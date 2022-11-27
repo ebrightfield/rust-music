@@ -218,16 +218,12 @@ impl TryFrom<&PcSet> for FourNoteChordQuality {
 
 #[cfg(test)]
 mod tests {
-    use crate::chord::four_note_chords::{AHH_PCS, APP_PCS, AUG7_PCS, AUG_MAJ7_PCS, DIM11_PCS, DIM7_PCS, DIM9_PCS, DIM_FLAT11_PCS, DIM_FLAT9_PCS, DOM7_FLAT5_PCS, FourNoteChordQuality, HAH_PCS, HAW_PCS, HHA_PCS, HHH_PCS, HHM_PCS, HHW_PCS, HWH_PCS, HWW_PCS, MAJ11_PCS, MAJ9_PCS, MAJ_FLAT9_PCS, MAJ_SHARP11_PCS, MAJ_SHARP9_PCS, MHH_PCS, MIN11_PCS, MIN7_FLAT5_PCS, MIN9_PCS, MIN_FLAT9_PCS, MIN_SHARP11_PCS, MINMAJ7_PCS, PAP_PCS, PHP_PCS, PPA_PCS, PPH_PCS, PPP_PCS, WAH_PCS, WHH_PCS, WHW_PCS, WWH_PCS, WWW_PCS};
-    use crate::chord::octave_partition::OctavePartition;
-    use crate::chord::pc_set::PcSet;
-    use crate::note::pc::Pc;
+    use super::*;
 
+    // Convert to and from intervallically descriptive types.
     fn test_quality(quality: FourNoteChordQuality) {
         let partition = OctavePartition::from(&quality);
-        dbg!(&partition);
         let pc_set = PcSet::from(&partition);
-        dbg!(&pc_set);
         assert_eq!(quality, FourNoteChordQuality::try_from(&pc_set).unwrap())
     }
 
@@ -243,18 +239,19 @@ mod tests {
         test_quality(FourNoteChordQuality::Aug7);
         test_quality(FourNoteChordQuality::AugMaj7);
         test_quality(FourNoteChordQuality::Dom7Flat5);
+        test_quality(FourNoteChordQuality::Maj9);
+        test_quality(FourNoteChordQuality::MinFlat9);
+        test_quality(FourNoteChordQuality::MajFlat9);
+        test_quality(FourNoteChordQuality::MajSharp9);
+        test_quality(FourNoteChordQuality::Min9);
+        test_quality(FourNoteChordQuality::Dim9);
+        test_quality(FourNoteChordQuality::DimFlat9);
+        test_quality(FourNoteChordQuality::Maj11);
+        test_quality(FourNoteChordQuality::MajSharp11);
+        test_quality(FourNoteChordQuality::Min11);
+        test_quality(FourNoteChordQuality::MinSharp11);
+        test_quality(FourNoteChordQuality::Dim11);
 
-        // FourNoteChordQuality::Maj9 => MAJ9_PCS,
-        // FourNoteChordQuality::MinFlat9 => MIN_FLAT9_PCS,
-        // FourNoteChordQuality::MajFlat9 => MAJ_FLAT9_PCS,
-        // FourNoteChordQuality::MajSharp9 => MAJ_SHARP9_PCS,
-        // FourNoteChordQuality::Min9 => MIN9_PCS,
-        // FourNoteChordQuality::Dim9 => DIM9_PCS,
-        // FourNoteChordQuality::DimFlat9 => DIM_FLAT9_PCS,
-        // FourNoteChordQuality::Maj11 => MAJ11_PCS,
-        // FourNoteChordQuality::MajSharp11 => MAJ_SHARP11_PCS,
-        // FourNoteChordQuality::Min11 => MIN11_PCS,
-        // FourNoteChordQuality::MinSharp11 => MIN_SHARP11_PCS,
         // FourNoteChordQuality::Dim11 => DIM11_PCS,
         // FourNoteChordQuality::DimFlat11 => DIM_FLAT11_PCS,
         // FourNoteChordQuality::PPP => PPP_PCS,

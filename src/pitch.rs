@@ -2,6 +2,8 @@ use crate::note::note::Note;
 use crate::note::pc::Pc;
 use anyhow::anyhow;
 
+/// This is the MIDI-compliant formula for calculating how:
+/// Note + octave = Pitch
 fn calc_midi_note(note: &Note, octave: &u8) -> u8 {
     (octave + 1) * 12 + u8::from(Pc::from(note))
 }
@@ -28,6 +30,7 @@ impl Pitch {
         })
     }
 
+    /// Produce a pitch from a MIDI note.
     pub fn from_midi(midi_note_value: u8) -> anyhow::Result<Self> {
         if midi_note_value >= 108 {
             return Err(anyhow!("Note is too high: {}", midi_note_value));
@@ -46,6 +49,7 @@ impl Pitch {
         })
     }
 
+    /// Control for spelling by including a "palette" of possible note values.
     pub fn spelled_as_in(midi_note_value: u8, notes: &Vec<Note>) -> anyhow::Result<Self> {
         let octave = (midi_note_value / 12) - 1;
         if octave > 8 {
@@ -65,6 +69,8 @@ impl Pitch {
         Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
     }
 
+    /// Subtract up or down from a pitch to arrive at another one.
+    /// This does not control spelling.
     pub fn at_distance_from(&self, distance: isize) -> anyhow::Result<Self> {
         let new_pitch = self.midi_note as isize + distance;
         //let new_pitch = 0;
@@ -76,5 +82,11 @@ impl Pitch {
                 )
             )?;
         Ok(Self::from_midi(new_pitch)?)
+    }
+
+    /// Compare pitches by their MIDI note, to equivocate over
+    /// spellings but not octaves.
+    pub fn is_same_frequency(&self, other: &Pitch) -> bool {
+        self.midi_note == other.midi_note
     }
 }

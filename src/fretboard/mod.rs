@@ -1,3 +1,5 @@
+pub mod fretboard_shape;
+
 use std::ops::Deref;
 use anyhow::{anyhow, Result};
 use crate::pitch::Pitch;
@@ -20,6 +22,10 @@ pub struct Fretboard {
 }
 
 impl Fretboard {
+    pub fn num_strings(&self) -> usize {
+        self.strings.len()
+    }
+
     pub fn at(&self, string: usize, fret: Option<u8>) -> Result<FrettedNote> {
         if let Some(fret) = fret {
             if fret > 35 {
@@ -65,34 +71,4 @@ pub struct FrettedNote<'a> {
     kind: FrettedNoteKind,
     string: usize,
     fretboard: &'a Fretboard,
-}
-
-#[derive(Debug)]
-pub struct FretboardShape<'a> {
-    strings: Vec<FrettedNote<'a>>,
-    fretboard: &'a Fretboard,
-}
-
-impl<'a> FretboardShape<'a> {
-    pub fn span(&self) -> (u8, u8) {
-        let mut lowest: u8 = 0;
-        let mut highest: u8  = 0;
-        for fretted_note in &self.strings {
-            match &fretted_note.kind {
-                FrettedNoteKind::Fretted { fret, .. } => {
-                    if *fret < lowest {
-                        lowest = *fret;
-                    }
-                    if *fret > highest {
-                        highest = *fret;
-                    }
-                },
-                FrettedNoteKind::Open(_) => {
-                    lowest = 0;
-                },
-                _ => {}
-            }
-        }
-        (lowest, highest)
-    }
 }
