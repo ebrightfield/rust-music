@@ -1,6 +1,7 @@
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 use std::collections::HashSet;
+use crate::chord::octave_partition::BaseChromaticInterval;
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();
@@ -115,6 +116,7 @@ impl<const N: usize> From<[Pc; N]> for PcSet {
         PcSet(pcs.to_vec())
     }
 }
+
 
 #[cfg(test)]
 mod tests {

@@ -64,4 +64,17 @@ impl Pitch {
         }
         Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
     }
+
+    pub fn at_distance_from(&self, distance: isize) -> anyhow::Result<Self> {
+        let new_pitch = self.midi_note as isize + distance;
+        //let new_pitch = 0;
+        let new_pitch = u8::try_from(new_pitch)
+                .map_err( |_| anyhow!(
+                    "Subtracting {} from {:?} goes beyond the bounds of practical musical pitches",
+                    new_pitch,
+                    self,
+                )
+            )?;
+        Ok(Self::from_midi(new_pitch)?)
+    }
 }

@@ -19,6 +19,32 @@ pub enum BaseChromaticInterval {
     Interval11,
 }
 
+impl From<&BaseChromaticInterval> for Pc {
+    fn from(interval: &BaseChromaticInterval) -> Pc {
+        match interval {
+            BaseChromaticInterval::Interval0 => Pc::Pc0,
+            BaseChromaticInterval::Interval1 => Pc::Pc1,
+            BaseChromaticInterval::Interval2 => Pc::Pc2,
+            BaseChromaticInterval::Interval3 => Pc::Pc3,
+            BaseChromaticInterval::Interval4 => Pc::Pc4,
+            BaseChromaticInterval::Interval5 => Pc::Pc5,
+            BaseChromaticInterval::Interval6 => Pc::Pc6,
+            BaseChromaticInterval::Interval7 => Pc::Pc7,
+            BaseChromaticInterval::Interval8 => Pc::Pc8,
+            BaseChromaticInterval::Interval9 => Pc::Pc9,
+            BaseChromaticInterval::Interval10 => Pc::Pc10,
+            BaseChromaticInterval::Interval11 => Pc::Pc11,
+        }
+    }
+}
+
+
+impl From<BaseChromaticInterval> for Pc {
+    fn from(interval: BaseChromaticInterval) -> Pc {
+        Pc::from(&interval)
+    }
+}
+
 impl From<&BaseChromaticInterval> for i32 {
     fn from(interval: &BaseChromaticInterval) -> Self {
         match interval {
@@ -71,6 +97,31 @@ impl From<i32> for BaseChromaticInterval {
     }
 }
 
+impl Into<u8> for BaseChromaticInterval {
+    fn into(self) -> u8 {
+        self.into()
+    }
+}
+
+impl Into<u8> for &BaseChromaticInterval {
+    fn into(self) -> u8 {
+        match self {
+            BaseChromaticInterval::Interval0 => 0,
+            BaseChromaticInterval::Interval1 => 1,
+            BaseChromaticInterval::Interval2 => 2,
+            BaseChromaticInterval::Interval3 => 3,
+            BaseChromaticInterval::Interval4 => 4,
+            BaseChromaticInterval::Interval5 => 5,
+            BaseChromaticInterval::Interval6 => 6,
+            BaseChromaticInterval::Interval7 => 7,
+            BaseChromaticInterval::Interval8 => 8,
+            BaseChromaticInterval::Interval9 => 9,
+            BaseChromaticInterval::Interval10 => 10,
+            BaseChromaticInterval::Interval11 => 11,
+        }
+    }
+}
+
 /// An ordered, cyclic series of intervals that sum to an octave.
 /// Represents a way to "slice" an octave into n intervals.
 #[derive(Debug, PartialEq)]
@@ -114,6 +165,19 @@ impl From<&PcSet> for OctavePartition {
 impl From<PcSet> for OctavePartition {
     fn from(pc_set: PcSet) -> Self {
         OctavePartition::from(&pc_set)
+    }
+}
+
+impl From<&OctavePartition> for PcSet {
+    fn from(value: &OctavePartition) -> Self {
+        let mut i: u8 = 0;
+        let mut pcs = vec![];
+        for part in &value.0 {
+            let distance: u8 = part.into();
+            i += distance;
+            pcs.push(i);
+        }
+        PcSet::new(pcs.iter().map(|pc| pc.into()).collect())
     }
 }
 

@@ -6,6 +6,7 @@ use crate::note::pc::Pc::*;
 use anyhow::anyhow;
 
 // A chord quality for every possible four-note [PcSet].
+#[derive(Debug, Clone, PartialEq)]
 pub enum FourNoteChordQuality {
     // Seventh Chords
     Maj7,
@@ -73,7 +74,7 @@ pub const MAJ_FLAT9_PCS: &[Pc] = &[Pc0, Pc1, Pc4, Pc7];
 pub const MIN9_PCS: &[Pc] = &[Pc0, Pc2, Pc3, Pc7];
 pub const MIN_FLAT9_PCS: &[Pc] = &[Pc0, Pc1, Pc3, Pc7];
 pub const DIM9_PCS: &[Pc] = &[Pc0, Pc2, Pc3, Pc6];
-pub const DIM_FLAT9_PCS: &[Pc] = &[Pc0, Pc1, Pc4, Pc6];
+pub const DIM_FLAT9_PCS: &[Pc] = &[Pc0, Pc1, Pc3, Pc6];
 pub const MAJ11_PCS: &[Pc] = &[Pc0, Pc4, Pc5, Pc7];
 pub const MAJ_SHARP11_PCS: &[Pc] = &[Pc0, Pc4, Pc6, Pc7];
 pub const MIN11_PCS: &[Pc] = &[Pc0, Pc3, Pc5, Pc7];
@@ -104,6 +105,12 @@ pub const PPH_PCS: &[Pc] = &[Pc0, Pc5, Pc10, Pc11];
 
 impl From<FourNoteChordQuality> for OctavePartition {
     fn from(value: FourNoteChordQuality) -> Self {
+        OctavePartition::from(&value)
+    }
+}
+
+impl From<&FourNoteChordQuality> for OctavePartition {
+    fn from(value: &FourNoteChordQuality) -> Self {
         OctavePartition::from(match value {
             FourNoteChordQuality::Maj7 => MAJ7_PCS,
             FourNoteChordQuality::Dom7 => DOM7_PCS,
@@ -185,29 +192,91 @@ impl TryFrom<&PcSet> for FourNoteChordQuality {
             DIM_FLAT11_PCS => Ok(FourNoteChordQuality::DimFlat11),
             PPP_PCS => Ok(FourNoteChordQuality::PPP),
             APP_PCS => Ok(FourNoteChordQuality::APP),
-            // WORKAROUND for compiler not allowing more than 40-some match branches
-            more => match more {
-                PAP_PCS => Ok(FourNoteChordQuality::PAP),
-                PPA_PCS => Ok(FourNoteChordQuality::PPA),
-                WWW_PCS => Ok(FourNoteChordQuality::WWW),
-                HWW_PCS => Ok(FourNoteChordQuality::HWW),
-                WHW_PCS => Ok(FourNoteChordQuality::WHW),
-                WWH_PCS => Ok(FourNoteChordQuality::WWH),
-                HAH_PCS => Ok(FourNoteChordQuality::HAH),
-                AHH_PCS => Ok(FourNoteChordQuality::AHH),
-                HHA_PCS => Ok(FourNoteChordQuality::HHA),
-                HWH_PCS => Ok(FourNoteChordQuality::HWH),
-                WHH_PCS => Ok(FourNoteChordQuality::WHH),
-                HHW_PCS => Ok(FourNoteChordQuality::HHW),
-                HHM_PCS => Ok(FourNoteChordQuality::HHM),
-                MHH_PCS => Ok(FourNoteChordQuality::MHH),
-                HAW_PCS => Ok(FourNoteChordQuality::HAW),
-                WAH_PCS => Ok(FourNoteChordQuality::WAH),
-                HHH_PCS => Ok(FourNoteChordQuality::HHH),
-                PHP_PCS => Ok(FourNoteChordQuality::PHP),
-                PPH_PCS => Ok(FourNoteChordQuality::PPH),
-                _ => Err(anyhow!("4NC not recognized: {:?}", value.0)),
-            },
+            PAP_PCS => Ok(FourNoteChordQuality::PAP),
+            PPA_PCS => Ok(FourNoteChordQuality::PPA),
+            WWW_PCS => Ok(FourNoteChordQuality::WWW),
+            HWW_PCS => Ok(FourNoteChordQuality::HWW),
+            WHW_PCS => Ok(FourNoteChordQuality::WHW),
+            WWH_PCS => Ok(FourNoteChordQuality::WWH),
+            HAH_PCS => Ok(FourNoteChordQuality::HAH),
+            AHH_PCS => Ok(FourNoteChordQuality::AHH),
+            HHA_PCS => Ok(FourNoteChordQuality::HHA),
+            HWH_PCS => Ok(FourNoteChordQuality::HWH),
+            WHH_PCS => Ok(FourNoteChordQuality::WHH),
+            HHW_PCS => Ok(FourNoteChordQuality::HHW),
+            HHM_PCS => Ok(FourNoteChordQuality::HHM),
+            MHH_PCS => Ok(FourNoteChordQuality::MHH),
+            HAW_PCS => Ok(FourNoteChordQuality::HAW),
+            WAH_PCS => Ok(FourNoteChordQuality::WAH),
+            HHH_PCS => Ok(FourNoteChordQuality::HHH),
+            PHP_PCS => Ok(FourNoteChordQuality::PHP),
+            PPH_PCS => Ok(FourNoteChordQuality::PPH),
+            _ => Err(anyhow!("4NC not recognized: {:?}", pitches)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::chord::four_note_chords::{AHH_PCS, APP_PCS, AUG7_PCS, AUG_MAJ7_PCS, DIM11_PCS, DIM7_PCS, DIM9_PCS, DIM_FLAT11_PCS, DIM_FLAT9_PCS, DOM7_FLAT5_PCS, FourNoteChordQuality, HAH_PCS, HAW_PCS, HHA_PCS, HHH_PCS, HHM_PCS, HHW_PCS, HWH_PCS, HWW_PCS, MAJ11_PCS, MAJ9_PCS, MAJ_FLAT9_PCS, MAJ_SHARP11_PCS, MAJ_SHARP9_PCS, MHH_PCS, MIN11_PCS, MIN7_FLAT5_PCS, MIN9_PCS, MIN_FLAT9_PCS, MIN_SHARP11_PCS, MINMAJ7_PCS, PAP_PCS, PHP_PCS, PPA_PCS, PPH_PCS, PPP_PCS, WAH_PCS, WHH_PCS, WHW_PCS, WWH_PCS, WWW_PCS};
+    use crate::chord::octave_partition::OctavePartition;
+    use crate::chord::pc_set::PcSet;
+    use crate::note::pc::Pc;
+
+    fn test_quality(quality: FourNoteChordQuality) {
+        let partition = OctavePartition::from(&quality);
+        dbg!(&partition);
+        let pc_set = PcSet::from(&partition);
+        dbg!(&pc_set);
+        assert_eq!(quality, FourNoteChordQuality::try_from(&pc_set).unwrap())
+    }
+
+    #[test]
+    fn chord_quality_identification() {
+        /// 7th chords
+        test_quality(FourNoteChordQuality::Maj7);
+        test_quality(FourNoteChordQuality::Dom7);
+        test_quality(FourNoteChordQuality::Min7);
+        test_quality(FourNoteChordQuality::MinMaj7);
+        test_quality(FourNoteChordQuality::Dim7);
+        test_quality(FourNoteChordQuality::Min7Flat5);
+        test_quality(FourNoteChordQuality::Aug7);
+        test_quality(FourNoteChordQuality::AugMaj7);
+        test_quality(FourNoteChordQuality::Dom7Flat5);
+
+        // FourNoteChordQuality::Maj9 => MAJ9_PCS,
+        // FourNoteChordQuality::MinFlat9 => MIN_FLAT9_PCS,
+        // FourNoteChordQuality::MajFlat9 => MAJ_FLAT9_PCS,
+        // FourNoteChordQuality::MajSharp9 => MAJ_SHARP9_PCS,
+        // FourNoteChordQuality::Min9 => MIN9_PCS,
+        // FourNoteChordQuality::Dim9 => DIM9_PCS,
+        // FourNoteChordQuality::DimFlat9 => DIM_FLAT9_PCS,
+        // FourNoteChordQuality::Maj11 => MAJ11_PCS,
+        // FourNoteChordQuality::MajSharp11 => MAJ_SHARP11_PCS,
+        // FourNoteChordQuality::Min11 => MIN11_PCS,
+        // FourNoteChordQuality::MinSharp11 => MIN_SHARP11_PCS,
+        // FourNoteChordQuality::Dim11 => DIM11_PCS,
+        // FourNoteChordQuality::DimFlat11 => DIM_FLAT11_PCS,
+        // FourNoteChordQuality::PPP => PPP_PCS,
+        // FourNoteChordQuality::APP => APP_PCS,
+        // FourNoteChordQuality::PAP => PAP_PCS,
+        // FourNoteChordQuality::PPA => PPA_PCS,
+        // FourNoteChordQuality::WWW => WWW_PCS,
+        // FourNoteChordQuality::HWW => HWW_PCS,
+        // FourNoteChordQuality::WHW => WHW_PCS,
+        // FourNoteChordQuality::WWH => WWH_PCS,
+        // FourNoteChordQuality::HAH => HAH_PCS,
+        // FourNoteChordQuality::AHH => AHH_PCS,
+        // FourNoteChordQuality::HHA => HHA_PCS,
+        // FourNoteChordQuality::HWH => HWH_PCS,
+        // FourNoteChordQuality::WHH => WHH_PCS,
+        // FourNoteChordQuality::HHW => HHW_PCS,
+        // FourNoteChordQuality::HHM => HHM_PCS,
+        // FourNoteChordQuality::MHH => MHH_PCS,
+        // FourNoteChordQuality::HAW => HAW_PCS,
+        // FourNoteChordQuality::WAH => WAH_PCS,
+        // FourNoteChordQuality::HHH => HHH_PCS,
+        // FourNoteChordQuality::PHP => PHP_PCS,
+        // FourNoteChordQuality::PPH => PPH_PCS,
     }
 }

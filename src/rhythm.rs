@@ -97,6 +97,8 @@ pub struct Meter {
     beat_pattern: Vec<DurationIn32ndNotes>,
 }
 
+/// Any duration denominated in quarter-note "beats". We arbitrarily use a quarter-note
+/// grid, even though we still account for e.g. meters like 4/8.
 type NumBeats = u8;
 
 impl Meter {
