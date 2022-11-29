@@ -1,3 +1,5 @@
+use std::ops::Index;
+use anyhow::anyhow;
 use crate::chord::chord_name::ChordName;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
@@ -42,6 +44,13 @@ impl NoteSet {
             a.partial_cmp(&b).unwrap()
         });
         Self(notes)
+    }
+
+    pub fn up_n_notes(&self, from: &Note, n: u8) -> anyhow::Result<Note> {
+        let index: usize = self.0.iter().position(|i| *i == *from)
+            .ok_or(anyhow!("Note {:?} not contained in {:?}", from, self))?;
+        let n = (index + (n as usize)).rem_euclid(self.0.len());
+        Ok(self.0[n].clone())
     }
 }
 

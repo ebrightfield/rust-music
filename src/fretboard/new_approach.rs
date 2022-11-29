@@ -36,7 +36,7 @@ impl<'a> SoundedNote<'a> {
         Ok(fretboard.at(string, fret)?)
     }
 
-    fn up_n_frets(&self, n: u8) -> Result<Self> {
+    pub fn up_n_frets(&self, n: u8) -> Result<Self> {
         Ok(self.fretboard.at(self.string, self.fret + n)?)
     }
 }

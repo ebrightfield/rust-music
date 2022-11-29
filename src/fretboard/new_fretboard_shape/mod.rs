@@ -1,4 +1,5 @@
 pub mod chord_shape_search;
+pub mod melodic_shape_search;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter, Pointer};
