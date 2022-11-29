@@ -1,6 +1,5 @@
-use std::ops::Index;
+use std::ops::Deref;
 use anyhow::anyhow;
-use crate::chord::chord_name::ChordName;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
 
@@ -32,6 +31,7 @@ pub trait NumUniqueNotes {
 pub struct NoteSet(Vec<Note>);
 
 impl NoteSet {
+    /// This is the preferred way to created a [NoteSet], as it guarantees
     /// Deduped and ordered by [Pc], normalized to Pc::0 by default,
     /// or whatever Pc is passed in.
     pub fn new(mut notes: Vec<Note>, starting_note: Option<&Note>) -> Self {
@@ -46,11 +46,24 @@ impl NoteSet {
         Self(notes)
     }
 
-    pub fn up_n_notes(&self, from: &Note, n: u8) -> anyhow::Result<Note> {
+    /// Retrieves the note n "steps" up in a [NoteSet], starting from a given
+    /// note that is expected to be in the [NoteSet] itself. Here we define
+    /// "step" arbitrarily as just any interval between adjacent elements in the [Vec<Pc>].
+    /// This assumes the [Vec<Pc>] is well-ordered, but the [NoteSet] constructor takes
+    /// care of this.
+    pub fn up_n_steps(&self, from: &Note, n: u8) -> anyhow::Result<Note> {
         let index: usize = self.0.iter().position(|i| *i == *from)
             .ok_or(anyhow!("Note {:?} not contained in {:?}", from, self))?;
         let n = (index + (n as usize)).rem_euclid(self.0.len());
         Ok(self.0[n].clone())
+    }
+}
+
+impl Deref for NoteSet {
+    type Target = Vec<Note>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -75,10 +88,12 @@ mod tests {
     #[test]
     fn test_n_steps_up() {
         let notes = NoteSet::new(vec![Note::C, Note::E, Note::G], None);
-        assert_eq!(notes.up_n_notes(&Note::C, 1).unwrap(), Note::E);
-        assert_eq!(notes.up_n_notes(&Note::C, 2).unwrap(), Note::G);
-        assert_eq!(notes.up_n_notes(&Note::C, 3).unwrap(), Note::C);
-        assert_eq!(notes.up_n_notes(&Note::C, 4).unwrap(), Note::E);
-        assert_eq!(notes.up_n_notes(&Note::C, 0).unwrap(), Note::C);
+        assert_eq!(notes.up_n_steps(&Note::C, 1).unwrap(), Note::E);
+        assert_eq!(notes.up_n_steps(&Note::C, 2).unwrap(), Note::G);
+        assert_eq!(notes.up_n_steps(&Note::C, 3).unwrap(), Note::C);
+        assert_eq!(notes.up_n_steps(&Note::C, 4).unwrap(), Note::E);
+        assert_eq!(notes.up_n_steps(&Note::C, 0).unwrap(), Note::C);
+        assert_eq!(notes.up_n_steps(&Note::E, 2).unwrap(), Note::C);
+        assert_eq!(notes.up_n_steps(&Note::G, 2).unwrap(), Note::E);
     }
 }

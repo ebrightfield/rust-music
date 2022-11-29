@@ -3,6 +3,8 @@ use crate::chord::pc_set::PcSet;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 use anyhow::anyhow;
+use crate::chord::chord_name::quality::{AugSubtype, ChordQuality, DimSubtype, MajorSubtype, MinorSubtype};
+use crate::chord::chord_name::quality::AugSubtype::AugN;
 
 /// The various possible octave partitions with three notes.
 pub enum ThreeNoteChordQuality {
@@ -107,3 +109,30 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
         }
     }
 }
+
+// TODO Should this be something more like a vector of possible qualities, one on each mode?
+// impl From<ThreeNoteChordQuality> for ChordQuality {
+//     fn from(chord_quality: ThreeNoteChordQuality) -> Self {
+//         match chord_quality {
+//             ThreeNoteChordQuality::Major => ChordQuality::Major(MajorSubtype::Major(None)),
+//             ThreeNoteChordQuality::Minor => ChordQuality::Minor(MinorSubtype::Min(None)),
+//             ThreeNoteChordQuality::Aug => ChordQuality::Aug(AugSubtype::Aug(None)),
+//             ThreeNoteChordQuality::Dim => ChordQuality::Dim(DimSubtype::Dim(None)),
+//             ThreeNoteChordQuality::PP => {},
+//             ThreeNoteChordQuality::AP => {},
+//             ThreeNoteChordQuality::PA => {},
+//             ThreeNoteChordQuality::MW => {},
+//             ThreeNoteChordQuality::WM => {},
+//             ThreeNoteChordQuality::MH => {},
+//             ThreeNoteChordQuality::HM => {},
+//             ThreeNoteChordQuality::AW => {},
+//             ThreeNoteChordQuality::WA => {},
+//             ThreeNoteChordQuality::HA => {},
+//             ThreeNoteChordQuality::AH => {},
+//             ThreeNoteChordQuality::WW => {},
+//             ThreeNoteChordQuality::WH => {},
+//             ThreeNoteChordQuality::HW => {},
+//             ThreeNoteChordQuality::HH => {},
+//         }
+//     }
+// }

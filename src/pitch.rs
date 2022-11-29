@@ -89,4 +89,12 @@ impl Pitch {
     pub fn is_same_frequency(&self, other: &Pitch) -> bool {
         self.midi_note == other.midi_note
     }
+
+    // TODO down_to_note method
+    /// Returns the next [Pitch] above [self] whose note is equivalent to
+    /// to the input [Note]. For when you want to "go up to G from B3".
+    pub fn up_to_note(&self, note: &Note) -> anyhow::Result<Self> {
+        let d = self.note.distance_up_to_note(note);
+        Ok(self.at_distance_from(d as isize)?)
+    }
 }

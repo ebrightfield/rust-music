@@ -1,46 +1,28 @@
 pub mod fretboard_shape;
+mod fretted_note;
 
+use std::ops::Deref;
 use anyhow::{anyhow, Result};
+use fretted_note::SoundedNote;
+use once_cell::sync::Lazy;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
 use crate::pitch::Pitch;
 
-#[derive(Debug)]
-pub enum FrettedNote<'a> {
-    Sounded(SoundedNote<'a>),
-    Muted {
-        string: u8,
-        fretboard: &'a Fretboard,
-    },
-}
-
-#[derive(Debug)]
-pub struct SoundedNote<'a> {
-    pub string: u8,
-    pub fret: u8,
-    pub pitch: Pitch,
-    pub fretboard: &'a Fretboard,
-}
-
-impl<'a> SoundedNote<'a> {
-    pub fn open(string: u8, fretboard: &'a Fretboard) -> Result<Self> {
-        let open_string = fretboard.get_string(string)?;
-        Ok(Self {
-            fret: 0,
-            pitch: open_string.clone(),
-            string,
-            fretboard,
-        })
+// TODO Add more such common guitar tunings as a convenience.
+/// Standard tuning on a 6-string guitar.
+static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
+    Fretboard {
+        open_strings: vec![
+            Pitch::new(Note::E, 3).unwrap(),
+            Pitch::new(Note::A, 3).unwrap(),
+            Pitch::new(Note::D, 4).unwrap(),
+            Pitch::new(Note::G, 4).unwrap(),
+            Pitch::new(Note::B, 4).unwrap(),
+            Pitch::new(Note::E, 5).unwrap(),
+        ],
     }
-
-    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self> {
-        Ok(fretboard.at(string, fret)?)
-    }
-
-    pub fn up_n_frets(&self, n: u8) -> Result<Self> {
-        Ok(self.fretboard.at(self.string, self.fret + n)?)
-    }
-}
+});
 
 /// Represents a fretboard with any arbitrary tuning or number of strings.
 #[derive(Clone, Debug)]
@@ -52,25 +34,38 @@ pub struct Fretboard {
 }
 
 impl Fretboard {
+
+    /// Allowing a hypothetical three-octave fretboard allows for performing various
+    /// melodic/harmonic fretboard shape search patterns higher up the neck, avoiding
+    /// running into the open strings
+    const MAX: u8 = 35;
+    const OPEN: u8 = u8::MIN;
+
+    /// The number of strings on the fretboard.
     pub fn num_strings(&self) -> u8 {
         u8::try_from(self.open_strings.len()).unwrap()
     }
 
+    /// Fallible indexing for an element in [self.open_strings].
+    /// It is important to remember that colloquially, the thickest string on a guitar
+    /// is "the 6th string", but it is indexed here as `self.open_strings[0]`.
     pub fn get_string(&self, string: u8) -> Result<&Pitch> {
         Ok(self.open_strings.get(string as usize)
             .ok_or(anyhow!("String too high for fretboard {:?}", self))?
         )
     }
 
-    pub fn at(&self, string: u8, fret: u8) -> Result<SoundedNote> {
-        if fret > 35 {
+    /// This is the preferred way to create a [SoundedNote] instance, because it
+    /// validates the initialization parameters against [self].
+    pub fn sounded_note(&self, string: u8, fret: u8) -> Result<SoundedNote> {
+        if fret > Self::MAX {
             return Err(anyhow!("Excessively high fret number"));
         }
         let open_string = self.get_string(string)?;
-        if fret == 0 {
+        if fret == Self::OPEN {
             return Ok(SoundedNote {
                 string,
-                fret: 0,
+                fret: Self::OPEN,
                 pitch: open_string.clone(),
                 fretboard: self,
             });
@@ -85,14 +80,15 @@ impl Fretboard {
         });
     }
 
-    /// Returns the first available fret on a given string that equals a given [Note].
+    /// Given a string and target note, returns the first available
+    /// [SoundedNote] whose fret equals a given [Note].
     pub fn note_on_string(&self, note: &Note, string: u8) -> Result<SoundedNote> {
         let fret = self.which_fret(note, string)?;
-        Ok(self.at(string, fret)?)
+        Ok(self.sounded_note(string, fret)?)
     }
 
-    /// At which fret you will find a target note on a target string.
-    /// e.g. "where is F# on the 3rd string of this fretboard?"
+    /// Returns the fret where a given [Note] resides on a given string.
+    /// e.g. "where is the place I can find an F# on the 3rd string of this fretboard?"
     pub fn which_fret(&self, note: &Note, string: u8) -> Result<u8> {
         let open_string = self.get_string(string)?;
         let mut pc = Pc::from(open_string.note);
@@ -107,59 +103,10 @@ impl Fretboard {
     }
 }
 
-impl<'a> FrettedNote<'a> {
-    pub fn muted(string: u8, fretboard: &'a Fretboard) -> Result<Self> {
-        let _ = fretboard.get_string(string)?;
-        Ok(Self::Muted {
-            string,
-            fretboard,
-        })
-    }
+impl Deref for Fretboard {
+    type Target = Vec<Pitch>;
 
-    pub fn open(string: u8, fretboard: &'a Fretboard) -> Result<Self> {
-        let open_string = fretboard.get_string(string)?;
-        Ok(Self::Sounded(SoundedNote {
-            pitch: open_string.clone(),
-            string,
-            fretboard,
-            fret: 0,
-        }))
-    }
-
-    /// Construct a [FrettedNoteKind::Fretted] variant.
-    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self> {
-        Ok(Self::Sounded(fretboard.at(string, fret)?))
-    }
-
-    fn string(&self) -> u8 {
-        match &self {
-            FrettedNote::Sounded(SoundedNote { string, ..}) => *string,
-            FrettedNote::Muted { string, .. } => *string,
-        }
-    }
-
-    /// Returns the fret, unless it's a Muted variant.
-    fn fret(&self) -> Option<u8> {
-        match &self {
-            FrettedNote::Sounded(SoundedNote { fret, ..}) => Some(*fret),
-            FrettedNote::Muted { .. } => None
-        }
-    }
-
-    /// Returns the pitch, unless it's a Muted variant.
-    fn pitch(&self) -> Option<Pitch> {
-        match &self {
-            FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(pitch.clone()),
-            FrettedNote::Muted { .. } => None
-        }
-    }
-
-    fn up_n_frets(&self, n: u8) -> Result<Option<Self>> {
-        match &self {
-            FrettedNote::Sounded(sounded_note) => Ok(Some(
-                FrettedNote::Sounded(sounded_note.up_n_frets(n)?)
-            )),
-            FrettedNote::Muted { .. } => Ok(None),
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.open_strings
     }
 }

@@ -1,10 +1,6 @@
 use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
 use std::collections::{HashMap, HashSet};
-use crate::chord::four_note_chords::{AUG7_PCS, DIM7_PCS, PHP_PCS};
 use crate::chord::geometry::{find_transpositional_symmetries, TranspositionalSymmetry};
-use crate::chord::octave_partition::BaseChromaticInterval;
-use crate::chord::three_note_chords::AUG_PCS;
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();

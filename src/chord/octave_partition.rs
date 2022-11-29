@@ -127,7 +127,7 @@ impl From<u8> for BaseChromaticInterval {
 
 impl Into<u8> for BaseChromaticInterval {
     fn into(self) -> u8 {
-        self.into()
+        (&self).into()
     }
 }
 

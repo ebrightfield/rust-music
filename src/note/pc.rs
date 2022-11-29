@@ -83,6 +83,13 @@ impl Pc {
     pub fn previous(&self) -> Self {
         Self::from(u8::from(self) - 1)
     }
+
+    // TODO distance_down_to method
+    pub fn distance_up_to(&self, other: &Pc) -> u8 {
+        u8::try_from(
+            (i32::from(other) - i32::from(self)).rem_euclid(12)
+        ).unwrap()
+    }
 }
 
 impl PartialOrd<Self> for Pc {
@@ -277,7 +284,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn iteration_works() {
+    fn pc_iter() {
         let all_pcs: Vec<Pc> = PcIter::default().into_iter().collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 12);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc0));
@@ -292,5 +299,21 @@ mod tests {
         assert_eq!(all_pcs.len(), 11);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc4));
         assert_eq!(all_pcs.last().cloned(), Some(Pc::Pc2));
+    }
+
+    #[test]
+    fn pc_distances() {
+        let pc1 = Pc::Pc0;
+        let pc2 = Pc::Pc5;
+        assert_eq!(pc1.distance_up_to(&pc2), 5);
+        assert_eq!(pc2.distance_up_to(&pc1), 7);
+        assert_eq!(pc1.distance_up_to(&pc1), 0);
+        assert_eq!(pc2.distance_up_to(&pc2), 0);
+        let pc1 = Pc::Pc3;
+        let pc2 = Pc::Pc11;
+        assert_eq!(pc1.distance_up_to(&pc2), 8);
+        assert_eq!(pc2.distance_up_to(&pc1), 4);
+        assert_eq!(pc1.distance_up_to(&pc1), 0);
+        assert_eq!(pc2.distance_up_to(&pc2), 0);
     }
 }

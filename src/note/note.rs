@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use crate::note::spelling::{Accidental, Letter, Spelling};
 use anyhow::anyhow;
@@ -45,7 +46,7 @@ pub enum Note {
 
 impl Note {
     // Return a note with an enharmonic spelling. Returns a clone of naturals.
-    pub fn enharmonic(&self) -> Note {
+    pub fn enharmonic(&self) -> Self {
         let spelling: Spelling = self.into();
         match spelling.acc {
             Accidental::Natural => self.clone(),
@@ -92,7 +93,7 @@ impl Note {
 
     /// Same as the regular enharmonic method,
     /// but aggressively switches B to Cb, C to B#, E to Fb, F to E#.
-    pub fn enharmonic_flip_bcef(&self) -> Note {
+    pub fn enharmonic_flip_bcef(&self) -> Self {
         if *self == Note::B {
             return Note::Ces;
         }
@@ -118,6 +119,15 @@ impl Note {
         }
         Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
     }
+
+    pub fn is_enharmonic(&self, other: &Note) -> bool {
+        Pc::from(self).notes().contains(other)
+    }
+
+    // TODO distance_down_to_note method
+    pub fn distance_up_to_note(&self, note: &Note) -> u8 {
+        Pc::from(self).distance_up_to(&Pc::from(note))
+    }
 }
 
 impl FromStr for Note {
@@ -126,6 +136,14 @@ impl FromStr for Note {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let spelling = Spelling::from_str(&s)?;
         Ok(Self::try_from(spelling)?)
+    }
+}
+
+impl Display for Note {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = Spelling::from(self);
+        let s = s.letter.to_string() + &s.acc.to_string();
+        f.write_str(&s)
     }
 }
 

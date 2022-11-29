@@ -1,6 +1,5 @@
 use crate::chord::octave_partition::OctavePartition;
 use crate::chord::pc_set::PcSet;
-use crate::chord::three_note_chords::ThreeNoteChordQuality;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 use anyhow::anyhow;

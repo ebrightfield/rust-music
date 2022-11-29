@@ -18,12 +18,23 @@ integration with JS frontends.
 - What should I name a given set of notes? Are there other plausible names, assuming various other root notes?
 
 
+### Philosophy
+This crate takes most of its influence from the following things:
+- Dmitri Tymoczko's work most well-fleshed-out in his book Geometry of Music.
+- My own manual explorations of the combinatoric space of pitch sets, their chord qualities, ways of voicing them, etc.
+- The mathematical structures that providing meaningful summations of possibilities for various
+musical choices that one often finds while composing/analyzing a piece, or even while improvising.
+- My conviction that the combinatoric space _is not too big_ for thorough and complete overview, at the very least.
+- With the right tools, generating teaching tools for theory, instrument practice, references, etc.
+
 ### TODO
-- Pitch struct, note + octave information
 - Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, SevenNoteChordQuality, IrregularScaleQuality
 - Library Error Type
-- Various calculations of sub-/super-chords, whether something is intervallically symmetrical.
+- Various geometric calculations of sub-/super-chords, voiceleadings, etc.
 - Lilypond and VexTab features
+- Chord naming
+- Chord name parsing
+- Melodic Sequencer
 
 
 #### Finding Guitar Shapes

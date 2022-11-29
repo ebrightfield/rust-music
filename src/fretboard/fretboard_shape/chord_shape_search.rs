@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use itertools::Itertools;
 use crate::chord::voicing::StackedIntervals;
-use crate::fretboard::{Fretboard, FrettedNote};
+use crate::fretboard::Fretboard;
 use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape};
+use crate::fretboard::fretted_note::FrettedNote;
 use crate::note::note::Note;
 
 #[derive(Debug)]
@@ -27,7 +28,7 @@ impl<'a> ChordShapeSearchResult<'a> {
 }
 
 /// Chord shapes are [FretboardShape]s where there is exactly one [FrettedNote] per string.
-/// If the string is not played in the chord, we denote it with a [FrettedNoteKind::Muted].
+/// If the string is not played in the chord, we denote it with a [FrettedNote::Muted].
 pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> anyhow::Result<ChordShapeSearchResult<'a>> {
     let chord_len = chord.len();
     let num_strings: u8 = fretboard.num_strings();
@@ -62,7 +63,7 @@ pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> any
                         let index = grouping.iter().position(|item| *item == i);
                         if let Some(index) = index {
                             return Ok::<_, anyhow::Error>(FrettedNote::Sounded(
-                                fretboard.at(i, *fret_shape[index])?
+                                fretboard.sounded_note(i, *fret_shape[index])?
                             ));
                         }
                         Ok::<_, anyhow::Error>(FrettedNote::Muted {

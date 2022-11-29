@@ -1,9 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use itertools::Itertools;
-use crate::chord::octave_partition::BaseChromaticInterval;
-use crate::chord::pc_set::zeroed_pcs;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 
@@ -44,6 +40,7 @@ pub fn find_transpositional_symmetries(pcs: &Vec<Pc>) -> HashMap<Pc, HashSet<Tra
             add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T3), &mut symmetries);
         },
         6 => {
+            // TODO Do the Aug Scale ones too, then factor this out into a function.
             // Check WT Scale
             if *pcs == WT_SCALE {
                 let mut to_add = HashMap::new();
