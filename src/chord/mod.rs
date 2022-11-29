@@ -71,4 +71,14 @@ mod tests {
         let should_be = NoteSet(vec![Note::Cis, Note::D, Note::C]);
         assert_eq!(notes, should_be);
     }
+
+    #[test]
+    fn test_n_steps_up() {
+        let notes = NoteSet::new(vec![Note::C, Note::E, Note::G], None);
+        assert_eq!(notes.up_n_notes(&Note::C, 1).unwrap(), Note::E);
+        assert_eq!(notes.up_n_notes(&Note::C, 2).unwrap(), Note::G);
+        assert_eq!(notes.up_n_notes(&Note::C, 3).unwrap(), Note::C);
+        assert_eq!(notes.up_n_notes(&Note::C, 4).unwrap(), Note::E);
+        assert_eq!(notes.up_n_notes(&Note::C, 0).unwrap(), Note::C);
+    }
 }
