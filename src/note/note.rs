@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use crate::note::spelling::{Accidental, Letter, Spelling};
 use anyhow::anyhow;
 use crate::note::pc::Pc;
@@ -106,6 +107,26 @@ impl Note {
         }
         self.enharmonic()
     }
+
+    /// Control for spelling by including a "palette" of possible note values.
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+        let pc = Pc::from(self);
+        for note in notes {
+            if Pc::from(note) == pc {
+                return Ok(note.clone());
+            }
+        }
+        Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
+    }
+}
+
+impl FromStr for Note {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let spelling = Spelling::from_str(&s)?;
+        Ok(Self::try_from(spelling)?)
+    }
 }
 
 impl TryFrom<Spelling> for Note {
@@ -179,5 +200,25 @@ impl TryFrom<Spelling> for Note {
                 )),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_string_parsing() {
+        assert_eq!(Note::Cisis, Note::from_str("C##").unwrap());
+        assert_eq!(Note::C, Note::from_str("C").unwrap());
+        assert_eq!(Note::Bes, Note::from_str("Bb").unwrap());
+    }
+
+    #[test]
+    fn test_enharmonics() {
+        assert_eq!(Note::Cis.enharmonic(), Note::Des);
+        assert_eq!(Note::Cisis.enharmonic(), Note::D);
+        assert_eq!(Note::Bes.enharmonic(), Note::Ais);
+        assert_eq!(Note::C.enharmonic_flip_bcef(), Note::Bis);
     }
 }

@@ -1,7 +1,10 @@
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use crate::chord::four_note_chords::{AUG7_PCS, DIM7_PCS, PHP_PCS};
+use crate::chord::geometry::{find_transpositional_symmetries, TranspositionalSymmetry};
 use crate::chord::octave_partition::BaseChromaticInterval;
+use crate::chord::three_note_chords::AUG_PCS;
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();
@@ -11,11 +14,13 @@ pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     Vec::from_iter(pc_set)
 }
 
-// Assumes ordered
+// Assumes ordered elements
 pub fn zeroed_pcs(pcs: &[Pc]) -> Vec<Pc> {
+    // Screen empty collections because we assume a first element.
     if pcs.is_empty() {
         return vec![];
     }
+    // We need to tolerate negative numbers in our subtraction, so using i32
     let magnitude = i32::from(&pcs[0]);
     pcs.iter()
         .map(|pc| {
@@ -27,7 +32,7 @@ pub fn zeroed_pcs(pcs: &[Pc]) -> Vec<Pc> {
 }
 
 /// Represents a set of pitch-classes.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PcSet(pub Vec<Pc>);
 
 impl PcSet {
@@ -97,6 +102,10 @@ impl PcSet {
         copy.rotate_right(usize::try_from(times).unwrap());
         Self(zeroed_pcs(&copy))
     }
+
+    pub fn transpositional_symmetry(&self) -> HashMap<Pc, HashSet<TranspositionalSymmetry>> {
+        find_transpositional_symmetries(&self.0)
+    }
 }
 
 impl From<&[Pc]> for PcSet {
@@ -114,20 +123,5 @@ impl<const N: usize> From<&[Pc; N]> for PcSet {
 impl<const N: usize> From<[Pc; N]> for PcSet {
     fn from(pcs: [Pc; N]) -> Self {
         PcSet(pcs.to_vec())
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_rotate() {
-        let pc_set = PcSet::new(vec![Pc0, Pc3, Pc7]);
-        let rotated = pc_set.rotate_fwd();
-        assert_eq!(PcSet::new(vec![Pc0, Pc4, Pc9]), rotated);
-        let rotated_back = rotated.rotate_back();
-        assert_eq!(pc_set, rotated_back);
     }
 }

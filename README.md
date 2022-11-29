@@ -4,8 +4,13 @@ The intention of this library is to describe musical pitch sets
 and other music theoretic constructs with their revelant information
 that is entailed from the particular instances being constructed.
 
-This library also intends to render objects into Lilypond source code,
-for purposes of automated instructional document creation.
+With this library, one can perform:
+- Tonal analysis -- answering questions like which chords or scales which into which others,
+ways to voicelead between chords, names, modes, etc.
+- Musical Combinatorics -- Go through all of the chord types, all the ways of voicing those
+chord types, and all the ways to realize those voicings on a particular fretboard.
+- Automated Scoring -- Output lilypond source code for document generation, or VexTab for
+integration with JS frontends.
 
 ### Applications
 - What sub- and super- chords exist within a given chord or scale?
@@ -15,9 +20,10 @@ for purposes of automated instructional document creation.
 
 ### TODO
 - Pitch struct, note + octave information
-- Chord types as enums
+- Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, SevenNoteChordQuality, IrregularScaleQuality
 - Library Error Type
 - Various calculations of sub-/super-chords, whether something is intervallically symmetrical.
+- Lilypond and VexTab features
 
 
 #### Finding Guitar Shapes

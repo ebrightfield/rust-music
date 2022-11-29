@@ -3,8 +3,10 @@ use crate::note::note::Note;
 use crate::note::spelling::Spelling;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
+use crate::chord::octave_partition::BaseChromaticInterval;
 
 /// The "ninth", "eleventh", etc in Maj9th or min11th chords, etc.
+#[derive(Debug, Clone)]
 pub enum AltChoice {
     FlatNine,
     Nine,
@@ -18,9 +20,11 @@ pub enum AltChoice {
 }
 
 /// Chord Quality Alterations
+#[derive(Debug, Clone)]
 pub struct Alt(Vec<AltChoice>);
 
 /// Chords based around a Major triad.
+#[derive(Debug, Clone)]
 pub enum MajorSubtype {
     Maj6(Option<Alt>),
     MajN(Option<Alt>),
@@ -28,6 +32,7 @@ pub enum MajorSubtype {
 }
 
 /// Chords based around a minor triad.
+#[derive(Debug, Clone)]
 pub enum MinorSubtype {
     Min6(Option<Alt>),
     MinMajN(Option<Alt>),
@@ -35,6 +40,7 @@ pub enum MinorSubtype {
 }
 
 /// Chords based around an Augmented triad.
+#[derive(Debug, Clone)]
 pub enum AugSubtype {
     /// e.g. C+Maj7
     AugMajN(Option<Alt>),
@@ -43,6 +49,7 @@ pub enum AugSubtype {
 }
 
 /// Chords based around a diminished triad.
+#[derive(Debug, Clone)]
 pub enum DimSubtype {
     /// e.g. Cmin7b5
     MinNb5(Option<Alt>),
@@ -54,23 +61,34 @@ pub enum DimSubtype {
 
 /// Basic categories for chords >=3 pitch classes,
 /// except for [ChordQuality::Interval] and [ChordQuality::SingleNote].
+#[derive(Debug, Clone)]
 pub enum ChordQuality {
     Major(MajorSubtype),
     Minor(MinorSubtype),
-    Aug,
-    Dim,
+    Aug(AugSubtype),
+    Dim(DimSubtype),
     Sus,
     AssumedThird,
     /// Any pair of distinct pitch-classes
-    Interval,
+    Interval(BaseChromaticInterval),
     SingleNote,
 }
 
-pub struct ChordName {
+#[derive(Debug, Clone)]
+pub enum TonalSpecification {
     /// If it's a slash chord, the bass note will be supplied here.
-    bass: Option<Note>,
+    SlashChord {
+        bass: Note,
+        root: Note,
+    },
     /// Root note relative to the defined chord quality.
-    root: Note,
+    RootPosition(Note),
+}
+
+#[derive(Debug, Clone)]
+pub struct ChordName {
+    /// Information regarding any choice of root notes, etc.
+    tonality: Option<TonalSpecification>,
     /// "Flavor" of chord, when built off the root.
     quality: ChordQuality,
     /// Underlying set of notes.
@@ -90,13 +108,13 @@ pub struct ChordName {
 
 impl Display for ChordName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut bass = Spelling::from(&self.root).to_string();
-        let mut is_slash_chord = false;
-        if let Some(note) = &self.bass {
-            bass = Spelling::from(note).to_string();
-            is_slash_chord = true;
-        }
-        f.write_str(&bass)?;
+        // let mut bass = Spelling::from(&self.root).to_string();
+        // let mut is_slash_chord = false;
+        // if let Some(note) = &self.bass {
+        //     bass = Spelling::from(note).to_string();
+        //     is_slash_chord = true;
+        // }
+        // f.write_str(&bass)?;
         Ok(())
     }
 }

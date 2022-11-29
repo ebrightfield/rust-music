@@ -1,6 +1,7 @@
 use crate::note::note::Note;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 struct PcIter {
     curr: Pc,
@@ -224,6 +225,12 @@ impl From<i32> for Pc {
 impl From<Note> for Pc {
     fn from(note: Note) -> Self {
         Pc::from(&note)
+    }
+}
+
+impl From<&mut Note> for Pc {
+    fn from(note: &mut Note) -> Self {
+        Pc::from(note.deref())
     }
 }
 

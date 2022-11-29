@@ -144,6 +144,16 @@ impl Display for Spelling {
     }
 }
 
+impl FromStr for Spelling {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let letter = Letter::from_str(&s[0..1])?;
+        let acc = Accidental::from_str(&s[1..s.len()])?;
+        Ok(Self { letter, acc })
+    }
+}
+
 impl From<Note> for Spelling {
     fn from(note: Note) -> Self {
         Spelling::from(&note)

@@ -4,6 +4,9 @@ use crate::note::note::*;
 use crate::note::pc::Pc;
 use crate::note::spelling::Spelling;
 
+/// Spell a [PcSet] as a [Vec<Note>], first using a root [Note] as the starting point
+/// as dictated by [default_spelling]. Then, we maybe convert that default spelling
+/// to its enharmonic equivalent as dictated by heuristics defined in [spell_rules].
 pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>> {
     if Spelling::from(root).acc.is_double() {
         return Err(anyhow!("Double accidentals are not valid roots for spelling. \
@@ -15,6 +18,8 @@ pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>> {
             // Unwraps are safe here because we screened out double-accidentals
             let default_spelling = default_spelling(root, pc).unwrap();
             let rules = spell_rules(root).unwrap();
+            // Iterate over the rule set for the given root note, if any apply,
+            // then we enharmonically flip the note, and move on.
             for rule in rules {
                 if rule.applied(*pc, pc_set) {
                     return default_spelling.enharmonic_flip_bcef();
@@ -25,10 +30,17 @@ pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>> {
         .collect())
 }
 
+/// A data descriptor for the logical pieces that make up a "rule" for whether or not
+/// one should alter a [Pc] to [Note] spelling from its [default_spelling] to an enharmonic.
 pub struct SpellingRule {
+    /// The [Pc] in question. If the rule is flagged, the note should be enharmonically flipped
+    /// from its [default_spelling].
     pc: Pc,
+    /// For the rule to be flagged, the [PcSet] *must contain all* of these [Pc]s.
     incl: Vec<Pc>,
+    /// For the rule to be flagged, the [PcSet] *must not contain any* of these [Pc]s.
     excl: Vec<Pc>,
+    /// For the rule to be flagged, the [PcSet] *must not contain all* of these [Pc]s.
     not_all: Vec<Pc>,
 }
 
@@ -58,8 +70,19 @@ impl SpellingRule {
     }
 }
 
-pub fn spell_rules(note: &Note) -> Option<Vec<SpellingRule>> {
-    match *note {
+/// This is a very long "getter" for spelling heuristics that are relevant
+/// when one has a collection of multiple notes, and they want them to be spelled sensibly
+/// in accordance with a supposed root Note.
+///
+/// For example, a tritone is better spelled as a sharp-fourth when the chord also contains
+/// a perfect-fifth, but often better spelled as a flat-fifth otherwise, and especially so
+/// when there is a perfect-fourth or a minor-third in the chord as well. Rules like these
+/// are encoded here and gathered into lists where they can be applied to a given set of notes.
+///
+/// If a rule is flagged, iteration over the rules terminates. The [Vec<SpellingRule>] should
+/// thus be considered a list of "inclusive-OR" conditions that would all warrant a spelling change.
+pub fn spell_rules(root: &Note) -> Option<Vec<SpellingRule>> {
+    match *root {
         Note::C => Some(vec![
             SpellingRule {
                 pc: Pc::Pc3,
@@ -526,6 +549,11 @@ pub fn spell_rules(note: &Note) -> Option<Vec<SpellingRule>> {
     }
 }
 
+/// A "getter" for the default spelling of a given [Pc],
+/// depending on a given root [Note], and absent consideration of any other notes that
+/// may accompany it). This is the "best guess in a vacuum" for how to spell a [Pc]
+/// sensibly in accordance with a root [Note].
+/// The rules defined in [spell_rules] account for considerations of accompanying notes.
 pub fn default_spelling(root: &Note, pc: &Pc) -> Option<Note> {
     match &root {
         Note::C => match *pc {
@@ -839,6 +867,14 @@ mod tests {
         assert_eq!(
             spelling,
             vec![Note::C, Note::E, Note::G, Note::B],
-        )
+        );
+        let spelling = spell_pc_set(
+            &Note::D,
+            &PcSet(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]),
+        ).unwrap();
+        assert_eq!(
+            spelling,
+            vec![Note::D, Note::Fis, Note::A, Note::Cis],
+        );
     }
 }

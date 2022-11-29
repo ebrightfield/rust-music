@@ -13,9 +13,10 @@ fn stack_midi_from_intervals(pitch: &Pitch, intervals: &StackedIntervals) -> Vec
     midi_notes
 }
 
-/// A collection of [Pitch]. [Note] duplicates are allowed.
-/// When we know a voicing, we know not only how a chord is to be spelled, but exactly
-/// in which octave(s) to express each pitch.
+/// A collection of [Pitch] with no constraints on its contents.
+/// For example, [Note] duplicates or enharmonic equivalents are allowed, as are sonic unisons.
+/// A [Voicing] can be played/notated in a definite manner,
+/// all it needs is rhythmic information.
 #[derive(Debug, Clone)]
 pub struct Voicing(pub Vec<Pitch>);
 
@@ -32,12 +33,17 @@ impl Voicing {
 }
 
 /// Consecutive vertical stacking of intervals, taken to be ordered from low to high.
-/// Roughly speaking, this represents how many semitones are between each consecutive
-/// note of a harmony, from low to high. These are root and spelling agnostic,
-/// non-negative distances between consecutive, ordered notes of a harmony.
-/// They serve as a means of classifying "unique ways to play a chord type", agnostic
-/// to root or spelling.
-#[derive(Debug, Clone)]
+/// These are non-negative, root-agnostic, and spelling-agnostic semitone distances
+/// between consecutive, ordered notes of a harmony.
+///
+/// Each unique value in this space defines a "unique way to play a particular chord type",
+/// generalized over any possible choice of root [Note].
+///
+/// If we consider only the space of values `vec[e_1, e_2, ..., e_i]` where all `e_i < 12`,
+/// and pick any chord type that is not rotationally (i.e. transpositionally) symmetrical,
+/// then there are `factorial(chord.len())` points in this space that uniquely correspond
+/// to that chord type. One for each permutation of its notes.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackedIntervals(pub Vec<u8>);
 
 impl Hash for StackedIntervals {
@@ -51,5 +57,11 @@ impl Deref for StackedIntervals {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl StackedIntervals {
+    pub fn has_wide_intervals(&self) -> bool {
+        self.iter().any(|interval| *interval >= 12)
     }
 }

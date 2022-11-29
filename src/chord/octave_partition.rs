@@ -97,6 +97,34 @@ impl From<i32> for BaseChromaticInterval {
     }
 }
 
+impl From<&u8> for BaseChromaticInterval {
+    fn from(pc: &u8) -> Self {
+        let pc = pc.rem_euclid(12);
+        match pc {
+            0 => BaseChromaticInterval::Interval0,
+            1 => BaseChromaticInterval::Interval1,
+            2 => BaseChromaticInterval::Interval2,
+            3 => BaseChromaticInterval::Interval3,
+            4 => BaseChromaticInterval::Interval4,
+            5 => BaseChromaticInterval::Interval5,
+            6 => BaseChromaticInterval::Interval6,
+            7 => BaseChromaticInterval::Interval7,
+            8 => BaseChromaticInterval::Interval8,
+            9 => BaseChromaticInterval::Interval9,
+            10 => BaseChromaticInterval::Interval10,
+            11 => BaseChromaticInterval::Interval11,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<u8> for BaseChromaticInterval {
+    fn from(pc: u8) -> Self {
+        BaseChromaticInterval::from(&pc)
+    }
+}
+
+
 impl Into<u8> for BaseChromaticInterval {
     fn into(self) -> u8 {
         self.into()

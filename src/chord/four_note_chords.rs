@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn chord_quality_identification() {
-        /// 7th chords
+        // 7th chords
         test_quality(FourNoteChordQuality::Maj7);
         test_quality(FourNoteChordQuality::Dom7);
         test_quality(FourNoteChordQuality::Min7);
@@ -239,6 +239,7 @@ mod tests {
         test_quality(FourNoteChordQuality::Aug7);
         test_quality(FourNoteChordQuality::AugMaj7);
         test_quality(FourNoteChordQuality::Dom7Flat5);
+        // Triads with 9th
         test_quality(FourNoteChordQuality::Maj9);
         test_quality(FourNoteChordQuality::MinFlat9);
         test_quality(FourNoteChordQuality::MajFlat9);
@@ -246,34 +247,36 @@ mod tests {
         test_quality(FourNoteChordQuality::Min9);
         test_quality(FourNoteChordQuality::Dim9);
         test_quality(FourNoteChordQuality::DimFlat9);
+        // Triads with 11th
         test_quality(FourNoteChordQuality::Maj11);
         test_quality(FourNoteChordQuality::MajSharp11);
         test_quality(FourNoteChordQuality::Min11);
         test_quality(FourNoteChordQuality::MinSharp11);
         test_quality(FourNoteChordQuality::Dim11);
-
-        // FourNoteChordQuality::Dim11 => DIM11_PCS,
-        // FourNoteChordQuality::DimFlat11 => DIM_FLAT11_PCS,
-        // FourNoteChordQuality::PPP => PPP_PCS,
-        // FourNoteChordQuality::APP => APP_PCS,
-        // FourNoteChordQuality::PAP => PAP_PCS,
-        // FourNoteChordQuality::PPA => PPA_PCS,
-        // FourNoteChordQuality::WWW => WWW_PCS,
-        // FourNoteChordQuality::HWW => HWW_PCS,
-        // FourNoteChordQuality::WHW => WHW_PCS,
-        // FourNoteChordQuality::WWH => WWH_PCS,
-        // FourNoteChordQuality::HAH => HAH_PCS,
-        // FourNoteChordQuality::AHH => AHH_PCS,
-        // FourNoteChordQuality::HHA => HHA_PCS,
-        // FourNoteChordQuality::HWH => HWH_PCS,
-        // FourNoteChordQuality::WHH => WHH_PCS,
-        // FourNoteChordQuality::HHW => HHW_PCS,
-        // FourNoteChordQuality::HHM => HHM_PCS,
-        // FourNoteChordQuality::MHH => MHH_PCS,
-        // FourNoteChordQuality::HAW => HAW_PCS,
-        // FourNoteChordQuality::WAH => WAH_PCS,
-        // FourNoteChordQuality::HHH => HHH_PCS,
-        // FourNoteChordQuality::PHP => PHP_PCS,
-        // FourNoteChordQuality::PPH => PPH_PCS,
+        test_quality(FourNoteChordQuality::DimFlat11);
+        // Stacked Fourths
+        test_quality(FourNoteChordQuality::PPP);
+        test_quality(FourNoteChordQuality::APP);
+        test_quality(FourNoteChordQuality::PAP);
+        test_quality(FourNoteChordQuality::PPA);
+        // Clusters (Stacked Seconds)
+        test_quality(FourNoteChordQuality::WWW);
+        test_quality(FourNoteChordQuality::HWW);
+        test_quality(FourNoteChordQuality::WHW);
+        test_quality(FourNoteChordQuality::WWH);
+        test_quality(FourNoteChordQuality::HAH);
+        test_quality(FourNoteChordQuality::AHH);
+        test_quality(FourNoteChordQuality::HHA);
+        test_quality(FourNoteChordQuality::HWH);
+        test_quality(FourNoteChordQuality::WHH);
+        test_quality(FourNoteChordQuality::HHW);
+        test_quality(FourNoteChordQuality::HHM);
+        test_quality(FourNoteChordQuality::MHH);
+        test_quality(FourNoteChordQuality::HAW);
+        test_quality(FourNoteChordQuality::WAH);
+        test_quality(FourNoteChordQuality::HHH);
+        // Perfect Fourths and HalfSteps (two each)
+        test_quality(FourNoteChordQuality::PHP);
+        test_quality(FourNoteChordQuality::PPH);
     }
 }
