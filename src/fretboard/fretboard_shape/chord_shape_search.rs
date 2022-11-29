@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use itertools::Itertools;
 use crate::chord::voicing::StackedIntervals;
-use crate::fretboard::{Fretboard, FrettedNote, FrettedNoteKind};
-use crate::fretboard::fretboard_shape::{FretboardShape, ChordShapeClassification};
+use crate::fretboard::{Fretboard, FrettedNote};
+use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape};
 use crate::note::note::Note;
 
 #[derive(Debug)]
@@ -61,10 +61,11 @@ pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> any
                     .map(|i| {
                         let index = grouping.iter().position(|item| *item == i);
                         if let Some(index) = index {
-                            return fretboard.at(i, Some(*fret_shape[index]));
+                            return Ok::<_, anyhow::Error>(FrettedNote::Sounded(
+                                fretboard.at(i, *fret_shape[index])?
+                            ));
                         }
-                        Ok(FrettedNote {
-                            kind: FrettedNoteKind::Muted,
+                        Ok::<_, anyhow::Error>(FrettedNote::Muted {
                             string: i,
                             fretboard,
                         })

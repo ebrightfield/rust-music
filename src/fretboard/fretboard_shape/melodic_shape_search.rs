@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::chord::NoteSet;
-use crate::fretboard::{Fretboard, FrettedNote};
+use crate::fretboard::Fretboard;
 use crate::fretboard::fretboard_shape::FretboardShape;
 use crate::note::note::Note;
 
@@ -65,7 +65,7 @@ pub fn find_scale_shapes<'a>(
     // Giving ourselves headroom such that even if our shape progressed completely downward from the start,
     // we would not run into the edge of the fretboard, thus killing off a search into shapes
     // that could have been explored and which are *perhaps* playable up twelve frets.
-    if first_fretted_note.fret().unwrap() < 7 {
+    if first_fretted_note.fret < 7 {
         first_fretted_note = first_fretted_note.up_n_frets(12).unwrap();
     }
     let frets = vec![first_fretted_note];

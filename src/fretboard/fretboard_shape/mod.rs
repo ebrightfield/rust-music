@@ -6,11 +6,10 @@ use std::fmt::{Display, Formatter, Pointer};
 use std::iter::zip;
 use std::ops::Index;
 use crate::chord::pc_set::PcSet;
-use crate::fretboard::{Fretboard, FrettedNote, FrettedNoteKind};
 use crate::pitch::Pitch;
 use itertools::{all, Itertools};
-use melodic_shape_search::MelodicFretboardShape;
 use crate::chord::voicing::StackedIntervals;
+use crate::fretboard::{Fretboard, FrettedNote, SoundedNote};
 use crate::note::note::Note;
 
 #[derive(Debug)]
@@ -23,11 +22,10 @@ impl<'a> Display for FretboardShape<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s: Vec<String> = self.fretted_notes
             .iter()
-            .map(|string| {
-                match string.kind {
-                    FrettedNoteKind::Muted => "x".to_string(),
-                    FrettedNoteKind::Open(_) => "0".to_string(),
-                    FrettedNoteKind::Fretted { fret, ..} => fret.to_string(),
+            .map(|value| {
+                match value {
+                    FrettedNote::Muted { .. } => "x".to_string(),
+                    FrettedNote::Sounded(SoundedNote { fret, .. }) => fret.to_string(),
                 }
             })
             .collect();
@@ -42,26 +40,24 @@ impl<'a> FretboardShape<'a> {
     /// Creates a new [FretboardShape] where all the open strings are converted to muted strings.
     /// This is useful for analyzing playability, if you consider open strings negligibly costly to play.
     pub fn without_open_strings(&'a self) -> Self {
-        FretboardShape {
+        Self {
             fretboard: self.fretboard,
             fretted_notes: self.fretted_notes
                 .iter()
-                .map(|string| match string.kind {
-                    FrettedNoteKind::Open(_) => FrettedNote {
-                        kind: FrettedNoteKind::Muted,
-                        string: string.string,
-                        fretboard: &string.fretboard,
+                .map(|value| match &value {
+                    FrettedNote::Muted { string, fretboard } => FrettedNote::Muted {
+                        string: *string, fretboard,
                     },
-                    FrettedNoteKind::Muted => FrettedNote {
-                        kind: FrettedNoteKind::Muted,
-                        string: string.string,
-                        fretboard: &string.fretboard,
+                    FrettedNote::Sounded(
+                        SoundedNote { fret: 0, string, fretboard, .. }
+                    ) => FrettedNote::Muted {
+                        string: *string, fretboard,
                     },
-                    FrettedNoteKind::Fretted {fret, pitch} => FrettedNote {
-                        kind: FrettedNoteKind::Fretted { fret, pitch },
-                        string: string.string,
-                        fretboard: &string.fretboard,
-                    }
+                    FrettedNote::Sounded(
+                        SoundedNote { fret, pitch, string, fretboard }
+                    ) => FrettedNote::Sounded(SoundedNote {
+                        fret: *fret, pitch: pitch.clone(), string: *string, fretboard,
+                    }),
                 })
                 .collect()
         }
@@ -80,8 +76,8 @@ impl<'a> FretboardShape<'a> {
     /// Number of strings not muted.
     pub fn size(&self) -> u8 {
         self.fretted_notes.iter()
-            .fold(0, |value, item| match item.kind {
-                FrettedNoteKind::Fretted { .. } => value + 1,
+            .fold(0, |value, item| match item {
+                FrettedNote::Sounded(_) => value + 1,
                 _ => value,
             })
     }
@@ -89,10 +85,9 @@ impl<'a> FretboardShape<'a> {
     pub fn range(&self) -> (Pitch, Pitch) {
         let mut pitches: Vec<Pitch> = self.fretted_notes
             .iter()
-            .map(|p| match &p.kind {
-                FrettedNoteKind::Fretted { pitch, .. } => Some(pitch.clone()),
-                FrettedNoteKind::Open(string) => Some((**string).clone()),
-                FrettedNoteKind::Muted => None,
+            .map(|p| match &p {
+                FrettedNote::Sounded(SoundedNote { pitch, .. }) => Some(pitch.clone()),
+                FrettedNote::Muted { .. } => None,
             })
             .into_iter()
             .flatten()
@@ -106,28 +101,22 @@ impl<'a> FretboardShape<'a> {
         let mut lowest: u8 = u8::MAX;
         let mut highest: u8  = u8::MIN;
         for fretted_note in &self.fretted_notes {
-            match &fretted_note.kind {
-                FrettedNoteKind::Fretted { fret, .. } => {
-                    if *fret < lowest {
-                        lowest = *fret;
-                    }
-                    if *fret > highest {
-                        highest = *fret;
-                    }
-                },
-                FrettedNoteKind::Open(_) => {
-                    lowest = 0;
-                },
-                _ => {}
+            if let FrettedNote::Sounded(SoundedNote { fret, .. }) = fretted_note {
+                if *fret < lowest {
+                    lowest = *fret;
+                }
+                if *fret > highest {
+                    highest = *fret;
+                }
             }
         }
         (lowest, highest)
     }
 
     pub fn contains_open_strings(&self) -> bool {
-        self.fretted_notes.iter().any(|string| {
-            match string.kind {
-                FrettedNoteKind::Open(_) => true,
+        self.fretted_notes.iter().any(|value| {
+            match value {
+                FrettedNote::Sounded(SoundedNote {fret: 0, ..}) => true,
                 _ => false,
             }
         })
@@ -137,18 +126,10 @@ impl<'a> FretboardShape<'a> {
     /// to equivocate over accidentals but not octaves.
     pub fn contains(&self, member: &Pitch) -> bool {
         for fretted_note in &self.fretted_notes {
-            match &fretted_note.kind {
-                FrettedNoteKind::Fretted { pitch, .. } => {
-                    if pitch.midi_note == member.midi_note {
-                        return true;
-                    }
-                },
-                FrettedNoteKind::Open(pitch) => {
-                    if pitch.midi_note == member.midi_note {
-                        return true;
-                    }
-                },
-                _ => {}
+            if let FrettedNote::Sounded(SoundedNote { pitch, ..}) = fretted_note {
+                if pitch.midi_note == member.midi_note {
+                    return true;
+                }
             }
         }
         false
@@ -156,9 +137,9 @@ impl<'a> FretboardShape<'a> {
 
     pub fn classify(&self) -> ChordShapeClassification {
         if self.is_playable() {
-            if self.fretted_notes.iter().all(|string| {
-                match string.kind {
-                    FrettedNoteKind::Fretted { fret, .. } => fret > 12,
+            if self.fretted_notes.iter().all(|value| {
+                match value {
+                    FrettedNote::Sounded(SoundedNote { fret, .. }) => *fret > 12,
                     _ => true,
                 }
             }) {
@@ -179,13 +160,12 @@ impl<'a> FretboardShape<'a> {
 
 impl<'a> From<&'a FretboardShape<'a>> for StackedIntervals {
     fn from(value: &'a FretboardShape<'a>) -> Self {
-        let mut pitches: Vec<Pitch> = value.fretted_notes.iter()
-            .map(|fretted_note| match &fretted_note.kind {
-                FrettedNoteKind::Fretted { pitch, .. } => {
-                  return Some(pitch.clone());
-                },
-                FrettedNoteKind::Open(open_string) => {
-                  return Some(open_string.0.clone())
+        let mut pitches: Vec<Pitch> = value
+            .fretted_notes
+            .iter()
+            .map(|fretted_note| match &fretted_note {
+                FrettedNote::Sounded(SoundedNote { pitch, .. }) => {
+                    return Some(pitch.clone());
                 },
                 _ => None,
             })
@@ -212,7 +192,6 @@ pub enum ChordShapeClassification {
 #[cfg(test)]
 mod tests {
     use crate::fretboard::fretboard_shape::chord_shape_search::find_chord_shapes;
-    use crate::fretboard::OpenString;
     use crate::pitch::Pitch;
     use super::*;
 
@@ -221,12 +200,12 @@ mod tests {
         let chord = vec![Note::C, Note::E, Note::G, Note::B];
         let fretboard = Fretboard {
             open_strings: vec![
-              OpenString(Pitch::new(Note::E, 3).unwrap()),
-              OpenString(Pitch::new(Note::A, 3).unwrap()),
-              OpenString(Pitch::new(Note::D, 4).unwrap()),
-              OpenString(Pitch::new(Note::G, 4).unwrap()),
-              OpenString(Pitch::new(Note::B, 4).unwrap()),
-              OpenString(Pitch::new(Note::E, 5).unwrap()),
+                Pitch::new(Note::E, 3).unwrap(),
+                Pitch::new(Note::A, 3).unwrap(),
+                Pitch::new(Note::D, 4).unwrap(),
+                Pitch::new(Note::G, 4).unwrap(),
+                Pitch::new(Note::B, 4).unwrap(),
+                Pitch::new(Note::E, 5).unwrap(),
             ],
         };
         let shapes = find_chord_shapes(
