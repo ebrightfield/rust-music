@@ -8,7 +8,8 @@ use crate::note_collections::voicing::StackedIntervals;
 use crate::fretboard::Fretboard;
 use crate::fretboard::fretted_note::{FrettedNote, SoundedNote};
 
-#[derive(Debug)]
+/// Meant for vertically oriented fretboard shapes.
+#[derive(Debug, Clone)]
 pub struct FretboardShape<'a> {
     pub fretted_notes: Vec<FrettedNote<'a>>,
     pub fretboard: &'a Fretboard,

@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+use anyhow::anyhow;
 use crate::fretboard::Fretboard;
 use crate::note::pitch::Pitch;
 use crate::note_collections::NoteSet;
@@ -25,6 +27,12 @@ pub struct SoundedNote<'a> {
     pub fretboard: &'a Fretboard,
 }
 
+impl<'a> Display for SoundedNote<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}({})", self.string, self.fret, self.pitch.note)
+    }
+}
+
 impl<'a> SoundedNote<'a> {
     /// Preferred constructor for an open string. Validates using
     /// the methods on the [Fretboard] passed in.
@@ -50,15 +58,31 @@ impl<'a> SoundedNote<'a> {
     }
 
     /// Moves up the same string to a new fret `n` semitones higher.
+    pub fn down_n_frets(&self, n: u8) -> anyhow::Result<Self> {
+        if n < self.fret {
+            return Err(anyhow!("Fret goes off the fretboard"));
+        }
+        Ok(self.fretboard.sounded_note(self.string, self.fret - n)?)
+    }
+
+    /// Moves up the same string to a new fret `n` semitones higher.
     pub fn up_an_octave(&self) -> anyhow::Result<Self> {
         Ok(self.fretboard.sounded_note(self.string, self.fret + 12)?)
+    }
+
+    /// Moves down the same string 12 semitones, if possible.
+    pub fn down_an_octave(&self) -> anyhow::Result<Self> {
+        if self.fret < 12 {
+            return Err(anyhow!("Fret goes off the fretboard"));
+        }
+        Ok(self.fretboard.sounded_note(self.string, self.fret - 12)?)
     }
 
     /// Produces a [FrettedNote] on the next chord/scale degree, on the same string.
     pub fn next_note_same_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
         let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
         let mut fretted_note = self.fretboard.note_on_string(&next_note, self.string)?;
-        while fretted_note.fret < self.fret {
+        while fretted_note.pitch.midi_note < self.pitch.midi_note {
             fretted_note = fretted_note.up_an_octave()?;
         }
         Ok(fretted_note)
@@ -68,7 +92,7 @@ impl<'a> SoundedNote<'a> {
     pub fn next_note_next_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
         let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
         let mut fretted_note = self.fretboard.note_on_string(&next_note, self.string + 1)?;
-        while fretted_note.fret < self.fret {
+        while fretted_note.pitch.midi_note < self.pitch.midi_note {
             fretted_note = fretted_note.up_an_octave()?;
         }
         Ok(fretted_note)
@@ -136,5 +160,11 @@ impl<'a> FrettedNote<'a> {
             )),
             FrettedNote::Muted { .. } => Ok(None),
         }
+    }
+}
+
+impl<'a> From<SoundedNote<'a>> for FrettedNote<'a> {
+    fn from(value: SoundedNote<'a>) -> Self {
+        FrettedNote::Sounded(value)
     }
 }
