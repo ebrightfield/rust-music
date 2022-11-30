@@ -187,32 +187,4 @@ pub enum ChordShapeClassification {
 
 #[cfg(test)]
 mod tests {
-    use crate::fretboard::fretboard_shape::chord_shape_search::find_chord_shapes;
-    use crate::fretboard::STD_6STR_GTR;
-    use crate::note::note::Note;
-    use super::*;
-
-    #[test]
-    fn finding_chord_shapes() {
-        let chord = vec![Note::C, Note::E, Note::G, Note::B];
-        // let fretboard = Fretboard {
-        //     open_strings: vec![
-        //         Pitch::new(Note::E, 3).unwrap(),
-        //         Pitch::new(Note::A, 3).unwrap(),
-        //         Pitch::new(Note::D, 4).unwrap(),
-        //         Pitch::new(Note::G, 4).unwrap(),
-        //         Pitch::new(Note::B, 4).unwrap(),
-        //         Pitch::new(Note::E, 5).unwrap(),
-        //     ],
-        // };
-        let shapes = find_chord_shapes(
-            &chord,
-            &STD_6STR_GTR,
-        ).unwrap();
-        // println!("VALID SHAPES:");
-        // for shape in shapes.playable {
-        //     println!("{:?}", shape.0);
-        //     println!("{}", shape.1.iter().map(|s| s.to_string()).collect::<Vec<String>>().join("\n"));
-        // }
-    }
 }

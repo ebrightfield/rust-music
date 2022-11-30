@@ -152,14 +152,14 @@ mod tests {
         let violations = tally_new_violations(&frets);
         assert_eq!(violations, (0,0));
 
-        /// Violation -- Four frets across the same string
+        // Violation -- Four frets across the same string
         let s1 = (*STD_6STR_GTR).sounded_note(0, 1).unwrap();
         let s2 = (*STD_6STR_GTR).sounded_note(0, 5).unwrap();
         let frets = vec![s1, s2];
         let violations = tally_new_violations(&frets);
         assert_eq!(violations, (1,0));
 
-        /// Violation -- Three notes over four notes on same string
+        // Violation -- Three notes over four notes on same string
         let s1 = (*STD_6STR_GTR).sounded_note(0, 1).unwrap();
         let s2 = (*STD_6STR_GTR).sounded_note(0, 2).unwrap();
         let s3 = (*STD_6STR_GTR).sounded_note(0, 5).unwrap();
