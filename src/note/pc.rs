@@ -50,15 +50,28 @@ impl Iterator for PcIter {
     }
 }
 
-/// Pitch-class -- a representation of musical notes that is
-/// agnostic to both letter and octave information.
-/// Every note of the chromatic scale is mapped to mod-12
-/// space of integers.
-/// Which note is chosen to be zero is arbitrary and situational,
+/// Pitch-class in integer notation.
+/// A note, agnostic to both letter and octave information.
+///
+/// The space of all possible [Pc] is simply a modulo-12 space of
+/// integers from zero to eleven. It can be intuited as a "clock face".
+///
+/// The only information a [Pc] carries is its location in that modulo-12
+/// space, but for music this turns out to be very important for
+/// observing regularities in how certain things sound.
+///
+/// We can generalize over all types of chords or scales using
+/// collections of [Pc], no matter their root note when played.
+///
+/// When we map a [Pc] to an alphabetical note, which
+/// note is chosen to be zero is arbitrary and situational,
 /// although by far the most common choice is usually the note "C".
-/// This convention is built into the [impl From<Note> for Pc].
-/// [Pc] converts to [i32] for arithmetic operations, and to [u8]
-/// for MIDI note representation.
+/// This convention is built into the `impl From` [Pc].
+/// [Pc] converts to/from [i32] for arithmetic operations, and to/from [u8]
+/// for certain operations where it is desirable to treat a [Pc] as a small, non-negative number.
+///
+/// Additionally, when mapping a [Pc] to an alphabetical note,
+/// there is no way to determine a preferred enharmonic spelling.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Pc {
     Pc0,
@@ -76,18 +89,29 @@ pub enum Pc {
 }
 
 impl Pc {
+    /// Step to the next semitone up ("clockwise on the clock-face").
     pub fn next(&self) -> Self {
         Self::from(u8::from(self) + 1)
     }
 
+    /// Step to the next semitone down ("counter-clockwise on the clock-face").
     pub fn previous(&self) -> Self {
         Self::from(u8::from(self) - 1)
     }
 
-    // TODO distance_down_to method
+    /// Returns the number of semitones up ("clockwise on the clock-face")
+    /// to another [Pc].
     pub fn distance_up_to(&self, other: &Pc) -> u8 {
         u8::try_from(
             (i32::from(other) - i32::from(self)).rem_euclid(12)
+        ).unwrap()
+    }
+
+    /// Returns the number of semitones down ("counter-clockwise on the clock-face")
+    /// to another [Pc].
+    pub fn distance_down_to(&self, other: &Pc) -> u8 {
+        u8::try_from(
+            (i32::from(self) - i32::from(other)).rem_euclid(12)
         ).unwrap()
     }
 }
@@ -113,6 +137,12 @@ impl Hash for Pc {
 }
 
 impl Pc {
+    /// The possible [Note] values that map to a given [Pc]. The naturals
+    /// have three spellings, although their natural spelling is the obvious.
+    /// Accidentals have two spellings, each of which is more or less appropriate
+    /// depending on the circumstances.
+    ///
+    /// For a detailed discussion of resolving spellings, see [crate::note_collections::spelling].
     pub fn notes(&self) -> Vec<Note> {
         match self {
             Pc::Pc0 => vec![Note::C, Note::Bis, Note::Deses],

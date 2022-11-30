@@ -199,11 +199,14 @@ mod tests {
         let notes = vec![Pc0, Pc4, Pc5, Pc7, Pc11];
         let notes = sanitize_pcs(&notes);
         let quality = infer_chord_quality(&notes);
+        let quality = quality.unwrap();
+        let quality = quality.1.unwrap();
+        assert_eq!(quality.to_string(&Default::default()), "Maj7 (11)");
         assert_eq!(
-            quality.unwrap().1,
-             Some(ChordQuality::Major(MajorSubtype::MajN(
+            quality,
+             ChordQuality::Major(MajorSubtype::MajN(
                 vec![Extension::Seventh, Extension::Eleventh], Alt(vec![])
-            )))
+            ))
         );
         let notes = vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11];
         let notes = sanitize_pcs(&notes);

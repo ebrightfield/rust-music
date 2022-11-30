@@ -11,13 +11,13 @@ mod three_note_chords;
 pub mod spelling;
 pub mod voicing;
 pub mod geometry;
+pub mod interval_class;
 
 
 pub trait NumUniqueNotes {
     fn unique_notes(&self) -> usize;
 }
 
-// I *could* put a "naming" trait on any struct where it's pitched enough to have a name.
 // pub trait HasChordName {
 //     fn chord_name(&self) -> ChordName;
 // }
@@ -32,11 +32,30 @@ pub struct NoteSet(Vec<Note>);
 
 impl NoteSet {
     /// This is the preferred way to created a [NoteSet], as it guarantees
-    /// Deduped and ordered by [Pc], normalized to Pc::0 by default,
-    /// or whatever Pc is passed in.
+    /// deduplication and sorting by [Pc].
+    /// It is normalized to Pc::0 by default, or whatever Pc is passed in.
     pub fn new(mut notes: Vec<Note>, starting_note: Option<&Note>) -> Self {
-        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
+        if notes.is_empty() {
+            return Self(vec![]);
+        }
         let orientation = starting_note.map_or(0, |n| u8::from(Pc::from(n)));
+        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
+        notes.sort_by(|a, b| {
+            // We add 12 in the arithmetic because we want to ensure
+            let a = (u8::from(Pc::from(a)) + 12 - orientation).rem_euclid(12);
+            let b = (u8::from(Pc::from(b)) + 12 - orientation).rem_euclid(12);
+            a.partial_cmp(&b).unwrap()
+        });
+        Self(notes)
+    }
+
+    /// Same as [NoteSet::new], but normalizes to the first element of the [Vec].
+    pub fn starting_from_first_note(mut notes: Vec<Note>) -> Self {
+        if notes.is_empty() {
+            return Self(vec![]);
+        }
+        let orientation = u8::from(Pc::from(notes[0]));
+        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
         notes.sort_by(|a, b| {
             // We add 12 in the arithmetic because we want to ensure
             let a = (u8::from(Pc::from(a)) + 12 - orientation).rem_euclid(12);
@@ -48,9 +67,9 @@ impl NoteSet {
 
     /// Retrieves the note n "steps" up in a [NoteSet], starting from a given
     /// note that is expected to be in the [NoteSet] itself. Here we define
-    /// "step" arbitrarily as just any interval between adjacent elements in the [Vec<Pc>].
-    /// This assumes the [Vec<Pc>] is well-ordered, but the [NoteSet] constructor takes
-    /// care of this.
+    /// "step" arbitrarily as just any interval between adjacent elements in [self].
+    /// This assumes the data in [self] is well-ordered,
+    /// but the [NoteSet] constructor takes care of this.
     pub fn up_n_steps(&self, from: &Note, n: u8) -> anyhow::Result<Note> {
         let index: usize = self.0.iter().position(|i| *i == *from)
             .ok_or(anyhow!("Note {:?} not contained in {:?}", from, self))?;

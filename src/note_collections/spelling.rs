@@ -1,10 +1,32 @@
+/// This module solves the problem of crossing the gap from the
+/// "integer world" of [Pc] to the "alphabetical world" of [Note]s.
+///
+/// Crossing this gap introduces a great deal of tonal suggestion.
+/// For example, C to D# implies a vastly different musical context than C to Eb.
+/// Or spelling a C major chord as (B#, Fb, Abb) would be utter nonsense.
+///
+/// We could take many different approaches to turning an integer into an
+/// adequate (arguably "correct") spelling.
+///
+/// 1. Simple preferences like "prefer sharps". This method doesn't account
+/// for how different collections of notes read better using sharps or using flats.
+/// 2. "Root note based" heuristics, where given a root note suggests spellings
+/// for all the other notes. This works slightly better than a simple preference,
+/// but it's nothing more than a "complicated" preference, in that it still doesn't
+/// take into account any context.
+/// 3. A contextual heuristic, where each note's spelling is based on the other
+/// notes included with it, and their collective intervallic content.
+///
+/// This module starts from approach (2), and enhances it with a collection of (3).
+/// The result is a pretty "smart" spelling engine to convert from
+/// collections of [Pc] to collections of [Note].
 use anyhow::{anyhow, Result};
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::*;
 use crate::note::pc::Pc;
 use crate::note::spelling::Spelling;
 
-/// Spell a [PcSet] as a [Vec<Note>], first using a root [Note] as the starting point
+/// Spell a [PcSet] as a [Vec] of [Note], first using a root [Note] as the starting point
 /// as dictated by [default_spelling]. Then, we maybe convert that default spelling
 /// to its enharmonic equivalent as dictated by heuristics defined in [spell_rules].
 pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>> {
@@ -79,7 +101,7 @@ impl SpellingRule {
 /// when there is a perfect-fourth or a minor-third in the chord as well. Rules like these
 /// are encoded here and gathered into lists where they can be applied to a given set of notes.
 ///
-/// If a rule is flagged, iteration over the rules terminates. The [Vec<SpellingRule>] should
+/// If a rule is flagged, iteration over the rules terminates. The [Vec] of [SpellingRule] should
 /// thus be considered a list of "inclusive-OR" conditions that would all warrant a spelling change.
 pub fn spell_rules(root: &Note) -> Option<Vec<SpellingRule>> {
     match *root {
@@ -551,9 +573,14 @@ pub fn spell_rules(root: &Note) -> Option<Vec<SpellingRule>> {
 
 /// A "getter" for the default spelling of a given [Pc],
 /// depending on a given root [Note], and absent consideration of any other notes that
-/// may accompany it). This is the "best guess in a vacuum" for how to spell a [Pc]
+/// may accompany it. This is the "best guess in a vacuum" for how to spell a [Pc]
 /// sensibly in accordance with a root [Note].
-/// The rules defined in [spell_rules] account for considerations of accompanying notes.
+///
+/// The spellings here are adequate more than 90% of the time. For example, they
+/// cover anything diatonic to a major scale. But they do benefit from some
+/// checks for "exceptions to the rule".
+/// Those "exceptions to the rule" are defined in [spell_rules], and they account
+/// for accompanying notes.
 pub fn default_spelling(root: &Note, pc: &Pc) -> Option<Note> {
     match &root {
         Note::C => match *pc {

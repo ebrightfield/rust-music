@@ -7,21 +7,49 @@ use std::fmt::{Display, Formatter};
 use quality::chord::ChordQuality;
 use crate::note::pc::Pc;
 
-/*
-There are a number of options I should add to configuring how chord names are converted to strings.
-1. How to notate extensions?
-2. Explicit Sus4?
-3. Fancy chars?
-4. Treat extensions as alterations, or enforce that it's gotta be stacked 9th, 11th, 13th.., or allow subsets
+#[derive(Debug, Default, Copy, Clone)]
+pub enum ExtensionStyle {
+    /// Label everything as a 7th chord, and show extensions as alterations
+    #[default]
+    None,
+    /// Any Nth must have all extensions below it. e.g. a 13th chord must contain an 11th
+    /// and a 9th.
+    Strict,
+    /// Labels the extension with whatever is highest
+    Highest,
+    /// Labels the extension with whatever is highest, except if there is only one
+    /// higher extension, in which case we label it as a 7th chord with the alteration.
+    HighestUnlessOne,
+}
 
- */
+/// Chords can be displayed in a number of ways, and users might have different
+/// preferences over the matter.
+/// This configuration struct provides fine-grained control over a number
+/// of formatting parameters.
+#[derive(Debug, Default, Clone)]
+pub struct ChordNameDisplayConfig {
+    // /// How to style the chord alterations.
+    // alt_notation: AlterationNotationStyle,
+    /// Whether or not to express sus4, 7sus4, 9sus4, etc.
+    /// as sus, 7sus, 9sus.
+    explicit_sus4: bool,
+    /// Use fancy utf-8 chars for notes.
+    uft8_accidentals: bool,
+    /// Number of space chars to put between the root note and the chord quality.
+    space_between_root_and_quality: usize,
+    /// Number of space chars to put between the chord quality and the slash in a slash chord.
+    space_between_quality_and_slash: usize,
+    /// Number of space chars to put after the slash symbol in a chord.
+    space_after_slash: usize,
+    /// Whether to only to e.g. label a min11 chord if it contains the 9th.
+    /// This is a practical assumption that usually doesn't apply in settings
+    /// outside of classical music theory.
+    extension_style: ExtensionStyle,
+}
 
-// TODO Display config and implementation.
-// TODO Add interval and single note solutions.
-
-/// All information necessary to describe a chord using typical
-/// western chord names. There are some occasionally weird chords, those
-/// need to be handled uniquely.
+/// Describes a [PcSet] using the chord lexicon fleshed out in [ChordQuality].
+/// The [TonalSpecification] provides optional means of specifying a particular
+/// root note, and/or bass note, and can also specify "no root".
 #[derive(Debug, Clone)]
 pub struct ChordName {
     /// Information regarding any choice of root notes, slash chord, or
@@ -33,27 +61,12 @@ pub struct ChordName {
     pc_set: PcSet,
 }
 
-// fn construct_quality_string(quality: &ChordQuality, ext: &ChordExtension) -> String {
-//     match quality {
-//         ChordQuality::Major => {
-//             match ext {
-//                 ChordExtension::None => "Maj",
-//                 ChordExtension::N => "Maj",
-//             }
-//         }
-//     }
-// }
-
-impl Display for ChordName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // let mut bass = Spelling::from(&self.root).to_string();
-        // let mut is_slash_chord = false;
-        // if let Some(note) = &self.bass {
-        //     bass = Spelling::from(note).to_string();
-        //     is_slash_chord = true;
-        // }
-        // f.write_str(&bass)?;
-        Ok(())
+impl ChordName {
+    pub fn to_string(&self, cfg: Option<&ChordNameDisplayConfig>) -> String {
+        let cfg = cfg
+            .map(|cfg| cfg.clone())
+            .unwrap_or_default();
+        self.quality.to_string(&cfg)
     }
 }
 
