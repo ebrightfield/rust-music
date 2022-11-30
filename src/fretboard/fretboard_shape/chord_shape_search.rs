@@ -28,7 +28,7 @@ impl<'a> ChordShapeSearchResult<'a> {
 }
 
 /// Chord shapes are [FretboardShape]s where there is exactly one [FrettedNote] per string.
-/// If the string is not played in the note_collections, we denote it with a [FrettedNote::Muted].
+/// If the string is not played in the chord, we denote it with a [FrettedNote::Muted].
 pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> anyhow::Result<ChordShapeSearchResult<'a>> {
     let chord_len = chord.len();
     let num_strings: u8 = fretboard.num_strings();

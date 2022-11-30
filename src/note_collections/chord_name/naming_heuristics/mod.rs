@@ -29,14 +29,14 @@ pub trait NamingHeuristic: std::fmt::Debug {
     /// even a simple string.
     type T;
 
-    /// We want to our note_collections in question to have only _one_ element in common with each [HashSet].
+    /// We want to our chord in question to have only _one_ element in common with each [HashSet].
     /// This property must hold true for each element.
     fn required(&self) -> Vec<HashSet<Pc>> { vec! [] }
-    /// We want to our note_collections in question to have only _one_ element in common with each [HashSet].
+    /// We want to our chord in question to have only _one_ element in common with each [HashSet].
     /// These properties are optional, all or none of them could match.
     fn optional(&self) -> Vec<HashSet<Pc>> { vec! [] }
 
-    /// One-shot execution of an attempt at applying this heuristic to naming a note_collections.
+    /// One-shot execution of an attempt at applying this heuristic to naming a chord.
     /// If the heuristic simply doesn't apply, it returns [None].
     /// Likewise, [self.generate_name] can sometimes return [None].
     fn apply(&self, pcs: &HashSet<Pc>) -> Option<Self::T> {

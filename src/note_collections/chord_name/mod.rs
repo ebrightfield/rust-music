@@ -8,7 +8,7 @@ use quality::chord::ChordQuality;
 use crate::note::pc::Pc;
 
 /*
-There are a number of options I should add to configuring how note_collections names are converted to strings.
+There are a number of options I should add to configuring how chord names are converted to strings.
 1. How to notate extensions?
 2. Explicit Sus4?
 3. Fancy chars?
@@ -19,15 +19,15 @@ There are a number of options I should add to configuring how note_collections n
 // TODO Display config and implementation.
 // TODO Add interval and single note solutions.
 
-/// All information necessary to describe a note_collections using typical
-/// western note_collections names. There are some occasionally weird chords, those
+/// All information necessary to describe a chord using typical
+/// western chord names. There are some occasionally weird chords, those
 /// need to be handled uniquely.
 #[derive(Debug, Clone)]
 pub struct ChordName {
-    /// Information regarding any choice of root notes, slash note_collections, or
+    /// Information regarding any choice of root notes, slash chord, or
     /// specifying that we are not generalizing over notes at all.
     tonality: TonalSpecification,
-    /// Combination of tonal "flavors" asserted to be in the note_collections.
+    /// Combination of tonal "flavors" asserted to be in the chord.
     quality: ChordQuality,
     /// Underlying set of pitch classes on which the name is being asserted.
     pc_set: PcSet,
@@ -57,16 +57,16 @@ impl Display for ChordName {
     }
 }
 
-/// Whether or not something is a slash note_collections.
+/// Whether or not something is a slash chord.
 /// All specified notes are assumed to be members of their associated [Vec<Pc>].
 #[derive(Debug, Clone)]
 pub enum TonalSpecification {
-    /// If it's a slash note_collections, the bass note will be supplied here.
+    /// If it's a slash chord, the bass note will be supplied here.
     SlashChord {
         bass: Note,
         root: Note,
     },
-    /// Root note relative to the defined note_collections quality.
+    /// Root note relative to the defined chord quality.
     RootPosition(Note),
     /// No tonal specification. The [Option<Pc>] specifies any possible bass note.
     /// The relevant bass note must be an element in the [Vec<Pc>] being named.

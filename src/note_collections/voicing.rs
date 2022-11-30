@@ -36,13 +36,13 @@ impl Voicing {
 /// These are non-negative, root-agnostic, and spelling-agnostic semitone distances
 /// between consecutive, ordered notes of a harmony.
 ///
-/// Each unique value in this space defines a "unique way to play a particular note_collections type",
+/// Each unique value in this space defines a "unique way to play a particular chord type",
 /// generalized over any possible choice of root [Note].
 ///
 /// If we consider only the space of values `vec[e_1, e_2, ..., e_i]` where all `e_i < 12`,
-/// and pick any note_collections type that is not rotationally (i.e. transpositionally) symmetrical,
-/// then there are `factorial(note_collections.len())` points in this space that uniquely correspond
-/// to that note_collections type. One for each permutation of its notes.
+/// and pick any chord type that is not rotationally (i.e. transpositionally) symmetrical,
+/// then there are `factorial(chord.len())` points in this space that uniquely correspond
+/// to that chord type. One for each permutation of its notes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackedIntervals(pub Vec<u8>);
 

@@ -1,12 +1,13 @@
 use crate::fretboard::Fretboard;
 use crate::note::pitch::Pitch;
+use crate::note_collections::NoteSet;
 
 /// Useful for times when we want to be able to mark a string as muted.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FrettedNote<'a> {
     /// A note that is played on the fretboard.
     Sounded(SoundedNote<'a>),
-    /// Denotes a muted string. Usually most useful for note_collections diagrams.
+    /// Denotes a muted string. Usually most useful for chord diagrams.
     Muted {
         string: u8,
         fretboard: &'a Fretboard,
@@ -16,7 +17,7 @@ pub enum FrettedNote<'a> {
 /// A note played on a fretboard. A reference to the fretboard ensures
 /// that each existing [FrettedNote] instance refers in code back to an
 /// actual [Fretboard] instance, which is often useful for performing calculations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SoundedNote<'a> {
     pub string: u8,
     pub fret: u8,
@@ -48,11 +49,30 @@ impl<'a> SoundedNote<'a> {
         Ok(self.fretboard.sounded_note(self.string, self.fret + n)?)
     }
 
-    // pub fn next_note_same_string(&self, notes: &NoteSet) -> Self {
-    //     let note = self.pitch.note;
-    //     let index = notes.iter().position(|n| *n == note);
-    //
-    // }
+    /// Moves up the same string to a new fret `n` semitones higher.
+    pub fn up_an_octave(&self) -> anyhow::Result<Self> {
+        Ok(self.fretboard.sounded_note(self.string, self.fret + 12)?)
+    }
+
+    /// Produces a [FrettedNote] on the next chord/scale degree, on the same string.
+    pub fn next_note_same_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
+        let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
+        let mut fretted_note = self.fretboard.note_on_string(&next_note, self.string)?;
+        while fretted_note.fret < self.fret {
+            fretted_note = fretted_note.up_an_octave()?;
+        }
+        Ok(fretted_note)
+    }
+
+    /// Produces a [FrettedNote] on the next chord/scale degree, on the next string up.
+    pub fn next_note_next_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
+        let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
+        let mut fretted_note = self.fretboard.note_on_string(&next_note, self.string + 1)?;
+        while fretted_note.fret < self.fret {
+            fretted_note = fretted_note.up_an_octave()?;
+        }
+        Ok(fretted_note)
+    }
 }
 
 impl<'a> FrettedNote<'a> {

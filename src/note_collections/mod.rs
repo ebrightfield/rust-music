@@ -22,9 +22,9 @@ pub trait NumUniqueNotes {
 //     fn chord_name(&self) -> ChordName;
 // }
 
-/// Wraps a [Vec<Note>] to provide some ordering guarantees on construction.
-/// This is music-theoretically the closest thing to e.g. a "C major note_collections" in the abstract.
-/// It contains no information about how that note_collections might be played, but it does entail
+/// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
+/// This is music-theoretically the closest thing to e.g. a "C major chord" in the abstract.
+/// It contains no information about how that notes might be played, but it does entail
 /// certain intervallic properties and therefore can be converted to [PcSet], or vice versa if
 /// a root [Note] is provided (spellings for the remaining [Pc] can be inferred).
 #[derive(Debug, Clone, PartialEq)]

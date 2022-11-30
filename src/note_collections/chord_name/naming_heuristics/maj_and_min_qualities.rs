@@ -65,7 +65,7 @@ impl NamingHeuristic for MajOrMin69 {
     }
 }
 
-/// When both the third and sharp ninth are in the note_collections.
+/// When both the third and sharp ninth are in the chord.
 /// We assume a P5th here. It's not tonally important in this case, and is covered elsewhere.
 #[derive(Debug)]
 pub struct MajSharpNine;
@@ -113,7 +113,7 @@ impl NamingHeuristic for MajOrMinN {
     }
 }
 
-/// When both the third and sharp ninth are in the note_collections.
+/// When both the third and sharp ninth are in the chord.
 /// We assume a P5th here. It's not tonally important in this case, and is covered elsewhere.
 #[derive(Debug)]
 pub struct MajNSharpNine;
