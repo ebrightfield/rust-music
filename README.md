@@ -31,6 +31,12 @@ musical choices that one often finds while composing/analyzing a piece, or even 
 - Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, SevenNoteChordQuality, IrregularScaleQuality
 - Library Error Type
 - Various geometric calculations of sub-/super-chords, voiceleadings, etc.
-- Lilypond and VexTab features
-- Chord name parsing
+- Lilypond code-gen feature
+- Vextab code-gen feature
+- Chord name parsing (regex)
 - Melodic Sequencer
+- PcSet vs PcMultiset
+- Remove the carets from docs
+- Collect lilypond templates in one place, saturate a Tera object with a `Lazy`.
+- Finish the fretboard scale scape search
+- Do a pass on ergonomics
