@@ -1,10 +1,10 @@
-use crate::chord::octave_partition::OctavePartition;
-use crate::chord::pc_set::PcSet;
+use crate::note_collections::octave_partition::OctavePartition;
+use crate::note_collections::pc_set::PcSet;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 use anyhow::anyhow;
 
-// A chord quality for every possible four-note [PcSet].
+// A note_collections quality for every possible four-note [PcSet].
 #[derive(Debug, Clone, PartialEq)]
 pub enum FourNoteChordQuality {
     // Seventh Chords
@@ -163,7 +163,7 @@ impl TryFrom<&PcSet> for FourNoteChordQuality {
 
     fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
         if value.0.len() != 4 {
-            return Err(anyhow!("wrong size for four note chord: {:?}", value.0));
+            return Err(anyhow!("wrong size for four note note_collections: {:?}", value.0));
         }
         let pitches = value.0.as_slice();
         match pitches {

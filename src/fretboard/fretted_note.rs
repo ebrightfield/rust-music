@@ -1,13 +1,12 @@
-use crate::chord::NoteSet;
 use crate::fretboard::Fretboard;
-use crate::pitch::Pitch;
+use crate::note::pitch::Pitch;
 
 /// Useful for times when we want to be able to mark a string as muted.
 #[derive(Debug)]
 pub enum FrettedNote<'a> {
     /// A note that is played on the fretboard.
     Sounded(SoundedNote<'a>),
-    /// Denotes a muted string. Usually most useful for chord diagrams.
+    /// Denotes a muted string. Usually most useful for note_collections diagrams.
     Muted {
         string: u8,
         fretboard: &'a Fretboard,

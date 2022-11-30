@@ -156,7 +156,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
 
 #[cfg(test)]
 mod tests {
-    use crate::chord::pc_set::PcSet;
+    use crate::note_collections::pc_set::PcSet;
     use super::*;
 
     #[test]

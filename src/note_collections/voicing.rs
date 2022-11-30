@@ -1,8 +1,8 @@
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use crate::chord::pc_set::PcSet;
-use crate::chord::spelling::spell_pc_set;
-use crate::pitch::Pitch;
+use crate::note_collections::pc_set::PcSet;
+use crate::note_collections::spelling::spell_pc_set;
+use crate::note::pitch::Pitch;
 
 /// Returns a vector of increasing midi note values, based on a series of
 /// vertically stacked intervals and a starting pitch.
@@ -36,13 +36,13 @@ impl Voicing {
 /// These are non-negative, root-agnostic, and spelling-agnostic semitone distances
 /// between consecutive, ordered notes of a harmony.
 ///
-/// Each unique value in this space defines a "unique way to play a particular chord type",
+/// Each unique value in this space defines a "unique way to play a particular note_collections type",
 /// generalized over any possible choice of root [Note].
 ///
 /// If we consider only the space of values `vec[e_1, e_2, ..., e_i]` where all `e_i < 12`,
-/// and pick any chord type that is not rotationally (i.e. transpositionally) symmetrical,
-/// then there are `factorial(chord.len())` points in this space that uniquely correspond
-/// to that chord type. One for each permutation of its notes.
+/// and pick any note_collections type that is not rotationally (i.e. transpositionally) symmetrical,
+/// then there are `factorial(note_collections.len())` points in this space that uniquely correspond
+/// to that note_collections type. One for each permutation of its notes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackedIntervals(pub Vec<u8>);
 

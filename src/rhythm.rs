@@ -1,4 +1,4 @@
-use crate::pitch::Pitch;
+use crate::note::pitch::Pitch;
 
 pub type DurationIn32ndNotes = u8;
 

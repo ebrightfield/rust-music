@@ -1,8 +1,7 @@
 use std::collections::HashSet;
-use crate::chord::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
-use crate::chord::chord_name::naming_heuristics::dim_qualities::search_for_dim_quality;
-use crate::chord::chord_name::naming_heuristics::NamingHeuristic;
-use crate::chord::chord_name::quality::{Alt, ChordQuality, DimSubtype, Extension, SusSubtype};
+use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::chord::{Alt, ChordQuality, SusSubtype};
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 

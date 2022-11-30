@@ -1,4 +1,4 @@
-use crate::chord::pc_set::PcSet;
+use crate::note_collections::pc_set::PcSet;
 use crate::note::pc::Pc;
 use anyhow::anyhow;
 

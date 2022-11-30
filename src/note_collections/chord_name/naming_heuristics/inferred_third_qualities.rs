@@ -1,6 +1,6 @@
 use std::collections::HashSet;
-use crate::chord::chord_name::naming_heuristics::{maj_and_min_qualities, NamingHeuristic};
-use crate::chord::chord_name::quality::ChordQuality;
+use crate::note_collections::chord_name::naming_heuristics::{maj_and_min_qualities, NamingHeuristic};
+use crate::note_collections::chord_name::quality::chord::ChordQuality;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 

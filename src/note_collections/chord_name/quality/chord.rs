@@ -1,12 +1,6 @@
-pub mod scale;
-
-use std::collections::HashSet;
-use std::ops::{Deref, DerefMut};
 use anyhow::anyhow;
-use crate::chord::octave_partition::IntervalClass;
-use crate::note::note::Note;
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use std::ops::{Deref, DerefMut};
+use crate::note_collections::octave_partition::IntervalClass;
 
 /// The "ninth", "eleventh", etc in Maj9th or min11th chords, etc.
 #[derive(Debug, Clone, PartialEq)]

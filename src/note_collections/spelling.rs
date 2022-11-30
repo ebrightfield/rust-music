@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use crate::chord::pc_set::PcSet;
+use crate::note_collections::pc_set::PcSet;
 use crate::note::note::*;
 use crate::note::pc::Pc;
 use crate::note::spelling::Spelling;
@@ -74,9 +74,9 @@ impl SpellingRule {
 /// when one has a collection of multiple notes, and they want them to be spelled sensibly
 /// in accordance with a supposed root Note.
 ///
-/// For example, a tritone is better spelled as a sharp-fourth when the chord also contains
+/// For example, a tritone is better spelled as a sharp-fourth when the note_collections also contains
 /// a perfect-fifth, but often better spelled as a flat-fifth otherwise, and especially so
-/// when there is a perfect-fourth or a minor-third in the chord as well. Rules like these
+/// when there is a perfect-fourth or a minor-third in the note_collections as well. Rules like these
 /// are encoded here and gathered into lists where they can be applied to a given set of notes.
 ///
 /// If a rule is flagged, iteration over the rules terminates. The [Vec<SpellingRule>] should

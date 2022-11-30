@@ -3,11 +3,10 @@ pub mod melodic_shape_search;
 
 use std::fmt::{Display, Formatter};
 use std::iter::zip;
-use crate::pitch::Pitch;
-use crate::chord::voicing::StackedIntervals;
+use crate::note::pitch::Pitch;
+use crate::note_collections::voicing::StackedIntervals;
 use crate::fretboard::Fretboard;
 use crate::fretboard::fretted_note::{FrettedNote, SoundedNote};
-use crate::note::note::Note;
 
 #[derive(Debug)]
 pub struct FretboardShape<'a> {
@@ -190,7 +189,7 @@ pub enum ChordShapeClassification {
 mod tests {
     use crate::fretboard::fretboard_shape::chord_shape_search::find_chord_shapes;
     use crate::fretboard::STD_6STR_GTR;
-    use crate::pitch::Pitch;
+    use crate::note::note::Note;
     use super::*;
 
     #[test]

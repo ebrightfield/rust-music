@@ -1,6 +1,5 @@
-pub mod chord;
+pub mod note_collections;
 mod lilypond;
 pub mod note;
-mod pitch;
 mod rhythm;
 pub mod fretboard;

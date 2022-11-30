@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 use once_cell::sync::Lazy;
-use crate::chord::chord_name::naming_heuristics::maj_and_min_qualities::search_for_maj_min_quality;
-use crate::chord::chord_name::naming_heuristics::NamingHeuristic;
-use crate::chord::chord_name::quality::ChordQuality;
-use crate::chord::chord_name::quality::scale::{Alt2nd, Alt2ndMinor, Alt4th, Alt4thMinor, Alt6thAugMaj7, Alt6thDom7, Alt6thMaj7, ScaleQuality};
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::scale::{Alt2nd, Alt2ndMinor, Alt4th, Alt4thMinor, Alt6thAugMaj7, Alt6thDom7, Alt6thMaj7, ScaleQuality};
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 

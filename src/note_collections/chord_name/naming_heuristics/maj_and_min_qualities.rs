@@ -1,7 +1,7 @@
 use std::collections::HashSet;
-use crate::chord::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
-use crate::chord::chord_name::naming_heuristics::NamingHeuristic;
-use crate::chord::chord_name::quality::{ChordQuality, MajorSubtype, MinorSubtype};
+use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::chord::{ChordQuality, MajorSubtype, MinorSubtype};
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 
@@ -65,7 +65,7 @@ impl NamingHeuristic for MajOrMin69 {
     }
 }
 
-/// When both the third and sharp ninth are in the chord.
+/// When both the third and sharp ninth are in the note_collections.
 /// We assume a P5th here. It's not tonally important in this case, and is covered elsewhere.
 #[derive(Debug)]
 pub struct MajSharpNine;
@@ -113,7 +113,7 @@ impl NamingHeuristic for MajOrMinN {
     }
 }
 
-/// When both the third and sharp ninth are in the chord.
+/// When both the third and sharp ninth are in the note_collections.
 /// We assume a P5th here. It's not tonally important in this case, and is covered elsewhere.
 #[derive(Debug)]
 pub struct MajNSharpNine;

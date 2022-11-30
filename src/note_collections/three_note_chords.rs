@@ -1,10 +1,8 @@
-use crate::chord::octave_partition::OctavePartition;
-use crate::chord::pc_set::PcSet;
+use crate::note_collections::octave_partition::OctavePartition;
+use crate::note_collections::pc_set::PcSet;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 use anyhow::anyhow;
-use crate::chord::chord_name::quality::{AugSubtype, ChordQuality, DimSubtype, MajorSubtype, MinorSubtype};
-use crate::chord::chord_name::quality::AugSubtype::AugN;
 
 /// The various possible octave partitions with three notes.
 pub enum ThreeNoteChordQuality {
@@ -82,7 +80,7 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
 
     fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
         if value.0.len() != 3 {
-            return Err(anyhow!("wrong size for three note chord: {:?}", value.0));
+            return Err(anyhow!("wrong size for three note note_collections: {:?}", value.0));
         }
         let pitches = value.0.as_slice();
         match pitches {

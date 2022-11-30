@@ -7,7 +7,7 @@ use fretted_note::SoundedNote;
 use once_cell::sync::Lazy;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
-use crate::pitch::Pitch;
+use crate::note::pitch::Pitch;
 
 // TODO Add more such common guitar tunings as a convenience.
 /// Standard tuning on a 6-string guitar.

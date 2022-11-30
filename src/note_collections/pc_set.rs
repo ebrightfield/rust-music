@@ -1,6 +1,6 @@
 use crate::note::pc::Pc;
 use std::collections::{HashMap, HashSet};
-use crate::chord::geometry::{find_transpositional_symmetries, TranspositionalSymmetry};
+use crate::note_collections::geometry::{find_transpositional_symmetries, TranspositionalSymmetry};
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();
