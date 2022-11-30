@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(
             quality.unwrap().1,
              Some(ChordQuality::Major(MajorSubtype::MajN(
-                vec![Extension::Seventh, Extension::Eleventh], Some(Alt(vec![]))
+                vec![Extension::Seventh, Extension::Eleventh], Alt(vec![])
             )))
         );
         let notes = vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11];

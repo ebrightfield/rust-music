@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use crate::chord::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
 use crate::chord::chord_name::naming_heuristics::dim_qualities::search_for_dim_quality;
 use crate::chord::chord_name::naming_heuristics::NamingHeuristic;
-use crate::chord::chord_name::quality::{ChordQuality, DimSubtype, Extension, SusSubtype};
+use crate::chord::chord_name::quality::{Alt, ChordQuality, DimSubtype, Extension, SusSubtype};
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 
@@ -13,7 +13,7 @@ pub fn search_for_sus_quality(pcs: &HashSet<Pc>) -> ChordQuality {
         return ChordQuality::Sus(SusSubtype::Sus4(alt));
     }
     if *pcs == HashSet::from([Pc0, Pc2, Pc5, Pc7, Pc9]) {
-        return ChordQuality::Sus(SusSubtype::SixNineSus(None));
+        return ChordQuality::Sus(SusSubtype::SixNineSus(Alt::empty()));
     }
     if pcs.contains(&Pc2) && !pcs.contains(&Pc5) {
         let alt = generate_alt(pcs, TriadContext::Sus);

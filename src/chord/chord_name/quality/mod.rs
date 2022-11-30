@@ -45,6 +45,12 @@ impl TryFrom<usize> for AltChoice {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Alt(pub(crate) Vec<AltChoice>);
 
+impl Alt {
+    pub fn empty() -> Self {
+        Alt(vec![])
+    }
+}
+
 impl From<Vec<AltChoice>> for Alt {
     fn from(value: Vec<AltChoice>) -> Self {
         Self(value)
@@ -76,53 +82,53 @@ pub enum Extension {
 /// Chords based around a Major triad.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MajorSubtype {
-    Maj(Option<Alt>),
-    Maj6(Option<Alt>),
-    MajN(Vec<Extension>, Option<Alt>),
-    N(Vec<Extension>, Option<Alt>),
+    Maj(Alt),
+    Maj6(Alt),
+    MajN(Vec<Extension>, Alt),
+    N(Vec<Extension>, Alt),
 }
 
 /// Chords based around a minor triad.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MinorSubtype {
-    Min(Option<Alt>),
-    Min6(Option<Alt>),
-    MinMajN(Vec<Extension>, Option<Alt>),
-    MinN(Vec<Extension>, Option<Alt>),
+    Min(Alt),
+    Min6(Alt),
+    MinMajN(Vec<Extension>, Alt),
+    MinN(Vec<Extension>, Alt),
 }
 
 /// Chords based around an Augmented triad.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AugSubtype {
     /// e.g. C+
-    Aug(Option<Alt>),
+    Aug(Alt),
     /// e.g. C+Maj7
-    AugMajN(Vec<Extension>, Option<Alt>),
+    AugMajN(Vec<Extension>, Alt),
     /// e.g. C+7
-    AugN(Vec<Extension>, Option<Alt>),
+    AugN(Vec<Extension>, Alt),
 }
 
 /// Chords based around a diminished triad.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DimSubtype {
     /// e.g. Cdim
-    Dim(Option<Alt>),
+    Dim(Alt),
     /// e.g. Cmin7b5
-    MinNb5(Vec<Extension>, Option<Alt>),
+    MinNb5(Vec<Extension>, Alt),
     /// e.g. Cdim7
-    DimN(Vec<Extension>, Option<Alt>),
+    DimN(Vec<Extension>, Alt),
     /// Edge case -- e.g. CdimMaj7
-    DimMajN(Vec<Extension>, Option<Alt>),
+    DimMajN(Vec<Extension>, Alt),
 }
 
 /// Chords based around a diminished triad.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SusSubtype {
-    Sus2(Option<Alt>),
-    Sus4(Option<Alt>),
-    DomNSus(Vec<Extension>, Option<Alt>),
-    MajNSus(Vec<Extension>, Option<Alt>),
-    SixNineSus(Option<Alt>),
+    Sus2(Alt),
+    Sus4(Alt),
+    DomNSus(Vec<Extension>, Alt),
+    MajNSus(Vec<Extension>, Alt),
+    SixNineSus(Alt),
 }
 
 /// Basic categories for chords >=3 pitch classes,
