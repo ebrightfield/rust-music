@@ -8,11 +8,15 @@ fn calc_midi_note(note: &Note, octave: &u8) -> u8 {
     (octave + 1) * 12 + u8::from(Pc::from(note))
 }
 
-/// Note with octave information.
+/// [Note] with octave information.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pitch {
+    /// Associated [Note] instance.
     pub note: Note,
+    /// The octave register. Middle C = C4.
     pub octave: u8,
+    /// The associated MIDI note, which also serves as a good means of measurement in
+    /// semitone space. Middle C = 60.
     pub midi_note: u8,
 }
 

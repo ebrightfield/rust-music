@@ -23,7 +23,7 @@ const G_8_STAFF: &str = r#"
             \omit Score.BarNumber
 
             {{ content }}
-        }}",
+        }
 "#;
 
 /// Intentional double indent here.
@@ -34,7 +34,7 @@ const TAB_STAFF: &str = r#"
             \omit Score.BarNumber
 
             {{ content }}
-        }}",
+        }
 "#;
 
 /// Wrap content in a score block, optionally with ragged-right set to false.
@@ -56,7 +56,7 @@ pub fn staff(content: String, time_signature: Option<String>) -> String {
         OMIT_TIME_SIGNATURE.to_string()
     };
     let mut tera = Tera::default();
-    tera.add_raw_template("staff", G_8_STAFF);
+    tera.add_raw_template("staff", G_8_STAFF).unwrap();
     let mut ctx = Context::new();
     ctx.insert("time_signature", &time_sig);
     ctx.insert("content", &content);
@@ -94,6 +94,6 @@ mod tests {
             result,
             true
         );
-        println!("{}", result);
+        //println!("{}", result);
     }
 }
