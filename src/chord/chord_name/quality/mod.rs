@@ -1,8 +1,12 @@
+pub mod scale;
+
+use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use anyhow::anyhow;
 use crate::chord::octave_partition::IntervalClass;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
+use crate::note::pc::Pc::*;
 
 /// The "ninth", "eleventh", etc in Maj9th or min11th chords, etc.
 #[derive(Debug, Clone, PartialEq)]
@@ -38,8 +42,8 @@ impl TryFrom<usize> for AltChoice {
 }
 
 /// Chord Quality Alterations
-#[derive(Debug, Clone)]
-pub struct Alt(Vec<AltChoice>);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Alt(pub(crate) Vec<AltChoice>);
 
 impl From<Vec<AltChoice>> for Alt {
     fn from(value: Vec<AltChoice>) -> Self {
@@ -61,7 +65,7 @@ impl DerefMut for Alt {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Extension {
     Seventh,
     Ninth,
@@ -70,7 +74,7 @@ pub enum Extension {
 }
 
 /// Chords based around a Major triad.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MajorSubtype {
     Maj(Option<Alt>),
     Maj6(Option<Alt>),
@@ -79,7 +83,7 @@ pub enum MajorSubtype {
 }
 
 /// Chords based around a minor triad.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MinorSubtype {
     Min(Option<Alt>),
     Min6(Option<Alt>),
@@ -88,7 +92,7 @@ pub enum MinorSubtype {
 }
 
 /// Chords based around an Augmented triad.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AugSubtype {
     /// e.g. C+
     Aug(Option<Alt>),
@@ -99,7 +103,7 @@ pub enum AugSubtype {
 }
 
 /// Chords based around a diminished triad.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DimSubtype {
     /// e.g. Cdim
     Dim(Option<Alt>),
@@ -112,7 +116,7 @@ pub enum DimSubtype {
 }
 
 /// Chords based around a diminished triad.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SusSubtype {
     Sus2(Option<Alt>),
     Sus4(Option<Alt>),
@@ -124,7 +128,7 @@ pub enum SusSubtype {
 /// Basic categories for chords >=3 pitch classes,
 /// and special variants for the trivial cases of
 /// [ChordQuality::Interval] and [ChordQuality::SingleNote].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ChordQuality {
     Major(MajorSubtype),
     Minor(MinorSubtype),
@@ -134,50 +138,4 @@ pub enum ChordQuality {
     /// Any pair of distinct pitch-classes
     Interval(IntervalClass),
     SingleNote,
-}
-
-#[derive(Debug, Clone)]
-pub enum Alt2nd {
-    Sharp, // TODO Cannot clobber min thirds on this.
-    Natural,
-    Flat
-}
-
-#[derive(Debug, Clone)]
-pub enum Alt4th {
-    Sharp,
-    Natural,
-    Flat // TODO Cannot clobber Major chords with this.
-}
-
-#[derive(Debug, Clone)]
-pub enum Alt6th {
-    Sharp,
-    Natural,
-    Flat // TODO Have to ensure we don't mark this on Aug
-}
-
-/// The primary categories of scales, modes, which we can then further characterize
-/// by alterations.
-#[derive(Debug, Clone)]
-pub enum ScaleQuality {
-    Major(Alt2nd, Alt6th),
-    IonianAug(Alt2nd, Alt6th),
-    Dorian(Alt2nd, Alt4th),
-    Phrygian(Alt4th),
-    Lydian(Alt2nd, Alt6th),
-    LydianAug(Alt2nd, Alt6th),
-    Mixolydian(Alt2nd, Alt4th, Alt6th),
-    MixolydianAug(Alt2nd, Alt4th, Alt6th),
-    NaturalMinor(Alt4th),
-    MelodicMinor(Alt2nd, Alt4th),
-    HarmonicMajor,
-    HarmonicMinor,
-    Locrian(Alt2nd, Alt6th),
-    Altered,
-    WholeTone,
-    AugAH,
-    AugHA,
-    DimHW,
-    DimWH,
 }
