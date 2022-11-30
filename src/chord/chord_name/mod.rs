@@ -1,15 +1,22 @@
 pub mod quality;
 pub mod naming_heuristics;
-pub mod generation;
 
 use std::collections::HashSet;
 use crate::chord::pc_set::PcSet;
 use crate::note::note::Note;
 use std::fmt::{Display, Formatter};
-use quality::{ChordQuality, TonalSpecification};
-use crate::chord::chord_name::naming_heuristics::sanitize_pcs;
-use crate::chord::octave_partition::BaseChromaticInterval;
+use quality::ChordQuality;
+use crate::chord::octave_partition::IntervalClass;
 use crate::note::pc::Pc;
+
+/*
+There are a number of options I should add to configuring how chord names are converted to strings.
+1. How to notate extensions?
+2. Explicit Sus4?
+3. Fancy chars?
+4. Treat extensions as alterations, or enforce that it's gotta be stacked 9th, 11th, 13th.., or allow subsets
+
+ */
 
 /// All information necessary to describe a chord using typical
 /// western chord names. There are some occasionally weird chords, those
@@ -49,25 +56,18 @@ impl Display for ChordName {
     }
 }
 
-pub fn infer_chord_quality(pcs: &Vec<Pc>) -> Option<ChordQuality> {
-    let pcs = sanitize_pcs(pcs);
-    for heuristic in naming_heuristics::heuristics() {
-        if heuristic.validate(&pcs) {
-            return heuristic.generate_name(&pcs);
-        }
-    }
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::note::pc::Pc::*;
-
-    #[test]
-    fn chord_names() {
-        let notes = vec![Pc0, Pc4, Pc7, Pc11];
-        let quality = infer_chord_quality(&notes);
-        println!("{:?}", quality);
-    }
+/// Whether or not something is a slash chord.
+/// All specified notes are assumed to be members of their associated [Vec<Pc>].
+#[derive(Debug, Clone)]
+pub enum TonalSpecification {
+    /// If it's a slash chord, the bass note will be supplied here.
+    SlashChord {
+        bass: Note,
+        root: Note,
+    },
+    /// Root note relative to the defined chord quality.
+    RootPosition(Note),
+    /// No tonal specification. The [Option<Pc>] specifies any possible bass note.
+    /// The relevant bass note must be an element in the [Vec<Pc>] being named.
+    None(Option<Pc>)
 }

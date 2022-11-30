@@ -3,149 +3,155 @@ use crate::note::pc::Pc;
 use anyhow::anyhow;
 
 /// The twelve possible interval distances inside of an octave.
+/// We keep this as a distinct class from [Pc] because while they're
+/// both mod-12 values, they represent different things musically,
+/// and they have certain relational properties that we want to be able to express
+/// in code.
+///
+/// Technically, this is called an unordered Pitch Interval Class.
 #[derive(Debug, Clone, PartialEq)]
-pub enum BaseChromaticInterval {
-    Interval0,
-    Interval1,
-    Interval2,
-    Interval3,
-    Interval4,
-    Interval5,
-    Interval6,
-    Interval7,
-    Interval8,
-    Interval9,
-    Interval10,
-    Interval11,
+pub enum IntervalClass {
+    Ic0,
+    Ic1,
+    Ic2,
+    Ic3,
+    Ic4,
+    Ic5,
+    Ic6,
+    Ic7,
+    Ic8,
+    Ic9,
+    Ic10,
+    Ic11,
 }
 
-impl From<&BaseChromaticInterval> for Pc {
-    fn from(interval: &BaseChromaticInterval) -> Pc {
+impl From<&IntervalClass> for Pc {
+    fn from(interval: &IntervalClass) -> Pc {
         match interval {
-            BaseChromaticInterval::Interval0 => Pc::Pc0,
-            BaseChromaticInterval::Interval1 => Pc::Pc1,
-            BaseChromaticInterval::Interval2 => Pc::Pc2,
-            BaseChromaticInterval::Interval3 => Pc::Pc3,
-            BaseChromaticInterval::Interval4 => Pc::Pc4,
-            BaseChromaticInterval::Interval5 => Pc::Pc5,
-            BaseChromaticInterval::Interval6 => Pc::Pc6,
-            BaseChromaticInterval::Interval7 => Pc::Pc7,
-            BaseChromaticInterval::Interval8 => Pc::Pc8,
-            BaseChromaticInterval::Interval9 => Pc::Pc9,
-            BaseChromaticInterval::Interval10 => Pc::Pc10,
-            BaseChromaticInterval::Interval11 => Pc::Pc11,
+            IntervalClass::Ic0 => Pc::Pc0,
+            IntervalClass::Ic1 => Pc::Pc1,
+            IntervalClass::Ic2 => Pc::Pc2,
+            IntervalClass::Ic3 => Pc::Pc3,
+            IntervalClass::Ic4 => Pc::Pc4,
+            IntervalClass::Ic5 => Pc::Pc5,
+            IntervalClass::Ic6 => Pc::Pc6,
+            IntervalClass::Ic7 => Pc::Pc7,
+            IntervalClass::Ic8 => Pc::Pc8,
+            IntervalClass::Ic9 => Pc::Pc9,
+            IntervalClass::Ic10 => Pc::Pc10,
+            IntervalClass::Ic11 => Pc::Pc11,
         }
     }
 }
 
 
-impl From<BaseChromaticInterval> for Pc {
-    fn from(interval: BaseChromaticInterval) -> Pc {
+impl From<IntervalClass> for Pc {
+    fn from(interval: IntervalClass) -> Pc {
         Pc::from(&interval)
     }
 }
 
-impl From<&BaseChromaticInterval> for i32 {
-    fn from(interval: &BaseChromaticInterval) -> Self {
+impl From<&IntervalClass> for i32 {
+    fn from(interval: &IntervalClass) -> Self {
         match interval {
-            BaseChromaticInterval::Interval0 => 0,
-            BaseChromaticInterval::Interval1 => 1,
-            BaseChromaticInterval::Interval2 => 2,
-            BaseChromaticInterval::Interval3 => 3,
-            BaseChromaticInterval::Interval4 => 4,
-            BaseChromaticInterval::Interval5 => 5,
-            BaseChromaticInterval::Interval6 => 6,
-            BaseChromaticInterval::Interval7 => 7,
-            BaseChromaticInterval::Interval8 => 8,
-            BaseChromaticInterval::Interval9 => 9,
-            BaseChromaticInterval::Interval10 => 10,
-            BaseChromaticInterval::Interval11 => 11,
+            IntervalClass::Ic0 => 0,
+            IntervalClass::Ic1 => 1,
+            IntervalClass::Ic2 => 2,
+            IntervalClass::Ic3 => 3,
+            IntervalClass::Ic4 => 4,
+            IntervalClass::Ic5 => 5,
+            IntervalClass::Ic6 => 6,
+            IntervalClass::Ic7 => 7,
+            IntervalClass::Ic8 => 8,
+            IntervalClass::Ic9 => 9,
+            IntervalClass::Ic10 => 10,
+            IntervalClass::Ic11 => 11,
         }
     }
 }
 
-impl From<BaseChromaticInterval> for i32 {
-    fn from(interval: BaseChromaticInterval) -> Self {
+impl From<IntervalClass> for i32 {
+    fn from(interval: IntervalClass) -> Self {
         i32::from(&interval)
     }
 }
 
-impl From<&i32> for BaseChromaticInterval {
+impl From<&i32> for IntervalClass {
     fn from(pc: &i32) -> Self {
         let pc = pc.rem_euclid(12);
         match pc {
-            0 => BaseChromaticInterval::Interval0,
-            1 => BaseChromaticInterval::Interval1,
-            2 => BaseChromaticInterval::Interval2,
-            3 => BaseChromaticInterval::Interval3,
-            4 => BaseChromaticInterval::Interval4,
-            5 => BaseChromaticInterval::Interval5,
-            6 => BaseChromaticInterval::Interval6,
-            7 => BaseChromaticInterval::Interval7,
-            8 => BaseChromaticInterval::Interval8,
-            9 => BaseChromaticInterval::Interval9,
-            10 => BaseChromaticInterval::Interval10,
-            11 => BaseChromaticInterval::Interval11,
+            0 => IntervalClass::Ic0,
+            1 => IntervalClass::Ic1,
+            2 => IntervalClass::Ic2,
+            3 => IntervalClass::Ic3,
+            4 => IntervalClass::Ic4,
+            5 => IntervalClass::Ic5,
+            6 => IntervalClass::Ic6,
+            7 => IntervalClass::Ic7,
+            8 => IntervalClass::Ic8,
+            9 => IntervalClass::Ic9,
+            10 => IntervalClass::Ic10,
+            11 => IntervalClass::Ic11,
             _ => unreachable!(),
         }
     }
 }
 
-impl From<i32> for BaseChromaticInterval {
+impl From<i32> for IntervalClass {
     fn from(pc: i32) -> Self {
-        BaseChromaticInterval::from(&pc)
+        IntervalClass::from(&pc)
     }
 }
 
-impl From<&u8> for BaseChromaticInterval {
+impl From<&u8> for IntervalClass {
     fn from(pc: &u8) -> Self {
         let pc = pc.rem_euclid(12);
         match pc {
-            0 => BaseChromaticInterval::Interval0,
-            1 => BaseChromaticInterval::Interval1,
-            2 => BaseChromaticInterval::Interval2,
-            3 => BaseChromaticInterval::Interval3,
-            4 => BaseChromaticInterval::Interval4,
-            5 => BaseChromaticInterval::Interval5,
-            6 => BaseChromaticInterval::Interval6,
-            7 => BaseChromaticInterval::Interval7,
-            8 => BaseChromaticInterval::Interval8,
-            9 => BaseChromaticInterval::Interval9,
-            10 => BaseChromaticInterval::Interval10,
-            11 => BaseChromaticInterval::Interval11,
+            0 => IntervalClass::Ic0,
+            1 => IntervalClass::Ic1,
+            2 => IntervalClass::Ic2,
+            3 => IntervalClass::Ic3,
+            4 => IntervalClass::Ic4,
+            5 => IntervalClass::Ic5,
+            6 => IntervalClass::Ic6,
+            7 => IntervalClass::Ic7,
+            8 => IntervalClass::Ic8,
+            9 => IntervalClass::Ic9,
+            10 => IntervalClass::Ic10,
+            11 => IntervalClass::Ic11,
             _ => unreachable!(),
         }
     }
 }
 
-impl From<u8> for BaseChromaticInterval {
+impl From<u8> for IntervalClass {
     fn from(pc: u8) -> Self {
-        BaseChromaticInterval::from(&pc)
+        IntervalClass::from(&pc)
     }
 }
 
 
-impl Into<u8> for BaseChromaticInterval {
+impl Into<u8> for IntervalClass {
     fn into(self) -> u8 {
         (&self).into()
     }
 }
 
-impl Into<u8> for &BaseChromaticInterval {
+impl Into<u8> for &IntervalClass {
     fn into(self) -> u8 {
         match self {
-            BaseChromaticInterval::Interval0 => 0,
-            BaseChromaticInterval::Interval1 => 1,
-            BaseChromaticInterval::Interval2 => 2,
-            BaseChromaticInterval::Interval3 => 3,
-            BaseChromaticInterval::Interval4 => 4,
-            BaseChromaticInterval::Interval5 => 5,
-            BaseChromaticInterval::Interval6 => 6,
-            BaseChromaticInterval::Interval7 => 7,
-            BaseChromaticInterval::Interval8 => 8,
-            BaseChromaticInterval::Interval9 => 9,
-            BaseChromaticInterval::Interval10 => 10,
-            BaseChromaticInterval::Interval11 => 11,
+            IntervalClass::Ic0 => 0,
+            IntervalClass::Ic1 => 1,
+            IntervalClass::Ic2 => 2,
+            IntervalClass::Ic3 => 3,
+            IntervalClass::Ic4 => 4,
+            IntervalClass::Ic5 => 5,
+            IntervalClass::Ic6 => 6,
+            IntervalClass::Ic7 => 7,
+            IntervalClass::Ic8 => 8,
+            IntervalClass::Ic9 => 9,
+            IntervalClass::Ic10 => 10,
+            IntervalClass::Ic11 => 11,
         }
     }
 }
@@ -153,11 +159,11 @@ impl Into<u8> for &BaseChromaticInterval {
 /// An ordered, cyclic series of intervals that sum to an octave.
 /// Represents a way to "slice" an octave into n intervals.
 #[derive(Debug, PartialEq)]
-pub struct OctavePartition(pub Vec<BaseChromaticInterval>);
+pub struct OctavePartition(pub Vec<IntervalClass>);
 
 impl OctavePartition {
     /// Sanitized to ensure that it's valid
-    pub fn new(intervals: Vec<BaseChromaticInterval>) -> anyhow::Result<Self> {
+    pub fn new(intervals: Vec<IntervalClass>) -> anyhow::Result<Self> {
         let sum: i32 = intervals.iter().map(|interval| i32::from(interval)).sum();
         if sum != 12 {
             return Err(anyhow!("Invalid octave partition: {:?}", intervals));
@@ -175,7 +181,7 @@ impl From<&[Pc]> for OctavePartition {
 impl From<&PcSet> for OctavePartition {
     fn from(pc_set: &PcSet) -> Self {
         if pc_set.is_empty() {
-            return Self(vec![BaseChromaticInterval::Interval0]);
+            return Self(vec![IntervalClass::Ic0]);
         }
         let vals = pc_set.0.iter().map(|pc| i32::from(pc));
         let next_vals = pc_set.0.iter().skip(1).map(|pc| i32::from(pc));
@@ -184,7 +190,7 @@ impl From<&PcSet> for OctavePartition {
         diffs.push(i32::from(pc_set.0.first().unwrap()) - i32::from(pc_set.0.last().unwrap()));
         let diffs = diffs
             .iter()
-            .map(|i| BaseChromaticInterval::from(i))
+            .map(|i| IntervalClass::from(i))
             .collect();
         OctavePartition::new(diffs).unwrap()
     }
@@ -222,9 +228,9 @@ mod tests {
                 OctavePartition::from(pc_set)
             },
             OctavePartition::new(vec![
-                BaseChromaticInterval::Interval4,
-                BaseChromaticInterval::Interval3,
-                BaseChromaticInterval::Interval5,
+                IntervalClass::Ic4,
+                IntervalClass::Ic3,
+                IntervalClass::Ic5,
             ])
             .unwrap()
         );
@@ -233,9 +239,9 @@ mod tests {
     #[test]
     fn test_invalid_octave_partition() {
         let intervals = vec![
-            BaseChromaticInterval::Interval4,
-            BaseChromaticInterval::Interval3,
-            BaseChromaticInterval::Interval6,
+            IntervalClass::Ic4,
+            IntervalClass::Ic3,
+            IntervalClass::Ic6,
         ];
         let result = OctavePartition::new(intervals.clone());
         match result {

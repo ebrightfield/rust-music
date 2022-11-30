@@ -1,13 +1,11 @@
-pub mod maj_and_min;
-
 use std::collections::HashSet;
-use crate::chord::chord_name::naming_heuristics::NamingHeuristic;
-use crate::chord::chord_name::quality::{Alt, AltChoice, ChordQuality, Extension, MajorSubtype, MinorSubtype};
+use crate::chord::chord_name::quality::{Alt, AltChoice, Extension};
 use crate::note::pc::Pc;
 
 /// This controls how we search for potential alterations,
 /// as the presence of some notes in certain contexts is an alteration,
 /// but in other contexts is not.
+#[derive(Debug, Clone, PartialEq)]
 pub enum TriadContext {
     Major,
     Minor,
@@ -16,9 +14,13 @@ pub enum TriadContext {
     Sus,
 }
 
+const MINOR_ALTS: &[usize] = &[1, 2, 4, 5, 6, 8, 9];
+/// Generate an [Alt] to describe what alterations should be added to a chord name.
 pub fn generate_alt(pcs: &HashSet<Pc>, triad_context: TriadContext) -> Option<Alt> {
     let mut alterations = vec![];
-    let mut possible_alts: Vec<usize> = vec![1, 2, 4, 5, 6, 8, 9];
+    // Based on some starting values and a [TriadContext],
+    // we can modify the [possible_alts] local to something tailored to each context.
+    let mut possible_alts: Vec<usize> = MINOR_ALTS.to_vec();
     match triad_context {
         TriadContext::Major => {
             // Override the Major third with a minor third.
@@ -49,10 +51,12 @@ pub fn generate_alt(pcs: &HashSet<Pc>, triad_context: TriadContext) -> Option<Al
     Some(alterations.into())
 }
 
+/// Generate an [Alt] to describe what alterations should be added to a chord name.
+/// Also generate a [Vec<Extension>].
 /// Used for "xxxN" qualities, i.e. Maj7, dom7, min7, min7b5, etc.
 pub fn generate_alt_and_extensions(pcs: &HashSet<Pc>, triad_context: TriadContext) -> (Option<Alt>, Vec<Extension>) {
     let mut extensions = vec![Extension::Seventh];
-    let mut alts = generate_alt(pcs, triad_context);
+    let mut alts = generate_alt(pcs, triad_context.clone());
     if let Some(inner) = alts.as_mut() {
         if inner.contains(&AltChoice::Nine) {
             inner.retain(|x| *x != AltChoice::Nine);
@@ -64,7 +68,10 @@ pub fn generate_alt_and_extensions(pcs: &HashSet<Pc>, triad_context: TriadContex
         }
         if inner.contains(&AltChoice::Thirteenth) {
             inner.retain(|x| *x != AltChoice::Thirteenth);
-            extensions.push(Extension::Thirteenth);
+            // 6ths/13ths on a diminished chord are diminished 7ths.
+            if triad_context != TriadContext::Dim {
+                extensions.push(Extension::Thirteenth);
+            }
         }
     }
     (alts, extensions)

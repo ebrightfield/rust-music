@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 use anyhow::anyhow;
-use crate::chord::octave_partition::BaseChromaticInterval;
+use crate::chord::octave_partition::IntervalClass;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
 
@@ -93,9 +93,9 @@ pub enum AugSubtype {
     /// e.g. C+
     Aug(Option<Alt>),
     /// e.g. C+Maj7
-    AugMajN(Extension, Option<Alt>),
+    AugMajN(Vec<Extension>, Option<Alt>),
     /// e.g. C+7
-    AugN(Extension, Option<Alt>),
+    AugN(Vec<Extension>, Option<Alt>),
 }
 
 /// Chords based around a diminished triad.
@@ -104,39 +104,80 @@ pub enum DimSubtype {
     /// e.g. Cdim
     Dim(Option<Alt>),
     /// e.g. Cmin7b5
-    MinNb5(Extension, Option<Alt>),
+    MinNb5(Vec<Extension>, Option<Alt>),
     /// e.g. Cdim7
-    DimN(Extension, Option<Alt>),
+    DimN(Vec<Extension>, Option<Alt>),
     /// Edge case -- e.g. CdimMaj7
-    DimMajN(Extension, Option<Alt>),
+    DimMajN(Vec<Extension>, Option<Alt>),
+}
+
+/// Chords based around a diminished triad.
+#[derive(Debug, Clone)]
+pub enum SusSubtype {
+    Sus2(Option<Alt>),
+    Sus4(Option<Alt>),
+    DomNSus(Vec<Extension>, Option<Alt>),
+    MajNSus(Vec<Extension>, Option<Alt>),
+    SixNineSus(Option<Alt>),
 }
 
 /// Basic categories for chords >=3 pitch classes,
-/// except for [ChordQuality::Interval] and [ChordQuality::SingleNote].
+/// and special variants for the trivial cases of
+/// [ChordQuality::Interval] and [ChordQuality::SingleNote].
 #[derive(Debug, Clone)]
 pub enum ChordQuality {
     Major(MajorSubtype),
     Minor(MinorSubtype),
     Aug(AugSubtype),
     Dim(DimSubtype),
-    Sus, // TODO Subtype
-    AssumedThird, // TODO This should mirror Major/Minor subtypes, or be removed
+    Sus(SusSubtype),
     /// Any pair of distinct pitch-classes
-    Interval(BaseChromaticInterval),
+    Interval(IntervalClass),
     SingleNote,
 }
 
-/// Whether or not something is a slash chord.
-/// All specified notes are assumed to be members of their associated [NoteSet].
 #[derive(Debug, Clone)]
-pub enum TonalSpecification {
-    /// If it's a slash chord, the bass note will be supplied here.
-    SlashChord {
-        bass: Note,
-        root: Note,
-    },
-    /// Root note relative to the defined chord quality.
-    RootPosition(Note),
-    /// No tonal specification, possibly slash chord denoted via Pc.
-    None(Option<Pc>)
+pub enum Alt2nd {
+    Sharp, // TODO Cannot clobber min thirds on this.
+    Natural,
+    Flat
+}
+
+#[derive(Debug, Clone)]
+pub enum Alt4th {
+    Sharp,
+    Natural,
+    Flat // TODO Cannot clobber Major chords with this.
+}
+
+#[derive(Debug, Clone)]
+pub enum Alt6th {
+    Sharp,
+    Natural,
+    Flat // TODO Have to ensure we don't mark this on Aug
+}
+
+/// The primary categories of scales, modes, which we can then further characterize
+/// by alterations.
+#[derive(Debug, Clone)]
+pub enum ScaleQuality {
+    Major(Alt2nd, Alt6th),
+    IonianAug(Alt2nd, Alt6th),
+    Dorian(Alt2nd, Alt4th),
+    Phrygian(Alt4th),
+    Lydian(Alt2nd, Alt6th),
+    LydianAug(Alt2nd, Alt6th),
+    Mixolydian(Alt2nd, Alt4th, Alt6th),
+    MixolydianAug(Alt2nd, Alt4th, Alt6th),
+    NaturalMinor(Alt4th),
+    MelodicMinor(Alt2nd, Alt4th),
+    HarmonicMajor,
+    HarmonicMinor,
+    Locrian(Alt2nd, Alt6th),
+    Altered,
+    WholeTone,
+    AugAH,
+    AugHA,
+    DimHW,
+    DimWH,
 }
