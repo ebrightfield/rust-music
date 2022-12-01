@@ -78,24 +78,28 @@ impl<'a> SoundedNote<'a> {
         Ok(self.fretboard.sounded_note(self.string, self.fret - 12)?)
     }
 
-    /// Produces a [FrettedNote] on the next chord/scale degree, on the same string.
+    /// Produces a [SoundedNote] on the next chord/scale degree, on the same string.
     pub fn next_note_same_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
         let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
-        let mut fretted_note = self.fretboard.note_on_string(&next_note, self.string)?;
-        while fretted_note.pitch.midi_note < self.pitch.midi_note {
-            fretted_note = fretted_note.up_an_octave()?;
-        }
-        Ok(fretted_note)
+        let pitch = self.pitch.up_to_note(&next_note)?;
+        let this_string = self.fretboard.get_string(self.string).unwrap();
+        let fret = pitch.midi_note - this_string.midi_note;
+        Ok(self.fretboard.sounded_note(self.string, fret)?)
     }
 
-    /// Produces a [FrettedNote] on the next chord/scale degree, on the next string up.
+    /// Produces a [SoundedNote] on the next chord/scale degree, on the next string up.
     pub fn next_note_next_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
         let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
-        let mut fretted_note = self.fretboard.note_on_string(&next_note, self.string + 1)?;
-        while fretted_note.pitch.midi_note < self.pitch.midi_note {
-            fretted_note = fretted_note.up_an_octave()?;
+        let pitch = self.pitch.up_to_note(&next_note)?;
+        let next_string = self.fretboard.get_string(self.string + 1)?;
+        if next_string.midi_note > pitch.midi_note {
+            return Err(anyhow!("Pitch {:?} is lower than the next string {:?}",
+                &pitch, next_string,
+            ))
         }
-        Ok(fretted_note)
+        Ok(self.fretboard.sounded_note(
+            self.string + 1, pitch.midi_note - next_string.midi_note
+        )?)
     }
 }
 

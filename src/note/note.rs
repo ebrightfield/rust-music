@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use crate::note::spelling::{Accidental, Letter, Spelling};
 use anyhow::anyhow;
@@ -9,7 +10,7 @@ use crate::note::pc::Pc;
 /// - Nothing more extreme than a double-accidental.
 /// - No "C" or "F" flattened more than once.
 /// - No "B" or "E" sharpened more than once.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Note {
     C,
     Deses,
@@ -42,6 +43,12 @@ pub enum Note {
     B,
     Ces,
     Bis,
+}
+
+impl Hash for Note {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_string().hash(state)
+    }
 }
 
 impl Note {
@@ -124,9 +131,12 @@ impl Note {
         Pc::from(self).notes().contains(other)
     }
 
-    // TODO distance_down_to_note method
     pub fn distance_up_to_note(&self, note: &Note) -> u8 {
         Pc::from(self).distance_up_to(&Pc::from(note))
+    }
+
+    pub fn distance_down_to_note(&self, note: &Note) -> u8 {
+        Pc::from(self).distance_down_to(&Pc::from(note))
     }
 }
 

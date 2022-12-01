@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use anyhow::anyhow;
 use itertools::Itertools;
 use crate::note_collections::NoteSet;
 use crate::fretboard::Fretboard;
@@ -62,21 +63,90 @@ impl<'a> MelodicFretboardShape<'a> {
 
 /// Broken down by various classifications
 pub struct ScaleShapeSearchResult<'a> {
-    simple: HashMap<Note, Vec<MelodicFretboardShape<'a>>>,
+    simple: Vec<MelodicFretboardShape<'a>>,
+    open: MelodicFretboardShape<'a>,
     other: HashMap<Note, Vec<MelodicFretboardShape<'a>>>,
 }
 
 impl<'a> ScaleShapeSearchResult<'a> {
     pub fn new() -> Self {
         Self {
-            simple: HashMap::new(),
+            simple: vec![],
+            open: MelodicFretboardShape {
+                shape: vec![],
+                score: 0
+            },
             other: HashMap::new(),
         }
     }
 
-    pub fn from_raw_search_result(result: Vec<MelodicFretboardShape>) -> Self {
+    pub fn from_raw_search_result(
+        chord: &Vec<Note>,
+        fretboard: &'a Fretboard,
+    ) -> anyhow::Result<Self> {
+        let result = find_all_scale_shapes(chord, fretboard)?;
+        // Calculate open shape
+        let open_shape = find_open_scale_shape(
+            chord: &Vec<Note>,
+            fretboard: &'a Fretboard,
+        )?;
+        // Calculate n-note-per-string shapes.
+        let mut instance = Self::new();
+        for (note, shapes) in result {
+            // categorize into simple shapes, or other
+        }
         todo!()
     }
+}
+
+pub fn find_open_scale_shape<'a>(
+    chord: &Vec<Note>,
+    fretboard: &'a Fretboard,
+) -> anyhow::Result<MelodicFretboardShape<'a>> {
+    if chord.is_empty() {
+        return Err(anyhow!("Empty set of notes"));
+    }
+    let mut first_note = fretboard.sounded_note(0, 0)?;
+    while !chord.contains(&first_note.pitch.note) {
+        first_note = first_note.up_n_frets(1)?;
+    }
+    let chord = NoteSet::new(chord.clone(), Some(&first_note.pitch.note));
+    let next_note = first_note.next_note_next_string(&chord)
+        .unwrap_or(first_note.next_note_same_string(&chord).unwrap());
+    // Manually add our next note.
+    let mut notes = MelodicFretboardShape {
+        shape: vec![first_note.clone(), next_note],
+        score: 0
+    };
+    while !{
+        let last_note = notes.shape.last().unwrap();
+        let last_string = fretboard.num_strings() - 1;
+        let on_last_string_past_5th = last_note.string == last_string &&
+            last_note.fret >=5;
+        on_last_string_past_5th
+    } {
+        let last_note = notes.shape.last().unwrap();
+        let next_note = last_note.next_note_next_string(&chord)
+            .unwrap_or(last_note.next_note_same_string(&chord).unwrap());
+        notes.shape.push(next_note);
+    }
+    Ok(notes)
+}
+
+/// Finds scale shapes starting from each note.
+pub fn find_all_scale_shapes<'a>(
+    chord: &Vec<Note>,
+    fretboard: &'a Fretboard,
+    ) -> anyhow::Result<HashMap<Note, Vec<MelodicFretboardShape<'a>>>> {
+    Ok(chord
+        .iter()
+        .map(|note| melodic_shapes_at_starting_note(chord, note, fretboard)
+            .map(|ok| (note.clone(), ok)
+        ))
+        .into_iter()
+        .flatten()
+        .collect()
+    )
 }
 
 /// Meant to be cloned across different branches of the recursive search tree.
@@ -101,7 +171,7 @@ fn normalize_octave_register(
 /// We never recurse many levels deep, because the anatomical restrictions of
 /// the hand force recursion to terminate early and often. There are many
 /// branches, but they are all shallow.
-fn recursive_scale_search<'a>(
+fn recursive_melodic_search<'a>(
     chord: &NoteSet,
     mut params: RecursiveSearchParams<'a>,
     shapes: &mut Vec<MelodicFretboardShape<'a>>,
@@ -141,7 +211,7 @@ fn recursive_scale_search<'a>(
         new_params.span_on_curr_string = span;
         new_params.notes_on_curr_string += 1;
         new_params.frets.push(next_note_same_string.clone());
-        recursive_scale_search(chord, new_params, shapes);
+        recursive_melodic_search(chord, new_params, shapes);
     }
     if params.fretboard.num_strings() > last_fret.string + 1 {
         let next_string = &params.fretboard.open_strings[last_fret.string as usize + 1];
@@ -168,7 +238,7 @@ fn recursive_scale_search<'a>(
             new_params.span_on_curr_string = 0;
             new_params.notes_on_curr_string = 1;
             new_params.frets.push(next_note_next_str);
-            recursive_scale_search(chord, new_params, shapes);
+            recursive_melodic_search(chord, new_params, shapes);
         }
     }
     if distance_to_next_note >= 7 && params.fretboard.num_strings() > last_fret.string + 2 {
@@ -204,7 +274,7 @@ fn recursive_scale_search<'a>(
             new_params.span_on_curr_string = 0;
             new_params.notes_on_curr_string = 1;
             new_params.frets.push(next_note);
-            recursive_scale_search(chord, new_params, shapes);
+            recursive_melodic_search(chord, new_params, shapes);
         }
     }
     if was_dead_end {
@@ -218,16 +288,11 @@ fn recursive_scale_search<'a>(
 }
 
 /// Searches over the space of possible arrangements of fretboard shapes.
-pub fn find_scale_shapes<'a>(
+pub fn melodic_shapes_at_starting_note<'a>(
     chord: &Vec<Note>,
     starting_note: &Note,
     fretboard: &'a Fretboard,
 ) -> anyhow::Result<Vec<MelodicFretboardShape<'a>>> {
-    //  4. Perform a recursive search. CHECK
-    //  5. Only keep the complete shapes.
-    //  6. Sort into sublists by score.
-    //  7. Sort each sublist by span, removing anything with a span >= 6, flattening to one list.
-    //  8. Sort them into their respective categories.
     // TODO We're normalizing the spelling because this is done in the Python, is this necessary?
     let starting_note = starting_note.spelled_as_in(chord)?;
     let chord = NoteSet::new(chord.clone(), Some(&starting_note));
@@ -254,7 +319,7 @@ pub fn find_scale_shapes<'a>(
             score: 0,
             fretboard,
         };
-        recursive_scale_search(&chord, params, &mut shapes);
+        recursive_melodic_search(&chord, params, &mut shapes);
     }
     if fretboard.num_strings() > 1 {
         let this_string = fretboard.open_strings[first_fretted_note.string as usize];
@@ -271,7 +336,7 @@ pub fn find_scale_shapes<'a>(
                 score: 0,
                 fretboard,
             };
-            recursive_scale_search(&chord, params, &mut shapes);
+            recursive_melodic_search(&chord, params, &mut shapes);
         }
         if span >= 7 && fretboard.num_strings() > first_fretted_note.string + 2 {
             let next_string = &fretboard.open_strings[first_fretted_note.string as usize + 2];
@@ -290,7 +355,6 @@ pub fn find_scale_shapes<'a>(
                         )
                     }
             } {
-
                 let fret = fretboard.which_fret(
                     &new_fret_same_str.pitch.note,
                     first_fretted_note.string + 2,
@@ -310,7 +374,7 @@ pub fn find_scale_shapes<'a>(
                     score: 0,
                     fretboard,
                 };
-                recursive_scale_search(&chord, params, &mut shapes);
+                recursive_melodic_search(&chord, params, &mut shapes);
             }
         }
     }
@@ -444,15 +508,26 @@ mod tests {
     }
 
     #[test]
-    fn test_scale_search() {
+    fn scale_search() {
         let chord = vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B];
-        let result = find_scale_shapes(
+        let result = melodic_shapes_at_starting_note(
             &chord,
             &Note::C,
             &*STD_6STR_GTR,
         ).unwrap();
         for shape in result {
-            println!("{}", shape);
+            //println!("{}", shape);
         }
+    }
+
+    #[test]
+    fn find_open_shape() {
+        let chord = vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B];
+
+        let shape = find_open_scale_shape(
+            &chord,
+            &*STD_6STR_GTR,
+        ).unwrap();
+        println!("{}", shape);
     }
 }
