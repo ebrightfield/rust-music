@@ -276,7 +276,7 @@ impl ChordQuality {
     pub fn to_string(&self, cfg: &ChordNameDisplayConfig) -> String {
         let style = cfg.extension_style;
         let ext_and_alts = |alt: &Alt, ext: &Vec<Extension>, style| {
-            let (mut ext, mut alts) = resolve_extension(ext, style);
+            let (ext, mut alts) = resolve_extension(ext, style);
             alts.extend(alt.0.clone());
             (ext, Alt::from(alts))
         };

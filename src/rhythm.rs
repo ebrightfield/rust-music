@@ -6,7 +6,7 @@ pub type DurationIn32ndNotes = u8;
 /// which 32nd note "ticks" are metrically prominent, or made prominent by choice.
 /// e.g. This would convert 6/8 time signature to [vec![0, 12]],
 /// as the first and fourth 8th notes in that signature are the strong beats.
-fn get_big_beats(
+pub fn get_big_beats(
     num_beats: NumBeats,
     base_unit_duration: DurationIn32ndNotes,
     beat_pattern: Option<Vec<DurationIn32ndNotes>>,
@@ -89,17 +89,17 @@ impl MeterDenominator {
 /// A time signature, accompanied with "big beat"/"groove" information.
 pub struct Meter {
     /// Numerator of a time signature, as is.
-    num_beats: u8,
+    pub num_beats: u8,
     /// Demoninator of a time signature,
     /// but represented as a duration of 32nd notes.
-    beat_duration: DurationIn32ndNotes,
+    pub denominator: MeterDenominator,
     /// Vec of durations between the "big beats" in a time signature or groove pattern.
-    beat_pattern: Vec<DurationIn32ndNotes>,
+    pub beat_pattern: Vec<DurationIn32ndNotes>,
 }
 
 /// Any duration denominated in quarter-note "beats". We arbitrarily use a quarter-note
 /// grid, even though we still account for e.g. meters like 4/8.
-type NumBeats = u8;
+pub type NumBeats = u8;
 
 impl Meter {
     pub fn new(
@@ -113,16 +113,16 @@ impl Meter {
         let beat_pattern = big_beats_to_durations(big_beats, total_duration);
         Self {
             num_beats: numerator,
-            beat_duration,
+            denominator,
             beat_pattern,
         }
     }
 }
 
 pub struct RhythmicNotatedEvent {
-    duration: u8, // Maximum duration is a double-whole-note
-    tied: bool,
-    event: NotatedEvent,
+    pub duration: u8, // Maximum duration is a double-whole-note
+    pub tied: bool,
+    pub event: NotatedEvent,
 }
 
 pub enum NotatedEvent {

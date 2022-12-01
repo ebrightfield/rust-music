@@ -3,7 +3,6 @@ pub mod naming_heuristics;
 
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::Note;
-use std::fmt::{Display, Formatter};
 use quality::chord::ChordQuality;
 use crate::note::pc::Pc;
 
@@ -32,19 +31,19 @@ pub struct ChordNameDisplayConfig {
     // alt_notation: AlterationNotationStyle,
     /// Whether or not to express sus4, 7sus4, 9sus4, etc.
     /// as sus, 7sus, 9sus.
-    explicit_sus4: bool,
+    pub explicit_sus4: bool,
     /// Use fancy utf-8 chars for notes.
-    uft8_accidentals: bool,
+    pub uft8_accidentals: bool,
     /// Number of space chars to put between the root note and the chord quality.
-    space_between_root_and_quality: usize,
+    pub space_between_root_and_quality: usize,
     /// Number of space chars to put between the chord quality and the slash in a slash chord.
-    space_between_quality_and_slash: usize,
+    pub space_between_quality_and_slash: usize,
     /// Number of space chars to put after the slash symbol in a chord.
-    space_after_slash: usize,
+    pub space_after_slash: usize,
     /// Whether to only to e.g. label a min11 chord if it contains the 9th.
     /// This is a practical assumption that usually doesn't apply in settings
     /// outside of classical music theory.
-    extension_style: ExtensionStyle,
+    pub extension_style: ExtensionStyle,
 }
 
 /// Describes a [PcSet] using the chord lexicon fleshed out in [ChordQuality].
@@ -54,11 +53,11 @@ pub struct ChordNameDisplayConfig {
 pub struct ChordName {
     /// Information regarding any choice of root notes, slash chord, or
     /// specifying that we are not generalizing over notes at all.
-    tonality: TonalSpecification,
+    pub tonality: TonalSpecification,
     /// Combination of tonal "flavors" asserted to be in the chord.
-    quality: ChordQuality,
+    pub quality: ChordQuality,
     /// Underlying set of pitch classes on which the name is being asserted.
-    pc_set: PcSet,
+    pub pc_set: PcSet,
 }
 
 impl ChordName {

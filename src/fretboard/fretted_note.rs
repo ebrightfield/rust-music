@@ -29,7 +29,7 @@ pub struct SoundedNote<'a> {
 
 impl<'a> Display for SoundedNote<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}({})", self.string, self.fret, self.pitch.note)
+        write!(f, "{}:{}({})", self.string+1, self.fret, self.pitch.note)
     }
 }
 
@@ -131,7 +131,7 @@ impl<'a> FrettedNote<'a> {
     }
 
     /// Returns the [string] value of either variant.
-    fn string(&self) -> u8 {
+    pub fn string(&self) -> u8 {
         match &self {
             FrettedNote::Sounded(SoundedNote { string, ..}) => *string,
             FrettedNote::Muted { string, .. } => *string,
@@ -139,7 +139,7 @@ impl<'a> FrettedNote<'a> {
     }
 
     /// Returns the [fret], unless it's a [FrettedNote::Muted] variant.
-    fn fret(&self) -> Option<u8> {
+    pub fn fret(&self) -> Option<u8> {
         match &self {
             FrettedNote::Sounded(SoundedNote { fret, ..}) => Some(*fret),
             FrettedNote::Muted { .. } => None
@@ -147,22 +147,10 @@ impl<'a> FrettedNote<'a> {
     }
 
     /// Returns the [pitch], unless it's a [FrettedNote::Muted] variant.
-    fn pitch(&self) -> Option<Pitch> {
+    pub fn pitch(&self) -> Option<Pitch> {
         match &self {
             FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(pitch.clone()),
             FrettedNote::Muted { .. } => None
-        }
-    }
-
-    /// A wrapped version of [SoundedNote::up_n_frets].
-    /// If [self] is a [FrettedNote::Muted], then this function returns [Ok(None)],
-    ///
-    fn up_n_frets(&self, n: u8) -> anyhow::Result<Option<Self>> {
-        match &self {
-            FrettedNote::Sounded(sounded_note) => Ok(Some(
-                FrettedNote::Sounded(sounded_note.up_n_frets(n)?)
-            )),
-            FrettedNote::Muted { .. } => Ok(None),
         }
     }
 }

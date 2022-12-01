@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
-struct PcIter {
+pub struct PcIter {
     curr: Pc,
     until: Pc,
     is_first: bool,

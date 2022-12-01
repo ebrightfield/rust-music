@@ -14,11 +14,11 @@ impl NamingHeuristic for WholetoneScale {
     type T = ScaleQuality;
 
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
-        *pcs == *HARMONIC_MAJOR_NO_ROOT
+        *pcs == *WT_SCALE_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
-        Some(ScaleQuality::HarmonicMajor)
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+        Some(ScaleQuality::WholeTone)
     }
 }
 
@@ -34,7 +34,7 @@ impl NamingHeuristic for AugAHScale {
         *pcs == *AUG_AH_SCALE_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::AugAH)
     }
 }
@@ -51,7 +51,7 @@ impl NamingHeuristic for AugHAScale {
         *pcs == *AUG_HA_SCALE_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::AugHA)
     }
 }
@@ -68,7 +68,7 @@ impl NamingHeuristic for DimHWScale {
         *pcs == *DIM_HW_SCALE_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::DimHW)
     }
 }
@@ -85,7 +85,7 @@ impl NamingHeuristic for DimWHScale {
         *pcs == *DIM_WH_SCALE_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::DimWH)
     }
 }
@@ -102,7 +102,7 @@ impl NamingHeuristic for HarmonicMinor {
         *pcs == *HARMONIC_MINOR_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::HarmonicMinor)
     }
 }
@@ -119,7 +119,7 @@ impl NamingHeuristic for HarmonicMajor {
         *pcs == *HARMONIC_MAJOR_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::HarmonicMajor)
     }
 }
@@ -136,7 +136,7 @@ impl NamingHeuristic for AlteredScale {
         *pcs == *ALTERED_NO_ROOT
     }
 
-    fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
         Some(ScaleQuality::Altered)
     }
 }

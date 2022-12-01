@@ -1,2 +1,3 @@
-mod scoring;
-mod staff_elements;
+pub mod scoring;
+pub mod staff_elements;
+pub mod templates;

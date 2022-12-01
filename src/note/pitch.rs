@@ -101,6 +101,8 @@ impl Pitch {
         Ok(self.at_distance_from(d as isize)?)
     }
 
+    /// Returns the next [Pitch] below [self] whose note is equivalent to
+    /// to the input [Note]. For when you want to "go down to G from B3".
     pub fn down_to_note(&self, note: &Note) -> anyhow::Result<Self> {
         let d = self.note.distance_down_to_note(note);
         Ok(self.at_distance_from(d as isize)?)

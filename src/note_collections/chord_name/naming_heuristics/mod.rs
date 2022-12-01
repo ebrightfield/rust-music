@@ -132,11 +132,13 @@ pub fn chord_heuristics() -> Vec<ChordHeuristic> {
 /// Other possibilities should be screened out ahead of time
 pub fn infer_chord_quality(pcs: &HashSet<Pc>) -> Option<(ChordHeuristic, Option<ChordQuality>)> {
 
-    let mut heuristics = vec![];
-    let result: Vec<_> = chord_heuristics()
-        .iter()
-        .map(|h| heuristics.push(h.apply(pcs)))
-        .collect();
+    // This way would be how I could collect answers from all the heuristics,
+    // but I would likely get lots of false positives.
+    // let mut heuristics = vec![];
+    // let _: Vec<_> = chord_heuristics()
+    //     .iter()
+    //     .map(|h| heuristics.push(h.apply(pcs)))
+    //     .collect();
     for heuristic in chord_heuristics() {
         if heuristic.validate(&pcs) {
             let name = heuristic.generate_name(&pcs);

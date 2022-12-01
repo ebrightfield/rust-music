@@ -1,41 +1,10 @@
-use tera::{Context, Tera};
+use tera::Context;
+use crate::lilypond::templates::{OMIT_TIME_SIGNATURE, RAGGED_RIGHT, TEMPLATE_ENGINE};
 
 /// Wrap content in a markup block
 pub fn markup(content: String) -> String {
     format!("\\markup {{\n    {}\n}}", content)
 }
-
-// TODO Configuring the layout block more hands-on and completely.
-/// Layout block which goes at the bottom of a score,
-/// and sets the ragged right property to false.
-const RAGGED_RIGHT: &str = r#"
-    \layout {
-        \omit Voice.StringNumber
-        ragged-right = ##f
-    }
-"#;
-
-/// Intentional double indent here.
-const G_8_STAFF: &str = r#"
-        \new Staff {
-            \clef G_8
-            {{ time_signature }}
-            \omit Score.BarNumber
-
-            {{ content }}
-        }
-"#;
-
-/// Intentional double indent here.
-const TAB_STAFF: &str = r#"
-        \new TabStaff {
-            \clef moderntab
-            {{ time_signature }}
-            \omit Score.BarNumber
-
-            {{ content }}
-        }
-"#;
 
 /// Wrap content in a score block, optionally with ragged-right set to false.
 pub fn score(content: String, ragged_right: bool) -> String {
@@ -47,7 +16,6 @@ pub fn score(content: String, ragged_right: bool) -> String {
     score
 }
 
-const OMIT_TIME_SIGNATURE: &str = "\\omit Staff.TimeSignature";
 /// Wrap content in a staff block
 pub fn staff(content: String, time_signature: Option<String>) -> String {
     let time_sig = if let Some(t) = time_signature {
@@ -55,12 +23,10 @@ pub fn staff(content: String, time_signature: Option<String>) -> String {
     } else {
         OMIT_TIME_SIGNATURE.to_string()
     };
-    let mut tera = Tera::default();
-    tera.add_raw_template("staff", G_8_STAFF).unwrap();
     let mut ctx = Context::new();
     ctx.insert("time_signature", &time_sig);
     ctx.insert("content", &content);
-    tera.render("staff", &ctx).unwrap()
+    (*TEMPLATE_ENGINE).render("staff", &ctx).unwrap()
 }
 
 pub fn tab_staff(content: String, time_signature: Option<String>) -> String {
@@ -69,15 +35,10 @@ pub fn tab_staff(content: String, time_signature: Option<String>) -> String {
     } else {
         OMIT_TIME_SIGNATURE.to_string()
     };
-    format!(
-        "       \\new TabStaff {{\
-            \\clef moderntab\
-            {}\
-            \\omit Score.BarNumber
-            {}\
-        }}",
-        time_sig, content
-    )
+    let mut ctx = Context::new();
+    ctx.insert("time_signature", &time_sig);
+    ctx.insert("content", &content);
+    (*TEMPLATE_ENGINE).render("tab_staff", &ctx).unwrap()
 }
 
 #[cfg(test)]
@@ -90,7 +51,7 @@ mod tests {
             "c2 d e f g".to_string(),
             Some("3/4".to_string())
         );
-        let result = score(
+        let _result = score(
             result,
             true
         );

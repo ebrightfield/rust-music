@@ -1,12 +1,10 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use anyhow::anyhow;
 use itertools::Itertools;
 use crate::note_collections::NoteSet;
 use crate::fretboard::Fretboard;
-use crate::fretboard::fretboard_shape::FretboardShape;
-use crate::fretboard::fretted_note::{FrettedNote, SoundedNote};
+use crate::fretboard::fretted_note::SoundedNote;
 use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 
@@ -61,11 +59,17 @@ impl<'a> MelodicFretboardShape<'a> {
     }
 }
 
+const N_PER_STRING_TUPLES: &[(usize, usize)] = &[(2,2), (2,3), (3,2), (3,3)];
+
 /// Broken down by various classifications
 pub struct ScaleShapeSearchResult<'a> {
-    simple: Vec<MelodicFretboardShape<'a>>,
-    open: MelodicFretboardShape<'a>,
-    other: HashMap<Note, Vec<MelodicFretboardShape<'a>>>,
+    pub simple: Vec<MelodicFretboardShape<'a>>,
+    pub open: MelodicFretboardShape<'a>,
+    pub n_per_string_2_2: HashMap<Note, Option<MelodicFretboardShape<'a>>>,
+    pub n_per_string_2_3: HashMap<Note, Option<MelodicFretboardShape<'a>>>,
+    pub n_per_string_3_2: HashMap<Note, Option<MelodicFretboardShape<'a>>>,
+    pub n_per_string_3_3: HashMap<Note, Option<MelodicFretboardShape<'a>>>,
+    pub other: HashMap<Note, Vec<MelodicFretboardShape<'a>>>,
 }
 
 impl<'a> ScaleShapeSearchResult<'a> {
@@ -76,6 +80,10 @@ impl<'a> ScaleShapeSearchResult<'a> {
                 shape: vec![],
                 score: 0
             },
+            n_per_string_2_2: HashMap::new(),
+            n_per_string_2_3: HashMap::new(),
+            n_per_string_3_2: HashMap::new(),
+            n_per_string_3_3: HashMap::new(),
             other: HashMap::new(),
         }
     }
@@ -90,10 +98,28 @@ impl<'a> ScaleShapeSearchResult<'a> {
             chord,
             fretboard,
         )?;
-        // Calculate n-note-per-string shapes.
         let mut instance = Self::new();
-        for (note, shapes) in result {
+        instance.open = open_shape;
+        // TODO add an is_playable check before appending
+        for (note, _shapes) in result {
             // categorize into simple shapes, or other
+            for n in N_PER_STRING_TUPLES {
+                let shape = find_n_note_per_string_shapes(
+                    n.clone(),
+                    chord,
+                    &note,
+                    fretboard,
+                ).ok();
+                if *n == (2,2) {
+                    instance.n_per_string_2_2.insert(note, shape);
+                } else if *n == (2,3) {
+                    instance.n_per_string_2_3.insert(note, shape);
+                } else if *n == (3,2) {
+                    instance.n_per_string_3_2.insert(note, shape);
+                } else if *n == (3,3) {
+                    instance.n_per_string_3_3.insert(note, shape);
+                }
+            }
         }
         todo!()
     }
@@ -131,6 +157,39 @@ pub fn find_open_scale_shape<'a>(
         notes.shape.push(next_note);
     }
     Ok(notes)
+}
+
+pub fn find_n_note_per_string_shapes<'a>(
+    n: (usize, usize),
+    chord: &Vec<Note>,
+    starting_note: &Note,
+    fretboard: &'a Fretboard,
+) -> anyhow::Result<MelodicFretboardShape<'a>> {
+    if chord.is_empty() {
+        return Err(anyhow!("Empty set of notes"));
+    }
+    let (value_1, value_2) = n;
+    if value_1 < 2 || value_2 < 2 {
+        return Err(anyhow!("Invalid n ({}, {})", value_1, value_2));
+    }
+    let starting_note = starting_note.spelled_as_in(chord)?;
+    let chord = NoteSet::new(chord.clone(), Some(&starting_note));
+    let first_fretted_note = fretboard.note_on_string(&starting_note, 0)?;
+    let mut using_value_1 = true;
+    let mut shape = vec![];
+    shape.push(first_fretted_note);
+    for _ in 0..fretboard.num_strings() {
+        let mut num_notes_on_curr_str = 1;
+        while (using_value_1 && num_notes_on_curr_str < value_1) || num_notes_on_curr_str < value_2 {
+            let last_note = shape.last().unwrap();
+            shape.push(last_note.next_note_same_string(&chord)?);
+            num_notes_on_curr_str += 1;
+        }
+        using_value_1 = !using_value_1;
+        let last_note = shape.last().unwrap();
+        shape.push(last_note.next_note_next_string(&chord)?)
+    }
+    Ok(MelodicFretboardShape { shape, score: 0 })
 }
 
 /// Finds scale shapes starting from each note.
@@ -464,7 +523,6 @@ fn tally_new_violations(frets: &Vec<SoundedNote>) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use crate::fretboard::STD_6STR_GTR;
-    use crate::note::pc::Pc::{Pc0, Pc11, Pc4, Pc5, Pc7};
     use super::*;
 
     #[test]
@@ -510,14 +568,14 @@ mod tests {
     #[test]
     fn scale_search() {
         let chord = vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B];
-        let result = melodic_shapes_at_starting_note(
+        let _result = melodic_shapes_at_starting_note(
             &chord,
             &Note::C,
             &*STD_6STR_GTR,
         ).unwrap();
-        for shape in result {
-            //println!("{}", shape);
-        }
+        // for shape in result {
+        //     println!("{}", shape);
+        // }
     }
 
     #[test]
@@ -528,6 +586,9 @@ mod tests {
             &chord,
             &*STD_6STR_GTR,
         ).unwrap();
-        println!("{}", shape);
+        let should_be = "1:0(E) 1:1(F) 1:3(G) 2:0(A) 2:2(B) 2:3(C) \
+        3:0(D) 3:2(E) 3:3(F) 4:0(G) 4:2(A) 5:0(B) 5:1(C) 5:3(D) 6:0(E) 6:1(F) 6:3(G) 6:5(A)";
+        //println!("{}", shape);
+        assert_eq!(format!("{}", shape), should_be);
     }
 }

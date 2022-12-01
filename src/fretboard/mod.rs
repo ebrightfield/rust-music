@@ -11,7 +11,7 @@ use crate::note::pitch::Pitch;
 
 // TODO Add more such common guitar tunings as a convenience.
 /// Standard tuning on a 6-string guitar.
-static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
+pub static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
             Pitch::new(Note::E, 3).unwrap(),

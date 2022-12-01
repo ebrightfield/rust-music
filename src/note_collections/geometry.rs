@@ -141,7 +141,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
                 .map(|i| Pc::from(i))
                 .collect();
             for pc in related_points_of_symmetry {
-                let mut entry = symmetries.entry(pc.clone())
+                let entry = symmetries.entry(pc.clone())
                     .or_insert_with(|| {
                         HashSet::new()
                     });
