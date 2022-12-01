@@ -5,6 +5,7 @@ pub static TEMPLATE_ENGINE: Lazy<Tera> = Lazy::new(|| {
     let mut tera = Tera::default();
     tera.add_raw_template("staff", G_8_STAFF).unwrap();
     tera.add_raw_template("tab_staff", TAB_STAFF).unwrap();
+    tera.add_raw_template("score", SCORE).unwrap();
     tera
 });
 
@@ -41,4 +42,12 @@ const TAB_STAFF: &str = r#"
 
             {{ content }}
         }
+"#;
+
+/// Intentional double indent here.
+const SCORE: &str = r#"
+\score {
+    {{ content }}
+    {{ format_block }}
+}
 "#;

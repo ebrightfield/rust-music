@@ -8,33 +8,38 @@ pub fn markup(content: String) -> String {
 
 /// Wrap content in a score block, optionally with ragged-right set to false.
 pub fn score(content: String, ragged_right: bool) -> String {
-    let mut score = format!("\\score {{\n    {}\n", content);
-    if ragged_right {
-        score.push_str(RAGGED_RIGHT);
+    let format_block = if ragged_right {
+        RAGGED_RIGHT
+    } else {
+        ""
+    };
+    let mut ctx = Context::new();
+    ctx.insert("content", &content);
+    ctx.insert("format_block", format_block);
+    (*TEMPLATE_ENGINE).render("score", &ctx).unwrap()
+}
+
+/// Replace a time signature with an instruction to omit the time signature.
+pub fn maybe_time_signature(sig: Option<String>) -> String {
+    if let Some(t) = sig {
+        format!("\\time {}\n", t)
+    } else {
+        OMIT_TIME_SIGNATURE.to_string()
     }
-    score.push_str("}");
-    score
 }
 
 /// Wrap content in a staff block
 pub fn staff(content: String, time_signature: Option<String>) -> String {
-    let time_sig = if let Some(t) = time_signature {
-        format!("\\time {}\n", t)
-    } else {
-        OMIT_TIME_SIGNATURE.to_string()
-    };
+    let time_sig = maybe_time_signature(time_signature);
     let mut ctx = Context::new();
     ctx.insert("time_signature", &time_sig);
     ctx.insert("content", &content);
     (*TEMPLATE_ENGINE).render("staff", &ctx).unwrap()
 }
 
+/// Wrap content in a tab staff block
 pub fn tab_staff(content: String, time_signature: Option<String>) -> String {
-    let time_sig = if let Some(t) = time_signature {
-        format!("\\time {}\n", t)
-    } else {
-        OMIT_TIME_SIGNATURE.to_string()
-    };
+    let time_sig = maybe_time_signature(time_signature);
     let mut ctx = Context::new();
     ctx.insert("time_signature", &time_sig);
     ctx.insert("content", &content);
