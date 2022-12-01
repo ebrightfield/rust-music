@@ -87,8 +87,8 @@ impl<'a> ScaleShapeSearchResult<'a> {
         let result = find_all_scale_shapes(chord, fretboard)?;
         // Calculate open shape
         let open_shape = find_open_scale_shape(
-            chord: &Vec<Note>,
-            fretboard: &'a Fretboard,
+            chord,
+            fretboard,
         )?;
         // Calculate n-note-per-string shapes.
         let mut instance = Self::new();
