@@ -10,3 +10,5 @@ anyhow = "1.0.58"
 itertools = "0.10.5"
 once_cell = "1.16.0"
 tera = "1.17.1"
+serde = { version = "1.0.148", features = [ "derive" ] }
+thiserror = "1.0.37"

@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use crate::note::note::Note;
 use crate::note::pc::Pc;
 use anyhow::anyhow;
@@ -106,5 +107,11 @@ impl Pitch {
     pub fn down_to_note(&self, note: &Note) -> anyhow::Result<Self> {
         let d = self.note.distance_down_to_note(note);
         Ok(self.at_distance_from(d as isize)?)
+    }
+}
+
+impl Display for Pitch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.note, self.octave)
     }
 }

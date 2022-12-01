@@ -37,6 +37,5 @@ musical choices that one often finds while composing/analyzing a piece, or even 
 - Melodic Sequencer
 - PcSet vs PcMultiset
 - Remove the carets from docs
-- Collect lilypond templates in one place, saturate a Tera object with a `Lazy`.
-- Finish the fretboard scale scape search
+- Finish the fretboard scale shape search
 - Do a pass on ergonomics

@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use anyhow::anyhow;
+use itertools::Itertools;
 use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
+use crate::note_collections::pc_set::PcSet;
 
 pub const WT_SCALE: &[Pc] = &[Pc0, Pc2, Pc4, Pc6, Pc8, Pc10];
 pub const WT_SCALE_ODD: &[Pc] = &[Pc1, Pc3, Pc5, Pc7, Pc9, Pc11];
@@ -155,6 +158,30 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
         rotated.sort();
     }
     symmetries
+}
+
+pub struct IntervalMatrix(Vec<Vec<i8>>);
+
+pub fn get_modes(pcs: &PcSet) -> Vec<PcSet> {
+    (0..pcs.len())
+        .map(|i| {
+            pcs.rotate(isize::try_from(i).unwrap())
+        })
+        .collect()
+}
+
+pub fn get_subchords(pcs: &PcSet, size: u8) -> anyhow::Result<Vec<Vec<Pc>>> {
+    if size < 3 {
+        return Err(anyhow!("Size too small for subchords: {}", size));
+    }
+    if size as usize > pcs.len() - 1 {
+        return Err(anyhow!("Size too large: {}. Needs to be <= {}", size, pcs.len() - 1));
+    }
+    Ok(pcs.0.clone()
+        .into_iter()
+        .combinations(size as usize)
+        .collect()
+    )
 }
 
 #[cfg(test)]
