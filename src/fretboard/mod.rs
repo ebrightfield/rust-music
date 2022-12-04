@@ -1,5 +1,5 @@
 pub mod fretboard_shape;
-mod fretted_note;
+pub mod fretted_note;
 
 use std::ops::Deref;
 use anyhow::{anyhow, Result};

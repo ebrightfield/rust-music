@@ -19,6 +19,8 @@ pub fn common_prefix(pcs: &HashSet<Pc>) -> Option<ChordQuality> {
             let alt = generate_alt(pcs, TriadContext::Major);
             return Some(ChordQuality::Major(MajorSubtype::Maj6(alt)));
         }
+        let alt = generate_alt(pcs, TriadContext::Major);
+        return Some(ChordQuality::Major(MajorSubtype::Maj(alt)));
     }
     if pcs.contains(&Pc3) {
         if pcs.contains(&Pc11) {
@@ -33,6 +35,8 @@ pub fn common_prefix(pcs: &HashSet<Pc>) -> Option<ChordQuality> {
             let alt = generate_alt(pcs, TriadContext::Minor);
             return Some(ChordQuality::Minor(MinorSubtype::Min6(alt)));
         }
+        let alt = generate_alt(pcs, TriadContext::Minor);
+        return Some(ChordQuality::Minor(MinorSubtype::Min(alt)));
     }
     None
 }

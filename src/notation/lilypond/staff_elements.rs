@@ -12,3 +12,15 @@ pub fn voicing(
     ctx.insert("ly_duration", &ly_duration);
     (*TEMPLATE_ENGINE).render("voicing", &ctx).unwrap()
 }
+
+pub trait ToLilypondString {
+    fn to_lilypond_string(&self) -> String;
+}
+
+// Does this work? Some collections are not tab. Oh but we can disambiguate? No,
+// need to specify it for concrete vec types.
+// impl ToLilypondString for Vec<T: ToLilypondString> {
+//     fn to_lilypond_string(&self) -> String {
+//         todo!()
+//     }
+// }

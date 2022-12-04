@@ -39,3 +39,4 @@ musical choices that one often finds while composing/analyzing a piece, or even 
 - Remove the carets from docs
 - Finish the fretboard scale shape search
 - Do a pass on ergonomics
+- Voiceleading calculation and ranking

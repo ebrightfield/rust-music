@@ -138,6 +138,13 @@ impl Note {
     pub fn distance_down_to_note(&self, note: &Note) -> u8 {
         Pc::from(self).distance_down_to(&Pc::from(note))
     }
+
+    /// Returns the letter distance upward (mod7).
+    pub fn diatonic_distance_up(&self, other: &Note) -> u8 {
+        Spelling::from(self).letter.diatonic_distance_up(
+            &Spelling::from(other).letter
+        )
+    }
 }
 
 impl FromStr for Note {

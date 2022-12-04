@@ -1,18 +1,19 @@
 use std::collections::HashMap;
 use itertools::Itertools;
-use crate::note_collections::voicing::StackedIntervals;
+use crate::note_collections::voicing::{StackedIntervals, Voicing};
 use crate::fretboard::Fretboard;
 use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape};
 use crate::fretboard::fretted_note::FrettedNote;
+use crate::notation::clef::Clef;
 use crate::note::note::Note;
 
 #[derive(Debug)]
 pub struct ChordShapeSearchResult<'a> {
-    pub playable: HashMap<StackedIntervals, Vec<FretboardShape<'a>>>,
-    pub wide_intervals: HashMap<StackedIntervals, Vec<FretboardShape<'a>>>,
-    pub nontransposable: HashMap<StackedIntervals, Vec<FretboardShape<'a>>>,
-    pub all_above_12th_fret: HashMap<StackedIntervals, Vec<FretboardShape<'a>>>,
-    pub unplayable: HashMap<StackedIntervals, Vec<FretboardShape<'a>>>,
+    pub playable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    pub wide_intervals: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    pub nontransposable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    pub all_above_12th_fret: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    pub unplayable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
 }
 
 impl<'a> ChordShapeSearchResult<'a> {
@@ -56,6 +57,7 @@ pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> any
                 .into_iter()
                 .flatten()
                 .collect();
+            // Flip through each possible combination of octave choices on each string
             for fret_shape in frets.iter().multi_cartesian_product() {
                 // Making a [FretboardShape]
                 let strings = (0u8..num_strings)
@@ -79,7 +81,8 @@ pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> any
                     fretboard,
                 };
                 // Classifying it, and indexing it into the search results.
-                let key: StackedIntervals = (&shape).into();
+                let key: Voicing = (&shape).into();
+                let key = key.normalize_register_to_clef(Clef::Treble).unwrap();
                 match shape.classify() {
                     ChordShapeClassification::Playable => {
                         if key.has_wide_intervals() {

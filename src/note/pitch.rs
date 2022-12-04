@@ -1,7 +1,10 @@
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use crate::note::note::Note;
 use crate::note::pc::Pc;
 use anyhow::anyhow;
+use crate::note::spelling::Spelling;
 
 /// This is the MIDI-compliant formula for calculating how:
 /// Note + octave = Pitch
@@ -10,7 +13,7 @@ fn calc_midi_note(note: &Note, octave: &u8) -> u8 {
 }
 
 /// [Note] with octave information.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pitch {
     /// Associated [Note] instance.
     pub note: Note,
@@ -108,10 +111,59 @@ impl Pitch {
         let d = self.note.distance_down_to_note(note);
         Ok(self.at_distance_from(d as isize)?)
     }
+
+    /// Returns the number of letters up/down between self and other,
+    /// accounting for octaves.
+    pub fn diatonic_distance(&self, other: &Pitch) -> i32 {
+        let self_diat = (self.octave * 7) as i32
+            + i32::from(Spelling::from(self.note).letter);
+        let other_diat = (other.octave * 7) as i32
+            + i32::from(Spelling::from(other.note).letter);
+        other_diat - self_diat
+    }
+
+    pub fn raise_octaves(&self, n: isize) -> anyhow::Result<Self> {
+        let i = Self::new(self.note, u8::try_from(self.octave as isize + n)?);
+        Self::new(self.note, u8::try_from(self.octave as isize + n)?)
+    }
 }
 
 impl Display for Pitch {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.note, self.octave)
+    }
+}
+
+impl PartialOrd for Pitch {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.midi_note.partial_cmp(&other.midi_note)
+    }
+}
+
+impl Hash for Pitch {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.note.hash(state);
+        self.octave.hash(state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diatonic_distance_works() {
+        let p1 = Pitch::new(Note::C, 5).unwrap();
+        let p2 = Pitch::new(Note::B, 4).unwrap();
+        assert_eq!(p1.diatonic_distance(&p2), -1);
+        let p2 = Pitch::new(Note::B, 5).unwrap();
+        assert_eq!(p1.diatonic_distance(&p2), 6);
+        let p2 = Pitch::new(Note::B, 6).unwrap();
+        assert_eq!(p1.diatonic_distance(&p2), 13);
+        let p1 = Pitch::new(Note::G, 3).unwrap();
+        let p2 = Pitch::new(Note::F, 3).unwrap();
+        assert_eq!(p1.diatonic_distance(&p2), -1);
+        let p2 = Pitch::new(Note::F, 4).unwrap();
+        assert_eq!(p1.diatonic_distance(&p2), 6);
     }
 }

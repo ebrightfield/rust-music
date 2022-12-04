@@ -4,9 +4,10 @@ pub mod melodic_shape_search;
 use std::fmt::{Display, Formatter};
 use std::iter::zip;
 use crate::note::pitch::Pitch;
-use crate::note_collections::voicing::StackedIntervals;
+use crate::note_collections::voicing::{StackedIntervals, Voicing};
 use crate::fretboard::Fretboard;
 use crate::fretboard::fretted_note::{FrettedNote, SoundedNote};
+use crate::note::note::Note;
 
 /// Meant for vertically oriented fretboard shapes.
 #[derive(Debug, Clone)]
@@ -58,6 +59,18 @@ impl<'a> FretboardShape<'a> {
                 })
                 .collect()
         }
+    }
+
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+        Ok(Self {
+            fretboard: self.fretboard,
+            fretted_notes: self.fretted_notes
+                .iter()
+                .map(|value| Ok::<_, anyhow::Error>(value.spelled_as_in(notes)?))
+                .into_iter()
+                .flatten()
+                .collect()
+        })
     }
 
     pub fn is_playable(&self) -> bool {
@@ -175,6 +188,17 @@ impl<'a> From<&'a FretboardShape<'a>> for StackedIntervals {
             .map(|(a, b)| b - a)
             .collect();
         StackedIntervals(consecutive_intervals)
+    }
+}
+
+impl<'a> From<&'a FretboardShape<'a>> for Voicing {
+    fn from(value: &'a FretboardShape<'a>) -> Self {
+        Voicing::new(
+            value.fretted_notes.iter()
+                .filter(|item| item.is_sounded())
+                .map(|item| item.pitch().unwrap().clone())
+                .collect()
+        )
     }
 }
 

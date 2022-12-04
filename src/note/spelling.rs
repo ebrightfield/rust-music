@@ -87,6 +87,32 @@ impl Letter {
             Letter::G => Letter::F,
         }
     }
+
+    pub fn diatonic_distance_up(&self, other: &Letter) -> u8 {
+        u8::try_from(
+            (i32::from(other) - i32::from(self)).rem_euclid(7)
+        ).unwrap()
+    }
+}
+
+impl From<&Letter> for i32 {
+    fn from(value: &Letter) -> Self {
+        match value {
+            Letter::A => 5,
+            Letter::B => 6,
+            Letter::C => 0,
+            Letter::D => 1,
+            Letter::E => 2,
+            Letter::F => 3,
+            Letter::G => 4,
+        }
+    }
+}
+
+impl From<Letter> for i32 {
+    fn from(value: Letter) -> Self {
+        i32::from(&value)
+    }
 }
 
 impl FromStr for Letter {

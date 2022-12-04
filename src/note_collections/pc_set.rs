@@ -121,3 +121,11 @@ impl<const N: usize> From<[Pc; N]> for PcSet {
         PcSet(pcs.to_vec())
     }
 }
+
+impl Into<HashSet<Pc>> for PcSet {
+    fn into(self) -> HashSet<Pc> {
+        let mut set = HashSet::new();
+        self.0.iter().for_each(|pc| { set.insert(*pc); });
+        set
+    }
+}

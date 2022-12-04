@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 use anyhow::anyhow;
 use crate::fretboard::Fretboard;
+use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 use crate::note_collections::NoteSet;
 
@@ -50,6 +51,16 @@ impl<'a> SoundedNote<'a> {
     /// the methods on the [Fretboard] passed in.
     pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> anyhow::Result<Self> {
         Ok(fretboard.sounded_note(string, fret)?)
+    }
+
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+        let pitch = Pitch::spelled_as_in(self.pitch.midi_note, notes)?;
+        Ok(Self {
+            string: self.string,
+            fret: self.fret,
+            pitch,
+            fretboard: self.fretboard,
+        })
     }
 
     /// Moves up the same string to a new fret `n` semitones higher.
@@ -130,6 +141,15 @@ impl<'a> FrettedNote<'a> {
         Ok(Self::Sounded(fretboard.sounded_note(string, fret)?))
     }
 
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+        Ok(match &self {
+            FrettedNote::Sounded(sounded_note) => FrettedNote::Sounded(
+                sounded_note.spelled_as_in(notes)?
+            ),
+            FrettedNote::Muted { string, .. } => self.clone(),
+        })
+    }
+
     /// Returns the [string] value of either variant.
     pub fn string(&self) -> u8 {
         match &self {
@@ -151,6 +171,13 @@ impl<'a> FrettedNote<'a> {
         match &self {
             FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(pitch.clone()),
             FrettedNote::Muted { .. } => None
+        }
+    }
+
+    pub fn is_sounded(&self) -> bool {
+        match &self {
+            FrettedNote::Sounded(_) => true,
+            FrettedNote::Muted { .. } => false,
         }
     }
 }
