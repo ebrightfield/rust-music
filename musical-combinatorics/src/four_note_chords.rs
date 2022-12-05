@@ -1,7 +1,7 @@
-use crate::note_collections::octave_partition::OctavePartition;
-use crate::note_collections::pc_set::PcSet;
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use music::note_collections::octave_partition::OctavePartition;
+use music::note_collections::pc_set::PcSet;
+use music::note::pc::Pc;
+use music::note::pc::Pc::*;
 use anyhow::anyhow;
 
 // A note_collections quality for every possible four-note [PcSet].

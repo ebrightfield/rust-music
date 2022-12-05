@@ -1,6 +1,11 @@
 use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 
+/// A simple enum, with descriptive functions that return
+/// [Pitch] instances for the top, bottom, and middle of the clef.
+///
+/// We use this type to assist in normalizing the octave register
+/// of pitch content.
 pub enum Clef {
     Treble,
     // Treble8va,

@@ -3,8 +3,9 @@ pub mod naming_heuristics;
 
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::Note;
-use quality::chord::ChordQuality;
 use crate::note::pc::Pc;
+
+pub use quality::chord::ChordQuality;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub enum ExtensionStyle {

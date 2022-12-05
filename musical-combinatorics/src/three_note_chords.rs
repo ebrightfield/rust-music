@@ -1,10 +1,11 @@
-use crate::note_collections::octave_partition::OctavePartition;
-use crate::note_collections::pc_set::PcSet;
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use music::note_collections::octave_partition::OctavePartition;
+use music::note_collections::pc_set::PcSet;
+use music::note::pc::Pc;
+use music::note::pc::Pc::*;
 use anyhow::anyhow;
 
 /// The various possible octave partitions with three notes.
+#[derive(Debug, Clone, PartialEq)]
 pub enum ThreeNoteChordQuality {
     Major,
     Minor,
@@ -49,29 +50,36 @@ pub const WH_PCS: &[Pc] = &[Pc0, Pc2, Pc3];
 pub const HW_PCS: &[Pc] = &[Pc0, Pc1, Pc3];
 pub const HH_PCS: &[Pc] = &[Pc0, Pc1, Pc2];
 
+
+impl From<&ThreeNoteChordQuality> for OctavePartition {
+    fn from(value: &ThreeNoteChordQuality) -> Self {
+        OctavePartition::from(match value {
+            ThreeNoteChordQuality::Major => MAJOR_PCS,
+            ThreeNoteChordQuality::Minor => MINOR_PCS,
+            ThreeNoteChordQuality::Aug => AUG_PCS,
+            ThreeNoteChordQuality::Dim => DIM_PCS,
+            ThreeNoteChordQuality::PP => PP_PCS,
+            ThreeNoteChordQuality::AP => AP_PCS,
+            ThreeNoteChordQuality::PA => PA_PCS,
+            ThreeNoteChordQuality::MW => MW_PCS,
+            ThreeNoteChordQuality::WM => WM_PCS,
+            ThreeNoteChordQuality::MH => MH_PCS,
+            ThreeNoteChordQuality::HM => HM_PCS,
+            ThreeNoteChordQuality::AW => AW_PCS,
+            ThreeNoteChordQuality::WA => WA_PCS,
+            ThreeNoteChordQuality::HA => HA_PCS,
+            ThreeNoteChordQuality::AH => AH_PCS,
+            ThreeNoteChordQuality::WW => WW_PCS,
+            ThreeNoteChordQuality::WH => WH_PCS,
+            ThreeNoteChordQuality::HW => HW_PCS,
+            ThreeNoteChordQuality::HH => HH_PCS,
+        })
+    }
+}
+
 impl From<ThreeNoteChordQuality> for OctavePartition {
-    fn from(chord_quality: ThreeNoteChordQuality) -> Self {
-        match chord_quality {
-            ThreeNoteChordQuality::Major => OctavePartition::from(MAJOR_PCS),
-            ThreeNoteChordQuality::Minor => OctavePartition::from(MINOR_PCS),
-            ThreeNoteChordQuality::Aug => OctavePartition::from(AUG_PCS),
-            ThreeNoteChordQuality::Dim => OctavePartition::from(DIM_PCS),
-            ThreeNoteChordQuality::PP => OctavePartition::from(PP_PCS),
-            ThreeNoteChordQuality::AP => OctavePartition::from(AP_PCS),
-            ThreeNoteChordQuality::PA => OctavePartition::from(PA_PCS),
-            ThreeNoteChordQuality::MW => OctavePartition::from(MW_PCS),
-            ThreeNoteChordQuality::WM => OctavePartition::from(WM_PCS),
-            ThreeNoteChordQuality::MH => OctavePartition::from(MH_PCS),
-            ThreeNoteChordQuality::HM => OctavePartition::from(HM_PCS),
-            ThreeNoteChordQuality::AW => OctavePartition::from(AW_PCS),
-            ThreeNoteChordQuality::WA => OctavePartition::from(WA_PCS),
-            ThreeNoteChordQuality::HA => OctavePartition::from(HA_PCS),
-            ThreeNoteChordQuality::AH => OctavePartition::from(AH_PCS),
-            ThreeNoteChordQuality::WW => OctavePartition::from(WW_PCS),
-            ThreeNoteChordQuality::WH => OctavePartition::from(WH_PCS),
-            ThreeNoteChordQuality::HW => OctavePartition::from(HW_PCS),
-            ThreeNoteChordQuality::HH => OctavePartition::from(HH_PCS),
-        }
+    fn from(value: ThreeNoteChordQuality) -> Self {
+        OctavePartition::from(&value)
     }
 }
 
@@ -134,3 +142,39 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
 //         }
 //     }
 // }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Convert to and from intervallically descriptive types.
+    fn test_quality(quality: ThreeNoteChordQuality) {
+        let partition = OctavePartition::from(&quality);
+        let pc_set = PcSet::from(&partition);
+        assert_eq!(quality, ThreeNoteChordQuality::try_from(&pc_set).unwrap())
+    }
+
+    #[test]
+    fn chord_quality_identification() {
+        test_quality(ThreeNoteChordQuality::Major);
+        test_quality(ThreeNoteChordQuality::Minor);
+        test_quality(ThreeNoteChordQuality::Aug);
+        test_quality(ThreeNoteChordQuality::Dim);
+        test_quality(ThreeNoteChordQuality::PP);
+        test_quality(ThreeNoteChordQuality::AP);
+        test_quality(ThreeNoteChordQuality::PA);
+        test_quality(ThreeNoteChordQuality::MW);
+        test_quality(ThreeNoteChordQuality::WM);
+        test_quality(ThreeNoteChordQuality::MH);
+        test_quality(ThreeNoteChordQuality::HM);
+        test_quality(ThreeNoteChordQuality::WA);
+        test_quality(ThreeNoteChordQuality::AW);
+        test_quality(ThreeNoteChordQuality::HA);
+        test_quality(ThreeNoteChordQuality::AH);
+        test_quality(ThreeNoteChordQuality::WW);
+        test_quality(ThreeNoteChordQuality::WH);
+        test_quality(ThreeNoteChordQuality::HW);
+        test_quality(ThreeNoteChordQuality::HH);
+    }
+}

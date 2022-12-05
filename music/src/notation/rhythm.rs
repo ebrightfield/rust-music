@@ -1,8 +1,12 @@
 use crate::note::pitch::Pitch;
+use crate::note_collections::voicing::Voicing;
 
+/// A temporal duration, denoted in units of 32nd notes.
+/// This library operates at a 32nd note "resolution",
+/// but can go shorter when factoring in tuplets.
 pub type DurationIn32ndNotes = u8;
 
-/// Creates a [Vec<DurationIn32ndNotes>] marking
+/// Creates a Vector of [DurationIn32ndNotes] marking
 /// which 32nd note "ticks" are metrically prominent, or made prominent by choice.
 /// e.g. This would convert 6/8 time signature to [vec![0, 12]],
 /// as the first and fourth 8th notes in that signature are the strong beats.
@@ -56,6 +60,8 @@ pub fn get_big_beats(
     vec![]
 }
 
+/// Returns a Vec of [DurationIn32ndNotes] representing the
+/// amount of time between temporally adjacent elements.
 pub fn big_beats_to_durations(
     big_beats: Vec<DurationIn32ndNotes>,
     total_duration: u8,
@@ -67,14 +73,38 @@ pub fn big_beats_to_durations(
 
 /// The only valid units in the denominator of a time signature.
 pub enum MeterDenominator {
+    /// Whole-note gets the beat.
     One,
+    /// Half-note gets the beat.
     Two,
+    /// Quarter-note gets the beat.
     Four,
+    /// Eighth-note gets the beat.
     Eight,
+    /// Sixteenth-note gets the beat.
     Sixteen,
 }
 
+impl From<&MeterDenominator> for DurationIn32ndNotes {
+    fn from(value: &MeterDenominator) -> DurationIn32ndNotes {
+        match &value {
+            MeterDenominator::One => 32,
+            MeterDenominator::Two => 16,
+            MeterDenominator::Four => 8,
+            MeterDenominator::Eight => 4,
+            MeterDenominator::Sixteen => 2,
+        }
+    }
+}
+
+impl From<MeterDenominator> for DurationIn32ndNotes {
+    fn from(value: MeterDenominator) -> DurationIn32ndNotes {
+        DurationIn32ndNotes::from(&value)
+    }
+}
+
 impl MeterDenominator {
+    /// Converts the associated rhythmic value into a [Duration
     pub fn duration_in_32nd_notes(&self) -> DurationIn32ndNotes {
         match &self {
             MeterDenominator::One => 32,
@@ -86,7 +116,12 @@ impl MeterDenominator {
     }
 }
 
-/// A time signature, accompanied with "big beat"/"groove" information.
+/// A time signature, accompanied with an accent pattern/"big beats"/"groove".
+///
+/// Meter subdivisions take a natural heirarchy of psychological salience,
+/// with a bias toward the wider and more evenly spaced beats in the heirarchy.
+/// This is the origin of the term "big beat", and it can be thought of as a kind of
+/// rhythmic middle-ground between that of the measure as a whole, and the beat grid.
 pub struct Meter {
     /// Numerator of a time signature, as is.
     pub num_beats: u8,
@@ -102,6 +137,9 @@ pub struct Meter {
 pub type NumBeats = u8;
 
 impl Meter {
+    /// Takes the numerator and demoninator of a typical non-additive meter,
+    /// and optionally, an accent pattern. A default accent pattern is inferred
+    /// for various meters.
     pub fn new(
         numerator: NumBeats,
         denominator: MeterDenominator,
@@ -119,9 +157,14 @@ impl Meter {
     }
 }
 
+/// A pitch or voicing with a rhythmic duration.
 pub struct RhythmicNotatedEvent {
-    pub duration: u8, // Maximum duration is a double-whole-note
+    /// Maximum duration is a double-whole-note
+    pub duration: DurationIn32ndNotes,
+    /// Whether the event is tied to a previous event, and thus
+    /// would not be articulated.
     pub tied: bool,
+    /// The data representing the notated event.
     pub event: NotatedEvent,
 }
 
@@ -132,7 +175,8 @@ pub enum NotatedEvent {
 
 pub enum SingleEvent {
     Pitch(Pitch),
-    Voicing,
+    Voicing(Voicing),
+    // Rest(DurationIn32ndNotes),
 }
 
 #[cfg(test)]

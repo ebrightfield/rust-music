@@ -1,4 +1,5 @@
-## An As-of-yet Unnamed Music Theory and Rendering Library
+## Rust Music Semantics
+A music theory library focused on precision, correctness, and expressiveness.
 
 This library provides:
 

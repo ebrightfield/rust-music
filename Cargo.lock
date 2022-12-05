@@ -390,6 +390,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "musical-combinatorics"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "music",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"

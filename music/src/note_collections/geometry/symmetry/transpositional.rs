@@ -1,10 +1,6 @@
-use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use anyhow::anyhow;
-use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
-use crate::note_collections::pc_set::{PcSet, zeroed_pcs};
 
 /// Type alias for the [HashMap] that stores the results of a search
 /// for transpositional symmetries.
@@ -123,6 +119,7 @@ impl Into<u8> for &TranspositionalSymmetry {
     }
 }
 
+/// Checks for only a specific [TranspositionalSymmetry], rather than all of them.
 /// The input of this function assumes a well-ordered, deduped [Vec],
 /// but does not have to be normalized to [Pc::Pc0]
 /// (i.e. does not need to contain [Pc::Pc0].
@@ -169,60 +166,10 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
     symmetries
 }
 
-// TODO Voiceleading search built off of this type.
-pub struct IntervalMatrix(Vec<Vec<i8>>);
-
-pub fn get_modes(pcs: &PcSet) -> Vec<PcSet> {
-    (0..pcs.len())
-        .map(|i| {
-            pcs.rotate(isize::try_from(i).unwrap())
-        })
-        .collect()
-}
-
-pub fn get_subchords(pcs: &PcSet, size: u8) -> anyhow::Result<Vec<Vec<Pc>>> {
-    if size < 3 {
-        return Err(anyhow!("Size too small for subchords: {}", size));
-    }
-    if size as usize > pcs.len() - 1 {
-        return Err(anyhow!("Size too large: {}. Needs to be <= {}", size, pcs.len() - 1));
-    }
-    Ok(pcs.0.clone()
-        .into_iter()
-        .combinations(size as usize)
-        .collect()
-    )
-}
-
-pub fn is_transposed_version_of(pcs: &PcSet, other: &Vec<Pc>) -> bool {
-    if pcs.is_empty() || other.is_empty() {
-        return false;
-    }
-    let pcs_len = pcs.len();
-    if pcs_len != other.len() {
-        return false;
-    }
-    if pcs_len == 1 {
-        return true;
-    }
-    let other = PcSet::new(other.clone());
-    (0..pcs_len)
-        .any(|i| other.rotate(isize::try_from(i).unwrap()) == *pcs)
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::note_collections::pc_set::PcSet;
+    use crate::note::pc::Pc::*;
     use super::*;
-
-    #[test]
-    fn test_rotate() {
-        let pc_set = PcSet::new(vec![Pc0, Pc3, Pc7]);
-        let rotated = pc_set.rotate_fwd();
-        assert_eq!(PcSet::new(vec![Pc0, Pc4, Pc9]), rotated);
-        let rotated_back = rotated.rotate_back();
-        assert_eq!(pc_set, rotated_back);
-    }
 
     #[test]
     fn test_symmetry() {
@@ -268,15 +215,5 @@ mod tests {
         should_be.insert(Pc9, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
         should_be.insert(Pc10, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
         assert_eq!(find_transpositional_symmetries(&pc_set), should_be);
-    }
-
-    #[test]
-    fn transposed_comparison() {
-        let pc_set = PcSet::new(vec![Pc0, Pc4, Pc7]);
-        let pc_set2 = vec![Pc2, Pc6, Pc9];
-        assert!(is_transposed_version_of(&pc_set, &pc_set2));
-        let pc_set = PcSet::new(vec![Pc0, Pc4, Pc7]);
-        let pc_set2 = vec![Pc0, Pc3, Pc9];
-        assert!(!is_transposed_version_of(&pc_set, &pc_set2));
     }
 }

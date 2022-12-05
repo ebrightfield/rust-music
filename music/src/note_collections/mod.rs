@@ -4,15 +4,17 @@ use crate::note::note::Note;
 use crate::note::pc::Pc;
 
 pub mod chord_name;
-mod four_note_chords;
 pub mod octave_partition;
 pub mod pc_set;
-mod three_note_chords;
 pub mod spelling;
 pub mod voicing;
 pub mod geometry;
 pub mod interval_class;
 
+pub use pc_set::PcSet;
+pub use interval_class::IntervalClass;
+pub use octave_partition::OctavePartition;
+pub use voicing::{StackedIntervals, Voicing};
 
 /// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
 ///
@@ -45,12 +47,12 @@ impl NoteSet {
 
     /// Same as [NoteSet::new], but orders elements treating
     /// the first element of the [Vec] as [Pc::Pc0].
-    pub fn starting_from_first_note(mut notes: Vec<Note>) -> Self {
+    pub fn starting_from_first_note(notes: Vec<Note>) -> Self {
         if notes.is_empty() {
             return Self(vec![]);
         }
-        let starting_note = Some(note[0].clone());
-        Self::new(notes, starting_note)
+        let starting_note = notes[0].clone();
+        Self::new(notes, Some(&starting_note))
     }
 
     /// Retrieves the note n "steps" up in a [NoteSet], starting from a given

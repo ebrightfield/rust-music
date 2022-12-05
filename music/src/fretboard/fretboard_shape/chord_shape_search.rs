@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use itertools::Itertools;
-use crate::note_collections::voicing::{StackedIntervals, Voicing};
+use crate::note_collections::voicing::Voicing;
 use crate::fretboard::Fretboard;
 use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape};
 use crate::fretboard::fretted_note::FrettedNote;

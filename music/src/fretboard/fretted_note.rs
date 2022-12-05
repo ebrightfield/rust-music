@@ -5,7 +5,10 @@ use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 use crate::note_collections::NoteSet;
 
-/// Useful for times when we want to be able to mark a string as muted.
+/// This enum is useful for times when you need to be able to mark a string as muted,
+/// for example when creating guitar chord diagrams.
+/// But if you're never going to have to notated a muted string,
+/// it is better to use a [SoundedNote] directly instead.
 #[derive(Debug, Clone)]
 pub enum FrettedNote<'a> {
     /// A note that is played on the fretboard.
@@ -53,6 +56,10 @@ impl<'a> SoundedNote<'a> {
         Ok(fretboard.sounded_note(string, fret)?)
     }
 
+    /// Returns a clone of self, but with the pitch spelled according
+    /// to a vec of [Note].
+    /// This is a way to assert a musical context (i.e. "correct" spelling)
+    /// over `self.pitch`.
     pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
         let pitch = Pitch::spelled_as_in(self.pitch.midi_note, notes)?;
         Ok(Self {
@@ -141,12 +148,16 @@ impl<'a> FrettedNote<'a> {
         Ok(Self::Sounded(fretboard.sounded_note(string, fret)?))
     }
 
+    /// Returns a clone of self, but with the pitch spelled according
+    /// to a vec of [Note].
+    /// This is a way to assert a musical context (i.e. "correct" spelling)
+    /// over `self.pitch`.
     pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
         Ok(match &self {
             FrettedNote::Sounded(sounded_note) => FrettedNote::Sounded(
                 sounded_note.spelled_as_in(notes)?
             ),
-            FrettedNote::Muted { string, .. } => self.clone(),
+            FrettedNote::Muted { .. } => self.clone(),
         })
     }
 

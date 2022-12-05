@@ -56,7 +56,7 @@ impl Voicing {
     /// Given a [Pitch], we can infer the others using a [StackedIntervals] instance.
     pub fn from_intervals(root: &Pitch, intervals: &StackedIntervals) -> anyhow::Result<Self> {
         let midi_notes = stack_midi_from_intervals(root, intervals);
-        let pc_set = PcSet::from_midi_notes(&midi_notes);
+        let pc_set = PcSet::from(&midi_notes);
         let spelling = spell_pc_set(&root.note, &pc_set)?;
         let mut pitches = midi_notes.iter()
             .map(|m| Pitch::spelled_as_in(*m, &spelling).unwrap())
@@ -100,6 +100,8 @@ impl Voicing {
             top_distance = clef_top.diatonic_distance(&max);
         }
         Ok(cloned)
+        // TODO Maybe add one more conditional, and potentially
+        //    raise the entire thing up an octave.
     }
 }
 

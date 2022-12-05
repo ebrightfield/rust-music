@@ -1,6 +1,9 @@
 use crate::note::pc::Pc;
-use std::collections::{HashMap, HashSet};
-use crate::note_collections::geometry::{find_transpositional_symmetries, TranspositionalSymmetry};
+use std::collections::HashSet;
+use std::ops::Deref;
+use crate::note::note::Note;
+use crate::note_collections::geometry::symmetry::transpositional::{find_transpositional_symmetries, TranspositionalSymmetryMap};
+use crate::note_collections::spelling::spell_pc_set;
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();
@@ -55,13 +58,6 @@ impl PcSet {
         pcs.len() == len - 1
     }
 
-    pub fn from_midi_notes(midi_notes: &Vec<u8>) -> Self {
-        let pcs = midi_notes.iter()
-            .map(|i| Pc::from(i))
-            .collect();
-        Self::new(pcs)
-    }
-
     /// Deduplicated, ordered, and zeroed
     pub fn new(pcs: Vec<Pc>) -> Self {
         let mut pcs = deduplicate_pcs(&pcs);
@@ -69,6 +65,8 @@ impl PcSet {
         Self(zeroed_pcs(&pcs))
     }
 
+    /// Rotate self backwards by one. This is equivalent to walking
+    /// to the previous mode of a scale, or inversion of a chord.
     pub fn rotate_back(&self) -> Self {
         if self.0.is_empty() {
             return Self(vec![]);
@@ -78,6 +76,8 @@ impl PcSet {
         Self(zeroed_pcs(&copy))
     }
 
+    /// Rotate self forward by one. This is equivalent to walking
+    /// to the next mode of a scale, or inversion of a chord.
     pub fn rotate_fwd(&self) -> Self {
         if self.0.is_empty() {
             return Self(vec![]);
@@ -99,26 +99,95 @@ impl PcSet {
         Self(zeroed_pcs(&copy))
     }
 
-    pub fn transpositional_symmetry(&self) -> HashMap<Pc, HashSet<TranspositionalSymmetry>> {
+    /// Returns a [HashMap] of all the transpositional symmetries
+    /// that self might have.
+    pub fn transpositional_symmetry(&self) -> TranspositionalSymmetryMap {
         find_transpositional_symmetries(&self.0)
+    }
+
+    /// Whether self can be transposed into other. For example,
+    /// `PcSet(vec![Pc0, Pc3])` is a transposed version of `&vec![Pc1, Pc4]`.
+    pub fn is_transposed_version_of(&self, other: &Vec<Pc>) -> bool {
+        if self.is_empty() || other.is_empty() {
+            return false;
+        }
+        let pcs_len = self.len();
+        if pcs_len != other.len() {
+            return false;
+        }
+        if pcs_len == 1 {
+            return true;
+        }
+        let other = PcSet::new(other.clone());
+        (0..pcs_len)
+            .any(|i| other.rotate(isize::try_from(i).unwrap()) == *self)
+    }
+
+    /// Move up (i.e. rotate clockwise around the "circle of [Pc]s") some
+    /// non-zero number of semitones.
+    /// This returns a Vec of [Pc] because we aren't normalizing the value to [Pc0],
+    /// which affords a bit more flexibility in how one might use this.
+    pub fn transpose(&self, semitones: u8) -> Vec<Pc> {
+        self.0
+            .iter()
+            .map(|pc| Pc::from(u8::from(pc) + 12 - semitones.rem_euclid(12)))
+            .collect()
+    }
+
+    /// Attempt to spell a [PcSet] using this library's provided spelling function,
+    /// [crate::note_collections::spelling::spell_pc_set].
+    pub fn try_spell(&self, root: &Note) -> anyhow::Result<Vec<Note>> {
+        spell_pc_set(root, self)
+    }
+}
+
+impl Deref for PcSet {
+    type Target = Vec<Pc>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 impl From<&[Pc]> for PcSet {
     fn from(pcs: &[Pc]) -> Self {
-        PcSet(pcs.to_vec())
+        Self(pcs.to_vec())
     }
 }
 
 impl<const N: usize> From<&[Pc; N]> for PcSet {
     fn from(pcs: &[Pc; N]) -> Self {
-        PcSet(pcs.to_vec())
+        Self(pcs.to_vec())
     }
 }
 
 impl<const N: usize> From<[Pc; N]> for PcSet {
     fn from(pcs: [Pc; N]) -> Self {
-        PcSet(pcs.to_vec())
+        Self(pcs.to_vec())
+    }
+}
+
+impl From<Vec<Pc>> for PcSet {
+    fn from(pcs: Vec<Pc>) -> Self {
+        Self::from(&pcs)
+    }
+}
+
+impl From<&Vec<Pc>> for PcSet {
+    fn from(pcs: &Vec<Pc>) -> Self {
+        Self(pcs.clone())
+    }
+}
+
+impl From<&Vec<u8>> for PcSet {
+    fn from(pcs: &Vec<u8>) -> Self {
+        Self(pcs.iter().map(|pc| Pc::from(pc)).collect())
+    }
+}
+
+impl From<Vec<u8>> for PcSet {
+    fn from(pcs: Vec<u8>) -> Self {
+        Self::from(&pcs)
     }
 }
 
@@ -127,5 +196,29 @@ impl Into<HashSet<Pc>> for PcSet {
         let mut set = HashSet::new();
         self.0.iter().for_each(|pc| { set.insert(*pc); });
         set
+    }
+}
+
+impl Into<HashSet<Pc>> for &PcSet {
+    fn into(self) -> HashSet<Pc> {
+        let mut set = HashSet::new();
+        self.0.iter().for_each(|pc| { set.insert(*pc); });
+        set
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::note::pc::Pc::*;
+
+    #[test]
+    fn transposed_comparison() {
+        let pc_set = PcSet::new(vec![Pc0, Pc4, Pc7]);
+        let pc_set2 = vec![Pc2, Pc6, Pc9];
+        assert!(pc_set.is_transposed_version_of(&pc_set2));
+        let pc_set = PcSet::new(vec![Pc0, Pc4, Pc7]);
+        let pc_set2 = vec![Pc0, Pc3, Pc9];
+        assert!(!pc_set.is_transposed_version_of(&pc_set2));
     }
 }
