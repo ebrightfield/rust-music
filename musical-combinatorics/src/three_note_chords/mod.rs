@@ -3,6 +3,7 @@ use music::note_collections::pc_set::PcSet;
 use music::note::pc::Pc;
 use music::note::pc::Pc::*;
 use anyhow::anyhow;
+use crate::canonical_voicings::CanonicalVoicings;
 
 /// The various possible octave partitions with three notes.
 #[derive(Debug, Clone, PartialEq)]
@@ -116,6 +117,11 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
     }
 }
 
+impl CanonicalVoicings for ThreeNoteChordQuality {
+    const N: usize = 3;
+    const FAMILIES: &'static [&'static[usize]] = &[&[0,1,2], &[0,2,1]];
+}
+
 // TODO Should this be something more like a vector of possible qualities, one on each mode?
 // impl From<ThreeNoteChordQuality> for ChordQuality {
 //     fn from(chord_quality: ThreeNoteChordQuality) -> Self {
@@ -147,6 +153,7 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use music::note::Note;
 
     // Convert to and from intervallically descriptive types.
     fn test_quality(quality: ThreeNoteChordQuality) {
@@ -176,5 +183,12 @@ mod tests {
         test_quality(ThreeNoteChordQuality::WH);
         test_quality(ThreeNoteChordQuality::HW);
         test_quality(ThreeNoteChordQuality::HH);
+    }
+
+    #[test]
+    fn voicings_3nc() {
+        let notes = vec![Note::C, Note::E, Note::G];
+        let voicings = ThreeNoteChordQuality::voicings(&notes);
+        println!("{:#?}", voicings);
     }
 }

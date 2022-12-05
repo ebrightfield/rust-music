@@ -3,6 +3,7 @@ use music::note_collections::pc_set::PcSet;
 use music::note::pc::Pc;
 use music::note::pc::Pc::*;
 use anyhow::anyhow;
+use crate::canonical_voicings::CanonicalVoicings;
 
 // A note_collections quality for every possible four-note [PcSet].
 #[derive(Debug, Clone, PartialEq)]
@@ -213,6 +214,18 @@ impl TryFrom<&PcSet> for FourNoteChordQuality {
             _ => Err(anyhow!("4NC not recognized: {:?}", pitches)),
         }
     }
+}
+
+impl CanonicalVoicings for FourNoteChordQuality {
+    const N: usize = 4;
+    const FAMILIES: &'static [&'static[usize]] = &[
+        &[0,1,2,3],
+        &[0,2,3,1],
+        &[0,3,1,2],
+        &[0,2,1,3],
+        &[0,1,3,2],
+        &[0,3,2,1],
+    ];
 }
 
 #[cfg(test)]
