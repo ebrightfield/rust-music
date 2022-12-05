@@ -38,7 +38,7 @@ pub fn generate_alt(pcs: &HashSet<Pc>, triad_context: TriadContext) -> Alt {
 }
 
 /// Generate an [Alt] to describe what alterations should be added to a chord name.
-/// Also generate a [Vec<Extension>].
+/// Also generate a `Vec<Extension>`.
 /// Used for "xxxN" qualities, i.e. Maj7, dom7, min7, min7b5, etc.
 pub fn generate_alt_and_extensions(pcs: &HashSet<Pc>, triad_context: TriadContext) -> (Alt, Vec<Extension>) {
     let mut extensions = vec![Extension::Seventh];

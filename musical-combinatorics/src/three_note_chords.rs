@@ -87,10 +87,10 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
     type Error = anyhow::Error;
 
     fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
-        if value.0.len() != 3 {
-            return Err(anyhow!("wrong size for three note chord: {:?}", value.0));
+        if value.len() != 3 {
+            return Err(anyhow!("wrong size for three note chord: {:?}", value));
         }
-        let pitches = value.0.as_slice();
+        let pitches = value.as_slice();
         match pitches {
             MAJOR_PCS => Ok(ThreeNoteChordQuality::Major),
             MINOR_PCS => Ok(ThreeNoteChordQuality::Minor),
@@ -111,7 +111,7 @@ impl TryFrom<&PcSet> for ThreeNoteChordQuality {
             WH_PCS => Ok(ThreeNoteChordQuality::WH),
             HW_PCS => Ok(ThreeNoteChordQuality::HW),
             HH_PCS => Ok(ThreeNoteChordQuality::HH),
-            _ => Err(anyhow!("3NC not recognized: {:?}", value.0)),
+            _ => Err(anyhow!("3NC not recognized: {:?}", value)),
         }
     }
 }

@@ -32,32 +32,9 @@ pub fn zeroed_pcs(pcs: &[Pc]) -> Vec<Pc> {
 
 /// Represents a set of pitch-classes.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PcSet(pub Vec<Pc>);
+pub struct PcSet(Vec<Pc>);
 
 impl PcSet {
-    pub fn has_duplicates(&self) -> bool {
-        let deduped = deduplicate_pcs(&self.0);
-        self.0.len() != deduped.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn len_unique(&self) -> usize {
-        deduplicate_pcs(&self.0).len()
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn has_only_one_of(&self, pcs: &[Pc]) -> bool {
-        let len = pcs.len();
-        let pcs: Vec<&Pc> = pcs.iter().filter(|pc| !self.0.contains(pc)).collect();
-        pcs.len() == len - 1
-    }
-
     /// Deduplicated, ordered, and zeroed
     pub fn new(pcs: Vec<Pc>) -> Self {
         let mut pcs = deduplicate_pcs(&pcs);
@@ -99,7 +76,7 @@ impl PcSet {
         Self(zeroed_pcs(&copy))
     }
 
-    /// Returns a [HashMap] of all the transpositional symmetries
+    /// Returns a `HashMap` of all the transpositional symmetries
     /// that self might have.
     pub fn transpositional_symmetry(&self) -> TranspositionalSymmetryMap {
         find_transpositional_symmetries(&self.0)
@@ -125,7 +102,8 @@ impl PcSet {
 
     /// Move up (i.e. rotate clockwise around the "circle of [Pc]s") some
     /// non-zero number of semitones.
-    /// This returns a Vec of [Pc] because we aren't normalizing the value to [Pc0],
+    /// This returns a Vec of [crate::note::Pc],
+    /// because we aren't normalizing the value to [crate::note::Pc::Pc0],
     /// which affords a bit more flexibility in how one might use this.
     pub fn transpose(&self, semitones: u8) -> Vec<Pc> {
         self.0
@@ -206,6 +184,26 @@ impl Into<HashSet<Pc>> for &PcSet {
         set
     }
 }
+
+/* TODO Should I create a PcMultiSet?
+
+    pub fn has_duplicates(&self) -> bool {
+        let deduped = deduplicate_pcs(&self.0);
+        self.0.len() != deduped.len()
+    }
+
+    /// The number of unique
+    pub fn len_unique(&self) -> usize {
+        deduplicate_pcs(&self.0).len()
+    }
+
+    pub fn has_only_one_of(&self, pcs: &[Pc]) -> bool {
+        let len = pcs.len();
+        let pcs: Vec<&Pc> = pcs.iter().filter(|pc| !self.0.contains(pc)).collect();
+        pcs.len() == len - 1
+    }
+
+ */
 
 #[cfg(test)]
 mod tests {

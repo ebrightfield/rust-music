@@ -14,9 +14,9 @@ fn stack_midi_from_intervals(pitch: &Pitch, intervals: &StackedIntervals) -> Vec
     midi_notes
 }
 
-/// A collection of [Pitch] with no guarantees on its contents, except
+/// A collection of [crate::note::Pitch] with no guarantees on its contents, except
 /// that it is sorted from low to high on initialization.
-/// For example, [Note] duplicates (both octaves and unisons) and
+/// For example, [crate::note::Note] duplicates (both octaves and unisons) and
 /// enharmonic equivalents are allowed.
 ///
 /// A [Voicing] can be played/notated in a definite manner,
@@ -150,7 +150,7 @@ impl Deref for Voicing {
 /// between consecutive, ordered notes of a harmony.
 ///
 /// Each unique value in this space defines a "unique way to play a particular chord type",
-/// generalized over any possible choice of root [Note].
+/// generalized over any possible choice of root [crate::note::Note].
 ///
 /// If we consider only the space of values `vec[e_1, e_2, ..., e_i]` where all `e_i < 12`,
 /// and pick any chord type that is not rotationally (i.e. transpositionally) symmetrical,

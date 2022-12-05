@@ -161,7 +161,7 @@ impl<'a> FrettedNote<'a> {
         })
     }
 
-    /// Returns the [string] value of either variant.
+    /// Returns the string value of either variant.
     pub fn string(&self) -> u8 {
         match &self {
             FrettedNote::Sounded(SoundedNote { string, ..}) => *string,
@@ -169,7 +169,7 @@ impl<'a> FrettedNote<'a> {
         }
     }
 
-    /// Returns the [fret], unless it's a [FrettedNote::Muted] variant.
+    /// Returns the fret, unless it's a [FrettedNote::Muted] variant.
     pub fn fret(&self) -> Option<u8> {
         match &self {
             FrettedNote::Sounded(SoundedNote { fret, ..}) => Some(*fret),
@@ -177,7 +177,7 @@ impl<'a> FrettedNote<'a> {
         }
     }
 
-    /// Returns the [pitch], unless it's a [FrettedNote::Muted] variant.
+    /// Returns the pitch, unless it's a [FrettedNote::Muted] variant.
     pub fn pitch(&self) -> Option<Pitch> {
         match &self {
             FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(pitch.clone()),

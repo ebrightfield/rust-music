@@ -38,7 +38,7 @@ impl Pitch {
         })
     }
 
-    /// Produce a pitch from a MIDI note.
+    /// Produce a pitch from a MIDI note value. Middle C = 60.
     pub fn from_midi(midi_note_value: u8) -> anyhow::Result<Self> {
         if midi_note_value >= 108 {
             return Err(anyhow!("Note is too high: {}", midi_note_value));

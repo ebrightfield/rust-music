@@ -7,12 +7,24 @@ use crate::fretboard::fretted_note::FrettedNote;
 use crate::notation::clef::Clef;
 use crate::note::note::Note;
 
+/// Categorized results of a search for fretboard chord shapes.
+/// Each category is a `HashMap` indexed by voicing, equivocated over the octave.
 #[derive(Debug)]
 pub struct ChordShapeSearchResult<'a> {
+    /// Shapes deemed playable using _very_ charitable bounds on the term.
     pub playable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    /// Shapes also deemed playable, but which contain adjacent intervals
+    /// wider than an octave.
     pub wide_intervals: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    /// Shapes deemed playable, but which rely on open strings in a way
+    /// that makes that deemed unplayable if transposed to a different root note.
     pub nontransposable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    /// Shapes deemed playable, but which reside entirely above the
+    /// 12th fret and which therefore should be found elsewhere in the search results 12 frets down.
     pub all_above_12th_fret: HashMap<Voicing, Vec<FretboardShape<'a>>>,
+    /// Shapes deemed unplayable. The vast majority of these are entirely
+    /// nonsensical considerations. But since they're already computed / considered,
+    /// we keep them in this category for the sake of "better to have and not want".
     pub unplayable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
 }
 

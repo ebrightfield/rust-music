@@ -16,8 +16,8 @@ pub mod scale_qualities;
 /// - Required Pcs -- Vec of subsets of Pcs, the input must contain only one element in each subset.
 /// - Optional Pcs -- Vec of subsets of Pcs, the "only one" requirement likewise applies.
 ///
-/// In order to "match" a naming heuristic's requirements, all elements of [pcs] must match,
-/// and all [HashSet]s in [self.required] should intersect on only one element of [pcs].
+/// In order to "match" a naming heuristic's requirements, all elements of `pcs` must match,
+/// and all `HashSet`s in `self.required` should intersect on only one element of `pcs`.
 ///
 /// Many naming heuristics are built, which can then be iterated over. When a call to
 /// [NamingHeuristic::validate] returns true, we can then call [NamingHeuristic::generate_name].
@@ -29,16 +29,16 @@ pub trait NamingHeuristic: std::fmt::Debug {
     /// even a simple string.
     type T;
 
-    /// We want to our chord in question to have only _one_ element in common with each [HashSet].
+    /// We want to our chord in question to have only _one_ element in common with each `HashSet`.
     /// This property must hold true for each element.
     fn required(&self) -> Vec<HashSet<Pc>> { vec! [] }
-    /// We want to our chord in question to have only _one_ element in common with each [HashSet].
+    /// We want to our chord in question to have only _one_ element in common with each `HashSet`.
     /// These properties are optional, all or none of them could match.
     fn optional(&self) -> Vec<HashSet<Pc>> { vec! [] }
 
     /// One-shot execution of an attempt at applying this heuristic to naming a chord.
-    /// If the heuristic simply doesn't apply, it returns [None].
-    /// Likewise, [self.generate_name] can sometimes return [None].
+    /// If the heuristic simply doesn't apply, it returns `None`.
+    /// Likewise, `self.generate_name` can sometimes return `None`.
     fn apply(&self, pcs: &HashSet<Pc>) -> Option<Self::T> {
         if self.validate(pcs) {
             return self.generate_name(pcs);
@@ -46,13 +46,13 @@ pub trait NamingHeuristic: std::fmt::Debug {
         None
     }
 
-    /// Try to generate a name based on the content of [pcs].
+    /// Try to generate a name based on the content of `pcs`.
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<Self::T>;
 
-    /// Does a given [Vec<Pc>] satisfy the following:
-    /// 1. All intersections with required [HashSet]s have only one element.
-    /// 2. All elements in [pcs] are matched,
-    ///    whether through required or optional [HashSet] intersections.
+    /// Does a given `Vec<Pc>` satisfy the following:
+    /// 1. All intersections with required `HashSet`s have only one element.
+    /// 2. All elements in `pcs` are matched,
+    ///    whether through required or optional `HashSet` intersections.
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
         // Clone and remove any Pc0.
         let mut pcs = pcs.clone();
@@ -83,13 +83,7 @@ pub trait NamingHeuristic: std::fmt::Debug {
     }
 }
 
-/// Convert a [Vec<Pc>] into a [HashSet<Pc>] for processing in these naming modules.
-pub fn sanitize_pcs(pcs: &Vec<Pc>) -> HashSet<Pc> {
-    let mut pcs = pcs.clone();
-    pcs.retain(|pc| *pc != Pc0);
-    pcs.into_iter().collect()
-}
-
+/// A naming heuristic that produces a [ChordQuality].
 type ChordHeuristic = Box<dyn NamingHeuristic<T=ChordQuality>>;
 
 /// An order-sensitive list of all the various naming heuristics.
@@ -127,8 +121,8 @@ pub fn chord_heuristics() -> Vec<ChordHeuristic> {
     ]
 }
 
-/// Infer a [ChordQuality] from a [HashSet<Pc>]. This is a not guaranteed to produce a quality.
-/// Assumes at least three unique [Pc] in [pcs].
+/// Infer a [ChordQuality] from a `HashSet<Pc>`. This is a not guaranteed to produce a quality.
+/// Assumes at least three unique [crate::note::Pc] in `pcs`.
 /// Other possibilities should be screened out ahead of time
 pub fn infer_chord_quality(pcs: &HashSet<Pc>) -> Option<(ChordHeuristic, Option<ChordQuality>)> {
 
@@ -148,6 +142,7 @@ pub fn infer_chord_quality(pcs: &HashSet<Pc>) -> Option<(ChordHeuristic, Option<
     None
 }
 
+/// A naming heuristic that produces a [ScaleQuality].
 type ScaleHeuristic = Box<dyn NamingHeuristic<T=ScaleQuality>>;
 
 pub fn scale_heuristics() -> Vec<ScaleHeuristic> {
@@ -177,15 +172,16 @@ pub fn scale_heuristics() -> Vec<ScaleHeuristic> {
     ]
 }
 
-/// Note that in this case, our [Box<dyn NamingHeuristic>] in the return type is
+// TODO I think I don't have to do this extra Option here.
+/// Note that in this case, our `Box<dyn NamingHeuristic>` in the return type is
 /// wrapped in its own [Option]. This is because unlike with chords,
-pub fn infer_scale_quality(pcs: &HashSet<Pc>) -> Option<(Option<ScaleHeuristic>, Option<ScaleQuality>)> {
+pub fn infer_scale_quality(pcs: &HashSet<Pc>) -> Option<(ScaleHeuristic, Option<ScaleQuality>)> {
     let mut pcs = pcs.clone();
     pcs.remove(&Pc0);
     for heuristic in scale_heuristics() {
         if heuristic.validate(&pcs) {
             let name = heuristic.generate_name(&pcs);
-            return Some((Some(heuristic), name));
+            return Some((heuristic, name));
         }
     }
     None
@@ -194,12 +190,13 @@ pub fn infer_scale_quality(pcs: &HashSet<Pc>) -> Option<(Option<ScaleHeuristic>,
 #[cfg(test)]
 mod tests {
     use crate::note_collections::chord_name::quality::chord::{Alt, Extension, MajorSubtype};
+    use crate::note_collections::PcSet;
     use super::*;
 
     #[test]
     fn chord_names() {
         let notes = vec![Pc0, Pc4, Pc5, Pc7, Pc11];
-        let notes = sanitize_pcs(&notes);
+        let notes: HashSet<Pc> = PcSet::from(notes).into();
         let quality = infer_chord_quality(&notes);
         let quality = quality.unwrap();
         let quality = quality.1.unwrap();
@@ -211,7 +208,7 @@ mod tests {
             ))
         );
         let notes = vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11];
-        let notes = sanitize_pcs(&notes);
+        let notes: HashSet<Pc> = PcSet::from(notes).into();
         let quality = infer_scale_quality(&notes);
         assert_eq!(quality.unwrap().1,
             Some(
@@ -219,19 +216,19 @@ mod tests {
             )
         );
         let notes = vec![Pc0, Pc1, Pc4, Pc5, Pc7, Pc9, Pc11];
-        let notes = sanitize_pcs(&notes);
+        let notes: HashSet<Pc> = PcSet::from(notes).into();
         let quality = infer_scale_quality(&notes);
         println!("{:?}", quality);
         let notes = vec![Pc0, Pc1, Pc4, Pc6, Pc7, Pc8, Pc10];
-        let notes = sanitize_pcs(&notes);
+        let notes: HashSet<Pc> = PcSet::from(&notes).into();
         let quality = infer_scale_quality(&notes);
         println!("{:?}", quality);
         let notes = vec![Pc0, Pc1, Pc3, Pc5, Pc6, Pc8, Pc10];
-        let notes = sanitize_pcs(&notes);
+        let notes: HashSet<Pc> = PcSet::from(notes).into();
         let quality = infer_scale_quality(&notes);
         println!("{:?}", quality);
         let notes = vec![Pc0, Pc2, Pc3, Pc5, Pc6, Pc8, Pc10];
-        let notes = sanitize_pcs(&notes);
+        let notes: HashSet<Pc> = PcSet::from(notes).into();
         let quality = infer_scale_quality(&notes);
         println!("{:?}", quality);
     }

@@ -52,7 +52,9 @@ impl Hash for Note {
 }
 
 impl Note {
-    // Return a note with an enharmonic spelling. Returns a clone of naturals.
+    /// Return a note with an enharmonic spelling. Naturals are cloned unaltered,
+    /// whereas sharps are converted to flats and vice versa. Notes like
+    /// F## or Cb are converted to their natural equivalents.
     pub fn enharmonic(&self) -> Self {
         let spelling: Spelling = self.into();
         match spelling.acc {

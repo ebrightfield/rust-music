@@ -34,7 +34,7 @@ pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>> {
         return Err(anyhow!("Double accidentals are not valid roots for spelling. \
         Use a different note and rotate it instead."))
     }
-    Ok(pc_set.0
+    Ok(pc_set
         .iter()
         .map(|pc| {
             // Unwraps are safe here because we screened out double-accidentals
@@ -75,15 +75,15 @@ impl SpellingRule {
             return false;
         }
         // We pass if not all the pcs in self.incl are in pc_set
-        if !self.incl.iter().all(|incl_pc| pc_set.0.contains(incl_pc)) {
+        if !self.incl.iter().all(|incl_pc| pc_set.contains(incl_pc)) {
             return false;
         }
         // We pass if pc_set contains anything that the rule indicates should be excluded
-        if self.excl.iter().any(|excl_pc| pc_set.0.contains(excl_pc)) {
+        if self.excl.iter().any(|excl_pc| pc_set.contains(excl_pc)) {
             return false;
         }
         // We pass if self.not_all is not empty, and pc_set contains all of them.
-        if !self.not_all.is_empty() && self.not_all.iter().all(|not_all_pc| pc_set.0.contains(not_all_pc)) {
+        if !self.not_all.is_empty() && self.not_all.iter().all(|not_all_pc| pc_set.contains(not_all_pc)) {
             return false;
         }
         // Otherwise, the rule is flagging the spelling, and suggests an aggressive
@@ -888,7 +888,7 @@ mod tests {
 
     #[test]
     fn test_basic_spelling() {
-        let pc_set = PcSet(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]);
+        let pc_set = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]);
         let root = Note::C;
         let spelling = spell_pc_set(&root, &pc_set).unwrap();
         assert_eq!(
@@ -897,7 +897,7 @@ mod tests {
         );
         let spelling = spell_pc_set(
             &Note::D,
-            &PcSet(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]),
+            &PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]),
         ).unwrap();
         assert_eq!(
             spelling,

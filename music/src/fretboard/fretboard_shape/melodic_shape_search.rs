@@ -8,7 +8,7 @@ use crate::fretboard::fretted_note::SoundedNote;
 use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 
-/// A struct intended to wrap a [FretboardShape], and add some scoring metrics.
+/// A struct intended to wrap a [crate::fretboard::FretboardShape], and add some scoring metrics.
 #[derive(Debug, Clone)]
 pub struct MelodicFretboardShape<'a> {
     shape: Vec<SoundedNote<'a>>,

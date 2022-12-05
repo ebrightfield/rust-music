@@ -4,9 +4,16 @@ use anyhow::anyhow;
 use crate::note_collections::interval_class::IntervalClass;
 
 /// An ordered, cyclic series of intervals that sum to an octave.
-/// Represents a way to "slice" an octave into n intervals.
+/// An instance of this type represents one way of "cutting" the octave
+/// into (not necessarily equal) pieces.
+///
+/// This representation of pitch content is intrinsically tied to the [PcSet],
+/// in that one entails the other.
+///
+/// One common practical example of thinking in terms of an [OctavePartition] is
+/// the "Whole-Whole-Half-Whole-Whole-Whole-Half" way of moving through the Major scale.
 #[derive(Debug, PartialEq)]
-pub struct OctavePartition(pub Vec<IntervalClass>);
+pub struct OctavePartition(Vec<IntervalClass>);
 
 impl OctavePartition {
     /// Sanitized to ensure that it's valid
@@ -21,7 +28,7 @@ impl OctavePartition {
 
 impl From<&[Pc]> for OctavePartition {
     fn from(pcs: &[Pc]) -> Self {
-        OctavePartition::from(PcSet(pcs.to_vec()))
+        OctavePartition::from(PcSet::new(pcs.to_vec()))
     }
 }
 
@@ -30,11 +37,11 @@ impl From<&PcSet> for OctavePartition {
         if pc_set.is_empty() {
             return Self(vec![IntervalClass::Ic0]);
         }
-        let vals = pc_set.0.iter().map(|pc| i32::from(pc));
-        let next_vals = pc_set.0.iter().skip(1).map(|pc| i32::from(pc));
+        let vals = pc_set.iter().map(|pc| i32::from(pc));
+        let next_vals = pc_set.iter().skip(1).map(|pc| i32::from(pc));
 
         let mut diffs: Vec<i32> = vals.zip(next_vals).map(|(cur, next)| next - cur).collect();
-        diffs.push(i32::from(pc_set.0.first().unwrap()) - i32::from(pc_set.0.last().unwrap()));
+        diffs.push(i32::from(pc_set.first().unwrap()) - i32::from(pc_set.last().unwrap()));
         let diffs = diffs
             .iter()
             .map(|i| IntervalClass::from(i))

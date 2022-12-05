@@ -3,11 +3,13 @@ pub mod fretted_note;
 
 use std::ops::Deref;
 use anyhow::{anyhow, Result};
-use fretted_note::SoundedNote;
 use once_cell::sync::Lazy;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
 use crate::note::pitch::Pitch;
+
+pub use fretboard_shape::{FretboardShape, ChordShapeClassification};
+pub use fretted_note::{SoundedNote, FrettedNote};
 
 // TODO Add more such common guitar tunings as a convenience.
 /// Standard tuning on a 6-string guitar.

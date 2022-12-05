@@ -162,10 +162,10 @@ impl TryFrom<&PcSet> for FourNoteChordQuality {
     type Error = anyhow::Error;
 
     fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
-        if value.0.len() != 4 {
-            return Err(anyhow!("wrong size for four note chord: {:?}", value.0));
+        if value.len() != 4 {
+            return Err(anyhow!("wrong size for four note chord: {:?}", value));
         }
-        let pitches = value.0.as_slice();
+        let pitches = value.as_slice();
         match pitches {
             MAJ7_PCS => Ok(FourNoteChordQuality::Maj7),
             DOM7_PCS => Ok(FourNoteChordQuality::Dom7),

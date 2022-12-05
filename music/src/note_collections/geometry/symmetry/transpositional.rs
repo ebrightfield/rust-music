@@ -75,7 +75,7 @@ pub fn transpose(pcs: &Vec<Pc>, semitones: u8) -> Vec<Pc> {
 
 /// A pitch set possesses a [TranspositionalSymmetry] of `N` when
 /// it can be transposed up or down by `N` semitones to arrive at an equivalent
-/// [PcSet].
+/// [crate::note_collections::PcSet].
 /// Most chords and scales do not exhibit any kind of transpositional symmetry,
 /// and it is highly associated with musical dissonance.
 /// Transpositionally symmetrical chord or scales can easily produce tonal ambiguity.

@@ -71,7 +71,7 @@ impl ChordName {
 }
 
 /// Whether or not something is a slash chord.
-/// All specified notes are assumed to be members of their associated [Vec<Pc>].
+/// All specified notes are assumed to be members of their associated `Vec<Pc>`.
 #[derive(Debug, Clone)]
 pub enum TonalSpecification {
     /// If it's a slash chord, the bass note will be supplied here.
@@ -81,7 +81,7 @@ pub enum TonalSpecification {
     },
     /// Root note relative to the defined chord quality.
     RootPosition(Note),
-    /// No tonal specification. The [Option<Pc>] specifies any possible bass note.
-    /// The relevant bass note must be an element in the [Vec<Pc>] being named.
+    /// No tonal specification. The `Option<Pc>` specifies any possible bass note.
+    /// The relevant bass note must be an element in the `Vec<Pc>` being named.
     None(Option<Pc>)
 }

@@ -27,7 +27,7 @@ pub fn get_subchords(pcs: &PcSet, size: u8) -> anyhow::Result<Vec<Vec<Pc>>> {
     if size as usize > pcs.len() - 1 {
         return Err(anyhow!("Size too large: {}. Needs to be <= {}", size, pcs.len() - 1));
     }
-    Ok(pcs.0.clone()
+    Ok((**pcs).clone()
         .into_iter()
         .combinations(size as usize)
         .collect()
