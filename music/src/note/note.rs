@@ -127,14 +127,17 @@ impl Note {
         Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
     }
 
+    /// Whether self and other are enharmonic equivalents of each other (e.g. C# and Db).
     pub fn is_enharmonic(&self, other: &Note) -> bool {
         Pc::from(self).notes().contains(other)
     }
 
+    /// The number of semitones up from self to other.
     pub fn distance_up_to_note(&self, note: &Note) -> u8 {
         Pc::from(self).distance_up_to(&Pc::from(note))
     }
 
+    /// The number of semitones down from self to other.
     pub fn distance_down_to_note(&self, note: &Note) -> u8 {
         Pc::from(self).distance_down_to(&Pc::from(note))
     }

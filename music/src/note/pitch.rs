@@ -122,6 +122,7 @@ impl Pitch {
         other_diat - self_diat
     }
 
+    /// Shift a pitch by some number of octaves.
     pub fn raise_octaves(&self, n: isize) -> anyhow::Result<Self> {
         let i = Self::new(self.note, u8::try_from(self.octave as isize + n)?);
         Self::new(self.note, u8::try_from(self.octave as isize + n)?)

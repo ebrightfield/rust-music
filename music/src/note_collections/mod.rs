@@ -14,19 +14,13 @@ pub mod geometry;
 pub mod interval_class;
 
 
-pub trait NumUniqueNotes {
-    fn unique_notes(&self) -> usize;
-}
-
-// pub trait HasChordName {
-//     fn chord_name(&self) -> ChordName;
-// }
-
 /// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
-/// This is music-theoretically the closest thing to e.g. a "C major chord" in the abstract.
-/// It contains no information about how that notes might be played, but it does entail
-/// certain intervallic properties and therefore can be converted to [PcSet], or vice versa if
-/// a root [Note] is provided (spellings for the remaining [Pc] can be inferred).
+///
+/// It entails all the same intervallic information as a [PcSet], but also
+/// conveys note spelling information.
+/// So you can think of it as "a [PcSet] with a defined note spelling."
+/// It's the minimal required information to talk about e.g. "a C major chord"
+/// in the abstract.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NoteSet(Vec<Note>);
 
@@ -49,20 +43,14 @@ impl NoteSet {
         Self(notes)
     }
 
-    /// Same as [NoteSet::new], but normalizes to the first element of the [Vec].
+    /// Same as [NoteSet::new], but orders elements treating
+    /// the first element of the [Vec] as [Pc::Pc0].
     pub fn starting_from_first_note(mut notes: Vec<Note>) -> Self {
         if notes.is_empty() {
             return Self(vec![]);
         }
-        let orientation = u8::from(Pc::from(notes[0]));
-        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
-        notes.sort_by(|a, b| {
-            // We add 12 in the arithmetic because we want to ensure
-            let a = (u8::from(Pc::from(a)) + 12 - orientation).rem_euclid(12);
-            let b = (u8::from(Pc::from(b)) + 12 - orientation).rem_euclid(12);
-            a.partial_cmp(&b).unwrap()
-        });
-        Self(notes)
+        let starting_note = Some(note[0].clone());
+        Self::new(notes, starting_note)
     }
 
     /// Retrieves the note n "steps" up in a [NoteSet], starting from a given

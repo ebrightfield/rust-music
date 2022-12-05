@@ -14,9 +14,11 @@ fn stack_midi_from_intervals(pitch: &Pitch, intervals: &StackedIntervals) -> Vec
     midi_notes
 }
 
-/// A collection of [Pitch] with no constraints on its contents, except
-/// for low-to-high ordering.
-/// For example, [Note] duplicates or enharmonic equivalents are allowed, as are sonic unisons.
+/// A collection of [Pitch] with no guarantees on its contents, except
+/// that it is sorted from low to high on initialization.
+/// For example, [Note] duplicates (both octaves and unisons) and
+/// enharmonic equivalents are allowed.
+///
 /// A [Voicing] can be played/notated in a definite manner,
 /// all it needs is rhythmic information.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +31,8 @@ impl Voicing {
         Self(pitches)
     }
 
+    /// Shifts the voicing up or down by some number of octaves.
+    /// Spelling remains the same.
     pub fn move_by_octaves(&self, n: isize) -> anyhow::Result<Self> {
         Ok(Self(self.iter()
             .map(|p| p.raise_octaves(n))

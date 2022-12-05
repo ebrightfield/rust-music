@@ -6,12 +6,21 @@ use crate::note::pc::Pc;
 use crate::note::pc::Pc::*;
 use crate::note_collections::pc_set::{PcSet, zeroed_pcs};
 
-pub const WT_SCALE: &[Pc] = &[Pc0, Pc2, Pc4, Pc6, Pc8, Pc10];
-pub const WT_SCALE_ODD: &[Pc] = &[Pc1, Pc3, Pc5, Pc7, Pc9, Pc11];
-
+/// Type alias for the [HashMap] that stores the results of a search
+/// for transpositional symmetries.
 pub type TranspositionalSymmetryMap = HashMap<Pc, HashSet<TranspositionalSymmetry>>;
 
-/// Returns a
+/// Returns a [HashMap] that contains a listing of all transpositional symmetries
+/// that occur in the intervallic content of a given collection of [Pc].
+///
+/// Some chords (e.g. Augmented triads, Dom7b5 chords) are transpositionally
+/// symmetrical at intervals smaller than the octave. This means
+/// that rather than needing to "rotate" the chord twelve semitones before you arrive
+/// at the same set of (enharmonically equivalent) notes, you can achieve the
+/// same effect after only e.g. 6 semitones.
+///
+/// The simplest example of a collection with this behavior is the tritone.
+/// If you raise a tritone by six semitones, you end up with the same notes.
 pub fn find_transpositional_symmetries(pcs: &Vec<Pc>) -> TranspositionalSymmetryMap {
     let mut symmetries = HashMap::new();
     // Closure for the complicated process of adding entries to our symmetries HashMap.
