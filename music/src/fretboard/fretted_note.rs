@@ -9,7 +9,7 @@ use crate::note_collections::NoteSet;
 /// for example when creating guitar chord diagrams.
 /// But if you're never going to have to notated a muted string,
 /// it is better to use a [SoundedNote] directly instead.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FrettedNote<'a> {
     /// A note that is played on the fretboard.
     Sounded(SoundedNote<'a>),
@@ -23,7 +23,7 @@ pub enum FrettedNote<'a> {
 /// A note played on a fretboard. A reference to the fretboard ensures
 /// that each existing [FrettedNote] instance refers in code back to an
 /// actual [Fretboard] instance, which is often useful for performing calculations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SoundedNote<'a> {
     pub string: u8,
     pub fret: u8,

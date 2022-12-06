@@ -2,8 +2,13 @@ use music::notation::clef::Clef;
 use music::note::{Note, Pitch};
 use music::note_collections::Voicing;
 
+/// Since the canonical voicing calculation is basically the same for three and four
+/// note chords, it is DRYest to create this shared implementation.
 pub trait CanonicalVoicings {
+    /// The size of the chord.
     const N: usize;
+    /// Set of voicing families. Each of these can be rotated to obtain
+    /// N distinct inversions for each family.
     const FAMILIES: &'static [&'static[usize]];
 
     /// Returns the canonical voicings for an N-note chord, well-ordered and grouped.

@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn voicings_3nc() {
         let notes = vec![Note::C, Note::E, Note::G];
-        let voicings = ThreeNoteChordQuality::voicings(&notes);
-        println!("{:#?}", voicings);
+        let _ = ThreeNoteChordQuality::voicings(&notes);
+        //println!("{:#?}", voicings);
     }
 }

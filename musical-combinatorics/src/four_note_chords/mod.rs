@@ -38,7 +38,7 @@ pub enum FourNoteChordQuality {
     APP,
     PAP,
     PPA,
-    // Clusters (A = Augmented second, W = Wholetone, H = Semitone)
+    // Clusters (A = Augmented second, W = Wholetone, H = Semitone, M = Major third)
     WWW,
     HWW,
     WHW,

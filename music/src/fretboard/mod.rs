@@ -27,7 +27,7 @@ pub static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
 });
 
 /// Represents a fretboard with any arbitrary tuning or number of strings.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Fretboard {
     /// The number and tuning of a fretboard is entirely defined here.
     /// Canonically, we use `open_strings[0]` to represent the thickest string
