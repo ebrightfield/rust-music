@@ -1,7 +1,7 @@
 pub mod symmetry;
 
-use anyhow::anyhow;
 use itertools::Itertools;
+use crate::error::MusicSemanticsError;
 use crate::note::pc::Pc;
 use crate::note_collections::pc_set::PcSet;
 
@@ -20,12 +20,12 @@ pub fn get_modes(pcs: &PcSet) -> Vec<PcSet> {
         .collect()
 }
 
-pub fn get_subchords(pcs: &PcSet, size: u8) -> anyhow::Result<Vec<Vec<Pc>>> {
+pub fn get_subchords(pcs: &PcSet, size: u8) -> Result<Vec<Vec<Pc>>, MusicSemanticsError> {
     if size < 3 {
-        return Err(anyhow!("Size too small for subchords: {}", size));
+        return Err(MusicSemanticsError::SizeTooSmallForChords(size as usize));
     }
     if size as usize > pcs.len() - 1 {
-        return Err(anyhow!("Size too large: {}. Needs to be <= {}", size, pcs.len() - 1));
+        return Err(MusicSemanticsError::SizeTooLargeForSubchords(size, pcs.clone()));
     }
     Ok((**pcs).clone()
         .into_iter()

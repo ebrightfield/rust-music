@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use crate::note::spelling::{Accidental, Letter, Spelling};
-use anyhow::anyhow;
+use crate::error::MusicSemanticsError;
 use crate::note::pc::Pc;
 
 /// Every chromatic note in all possible enharmonic spellings,
@@ -119,14 +119,14 @@ impl Note {
     }
 
     /// Control for spelling by including a "palette" of possible note values.
-    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         let pc = Pc::from(self);
         for note in notes {
             if Pc::from(note) == pc {
                 return Ok(note.clone());
             }
         }
-        Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
+        Err(MusicSemanticsError::NotAMember(self.clone(), notes.clone()))
     }
 
     /// Whether self and other are enharmonic equivalents of each other (e.g. C# and Db).
@@ -153,7 +153,7 @@ impl Note {
 }
 
 impl FromStr for Note {
-    type Err = anyhow::Error;
+    type Err = MusicSemanticsError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let spelling = Spelling::from_str(&s)?;
@@ -170,18 +170,16 @@ impl Display for Note {
 }
 
 impl TryFrom<Spelling> for Note {
-    type Error = anyhow::Error;
+    type Error = MusicSemanticsError;
 
-    fn try_from(spelling: Spelling) -> Result<Self, Self::Error> {
+    fn try_from(spelling: Spelling) -> Result<Self, MusicSemanticsError> {
         match spelling.letter {
             Letter::C => match spelling.acc {
                 Accidental::Natural => Ok(Note::C),
                 Accidental::Flat => Ok(Note::Ces),
                 Accidental::Sharp => Ok(Note::Cis),
-                Accidental::DoubleFlat => Err(anyhow!(
-                    "Invalid spelling: {}, {}",
-                    Letter::C,
-                    Accidental::DoubleFlat,
+                Accidental::DoubleFlat => Err(MusicSemanticsError::ExcessiveAccidental(
+                    Letter::C, Accidental::DoubleFlat,
                 )),
                 Accidental::DoubleSharp => Ok(Note::Cisis),
             },
@@ -197,8 +195,7 @@ impl TryFrom<Spelling> for Note {
                 Accidental::Flat => Ok(Note::Ees),
                 Accidental::Sharp => Ok(Note::Eis),
                 Accidental::DoubleFlat => Ok(Note::Eeses),
-                Accidental::DoubleSharp => Err(anyhow!(
-                    "Invalid spelling: {}, {}",
+                Accidental::DoubleSharp => Err(MusicSemanticsError::ExcessiveAccidental(
                     Letter::E,
                     Accidental::DoubleSharp,
                 )),
@@ -207,10 +204,8 @@ impl TryFrom<Spelling> for Note {
                 Accidental::Natural => Ok(Note::F),
                 Accidental::Flat => Ok(Note::Fes),
                 Accidental::Sharp => Ok(Note::Fis),
-                Accidental::DoubleFlat => Err(anyhow!(
-                    "Invalid spelling: {}, {}",
-                    Letter::F,
-                    Accidental::DoubleFlat,
+                Accidental::DoubleFlat => Err(MusicSemanticsError::ExcessiveAccidental(
+                    Letter::F, Accidental::DoubleFlat,
                 )),
                 Accidental::DoubleSharp => Ok(Note::Fisis),
             },
@@ -233,9 +228,8 @@ impl TryFrom<Spelling> for Note {
                 Accidental::Flat => Ok(Note::Bes),
                 Accidental::Sharp => Ok(Note::Bis),
                 Accidental::DoubleFlat => Ok(Note::Beses),
-                Accidental::DoubleSharp => Err(anyhow!(
-                    "Invalid spelling: {}, {}",
-                    Letter::B,
+                Accidental::DoubleSharp => Err(MusicSemanticsError::ExcessiveAccidental(
+                    Letter::E,
                     Accidental::DoubleSharp,
                 )),
             },

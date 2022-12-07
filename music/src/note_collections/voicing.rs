@@ -1,5 +1,6 @@
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use crate::error::MusicSemanticsError;
 use crate::notation::clef::Clef;
 use crate::note_collections::pc_set::PcSet;
 use crate::note_collections::spelling::spell_pc_set;
@@ -33,7 +34,7 @@ impl Voicing {
 
     /// Shifts the voicing up or down by some number of octaves.
     /// Spelling remains the same.
-    pub fn move_by_octaves(&self, n: isize) -> anyhow::Result<Self> {
+    pub fn move_by_octaves(&self, n: isize) -> Result<Self, MusicSemanticsError> {
         Ok(Self(self.iter()
             .map(|p| p.raise_octaves(n))
             .into_iter()
@@ -54,7 +55,7 @@ impl Voicing {
     }
 
     /// Given a [Pitch], we can infer the others using a [StackedIntervals] instance.
-    pub fn from_intervals(root: &Pitch, intervals: &StackedIntervals) -> anyhow::Result<Self> {
+    pub fn from_intervals(root: &Pitch, intervals: &StackedIntervals) -> Result<Self, MusicSemanticsError> {
         let midi_notes = stack_midi_from_intervals(root, intervals);
         let pc_set = PcSet::from(&midi_notes);
         let spelling = spell_pc_set(&root.note, &pc_set)?;
@@ -75,7 +76,7 @@ impl Voicing {
     /// its presentation toward the middle of a given clef.
     /// In very extreme cases, this attempt can fail, but those have to be very contrived
     /// cases, and this function would not be applicable to such scenarios anyway.
-    pub fn normalize_register_to_clef(&self, clef: Clef) -> anyhow::Result<Self> {
+    pub fn normalize_register_to_clef(&self, clef: Clef) -> Result<Self, MusicSemanticsError> {
         if self.is_empty() {
             return Ok(self.clone());
         }

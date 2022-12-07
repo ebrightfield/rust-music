@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use itertools::Itertools;
+use crate::error::MusicSemanticsError;
 use crate::note_collections::voicing::Voicing;
 use crate::fretboard::Fretboard;
 use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape};
@@ -42,7 +43,10 @@ impl<'a> ChordShapeSearchResult<'a> {
 
 /// Chord shapes are [FretboardShape]s where there is exactly one [FrettedNote] per string.
 /// If the string is not played in the chord, we denote it with a [FrettedNote::Muted].
-pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> anyhow::Result<ChordShapeSearchResult<'a>> {
+pub fn find_chord_shapes<'a>(
+    chord: &Vec<Note>,
+    fretboard: &'a Fretboard
+) -> Result<ChordShapeSearchResult<'a>, MusicSemanticsError> {
     let chord_len = chord.len();
     let num_strings: u8 = fretboard.num_strings();
     // String groupings are e.g. 0x0000. Note that x0000x is distinct from 0000xx.
@@ -62,9 +66,9 @@ pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> any
                 .map(|(i, note)| {
                     let fret = fretboard.which_fret(note, grouping[i])?;
                     if fret < 6 {
-                        return Ok::<_, anyhow::Error>(vec![fret, fret + 12]);
+                        return Ok::<_, MusicSemanticsError>(vec![fret, fret + 12]);
                     }
-                    Ok::<_, anyhow::Error>(vec![fret])
+                    Ok::<_, MusicSemanticsError>(vec![fret])
                 })
                 .into_iter()
                 .flatten()
@@ -76,11 +80,11 @@ pub fn find_chord_shapes<'a>(chord: &Vec<Note>, fretboard: &'a Fretboard) -> any
                     .map(|i| {
                         let index = grouping.iter().position(|item| *item == i);
                         if let Some(index) = index {
-                            return Ok::<_, anyhow::Error>(FrettedNote::Sounded(
+                            return Ok::<_, MusicSemanticsError>(FrettedNote::Sounded(
                                 fretboard.sounded_note(i, *fret_shape[index])?
                             ));
                         }
-                        Ok::<_, anyhow::Error>(FrettedNote::Muted {
+                        Ok::<_, MusicSemanticsError>(FrettedNote::Muted {
                             string: i,
                             fretboard,
                         })

@@ -3,6 +3,7 @@ pub mod melodic_shape_search;
 
 use std::fmt::{Display, Formatter};
 use std::iter::zip;
+use crate::error::MusicSemanticsError;
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::{StackedIntervals, Voicing};
 use crate::fretboard::Fretboard;
@@ -61,12 +62,12 @@ impl<'a> FretboardShape<'a> {
         }
     }
 
-    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         Ok(Self {
             fretboard: self.fretboard,
             fretted_notes: self.fretted_notes
                 .iter()
-                .map(|value| Ok::<_, anyhow::Error>(value.spelled_as_in(notes)?))
+                .map(|value| Ok::<_, MusicSemanticsError>(value.spelled_as_in(notes)?))
                 .into_iter()
                 .flatten()
                 .collect()

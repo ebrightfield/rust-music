@@ -1,6 +1,6 @@
 use crate::note_collections::pc_set::PcSet;
 use crate::note::pc::Pc;
-use anyhow::anyhow;
+use crate::error::MusicSemanticsError;
 use crate::note_collections::interval_class::IntervalClass;
 
 /// An ordered, cyclic series of intervals that sum to an octave.
@@ -17,10 +17,10 @@ pub struct OctavePartition(Vec<IntervalClass>);
 
 impl OctavePartition {
     /// Sanitized to ensure that it's valid
-    pub fn new(intervals: Vec<IntervalClass>) -> anyhow::Result<Self> {
+    pub fn new(intervals: Vec<IntervalClass>) -> Result<Self, MusicSemanticsError> {
         let sum: i32 = intervals.iter().map(|interval| i32::from(interval)).sum();
         if sum != 12 {
-            return Err(anyhow!("Invalid octave partition: {:?}", intervals));
+            return Err(MusicSemanticsError::InvalidOctavePartition(intervals));
         }
         Ok(Self(intervals))
     }

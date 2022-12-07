@@ -1,8 +1,9 @@
 use crate::note::note::Note;
-use anyhow::anyhow;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 use std::str::FromStr;
+use crate::error::MusicSemanticsError;
+use crate::error::MusicSemanticsError::InvalidNoteLetter;
 
 /// Nothing more extreme than a double-accidental is represented here.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -21,7 +22,7 @@ impl Accidental {
 }
 
 impl FromStr for Accidental {
-    type Err = anyhow::Error;
+    type Err = MusicSemanticsError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -31,7 +32,7 @@ impl FromStr for Accidental {
             "bb" => Ok(Accidental::DoubleFlat),
             "##" => Ok(Accidental::DoubleSharp),
             // TODO Match fancy Utf-8 chars
-            _ => Err(anyhow!("Invalid note accidental: {}", s)),
+            _ => Err(MusicSemanticsError::InvalidAccidental(s.to_string())),
         }
     }
 }
@@ -116,7 +117,7 @@ impl From<Letter> for i32 {
 }
 
 impl FromStr for Letter {
-    type Err = anyhow::Error;
+    type Err = MusicSemanticsError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_lowercase();
@@ -128,7 +129,7 @@ impl FromStr for Letter {
             "e" => Ok(Letter::E),
             "f" => Ok(Letter::F),
             "g" => Ok(Letter::G),
-            _ => Err(anyhow!("Invalid note letter: {}", s)),
+            _ => Err(InvalidNoteLetter(s.to_string())),
         }
     }
 }
@@ -171,7 +172,7 @@ impl Display for Spelling {
 }
 
 impl FromStr for Spelling {
-    type Err = anyhow::Error;
+    type Err = MusicSemanticsError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let letter = Letter::from_str(&s[0..1])?;

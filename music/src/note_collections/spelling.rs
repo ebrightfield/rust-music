@@ -1,3 +1,4 @@
+use crate::error::MusicSemanticsError;
 /// This module solves the problem of crossing the gap from the
 /// "integer world" of [Pc] to the "alphabetical world" of [Note]s.
 ///
@@ -20,7 +21,6 @@
 /// This module starts from approach (2), and enhances it with a collection of (3).
 /// The result is a pretty "smart" spelling engine to convert from
 /// collections of [Pc] to collections of [Note].
-use anyhow::{anyhow, Result};
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::*;
 use crate::note::pc::Pc;
@@ -29,10 +29,9 @@ use crate::note::spelling::Spelling;
 /// Spell a [PcSet] as a [Vec] of [Note], first using a root [Note] as the starting point
 /// as dictated by [default_spelling]. Then, we maybe convert that default spelling
 /// to its enharmonic equivalent as dictated by heuristics defined in [spell_rules].
-pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>> {
+pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>, MusicSemanticsError> {
     if Spelling::from(root).acc.is_double() {
-        return Err(anyhow!("Double accidentals are not valid roots for spelling. \
-        Use a different note and rotate it instead."))
+        return Err(MusicSemanticsError::NoDoubleAccidentalRoot(root.clone()))
     }
     Ok(pc_set
         .iter()

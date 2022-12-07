@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
-use anyhow::anyhow;
 use std::ops::{Deref, DerefMut};
+use crate::error::MusicSemanticsError;
 use crate::note_collections::chord_name::{ChordNameDisplayConfig, ExtensionStyle};
 use crate::note_collections::interval_class::IntervalClass;
 
@@ -35,7 +35,7 @@ impl Display for AltChoice {
 }
 
 impl TryFrom<usize> for AltChoice {
-    type Error = anyhow::Error;
+    type Error = MusicSemanticsError;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         match value {
@@ -48,7 +48,7 @@ impl TryFrom<usize> for AltChoice {
             8 => Ok(AltChoice::FlatThirteenth),
             9 => Ok(AltChoice::Thirteenth),
             10 => Ok(AltChoice::SharpThirteenth),
-            _ => Err(anyhow!("not a proper pc for an alteration: {}", value))
+            _ => Err(MusicSemanticsError::PcNotAnAlteration(value))
         }
     }
 }

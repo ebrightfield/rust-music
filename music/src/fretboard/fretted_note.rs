@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use anyhow::anyhow;
+use crate::error::MusicSemanticsError;
 use crate::fretboard::Fretboard;
 use crate::note::note::Note;
 use crate::note::pitch::Pitch;
@@ -40,7 +40,7 @@ impl<'a> Display for SoundedNote<'a> {
 impl<'a> SoundedNote<'a> {
     /// Preferred constructor for an open string. Validates using
     /// the methods on the [Fretboard] passed in.
-    pub fn open(string: u8, fretboard: &'a Fretboard) -> anyhow::Result<Self> {
+    pub fn open(string: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         let open_string = fretboard.get_string(string)?;
         Ok(Self {
             fret: Fretboard::OPEN,
@@ -52,7 +52,7 @@ impl<'a> SoundedNote<'a> {
 
     /// Preferred constructor for a fretted string. Validates using
     /// the methods on the [Fretboard] passed in.
-    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> anyhow::Result<Self> {
+    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         Ok(fretboard.sounded_note(string, fret)?)
     }
 
@@ -60,7 +60,7 @@ impl<'a> SoundedNote<'a> {
     /// to a vec of [Note].
     /// This is a way to assert a musical context (i.e. "correct" spelling)
     /// over `self.pitch`.
-    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         let pitch = Pitch::spelled_as_in(self.pitch.midi_note, notes)?;
         Ok(Self {
             string: self.string,
@@ -71,60 +71,58 @@ impl<'a> SoundedNote<'a> {
     }
 
     /// Moves up the same string to a new fret `n` semitones higher.
-    pub fn up_n_frets(&self, n: u8) -> anyhow::Result<Self> {
-        Ok(self.fretboard.sounded_note(self.string, self.fret + n)?)
+    pub fn up_n_frets(&self, n: u8) -> Result<Self, MusicSemanticsError> {
+        self.fretboard.sounded_note(self.string, self.fret + n)
     }
 
     /// Moves up the same string to a new fret `n` semitones higher.
-    pub fn down_n_frets(&self, n: u8) -> anyhow::Result<Self> {
+    pub fn down_n_frets(&self, n: u8) -> Result<Self, MusicSemanticsError> {
         if n < self.fret {
-            return Err(anyhow!("Fret goes off the fretboard"));
+            return Err(MusicSemanticsError::CantMoveDownFrets(n));
         }
         Ok(self.fretboard.sounded_note(self.string, self.fret - n)?)
     }
 
     /// Moves up the same string to a new fret `n` semitones higher.
-    pub fn up_an_octave(&self) -> anyhow::Result<Self> {
-        Ok(self.fretboard.sounded_note(self.string, self.fret + 12)?)
+    pub fn up_an_octave(&self) -> Result<Self, MusicSemanticsError> {
+        self.fretboard.sounded_note(self.string, self.fret + 12)
     }
 
     /// Moves down the same string 12 semitones, if possible.
-    pub fn down_an_octave(&self) -> anyhow::Result<Self> {
+    pub fn down_an_octave(&self) -> Result<Self, MusicSemanticsError> {
         if self.fret < 12 {
-            return Err(anyhow!("Fret goes off the fretboard"));
+            return Err(MusicSemanticsError::CantMoveDownFrets(12));
         }
         Ok(self.fretboard.sounded_note(self.string, self.fret - 12)?)
     }
 
     /// Produces a [SoundedNote] on the next chord/scale degree, on the same string.
-    pub fn next_note_same_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
+    pub fn next_note_same_string(&self, notes: &NoteSet) -> Result<Self, MusicSemanticsError> {
         let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
         let pitch = self.pitch.up_to_note(&next_note)?;
         let this_string = self.fretboard.get_string(self.string).unwrap();
         let fret = pitch.midi_note - this_string.midi_note;
-        Ok(self.fretboard.sounded_note(self.string, fret)?)
+        self.fretboard.sounded_note(self.string, fret)
     }
 
     /// Produces a [SoundedNote] on the next chord/scale degree, on the next string up.
-    pub fn next_note_next_string(&self, notes: &NoteSet) -> anyhow::Result<Self> {
+    pub fn next_note_next_string(&self, notes: &NoteSet) -> Result<Self, MusicSemanticsError> {
         let next_note = notes.up_n_steps(&self.pitch.note, 1)?;
         let pitch = self.pitch.up_to_note(&next_note)?;
         let next_string = self.fretboard.get_string(self.string + 1)?;
         if next_string.midi_note > pitch.midi_note {
-            return Err(anyhow!("Pitch {:?} is lower than the next string {:?}",
-                &pitch, next_string,
-            ))
+            return Err(MusicSemanticsError::FretBelowZero(pitch, next_string.clone()));
         }
-        Ok(self.fretboard.sounded_note(
+        self.fretboard.sounded_note(
             self.string + 1, pitch.midi_note - next_string.midi_note
-        )?)
+        )
     }
 }
 
 impl<'a> FrettedNote<'a> {
 
     /// Constructor for a [FrettedNote::Muted] variant.
-    pub fn muted(string: u8, fretboard: &'a Fretboard) -> anyhow::Result<Self> {
+    pub fn muted(string: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         let _ = fretboard.get_string(string)?;
         Ok(Self::Muted {
             string,
@@ -133,7 +131,7 @@ impl<'a> FrettedNote<'a> {
     }
 
     /// Constructor for a [FrettedNote::Sounded] variant of an open string.
-    pub fn open(string: u8, fretboard: &'a Fretboard) -> anyhow::Result<Self> {
+    pub fn open(string: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         let open_string = fretboard.get_string(string)?;
         Ok(Self::Sounded(SoundedNote {
             pitch: open_string.clone(),
@@ -144,7 +142,7 @@ impl<'a> FrettedNote<'a> {
     }
 
     /// Construct a [FrettedNote::Sounded] variant that is fretted.
-    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> anyhow::Result<Self> {
+    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         Ok(Self::Sounded(fretboard.sounded_note(string, fret)?))
     }
 
@@ -152,7 +150,7 @@ impl<'a> FrettedNote<'a> {
     /// to a vec of [Note].
     /// This is a way to assert a musical context (i.e. "correct" spelling)
     /// over `self.pitch`.
-    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> anyhow::Result<Self> {
+    pub fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         Ok(match &self {
             FrettedNote::Sounded(sounded_note) => FrettedNote::Sounded(
                 sounded_note.spelled_as_in(notes)?

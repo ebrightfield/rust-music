@@ -1,6 +1,7 @@
 use crate::note::pc::Pc;
 use std::collections::HashSet;
 use std::ops::Deref;
+use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note_collections::geometry::symmetry::transpositional::{find_transpositional_symmetries, TranspositionalSymmetryMap};
 use crate::note_collections::spelling::spell_pc_set;
@@ -114,7 +115,7 @@ impl PcSet {
 
     /// Attempt to spell a [PcSet] using this library's provided spelling function,
     /// [crate::note_collections::spelling::spell_pc_set].
-    pub fn try_spell(&self, root: &Note) -> anyhow::Result<Vec<Note>> {
+    pub fn try_spell(&self, root: &Note) -> Result<Vec<Note>, MusicSemanticsError> {
         spell_pc_set(root, self)
     }
 }

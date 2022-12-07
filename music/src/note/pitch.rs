@@ -3,8 +3,10 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use crate::note::note::Note;
 use crate::note::pc::Pc;
-use anyhow::anyhow;
+use crate::error::MusicSemanticsError;
 use crate::note::spelling::Spelling;
+
+// TODO Expand range out to MIDI note 128
 
 /// This is the MIDI-compliant formula for calculating how:
 /// Note + octave = Pitch
@@ -26,9 +28,9 @@ pub struct Pitch {
 
 impl Pitch {
     /// Sanitizes for octave height
-    pub fn new(note: Note, octave: u8) -> anyhow::Result<Self> {
+    pub fn new(note: Note, octave: u8) -> Result<Self, MusicSemanticsError> {
         if octave > 8 {
-            return Err(anyhow!("Octave too high: {}", octave));
+            return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
         let midi_note = calc_midi_note(&note, &octave);
         Ok(Self {
@@ -39,13 +41,13 @@ impl Pitch {
     }
 
     /// Produce a pitch from a MIDI note value. Middle C = 60.
-    pub fn from_midi(midi_note_value: u8) -> anyhow::Result<Self> {
+    pub fn from_midi(midi_note_value: u8) -> Result<Self, MusicSemanticsError> {
         if midi_note_value >= 108 {
-            return Err(anyhow!("Note is too high: {}", midi_note_value));
+            return Err(MusicSemanticsError::MidiTooHigh(midi_note_value));
         }
         let octave = (midi_note_value / 12) - 1;
         if octave > 8 {
-            return Err(anyhow!("Octave too high: {}", octave));
+            return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
         let pc = midi_note_value - (octave * 12);
         let pc = Pc::from(pc);
@@ -58,10 +60,10 @@ impl Pitch {
     }
 
     /// Control for spelling by including a "palette" of possible note values.
-    pub fn spelled_as_in(midi_note_value: u8, notes: &Vec<Note>) -> anyhow::Result<Self> {
+    pub fn spelled_as_in(midi_note_value: u8, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         let octave = (midi_note_value / 12) - 1;
         if octave > 8 {
-            return Err(anyhow!("Octave too high: {}", octave));
+            return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
         let pc = midi_note_value - (octave * 12);
         let pc = Pc::from(pc);
@@ -74,22 +76,19 @@ impl Pitch {
                 });
             }
         }
-        Err(anyhow!("{:?} not in the notes {:?}", pc.notes(), notes))
+        Err(MusicSemanticsError::NotAMember(
+            pc.notes().first().unwrap().clone(),
+            notes.clone())
+        )
     }
 
     /// Subtract up or down from a pitch to arrive at another one.
     /// This does not control spelling.
-    pub fn at_distance_from(&self, distance: isize) -> anyhow::Result<Self> {
+    pub fn at_distance_from(&self, distance: isize) -> Result<Self, MusicSemanticsError> {
         let new_pitch = self.midi_note as isize + distance;
-        //let new_pitch = 0;
         let new_pitch = u8::try_from(new_pitch)
-                .map_err( |_| anyhow!(
-                    "Subtracting {} from {:?} goes beyond the bounds of practical musical pitches",
-                    new_pitch,
-                    self,
-                )
-            )?;
-        Ok(Self::from_midi(new_pitch)?)
+            .map_err(|_| MusicSemanticsError::OutOfBoundsLower(self.midi_note))?;
+        Self::from_midi(new_pitch)
     }
 
     /// Compare pitches by their MIDI note, to equivocate over
@@ -100,14 +99,14 @@ impl Pitch {
 
     /// Returns the next [Pitch] above [self] whose note is equivalent to
     /// to the input [Note]. For when you want to "go up to G from B3".
-    pub fn up_to_note(&self, note: &Note) -> anyhow::Result<Self> {
+    pub fn up_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_up_to_note(note);
-        Ok(self.at_distance_from(d as isize)?)
+        self.at_distance_from(d as isize)
     }
 
     /// Returns the next [Pitch] below [self] whose note is equivalent to
     /// to the input [Note]. For when you want to "go down to G from B3".
-    pub fn down_to_note(&self, note: &Note) -> anyhow::Result<Self> {
+    pub fn down_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_down_to_note(note);
         Ok(self.at_distance_from(d as isize)?)
     }
@@ -123,8 +122,10 @@ impl Pitch {
     }
 
     /// Shift a pitch by some number of octaves.
-    pub fn raise_octaves(&self, n: isize) -> anyhow::Result<Self> {
-        Self::new(self.note, u8::try_from(self.octave as isize + n)?)
+    pub fn raise_octaves(&self, n: isize) -> Result<Self, MusicSemanticsError> {
+        Self::new(self.note, u8::try_from(self.octave as isize + n)
+            .map_err(|_| MusicSemanticsError::MidiTooHigh(u8::MAX))?
+        )
     }
 }
 
