@@ -51,4 +51,6 @@ pub enum MusicSemanticsError {
     SizeTooSmallForChords(usize),
     #[error("Collection size is not the same: {0} != {1}")]
     MismatchedCollectionSize(usize, usize),
+    #[error("The following voiceleading rules were broken: {0:?}")]
+    VoiceleadingViolation(Vec<String>)
 }
