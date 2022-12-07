@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use crate::note::note::Note;
 use crate::note::pc::Pc;
@@ -15,6 +17,7 @@ pub use interval_class::IntervalClass;
 pub use octave_partition::OctavePartition;
 pub use voicing::{StackedIntervals, Voicing};
 use crate::error::MusicSemanticsError;
+use crate::note_collections::geometry::symmetry::transpositional::TranspositionalSymmetry;
 
 /// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
 ///
@@ -23,7 +26,7 @@ use crate::error::MusicSemanticsError;
 /// So you can think of it as "a [PcSet] with a defined note spelling."
 /// It's the minimal required information to talk about e.g. "a C major chord"
 /// in the abstract.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteSet(Vec<Note>);
 
 impl NoteSet {
@@ -65,6 +68,36 @@ impl NoteSet {
             .ok_or(MusicSemanticsError::NotAMember(from.clone(), (**self).clone()))?;
         let n = (index + (n as usize)).rem_euclid(self.0.len());
         Ok(self.0[n].clone())
+    }
+
+    /// Indexed by [Note] instead of [Pc] as in
+    /// [crate::note_collections::geometry::symmetry::find_transpositional_symmetries].
+    /// See that function's docs for more details.
+    pub fn find_transpositional_symmetries(&self) -> TranspositionalSymmetryMap {
+        let pcs = PcSet::from(self);
+        let mut symmetries = pcs.transpositional_symmetry();
+        let mut indexed_by_note = HashMap::new();
+        for (i, note) in self.iter().enumerate() {
+            indexed_by_note.insert(
+                note.clone(),
+                symmetries.remove(&pcs[i]).unwrap(),
+            );
+        }
+        indexed_by_note
+    }
+}
+
+pub type TranspositionalSymmetryMap = HashMap<Note, HashSet<TranspositionalSymmetry>>;
+
+impl Hash for NoteSet {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.0.is_empty() {
+            "NoteSet:<empty>".hash(state);
+        } else {
+            for note in &self.0 {
+                note.hash(state);
+            }
+        }
     }
 }
 

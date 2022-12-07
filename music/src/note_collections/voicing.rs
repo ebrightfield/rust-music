@@ -2,9 +2,12 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::notation::clef::Clef;
+use crate::note::Note;
 use crate::note_collections::pc_set::PcSet;
-use crate::note_collections::spelling::spell_pc_set;
+use crate::note_collections::spelling::{HasSpelling, spell_pc_set};
 use crate::note::pitch::Pitch;
+use crate::note_collections::geometry::symmetry::transpositional::TryTranspose;
+
 
 /// Returns a vector of increasing midi note values, based on a series of
 /// vertically stacked intervals and a starting pitch.
@@ -36,10 +39,38 @@ impl Voicing {
     /// Spelling remains the same.
     pub fn move_by_octaves(&self, n: isize) -> Result<Self, MusicSemanticsError> {
         Ok(Self(self.iter()
-            .map(|p| p.raise_octaves(n))
+            .map(|p| Ok::<_, MusicSemanticsError>(p.raise_octaves(n)?))
             .into_iter()
             .flatten()
             .collect()))
+    }
+
+    /// Applies a set of voiceleading paths to `self`. Produces
+    /// a Vector of [Pitch] instead of a [Voicing], because the resultant
+    /// pitch ordering carries information about voice crossings.
+    ///
+    /// We perform a length check, so that `paths.len()` must be equal to `self.len()`.
+    pub fn apply_paths(&self, paths: &Vec<i8>, notes: Option<&Vec<Note>>) -> Result<Vec<Pitch>, MusicSemanticsError> {
+        if paths.len() != self.0.len() {
+            return Err(MusicSemanticsError::MismatchedCollectionSize(
+                self.0.len(), paths.len()
+            ));
+        }
+        Ok(self
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let mut transposed = p.try_transpose(paths[i])?;
+                if let Some(notes) = notes {
+                    transposed = transposed.spelled_as_in(notes)?;
+                }
+                Ok::<_, MusicSemanticsError>(transposed)
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .flatten()
+            .collect()
+        )
     }
 
     /// Return the min and max pitches.
@@ -60,7 +91,7 @@ impl Voicing {
         let pc_set = PcSet::from(&midi_notes);
         let spelling = spell_pc_set(&root.note, &pc_set)?;
         let mut pitches = midi_notes.iter()
-            .map(|m| Pitch::spelled_as_in(*m, &spelling).unwrap())
+            .map(|m| Pitch::new_spelled_as_in(*m, &spelling).unwrap())
             .collect::<Vec<_>>();
         pitches.sort_by(|a,b| a.partial_cmp(b).unwrap());
         Ok(Self(pitches))
@@ -102,7 +133,11 @@ impl Voicing {
         }
         Ok(cloned)
         // TODO Maybe add one more conditional, and potentially
-        //    raise the entire thing up an octave.
+        //    raise the entire thing up an octave, because we're getting shapes
+        //    biased to the bottom ledger lines when it seemingly doesn't need to.
+        //    So we could maybe assess one more time whether to move up an octave,
+        //    if the low is below X and the high is below Y, where X and Y are defined
+        //    dynamically with the clef.
     }
 }
 
@@ -128,7 +163,7 @@ impl Into<StackedIntervals> for &Voicing {
 impl Hash for Voicing {
     fn hash<H: Hasher>(&self, state: &mut H) {
         if self.0.is_empty() {
-            "<empty>".hash(state);
+            "Voicing:<empty>".hash(state);
         } else {
             let intervals: StackedIntervals = self.into();
             let first = self.0.first().unwrap();

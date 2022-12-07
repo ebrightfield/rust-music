@@ -61,7 +61,7 @@ impl<'a> SoundedNote<'a> {
     /// This is a way to assert a musical context (i.e. "correct" spelling)
     /// over `self.pitch`.
     pub fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
-        let pitch = Pitch::spelled_as_in(self.pitch.midi_note, notes)?;
+        let pitch = Pitch::new_spelled_as_in(self.pitch.midi_note, notes)?;
         Ok(Self {
             string: self.string,
             fret: self.fret,

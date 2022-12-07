@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::note_collections::pc_set::PcSet;
 use crate::note::pc::Pc;
 use crate::error::MusicSemanticsError;
@@ -12,7 +13,7 @@ use crate::note_collections::interval_class::IntervalClass;
 ///
 /// One common practical example of thinking in terms of an [OctavePartition] is
 /// the "Whole-Whole-Half-Whole-Whole-Whole-Half" way of moving through the Major scale.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OctavePartition(Vec<IntervalClass>);
 
 impl OctavePartition {
@@ -23,6 +24,14 @@ impl OctavePartition {
             return Err(MusicSemanticsError::InvalidOctavePartition(intervals));
         }
         Ok(Self(intervals))
+    }
+}
+
+impl Deref for OctavePartition {
+    type Target = Vec<IntervalClass>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

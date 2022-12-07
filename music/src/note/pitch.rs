@@ -60,7 +60,7 @@ impl Pitch {
     }
 
     /// Control for spelling by including a "palette" of possible note values.
-    pub fn spelled_as_in(midi_note_value: u8, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
+    pub fn new_spelled_as_in(midi_note_value: u8, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         let octave = (midi_note_value / 12) - 1;
         if octave > 8 {
             return Err(MusicSemanticsError::OctaveTooHigh(octave));

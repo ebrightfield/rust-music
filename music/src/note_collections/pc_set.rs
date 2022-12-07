@@ -4,6 +4,7 @@ use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note_collections::geometry::symmetry::transpositional::{find_transpositional_symmetries, TranspositionalSymmetryMap};
+use crate::note_collections::NoteSet;
 use crate::note_collections::spelling::spell_pc_set;
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
@@ -79,6 +80,8 @@ impl PcSet {
 
     /// Returns a `HashMap` of all the transpositional symmetries
     /// that self might have.
+    /// For more detailss, see
+    /// [crate::note_collections::geometry::symmetry::find_transpositional_symmetries].
     pub fn transpositional_symmetry(&self) -> TranspositionalSymmetryMap {
         find_transpositional_symmetries(&self.0)
     }
@@ -106,7 +109,7 @@ impl PcSet {
     /// This returns a Vec of [crate::note::Pc],
     /// because we aren't normalizing the value to [crate::note::Pc::Pc0],
     /// which affords a bit more flexibility in how one might use this.
-    pub fn transpose(&self, semitones: u8) -> Vec<Pc> {
+    pub fn transpose_nonzeroed(&self, semitones: u8) -> Vec<Pc> {
         self.0
             .iter()
             .map(|pc| Pc::from(u8::from(pc) + 12 - semitones.rem_euclid(12)))
@@ -183,6 +186,21 @@ impl Into<HashSet<Pc>> for &PcSet {
         let mut set = HashSet::new();
         self.0.iter().for_each(|pc| { set.insert(*pc); });
         set
+    }
+}
+
+impl From<&NoteSet> for PcSet {
+    fn from(value: &NoteSet) -> Self {
+        PcSet::new(value
+            .iter()
+            .map(|note| Pc::from(note))
+            .collect()
+        )
+    }
+}
+impl From<NoteSet> for PcSet {
+    fn from(value: NoteSet) -> Self {
+        PcSet::from(&value)
     }
 }
 

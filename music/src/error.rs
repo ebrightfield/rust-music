@@ -49,4 +49,6 @@ pub enum MusicSemanticsError {
     SizeTooLargeForSubchords(u8, PcSet),
     #[error("Size {0} too small for chords")]
     SizeTooSmallForChords(usize),
+    #[error("Collection size is not the same: {0} != {1}")]
+    MismatchedCollectionSize(usize, usize),
 }

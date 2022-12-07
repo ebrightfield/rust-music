@@ -24,7 +24,36 @@ use crate::error::MusicSemanticsError;
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::*;
 use crate::note::pc::Pc;
+use crate::note::Pitch;
 use crate::note::spelling::Spelling;
+use crate::note_collections::Voicing;
+
+pub trait HasSpelling: Sized {
+    fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError>;
+}
+
+impl HasSpelling for Pitch {
+    fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
+        for note in notes {
+            if *note == self.note {
+                return Self::new(*note, self.octave);
+            }
+        }
+        Err(MusicSemanticsError::NotAMember(self.note, notes.clone()))
+    }
+}
+
+impl HasSpelling for Voicing {
+    fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
+        Ok(Self::new(self
+            .iter()
+            .map(|p| Ok::<_, MusicSemanticsError>(p.spelled_as_in(notes)?))
+            .into_iter()
+            .flatten()
+            .collect()
+        ))
+    }
+}
 
 /// Spell a [PcSet] as a [Vec] of [Note], first using a root [Note] as the starting point
 /// as dictated by [default_spelling]. Then, we maybe convert that default spelling

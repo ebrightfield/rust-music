@@ -1,6 +1,103 @@
 use std::hash::{Hash, Hasher};
 use std::collections::{HashMap, HashSet};
+use crate::error::MusicSemanticsError;
+use crate::note::{Note, Pitch};
 use crate::note::pc::Pc;
+use crate::note_collections::{NoteSet, PcSet, Voicing};
+
+/// A type that can be transposed. Any type that has modes is necessarily
+/// transposable, but not every transposable type has modes, because only
+/// types that represent colle
+pub trait Transpose: PartialEq + Eq + Hash + Sized {
+    /// Returns a version of `self` rotated some number of semitones
+    /// up or down.
+    fn transpose(&self, semitones: i8) -> Self;
+}
+
+/// For items with octave bounds, we have strict upper and lower pitch bounds
+/// and therefore transposition is fallible.
+pub trait TryTranspose: PartialEq + Eq + Hash + Sized {
+    /// Returns a version of `self` rotated some number of semitones
+    /// up or down.
+    fn try_transpose(&self, semitones: i8) -> Result<Self, MusicSemanticsError>;
+}
+
+impl Transpose for Pc {
+    fn transpose(&self, semitones: i8) -> Self {
+        Self::from(i32::from(self) - semitones as i32)
+    }
+}
+
+/// A [PcSet] transposed is still just itself or a mode of itself, because it's zeroed.
+/// We therefore put the [Transpose] trait on `Vec<Pc>` instead.
+impl Transpose for Vec<Pc> {
+    fn transpose(&self, semitones: i8) -> Self {
+        self
+            .iter()
+            .map(|pc| pc.transpose(semitones))
+            .collect()
+    }
+}
+
+impl Transpose for Note {
+    fn transpose(&self, semitones: i8) -> Self {
+        *Pc::from(self).transpose(semitones).notes().first().unwrap()
+    }
+}
+
+impl TryTranspose for Pitch {
+    /// Does not control for spelling.
+    fn try_transpose(&self, semitones: i8) -> Result<Self, MusicSemanticsError> {
+        let new_pitch = self.midi_note as isize + semitones as isize;
+        let new_pitch = u8::try_from(new_pitch)
+            .map_err(|_| MusicSemanticsError::OutOfBoundsLower(self.midi_note))?;
+        Self::from_midi(new_pitch)
+    }
+}
+
+impl TryTranspose for Voicing {
+    fn try_transpose(&self, semitones: i8) -> Result<Self, MusicSemanticsError> {
+        Ok(Voicing::new(self
+            .iter()
+            .map(|p| Ok::<_, MusicSemanticsError>(p.try_transpose(semitones)?))
+            .into_iter()
+            .flatten()
+            .collect()
+        ))
+    }
+}
+
+impl Transpose for NoteSet {
+    fn transpose(&self, semitones: i8) -> Self {
+        Self::starting_from_first_note(self
+            .iter()
+            .map(|note| note.transpose(semitones))
+            .collect())
+    }
+}
+
+/// This type describes the general interface for types that can
+/// be described as having modes or inversions.
+pub trait Modes: PartialEq + Sized {
+    /// Returns all rotations of self.
+    fn modes(&self) -> Vec<Self>;
+
+    /// Whether `other` is a mode of self, and if so, which mode it is.
+    fn is_mode(&self, other: &Self) -> Option<usize> {
+        self.modes().iter().position(|item| item == other)
+    }
+}
+
+impl Modes for PcSet {
+    fn modes(&self) -> Vec<Self> {
+        (0..self.len())
+            .map(|i| {
+                self.rotate(isize::try_from(i).unwrap())
+            })
+           .collect()
+    }
+}
+
 
 /// Type alias for the [HashMap] that stores the results of a search
 /// for transpositional symmetries.
@@ -119,6 +216,28 @@ impl Into<u8> for &TranspositionalSymmetry {
     }
 }
 
+impl Into<i8> for TranspositionalSymmetry {
+    fn into(self) -> i8 {
+        match self {
+            TranspositionalSymmetry::T2 => 2,
+            TranspositionalSymmetry::T3 => 3,
+            TranspositionalSymmetry::T4 => 4,
+            TranspositionalSymmetry::T6 => 6,
+        }
+    }
+}
+
+impl Into<i8> for &TranspositionalSymmetry {
+    fn into(self) -> i8 {
+        match self {
+            TranspositionalSymmetry::T2 => 2,
+            TranspositionalSymmetry::T3 => 3,
+            TranspositionalSymmetry::T4 => 4,
+            TranspositionalSymmetry::T6 => 6,
+        }
+    }
+}
+
 /// Checks for only a specific [TranspositionalSymmetry], rather than all of them.
 /// The input of this function assumes a well-ordered, deduped [Vec],
 /// but does not have to be normalized to [Pc::Pc0]
@@ -141,7 +260,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
         if checked_through >= 6 {
             return symmetries;
         }
-        let mut maybe_same = transpose(&rotated, symmetry_u8);
+        let mut maybe_same = rotated.transpose(i8::try_from(symmetry_u8).unwrap());
         maybe_same.sort();
         if rotated == maybe_same {
             let pt_of_symmetry = u8::from(pc);

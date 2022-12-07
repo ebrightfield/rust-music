@@ -7,6 +7,9 @@ use crate::note::pc::Pc;
 
 pub use quality::chord::ChordQuality;
 
+/// The means by which to stylize the text that denotes
+/// a chord's extensions. There are a number of mutually incompatible
+/// conventions, so we just provide them all as options.
 #[derive(Debug, Default, Copy, Clone)]
 pub enum ExtensionStyle {
     /// Label everything as a 7th chord, and show extensions as alterations
