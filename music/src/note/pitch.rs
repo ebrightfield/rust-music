@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use crate::note::note::Note;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 use crate::error::MusicSemanticsError;
 use crate::note::spelling::Spelling;
 use crate::note_collections::spelling::HasSpelling;
@@ -109,7 +109,7 @@ impl Pitch {
     /// to the input [Note]. For when you want to "go down to G from B3".
     pub fn down_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_down_to_note(note);
-        self.at_distance_from(d as isize)?.spelled_as_in(&vec![note.clone()])
+        self.at_distance_from((d as isize) * -1)?.spelled_as_in(&vec![note.clone()])
     }
 
     /// Returns the number of letters up/down between self and other,
@@ -149,9 +149,51 @@ impl Hash for Pitch {
     }
 }
 
+/// As this is meant to afford a shorthand syntax, this _will_ unwrap the pitch.
+/// If that's not the behavior you want, use `Pitch::new` directly.
+#[macro_export]
+macro_rules! pitch {
+    (bis, $octave:expr) => { Pitch::new(Note::Bis, $octave).unwrap()};
+    (c, $octave:expr) => { Pitch::new(Note::C, $octave).unwrap()};
+    (deses, $octave:expr) => { Pitch::new(Note::Deses, $octave).unwrap()};
+    (cis, $octave:expr) => { Pitch::new(Note::Cis, $octave).unwrap()};
+    (des, $octave:expr) => { Pitch::new(Note::Des, $octave).unwrap()};
+    (d, $octave:expr) => { Pitch::new(Note::D, $octave).unwrap()};
+    (cisis, $octave:expr) => { Pitch::new(Note::Cisis, $octave).unwrap()};
+    (eeses, $octave:expr) => { Pitch::new(Note::Eeses, $octave).unwrap()};
+    (dis, $octave:expr) => { Pitch::new(Note::Dis, $octave).unwrap()};
+    (ees, $octave:expr) => { Pitch::new(Note::Ees, $octave).unwrap()};
+    (e, $octave:expr) => { Pitch::new(Note::E, $octave).unwrap()};
+    (disis, $octave:expr) => { Pitch::new(Note::Disis, $octave).unwrap()};
+    (fes, $octave:expr) => { Pitch::new(Note::Fes, $octave).unwrap()};
+    (f, $octave:expr) => { Pitch::new(Note::F, $octave).unwrap()};
+    (eis, $octave:expr) => { Pitch::new(Note::Eis, $octave).unwrap()};
+    (geses, $octave:expr) => { Pitch::new(Note::Geses, $octave).unwrap()};
+    (fis, $octave:expr) => { Pitch::new(Note::Fis, $octave).unwrap()};
+    (ges, $octave:expr) => { Pitch::new(Note::Ges, $octave).unwrap()};
+    (g, $octave:expr) => { Pitch::new(Note::G, $octave).unwrap()};
+    (fisis, $octave:expr) => { Pitch::new(Note::Fisis, $octave).unwrap()};
+    (aeses, $octave:expr) => { Pitch::new(Note::Aeses, $octave).unwrap()};
+    (gis, $octave:expr) => { Pitch::new(Note::Gis, $octave).unwrap()};
+    (aes, $octave:expr) => { Pitch::new(Note::Aes, $octave).unwrap()};
+    (a, $octave:expr) => { Pitch::new(Note::A, $octave).unwrap()};
+    (gisis, $octave:expr) => { Pitch::new(Note::Gisis, $octave).unwrap()};
+    (beses, $octave:expr) => { Pitch::new(Note::Beses, $octave).unwrap()};
+    (ais, $octave:expr) => { Pitch::new(Note::Ais, $octave).unwrap()};
+    (bes, $octave:expr) => { Pitch::new(Note::Bes, $octave).unwrap()};
+    (b, $octave:expr) => { Pitch::new(Note::B, $octave).unwrap()};
+    (ces, $octave:expr) => { Pitch::new(Note::Ces, $octave).unwrap()};
+    (aisis, $octave:expr) => { Pitch::new(Note::Aisis, $octave).unwrap()};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pitch_macro() {
+        assert_eq!(Pitch::new(Note::C, 4).unwrap(), pitch!(c, 4));
+    }
 
     #[test]
     fn diatonic_distance_works() {

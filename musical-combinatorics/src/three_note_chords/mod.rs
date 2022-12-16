@@ -1,7 +1,7 @@
 use music::note_collections::octave_partition::OctavePartition;
 use music::note_collections::pc_set::PcSet;
-use music::note::pc::Pc;
-use music::note::pc::Pc::*;
+use music::note::pitch_class::Pc;
+use music::note::pitch_class::Pc::*;
 use anyhow::anyhow;
 use crate::canonical_voicings::CanonicalVoicings;
 

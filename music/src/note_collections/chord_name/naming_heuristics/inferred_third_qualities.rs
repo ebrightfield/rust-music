@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use crate::note_collections::chord_name::naming_heuristics::{maj_and_min_qualities, NamingHeuristic};
 use crate::note_collections::chord_name::quality::chord::ChordQuality;
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use crate::note::pitch_class::Pc;
+use crate::note::pitch_class::Pc::*;
 
 const SUGGESTIVE_OF_MAJOR_THIRD: &[Pc] = &[Pc0, Pc2, Pc5, Pc7, Pc9, Pc10, Pc11];
 

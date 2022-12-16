@@ -3,6 +3,7 @@ pub mod melodic_shape_search;
 
 use std::fmt::{Display, Formatter};
 use std::iter::zip;
+use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::{StackedIntervals, Voicing};
@@ -15,6 +16,14 @@ use crate::note::note::Note;
 pub struct FretboardShape<'a> {
     pub fretted_notes: Vec<FrettedNote<'a>>,
     pub fretboard: &'a Fretboard,
+}
+
+impl<'a> Deref for FretboardShape<'a> {
+    type Target = Vec<FrettedNote<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.fretted_notes
+    }
 }
 
 impl<'a> Display for FretboardShape<'a> {

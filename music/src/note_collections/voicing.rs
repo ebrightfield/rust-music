@@ -215,10 +215,35 @@ impl StackedIntervals {
     }
 }
 
+#[macro_export]
+macro_rules! voicing {
+    ($( $p:expr ),+) => {
+        Voicing::new([$($p),+].to_vec())
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::note::note::Note;
+    use crate::pitch;
+
+    #[test]
+    fn voicing_macro() {
+        assert_eq!(
+            Voicing::new(vec![
+                Pitch::new(Note::C, 4).unwrap(),
+                Pitch::new(Note::E, 4).unwrap(),
+                Pitch::new(Note::G, 4).unwrap(),
+            ]),
+            voicing!(
+                pitch!(c, 4),
+                pitch!(e, 4),
+                pitch!(g, 4)
+            )
+        );
+    }
 
     #[test]
     fn normalizing_to_treble() {

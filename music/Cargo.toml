@@ -5,6 +5,12 @@ edition = "2021"
 
 [lib]
 
+[[example]]
+name = "primitives"
+
+[[example]]
+name = "collections"
+
 [features]
 default=[]
 lilypond = ["dep:tera", "dep:serde"]

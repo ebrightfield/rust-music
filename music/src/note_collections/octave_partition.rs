@@ -1,6 +1,6 @@
 use std::ops::Deref;
 use crate::note_collections::pc_set::PcSet;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 use crate::error::MusicSemanticsError;
 use crate::note_collections::interval_class::IntervalClass;
 
@@ -81,7 +81,7 @@ impl From<&OctavePartition> for PcSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::note::pc::Pc;
+    use crate::note::pitch_class::Pc;
 
     #[test]
     fn test_from_pc_set() {

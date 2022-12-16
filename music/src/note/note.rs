@@ -3,13 +3,20 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use crate::note::spelling::{Accidental, Letter, Spelling};
 use crate::error::MusicSemanticsError;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 
 /// Every chromatic note in all possible enharmonic spellings,
 /// with the following caveats:
+///
 /// - Nothing more extreme than a double-accidental.
 /// - No "C" or "F" flattened more than once.
 /// - No "B" or "E" sharpened more than once.
+///
+/// The accidental suffixes come from Lilypond, which in turn gets it from an
+/// absolute pitch solfege naming.
+///
+/// - Flat (b) = "es"
+/// - Sharp (#) = "es"
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Note {
     C,
@@ -236,6 +243,41 @@ impl TryFrom<Spelling> for Note {
         }
     }
 }
+//
+// #[macro_export]
+// macro_use! note {
+//     (bis) => { Note::Bis };
+//     (c) => { Note::C };
+//     (deses) => { Note::Deses };
+//     (cis) => { Note::Cis };
+//     (des) => { Note::Des };
+//     (d) => { Note::D };
+//     (cisis) => { Note::Cisis };
+//     (eeses) => { Note::Eeses };
+//     (dis) => { Note::Dis };
+//     (ees) => { Note::Ees };
+//     (e) => { Note::E };
+//     (disis) => { Note::Disis };
+//     (fes) => { Note::Fes };
+//     (f) => { Note::F };
+//     (eis) => { Note::Eis };
+//     (geses) => { Note::Geses };
+//     (fis) => { Note::Fis };
+//     (ges) => { Note::Ges };
+//     (g) => { Note::G };
+//     (fisis) => { Note::Fisis };
+//     (aeses) => { Note::Aeses };
+//     (gis) => { Note::Gis };
+//     (aes) => { Note::Aes };
+//     (a) => { Note::A };
+//     (gisis) => { Note::Gisis };
+//     (beses) => { Note::Beses };
+//     (ais) => { Note::Ais };
+//     (bes) => { Note::Bes };
+//     (b) => { Note::B };
+//     (ces) => { Note::Ces };
+//     (aisis) => { Note::Aisis };
+// }
 
 #[cfg(test)]
 mod tests {

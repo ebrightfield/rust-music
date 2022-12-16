@@ -1,9 +1,10 @@
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 use std::collections::HashSet;
 use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note_collections::geometry::symmetry::transpositional::{find_transpositional_symmetries, TranspositionalSymmetryMap};
+use crate::note_collections::geometry::symmetry::transpositional::Transpose;
 use crate::note_collections::NoteSet;
 use crate::note_collections::spelling::spell_pc_set;
 
@@ -74,7 +75,7 @@ impl PcSet {
         }
         let mut copy = self.0.clone();
         let times = times.rem_euclid(isize::try_from(self.0.len()).unwrap());
-        copy.rotate_right(usize::try_from(times).unwrap());
+        copy.rotate_left(usize::try_from(times).unwrap());
         Self(zeroed_pcs(&copy))
     }
 
@@ -109,10 +110,10 @@ impl PcSet {
     /// This returns a Vec of [crate::note::Pc],
     /// because we aren't normalizing the value to [crate::note::Pc::Pc0],
     /// which affords a bit more flexibility in how one might use this.
-    pub fn transpose_nonzeroed(&self, semitones: u8) -> Vec<Pc> {
+    pub fn transpose_nonzeroed(&self, semitones: i8) -> Vec<Pc> {
         self.0
             .iter()
-            .map(|pc| Pc::from(u8::from(pc) + 12 - semitones.rem_euclid(12)))
+            .map(|pc| pc.transpose(semitones))
             .collect()
     }
 
@@ -204,7 +205,7 @@ impl From<NoteSet> for PcSet {
     }
 }
 
-/* TODO Should I create a PcMultiSet?
+/* TODO Should I create a PcMultiSet? Methods below...
 
     pub fn has_duplicates(&self) -> bool {
         let deduped = deduplicate_pcs(&self.0);
@@ -224,10 +225,25 @@ impl From<NoteSet> for PcSet {
 
  */
 
+#[macro_export]
+macro_rules! pcs {
+    ($( $pc:expr ),+) => {
+        PcSet::from([$($pc),+].to_vec())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::note::pc::Pc::*;
+    use crate::note::pitch_class::Pc::*;
+
+    #[test]
+    fn pcs_macro() {
+        assert_eq!(
+            PcSet(vec![Pc0, Pc1, Pc5]),
+            pcs!(0, 1, 5),
+        )
+    }
 
     #[test]
     fn transposed_comparison() {

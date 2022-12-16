@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use crate::note_collections::chord_name::quality::chord::{Alt, AltChoice, Extension};
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 
 /// This controls how we search for potential chord alterations,
 /// as the presence of some notes in certain contexts is an alteration,

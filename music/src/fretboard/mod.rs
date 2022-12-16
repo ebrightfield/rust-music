@@ -4,7 +4,7 @@ pub mod fretted_note;
 use std::ops::Deref;
 use once_cell::sync::Lazy;
 use crate::note::note::Note;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 use crate::note::pitch::Pitch;
 
 pub use fretboard_shape::{FretboardShape, ChordShapeClassification};

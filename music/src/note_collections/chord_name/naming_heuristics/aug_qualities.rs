@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
 use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
 use crate::note_collections::chord_name::quality::chord::{AugSubtype, ChordQuality};
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use crate::note::pitch_class::Pc;
+use crate::note::pitch_class::Pc::*;
 
 /// Common Logic across all heuristics based on diminished chords.
 pub fn search_for_aug_quality(pcs: &HashSet<Pc>) -> ChordQuality {

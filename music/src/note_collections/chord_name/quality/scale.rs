@@ -1,6 +1,6 @@
 use std::collections::HashSet;
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use crate::note::pitch_class::Pc;
+use crate::note::pitch_class::Pc::*;
 
 /// Scale alteration.
 #[derive(Debug, Clone, PartialEq)]

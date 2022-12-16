@@ -1,6 +1,5 @@
 use music::notation::clef::Clef;
 use music::note::{Note, Pitch};
-use music::note_collections::spelling::HasSpelling;
 use music::note_collections::Voicing;
 
 /// Since the canonical voicing calculation is basically the same for three and four

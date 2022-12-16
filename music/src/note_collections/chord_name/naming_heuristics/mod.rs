@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use crate::note_collections::chord_name::quality::chord::ChordQuality;
 use crate::note_collections::chord_name::quality::scale::ScaleQuality;
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use crate::note::pitch_class::Pc;
+use crate::note::pitch_class::Pc::*;
 
 pub mod maj_and_min_qualities;
 pub mod alts_and_extensions;

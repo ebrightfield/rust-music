@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use once_cell::sync::Lazy;
 use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
 use crate::note_collections::chord_name::quality::scale::{Alt2nd, Alt2ndMinor, Alt4th, Alt4thMinor, Alt6thAugMaj7, Alt6thDom7, Alt6thMaj7, ScaleQuality};
-use crate::note::pc::Pc;
-use crate::note::pc::Pc::*;
+use crate::note::pitch_class::Pc;
+use crate::note::pitch_class::Pc::*;
 
 static WT_SCALE_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
     HashSet::from([Pc2, Pc4, Pc6, Pc8, Pc10])

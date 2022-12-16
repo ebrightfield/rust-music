@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 
 /// The twelve possible interval distances inside of an octave.
 /// We keep this as a distinct class from [Pc] because while they're

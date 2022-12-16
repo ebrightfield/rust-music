@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::collections::{HashMap, HashSet};
 use crate::error::MusicSemanticsError;
 use crate::note::{Note, Pitch};
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 use crate::note_collections::{NoteSet, PcSet, Voicing};
 
 /// A type that can be transposed. Any type that has modes is necessarily
@@ -24,7 +24,7 @@ pub trait TryTranspose: PartialEq + Eq + Hash + Sized {
 
 impl Transpose for Pc {
     fn transpose(&self, semitones: i8) -> Self {
-        Self::from(i32::from(self) - semitones as i32)
+        Self::from(i32::from(self) + semitones as i32)
     }
 }
 
@@ -287,7 +287,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
 
 #[cfg(test)]
 mod tests {
-    use crate::note::pc::Pc::*;
+    use crate::note::pitch_class::Pc::*;
     use super::*;
 
     #[test]

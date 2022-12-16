@@ -3,7 +3,7 @@ pub mod naming_heuristics;
 
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::Note;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 
 pub use quality::chord::ChordQuality;
 

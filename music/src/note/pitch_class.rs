@@ -1,5 +1,6 @@
 use crate::note::note::Note;
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
@@ -96,7 +97,7 @@ impl Pc {
 
     /// Step to the next semitone down ("counter-clockwise on the clock-face").
     pub fn previous(&self) -> Self {
-        Self::from(u8::from(self) - 1)
+        Self::from(u8::from(self).wrapping_add(12) - 1)
     }
 
     /// Returns the number of semitones up ("clockwise on the clock-face")
@@ -133,6 +134,12 @@ impl Ord for Pc {
 impl Hash for Pc {
     fn hash<H: Hasher>(&self, state: &mut H) {
         i32::from(self).hash(state)
+    }
+}
+
+impl Display for Pc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", u8::from(self))
     }
 }
 
@@ -307,6 +314,22 @@ impl From<&Note> for Pc {
             Note::Bis => Pc::Pc0,
         }
     }
+}
+
+#[macro_export]
+macro_rules! pc {
+    (0) => {Pc::Pc0};
+    (1) => {Pc::Pc1};
+    (2) => {Pc::Pc2};
+    (3) => {Pc::Pc3};
+    (4) => {Pc::Pc4};
+    (5) => {Pc::Pc5};
+    (6) => {Pc::Pc6};
+    (7) => {Pc::Pc7};
+    (8) => {Pc::Pc8};
+    (9) => {Pc::Pc9};
+    (10) => {Pc::Pc10};
+    (11) => {Pc::Pc11};
 }
 
 #[cfg(test)]

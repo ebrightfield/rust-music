@@ -23,7 +23,7 @@ use crate::error::MusicSemanticsError;
 /// collections of [Pc] to collections of [Note].
 use crate::note_collections::pc_set::PcSet;
 use crate::note::note::*;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 use crate::note::Pitch;
 use crate::note::spelling::Spelling;
 use crate::note_collections::Voicing;

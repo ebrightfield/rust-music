@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use crate::note::note::Note;
-use crate::note::pc::Pc;
+use crate::note::pitch_class::Pc;
 
 pub mod chord_name;
 pub mod octave_partition;

@@ -1,6 +1,7 @@
 use tera::Context;
 use serde::Serialize;
-use crate::lilypond::templates::TEMPLATE_ENGINE;
+use crate::{FretboardShape, FrettedNote};
+use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 
 #[derive(Debug, Serialize)]
 pub struct DiagramFret {
@@ -17,6 +18,17 @@ impl From<(u8, u8)> for DiagramFret {
     }
 }
 
+impl Into<Vec<DiagramFret>> for &FretboardShape {
+    fn into(self) -> Vec<DiagramFret> {
+        self.iter().map(|note| {
+            match note {
+                FrettedNote::Sounded(s) => (s.string, s.fret),
+                FrettedNote::Muted {string, ..} => (string, 255),
+            }
+        }).collect()
+    }
+}
+
 pub fn fretboard_diagram(frets: Vec<DiagramFret>) -> String {
     let mut ctx = Context::new();
     ctx.insert("frets", &frets);
@@ -25,8 +37,7 @@ pub fn fretboard_diagram(frets: Vec<DiagramFret>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::lilypond::fretboard_diagram::fretboard_diagram;
-    use crate::lilypond::staff_elements::*;
+    use super::*;
 
     #[test]
     fn fretboard_diagram_works() {
