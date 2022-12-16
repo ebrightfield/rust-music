@@ -38,13 +38,13 @@ impl NoteSet {
             return Self(vec![]);
         }
         let orientation = starting_note.map_or(0, |n| u8::from(Pc::from(n)));
-        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
         notes.sort_by(|a, b| {
             // We add 12 in the arithmetic because we want to ensure
             let a = (u8::from(Pc::from(a)) + 12 - orientation).rem_euclid(12);
             let b = (u8::from(Pc::from(b)) + 12 - orientation).rem_euclid(12);
             a.partial_cmp(&b).unwrap()
         });
+        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
         Self(notes)
     }
 
@@ -67,6 +67,15 @@ impl NoteSet {
         let index: usize = self.0.iter().position(|i| *i == *from)
             .ok_or(MusicSemanticsError::NotAMember(from.clone(), (**self).clone()))?;
         let n = (index + (n as usize)).rem_euclid(self.0.len());
+        Ok(self.0[n].clone())
+    }
+
+    /// Same as the `up_n_steps` method, but in the downward direction.
+    pub fn down_n_steps(&self, from: &Note, n: u8) -> Result<Note, MusicSemanticsError> {
+        let index = self.0.iter().position(|i| *i == *from)
+            .ok_or(MusicSemanticsError::NotAMember(from.clone(), (**self).clone()))?;
+        let equivalent_up = self.0.len() - (n as usize).rem_euclid(self.0.len());
+        let n = (index + equivalent_up).rem_euclid(self.0.len());
         Ok(self.0[n].clone())
     }
 

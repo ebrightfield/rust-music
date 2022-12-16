@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter};
 use crate::note::pitch_class::Pc;
 
+// TODO Need to be able to derive these from two Pc instances
+
 /// The twelve possible interval distances inside of an octave.
 /// We keep this as a distinct class from [Pc] because while they're
 /// both mod-12 values, they represent different things musically,

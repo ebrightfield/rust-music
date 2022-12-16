@@ -7,6 +7,7 @@ use crate::note_collections::pc_set::PcSet;
 use crate::note_collections::spelling::{HasSpelling, spell_pc_set};
 use crate::note::pitch::Pitch;
 use crate::note_collections::geometry::symmetry::transpositional::TryTranspose;
+use crate::NoteSet;
 
 
 /// Returns a vector of increasing midi note values, based on a series of
@@ -181,6 +182,15 @@ impl Deref for Voicing {
     }
 }
 
+impl Into<NoteSet> for &Voicing {
+    fn into(self) -> NoteSet {
+        NoteSet::new(
+            self.iter().map(|p| p.note).collect(),
+            self.first().map(|p|&p.note)
+        )
+    }
+}
+
 /// Consecutive vertical stacking of intervals, taken to be ordered from low to high.
 /// These are non-negative, root-agnostic, and spelling-agnostic semitone distances
 /// between consecutive, ordered notes of a harmony.
@@ -194,6 +204,12 @@ impl Deref for Voicing {
 /// to that chord type. One for each permutation of its notes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackedIntervals(pub Vec<u8>);
+
+impl StackedIntervals {
+    pub fn new(v: Vec<u8>) -> Self {
+        Self(v)
+    }
+}
 
 impl Hash for StackedIntervals {
     fn hash<H: Hasher>(&self, state: &mut H) {

@@ -4,7 +4,6 @@ use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note_collections::geometry::symmetry::transpositional::{find_transpositional_symmetries, TranspositionalSymmetryMap};
-use crate::note_collections::geometry::symmetry::transpositional::Transpose;
 use crate::note_collections::NoteSet;
 use crate::note_collections::spelling::spell_pc_set;
 
@@ -103,18 +102,6 @@ impl PcSet {
         let other = PcSet::new(other.clone());
         (0..pcs_len)
             .any(|i| other.rotate(isize::try_from(i).unwrap()) == *self)
-    }
-
-    /// Move up (i.e. rotate clockwise around the "circle of [Pc]s") some
-    /// non-zero number of semitones.
-    /// This returns a Vec of [crate::note::Pc],
-    /// because we aren't normalizing the value to [crate::note::Pc::Pc0],
-    /// which affords a bit more flexibility in how one might use this.
-    pub fn transpose_nonzeroed(&self, semitones: i8) -> Vec<Pc> {
-        self.0
-            .iter()
-            .map(|pc| pc.transpose(semitones))
-            .collect()
     }
 
     /// Attempt to spell a [PcSet] using this library's provided spelling function,
