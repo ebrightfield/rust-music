@@ -6,6 +6,10 @@ use anyhow::anyhow;
 use crate::canonical_voicings::CanonicalVoicings;
 
 /// The various possible octave partitions with three notes.
+///
+/// This type is exhaustive. Any combination of
+/// three unique notes (not enharmonic) will correspond to
+/// exactly one of these variants, at a particular mode.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ThreeNoteChordQuality {
     Major,
@@ -27,6 +31,29 @@ pub enum ThreeNoteChordQuality {
     WH,
     HW,
     HH,
+}
+
+impl ThreeNoteChordQuality {
+    pub fn identify(pcs: &PcSet) -> anyhow::Result<(usize, ThreeNoteChordQuality)> {
+        if pcs.len() != 3 {
+            return Err(anyhow!("wrong size for three note chord: {:?}", pcs));
+        }
+        // try the first mode
+        if let Ok(quality) = ThreeNoteChordQuality::try_from(pcs) {
+            return Ok((0, quality));
+        }
+        // then try the other two, rotating each time
+        let mut copied = pcs.clone();
+        for i in 0usize..2 {
+            copied = copied.rotate_fwd();
+            if let Ok(quality) = ThreeNoteChordQuality::try_from(&copied) {
+                return Ok((i+1, quality));
+            }
+        }
+        // this chord quality is combinatorically exhaustive, it should always
+        // find a quality at inversion 0, 1, or 2.
+        unreachable!()
+    }
 }
 
 // Canonical "root position" spellings,

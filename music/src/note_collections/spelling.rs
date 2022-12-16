@@ -35,7 +35,7 @@ pub trait HasSpelling: Sized {
 impl HasSpelling for Pitch {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         for note in notes {
-            if *note == self.note {
+            if Pc::from(note) == Pc::from(self.note) {
                 return Self::new(*note, self.octave);
             }
         }

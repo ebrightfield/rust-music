@@ -5,6 +5,7 @@ use crate::note::note::Note;
 use crate::note::pc::Pc;
 use crate::error::MusicSemanticsError;
 use crate::note::spelling::Spelling;
+use crate::note_collections::spelling::HasSpelling;
 
 // TODO Expand range out to MIDI note 128
 
@@ -101,14 +102,14 @@ impl Pitch {
     /// to the input [Note]. For when you want to "go up to G from B3".
     pub fn up_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_up_to_note(note);
-        self.at_distance_from(d as isize)
+        self.at_distance_from(d as isize)?.spelled_as_in(&vec![note.clone()])
     }
 
     /// Returns the next [Pitch] below [self] whose note is equivalent to
     /// to the input [Note]. For when you want to "go down to G from B3".
     pub fn down_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_down_to_note(note);
-        Ok(self.at_distance_from(d as isize)?)
+        self.at_distance_from(d as isize)?.spelled_as_in(&vec![note.clone()])
     }
 
     /// Returns the number of letters up/down between self and other,

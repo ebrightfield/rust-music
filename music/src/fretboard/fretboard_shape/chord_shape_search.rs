@@ -7,6 +7,7 @@ use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape
 use crate::fretboard::fretted_note::FrettedNote;
 use crate::notation::clef::Clef;
 use crate::note::note::Note;
+use crate::note_collections::spelling::HasSpelling;
 
 /// Categorized results of a search for fretboard chord shapes.
 /// Each category is a `HashMap` indexed by voicing, equivocated over the octave.
@@ -99,6 +100,7 @@ pub fn find_chord_shapes<'a>(
                 // Classifying it, and indexing it into the search results.
                 let key: Voicing = (&shape).into();
                 let key = key.normalize_register_to_clef(Clef::Treble).unwrap();
+                let key = key.spelled_as_in(chord)?;
                 match shape.classify() {
                     ChordShapeClassification::Playable => {
                         if key.has_wide_intervals() {

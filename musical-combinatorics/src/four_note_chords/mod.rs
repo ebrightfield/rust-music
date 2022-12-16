@@ -59,6 +59,29 @@ pub enum FourNoteChordQuality {
     PPH,
 }
 
+impl FourNoteChordQuality {
+    pub fn identify(pcs: &PcSet) -> anyhow::Result<(usize, FourNoteChordQuality)> {
+        if pcs.len() != 4 {
+            return Err(anyhow!("wrong size for four note chord: {:?}", pcs));
+        }
+        // try the first mode
+        if let Ok(quality) = FourNoteChordQuality::try_from(pcs) {
+            return Ok((0, quality));
+        }
+        // then try the other two, rotating each time
+        let mut copied = pcs.clone();
+        for i in 0usize..3 {
+            copied = copied.rotate_fwd();
+            if let Ok(quality) = FourNoteChordQuality::try_from(&copied) {
+                return Ok((i+1, quality));
+            }
+        }
+        // this chord quality is combinatorically exhaustive, it should always
+        // find a quality at inversion 0, 1, 2, or 3.
+        unreachable!()
+    }
+}
+
 pub const MAJ7_PCS: &[Pc] = &[Pc0, Pc4, Pc7, Pc11];
 pub const DOM7_PCS: &[Pc] = &[Pc0, Pc4, Pc7, Pc10];
 pub const MIN7_PCS: &[Pc] = &[Pc0, Pc3, Pc7, Pc10];

@@ -32,12 +32,11 @@ music theory understanding that we usually only expect of professional musicians
 
 ### TODO
 - Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, SevenNoteChordQuality, IrregularScaleQuality
-- Various geometric calculations of sub-/super-chords, voiceleadings, etc.
+- Various geometric calculations of sub-/super-chords, etc.
 - A few more Lilypond code-gen feature
 - A few more Vextab code-gen feature
 - Chord name parsing (regex)
 - Melodic Sequencer
 - PcSet vs PcMultiset
 - Do a pass on ergonomics
-- Voiceleading calculation and ranking
 - Common scale check -- Check which common scales a chord fits into.
