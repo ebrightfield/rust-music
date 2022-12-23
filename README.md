@@ -18,6 +18,10 @@ integration with JS frontends.
 - Application development -- VexTab is a powerful way to generate music notation in a UI.
 Using Web Assembly, Rust is easy to incorporate into browser-based frontend frameworks.
 
+### Code Examples
+
+See the `music/examples` directory for some demonstrations on the basic types.
+
 ### Philosophy
 This crate takes much influence from Dmitri Tymoczko's work, which you can find in his book Geometry of Music.
 
