@@ -1,5 +1,3 @@
-
-
 use music::{Pc, Note, Pitch, PcSet, NoteSet, Voicing, pcs, pc, pitch, voicing, StackedIntervals};
 use music::geometry::symmetry::transpositional::{Modes, Transpose};
 use music::notation::clef::Clef;

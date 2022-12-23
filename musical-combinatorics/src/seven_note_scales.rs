@@ -3,6 +3,26 @@ use music::note::Pc;
 use music::note::Pc::*;
 use music::note_collections::{OctavePartition, PcSet};
 
+/// This is a non-exhaustive collection of pertinent seven-note scales.
+/// They all are derived from the following procedure:
+/// - Start from a Root and Perfect Fifth (two notes so far)
+/// - Pick either a Major or minor Third (up to three notes now)
+/// - Pick a Fourth to sit between the Third and Fifth.
+/// - Pick a Second to sit between the Root and Third.
+/// - Pick a minor or Major Sixth, and a minor or Major Seventh.
+///
+/// This yields many scales which are in fact modes of each other,
+/// but it reduces down to the 22 scales below.
+///
+/// Some notable properties of these 22 scales:
+/// - You easily derive the obvious seven-note scales like Major, melodic minor, Harmonic minor/Major.
+/// - Each scale has a mode that looks either Ionian, Lydian, Mixolydian, or melodic minor,
+///   with some potential combination of alterations to the 2nd, 4th, or 6th.
+/// - There are no 4-semitone "steps" between adjacent notes.
+/// - There is never more than two consecutive half-steps.
+/// - There are no adjacent augmented steps (adjacent 3-semitone steps).
+/// - No augmented step surrounded on both sides by a whole-step.
+/// - Diminished and augmented intervals in all their forms (augmented 6ths, diminished fourths, etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum SevenNoteScaleQuality {
     Major,
