@@ -12,7 +12,7 @@ impl ToLilypondString for Meter {
     }
 }
 
-// TODO There could almost be an enum for valid, notatable durations
+// TODO There could almost be an enum for valid, "atomically engravable" durations
 // TODO Perform automatic tied conversions for rhythmic durations that need to be
 //    expressed as tied values.
 pub fn ly_duration(duration: DurationIn32ndNotes) -> Option<String> {
