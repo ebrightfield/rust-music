@@ -11,6 +11,10 @@ name = "primitives"
 [[example]]
 name = "collections"
 
+[[example]]
+name = "generate_lilypond"
+required-features = ["lilypond"]
+
 [features]
 default=[]
 lilypond = ["dep:tera", "dep:serde"]

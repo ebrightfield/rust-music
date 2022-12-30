@@ -35,7 +35,7 @@ But with the right tools, protocols, and practice, it should be no burden to acq
 music theory understanding that we usually only expect of professional musicians.
 
 ### TODO
-- Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, SevenNoteChordQuality, IrregularScaleQuality
+- Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, IrregularScaleQuality
 - Various geometric calculations of sub-/super-chords, etc.
 - A few more Lilypond code-gen feature
 - A few more Vextab code-gen feature
@@ -44,3 +44,11 @@ music theory understanding that we usually only expect of professional musicians
 - PcSet vs PcMultiset
 - Do a pass on ergonomics
 - Common scale check -- Check which common scales a chord fits into.
+
+### Lilypond TODO
+- Repeat blocks
+- Breaks, barlines,
+- Modifiers like `\hide`, `\stemUp`, `\stemDown`, etc
+- Context blocks (create a lazy static `Slashes` context for a useful example)
+- Chord name customization
+- Cleaner `.ly` output formatting, particularly with tabs and line breaks.

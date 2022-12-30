@@ -84,6 +84,7 @@ impl ToVexTab for SingleEvent {
         match self {
             SingleEvent::Pitch(p) => p.to_vextab(),
             SingleEvent::Voicing(v) => v.to_vextab(),
+            SingleEvent::Rest => "##".to_string(),
         }
     }
 }

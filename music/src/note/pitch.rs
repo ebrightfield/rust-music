@@ -9,6 +9,8 @@ use crate::note_collections::spelling::HasSpelling;
 
 // TODO Expand range out to MIDI note 128
 
+pub const MIDDLE_C: u8 = 60;
+
 /// This is the MIDI-compliant formula for calculating how:
 /// Note + octave = Pitch
 fn calc_midi_note(note: &Note, octave: &u8) -> u8 {

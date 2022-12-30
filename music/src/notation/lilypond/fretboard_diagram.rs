@@ -18,13 +18,13 @@ impl From<(u8, u8)> for DiagramFret {
     }
 }
 
-impl Into<Vec<DiagramFret>> for &FretboardShape {
+impl<'a> Into<Vec<DiagramFret>> for &'a FretboardShape<'a> {
     fn into(self) -> Vec<DiagramFret> {
         self.iter().map(|note| {
-            match note {
+            DiagramFret::from(match note {
                 FrettedNote::Sounded(s) => (s.string, s.fret),
-                FrettedNote::Muted {string, ..} => (string, 255),
-            }
+                FrettedNote::Muted {string, ..} => (*string, 255),
+            })
         }).collect()
     }
 }

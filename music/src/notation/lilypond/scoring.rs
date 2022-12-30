@@ -1,5 +1,5 @@
 use tera::Context;
-use crate::lilypond::templates::{OMIT_TIME_SIGNATURE, RAGGED_RIGHT, TEMPLATE_ENGINE};
+use crate::notation::lilypond::templates::{OMIT_TIME_SIGNATURE, RAGGED_RIGHT, TEMPLATE_ENGINE};
 
 /// Wrap content in a markup block
 pub fn markup(content: String) -> String {

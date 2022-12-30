@@ -1,6 +1,10 @@
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 
+// TODO A better way would be to enumerate the possible durations
+//    that are atomically engravable, then make a special constructor
+//    that potentially returns more than one value, tied, and metrically
+//    sanitized.
 /// A temporal duration, denoted in units of 32nd notes.
 /// This library operates at a 32nd note "resolution",
 /// but can go shorter when factoring in tuplets.
@@ -85,6 +89,18 @@ pub enum MeterDenominator {
     Sixteen,
 }
 
+impl ToString for MeterDenominator {
+    fn to_string(&self) -> String {
+        match &self {
+            MeterDenominator::One => "1".to_string(),
+            MeterDenominator::Two => "2".to_string(),
+            MeterDenominator::Four => "4".to_string(),
+            MeterDenominator::Eight => "8".to_string(),
+            MeterDenominator::Sixteen => "16".to_string(),
+        }
+    }
+}
+
 impl From<&MeterDenominator> for DurationIn32ndNotes {
     fn from(value: &MeterDenominator) -> DurationIn32ndNotes {
         match &value {
@@ -125,7 +141,7 @@ impl MeterDenominator {
 pub struct Meter {
     /// Numerator of a time signature, as is.
     pub num_beats: u8,
-    /// Demoninator of a time signature,
+    /// Denominator of a time signature,
     /// but represented as a duration of 32nd notes.
     pub denominator: MeterDenominator,
     /// Vec of durations between the "big beats" in a time signature or groove pattern.
@@ -168,6 +184,48 @@ pub struct RhythmicNotatedEvent {
     pub event: NotatedEvent,
 }
 
+impl RhythmicNotatedEvent {
+    pub fn pitch(pitch: Pitch, duration: DurationIn32ndNotes) -> Self {
+        Self {
+            duration,
+            tied: false,
+            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch))
+        }
+    }
+
+    pub fn pitch_tied(pitch: Pitch, duration: DurationIn32ndNotes) -> Self {
+        Self {
+            duration,
+            tied: true,
+            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch))
+        }
+    }
+
+    pub fn voicing(voicing: Voicing, duration: DurationIn32ndNotes) -> Self {
+        Self {
+            duration,
+            tied: false,
+            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing))
+        }
+    }
+
+    pub fn voicing_tied(voicing: Voicing, duration: DurationIn32ndNotes) -> Self {
+        Self {
+            duration,
+            tied: true,
+            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing))
+        }
+    }
+
+    pub fn rest(duration: DurationIn32ndNotes) -> Self {
+        Self {
+            duration,
+            tied: false,
+            event: NotatedEvent::SingleEvent(SingleEvent::Rest)
+        }
+    }
+}
+
 pub enum NotatedEvent {
     SingleEvent(SingleEvent),
     Tuple(Vec<SingleEvent>),
@@ -176,7 +234,7 @@ pub enum NotatedEvent {
 pub enum SingleEvent {
     Pitch(Pitch),
     Voicing(Voicing),
-    // Rest(DurationIn32ndNotes),
+    Rest,
 }
 
 #[cfg(test)]

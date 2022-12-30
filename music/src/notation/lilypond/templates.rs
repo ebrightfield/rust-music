@@ -3,20 +3,29 @@ use tera::Tera;
 
 pub static TEMPLATE_ENGINE: Lazy<Tera> = Lazy::new(|| {
     let mut tera = Tera::default();
-    tera.add_raw_template("staff", G_8_STAFF).unwrap();
+    tera.add_raw_template("staff", STAFF).unwrap();
     tera.add_raw_template("tab_staff", TAB_STAFF).unwrap();
     tera.add_raw_template("score", SCORE).unwrap();
-    tera.add_raw_template("voicing", VOICING).unwrap();
-    tera.add_raw_template("voicing_tab", VOICING).unwrap();
+    tera.add_raw_template("header", HEADER).unwrap();
+    tera.add_raw_template("voice", VOICE).unwrap();
+    tera.add_raw_template("voicing_tab", VOICING_TAB).unwrap();
     tera.add_raw_template("fretboard_diagram", FRET_DIAGRAM).unwrap();
+    tera.add_raw_template("layout", LAYOUT).unwrap();
+    tera.add_raw_template("layout_context", LAYOUT_CONTEXT).unwrap();
     tera
 });
 
-/// The main top-level element of a lilypond document.
+/// A top-level element of a lilypond document.
 const SCORE: &str = r#"
 \score {
     {{ content }}
-    {{ format_block }}
+}
+"#;
+
+/// A top-level element of a lilypond document.
+const HEADER: &str = r#"
+\header {
+    {{ content }}
 }
 "#;
 
@@ -30,16 +39,46 @@ pub const RAGGED_RIGHT: &str = r#"
     }
 "#;
 
+pub const LAYOUT_CONTEXT: &str = r#"
+\context {
+  {% for statement in statements %}
+  {{ statement }}
+  {% endfor %}
+}
+"#;
+
+pub const LAYOUT: &str = r#"
+    \layout {
+      {% for statement in statements %}
+      {{ statement }}
+      {% endfor %}
+    }
+"#;
+
 /// Placed in a staff to hide the time signature.
 pub const OMIT_TIME_SIGNATURE: &str = "\\omit Staff.TimeSignature";
+pub const OMIT_CLEF: &str = "\\omit Staff.Clef";
+pub const OMIT_BAR_NUMBER: &str = "\\omit Staff.BarNumber";
+pub const OMIT_STRING_NUMBER: &str = "\\omit Voice.StringNumber";
+pub const NO_AUTOMATIC_BAR_LINES: &str = "\\set Score.automaticBars = ##f";
 
 /// Intentional double indent here.
-const G_8_STAFF: &str = r#"
-        \new Staff {
-            \clef G_8
-            {{ time_signature }}
-            \omit Score.BarNumber
+const STAFF: &str = r#"
+      \new Staff {
+        {% for statement in statements %}
+        {{ statement }}
+        {% endfor %}
+        <<
+          {% for voice in voices %}
+          {{ voice }}
+        {% endfor %}
+        >>
+        }
+"#;
 
+/// Intentional double indent here.
+const VOICE: &str = r#"
+        \new Voice {
             {{ content }}
         }
 "#;
@@ -47,22 +86,17 @@ const G_8_STAFF: &str = r#"
 /// Intentional double indent here.
 const TAB_STAFF: &str = r#"
         \new TabStaff {
-            \clef moderntab
-            {{ time_signature }}
-            \omit Score.BarNumber
-
-            {{ content }}
+          {% for statement in statements %}
+          {{ statement }}
+          {% endfor %}
+          <<
+            {% for voice in voices %}
+            {{ voice }}
+            {% endfor %}
+          >>
         }
 "#;
 
-/// Intentionally triple-indented. Intended to go in a staff (which is inside a score).
-const VOICING: &str = r#"
-            {% if duration != 0 -%}
-                < {% for note in ly_notes %}{{ note }} {% endfor %}>{{ ly_duration }}
-            {%- else -%}
-                < {% for note in ly_notes %}{{ note }} {% endfor %}>
-            {%- endif %}
-"#;
 
 /// A voicing for tablature, specifying string numbers in addition to pitch / duration.
 const VOICING_TAB: &str = r#"
