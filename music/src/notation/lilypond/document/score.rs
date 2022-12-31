@@ -58,7 +58,7 @@ impl<'a> ToLilypondString for LilypondStaffGroup<'a> {
         let staves = self.0.iter()
             .map(|staff| staff.to_lilypond_string())
             .join("\n");
-        format!("<<\n{}\n>>\n", staves)
+        format!("<<{}  >>", staves)
     }
 }
 

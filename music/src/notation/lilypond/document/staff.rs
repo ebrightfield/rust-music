@@ -11,6 +11,7 @@ pub struct LilypondStaff<'a> {
     show_bar_numbers: bool,
     show_string_numbers: bool,
     automatic_bar_lines: bool,
+    /// Each voice is simply a `Vec<LilypondVoiceElement>`
     voices: Vec<Vec<LilypondVoiceElement<'a>>>,
 }
 

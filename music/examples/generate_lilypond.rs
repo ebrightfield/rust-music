@@ -34,9 +34,13 @@ fn main() {
         .into_iter()
         .map(|e| e.into())
         .collect();
+    let another_voice = vec![
+        RhythmicNotatedEvent::pitch(pitch!(c, 5), Duration::WHOLE).into()
+    ];
     // We can then create a simple staff and score.
     let staff = LilypondStaff::new()
-        .add_voice(musical_events);
+        .add_voice(musical_events)
+        .add_voice(another_voice);
     let score = LilypondScore::new()
         .staff_group(LilypondStaffGroup::new(vec![staff]));
 

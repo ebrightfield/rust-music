@@ -23,6 +23,8 @@ pub enum LilypondVoiceElement<'a> {
     /// Notes, chords (fretted or otherwise), and rests.
     Common(RhythmicNotatedEvent<'a>),
     // TODO Repeat block
+    // TODO \break
+    // TODO barline
     // TODO Replace this with definite types
     /// This enum is meant to be used inside of Voice contexts.
     /// Therefore, any `impl ToLilypondString` that is not valid inside

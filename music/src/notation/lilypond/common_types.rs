@@ -8,12 +8,15 @@ use crate::notation::rhythm::meter::Meter;
 use crate::note::pitch::MIDDLE_C;
 use crate::note::spelling::Accidental;
 
+/// Lilypond represents time signatures as simple fractions
 impl ToLilypondString for Meter {
     fn to_lilypond_string(&self) -> String {
         format!("{}/{}", self.num_beats, self.denominator.to_string())
     }
 }
 
+/// The only tricky conversion here is the double-whole note `\breve`,
+/// otherwise everything converts to the integer string value you'd expect.
 impl ToLilypondString for DurationKind {
     fn to_lilypond_string(&self) -> String {
         match &self {
@@ -38,16 +41,16 @@ impl ToLilypondString for Duration {
     }
 }
 
-
+/// The actual complete clef declaration is in the [LilypondStaff].
 impl ToLilypondString for Clef {
     fn to_lilypond_string(&self) -> String {
-        let clef_name = match &self {
+        match &self {
             Clef::Treble => "treble",
-        };
-        format!("\\clef {}\n", clef_name)
+        }.to_string()
     }
 }
 
+/// Lilypond uses the solfege-style "is" (pronounced "ees") for "sharp", and "es" for "flat".
 impl ToLilypondString for Note {
     fn to_lilypond_string(&self) -> String {
         let spelling = Spelling::from(self);
@@ -83,6 +86,7 @@ impl ToLilypondString for Pitch {
     }
 }
 
+/// Space separated interior elements, surrounded by `<` `>` angle brackets.
 impl ToLilypondString for Voicing {
     fn to_lilypond_string(&self) -> String {
         let inner: String = self.iter()
@@ -92,6 +96,8 @@ impl ToLilypondString for Voicing {
     }
 }
 
+/// This is where the duration and content are combined into an element
+/// that can be rendered by Lilypond.
 impl<'a> ToLilypondString for RhythmicNotatedEvent<'a> {
     fn to_lilypond_string(&self) -> String {
         match &self.event {

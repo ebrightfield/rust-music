@@ -18,7 +18,7 @@ pub static TEMPLATE_ENGINE: Lazy<Tera> = Lazy::new(|| {
 /// A top-level element of a lilypond document.
 const SCORE: &str = r#"
 \score {
-    {{ content }}
+  {{ content }}
 }
 "#;
 
@@ -64,24 +64,22 @@ pub const NO_AUTOMATIC_BAR_LINES: &str = "\\set Score.automaticBars = ##f";
 
 /// Intentional double indent here.
 const STAFF: &str = r#"
-      \new Staff {
-        {% for statement in statements %}
-        {{ statement }}
-        {% endfor %}
-        <<
-          {% for voice in voices %}
-          {{ voice }}
-        {% endfor %}
-        >>
-        }
+    \new Staff {
+      {% for statement in statements -%}
+      {{ statement }}
+      {% endfor -%}
+      <<{% for voice in voices -%}
+        {{ voice }}
+      {%- endfor %}
+      >>
+    }
 "#;
 
 /// Intentional double indent here.
 const VOICE: &str = r#"
         \new Voice {
-            {{ content }}
-        }
-"#;
+          {{ content }}
+        }"#;
 
 /// Intentional double indent here.
 const TAB_STAFF: &str = r#"
