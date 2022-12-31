@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use crate::notation::lilypond::ToLilypondString;
-use crate::{Note, Pitch, Spelling, Voicing};
+use crate::{Note, Pitch, SoundedNote, Spelling, Voicing};
 use crate::notation::clef::Clef;
 use crate::notation::rhythm::duration::{Duration, DurationKind};
 use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};
@@ -92,25 +92,35 @@ impl ToLilypondString for Voicing {
     }
 }
 
-// TODO You need to account for meter and offset, and convert
-//    some durations into tied composite notated events.
-impl ToLilypondString for RhythmicNotatedEvent {
+impl<'a> ToLilypondString for RhythmicNotatedEvent<'a> {
     fn to_lilypond_string(&self) -> String {
         match &self.event {
             NotatedEvent::SingleEvent(event, duration) => {
-                let pitches = match event {
+                let duration = duration.to_lilypond_string();
+                match event {
                     SingleEvent::Pitch(p) => {
-                        p.to_lilypond_string()
+                        format!("{}{}", p.to_lilypond_string(), duration)
                     }
                     SingleEvent::Voicing(v) => {
-                        v.to_lilypond_string()
+                        format!("{}{}", v.to_lilypond_string(), duration)
+                    },
+                    SingleEvent::Fretted(s) => {
+                        let pitch = s.pitch.to_lilypond_string();
+                        format!("{}{}\\{}", pitch, duration, s.string)
+                    },
+                    SingleEvent::FrettedMany(notes) => {
+                        let inner: String = notes.iter()
+                            .map(|f| {
+                                let pitch = f.pitch.to_lilypond_string();
+                                format!("{}{}\\{}", pitch, duration, f.string)
+                            })
+                            .join(" ");
+                        format!("<{}>{}", inner, duration)
                     }
                     SingleEvent::Rest => {
-                        "r".to_string()
+                        format!("r{}", duration)
                     }
-                };
-                let duration = duration.to_lilypond_string();
-                format!("{}{}", pitches, duration)
+                }
             }
             NotatedEvent::Tuplet(tuplet) => {
                 let ratio = format!("{}/{}", tuplet.numerator, tuplet.denominator);

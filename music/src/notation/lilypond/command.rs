@@ -10,13 +10,13 @@ pub enum LilypondOutput {
     Png,
 }
 
-pub struct LilypondCmdBuilder {
+pub struct LilypondCmdBuilder<'a> {
     formats: Vec<LilypondOutput>,
     output: Option<PathBuf>,
-    files: Vec<LilypondFile>,
+    files: Vec<LilypondFile<'a>>,
 }
 
-impl LilypondCmdBuilder {
+impl<'a> LilypondCmdBuilder<'a> {
     pub fn new() -> Self {
         Self {
             formats: vec![],
@@ -35,7 +35,7 @@ impl LilypondCmdBuilder {
         self
     }
 
-    pub fn builder(mut self, builder: LilypondBuilder) -> Self {
+    pub fn builder(mut self, builder: LilypondBuilder<'a>) -> Self {
         self.files.push(LilypondFile::Virtual(builder));
         self
     }

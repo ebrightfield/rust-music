@@ -14,23 +14,23 @@ use crate::notation::lilypond::ToLilypondString;
 
 /// Either a pre-existing lilypond source file,
 /// or one defined in Rust code with a [LilypondBuilder].
-pub enum LilypondFile {
+pub enum LilypondFile<'a> {
     Preexisting(PathBuf),
-    Virtual(LilypondBuilder),
+    Virtual(LilypondBuilder<'a>),
 }
 
 /// Builder for a Lilypond document.
-pub struct LilypondBuilder {
+pub struct LilypondBuilder<'a> {
     path: Option<PathBuf>,
     includes: Vec<LilypondInclude>,
     header: Option<LilypondHeader>,
     layout: Vec<LilypondLayout>,
-    score: Option<LilypondScore>,
-    //version: Option<String>,
+    score: Option<LilypondScore<'a>>,
+    //version: String, // default "2.22.2"
     // TODO page and paper block
 }
 
-impl LilypondBuilder {
+impl<'a> LilypondBuilder<'a> {
     pub fn new() -> Self {
         Self {
             path: None,
@@ -55,7 +55,7 @@ impl LilypondBuilder {
         &self.path
     }
 
-    pub fn score(mut self, score: Option<LilypondScore>) -> Self {
+    pub fn score(mut self, score: Option<LilypondScore<'a>>) -> Self {
         self.score = score;
         self
     }
@@ -69,7 +69,7 @@ impl LilypondBuilder {
     }
 }
 
-impl ToLilypondString for LilypondBuilder {
+impl<'a> ToLilypondString for LilypondBuilder<'a> {
     fn to_lilypond_string(&self) -> String {
         let mut content = self.includes.iter()
             .map(|include| include.to_lilypond_string())
@@ -151,7 +151,7 @@ impl ToLilypondString for LilypondInclude {
     }
 }
 
-impl TryInto<LilypondInclude> for &LilypondBuilder {
+impl<'a> TryInto<LilypondInclude> for &LilypondBuilder<'a> {
     type Error = LilypondError;
 
     fn try_into(self) -> Result<LilypondInclude, LilypondError> {

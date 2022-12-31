@@ -4,13 +4,13 @@ use crate::notation::lilypond::document::staff::LilypondStaff;
 use crate::notation::lilypond::ToLilypondString;
 use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 
-pub struct LilypondScore {
-    staff_groups: Vec<LilypondStaffGroup>,
+pub struct LilypondScore<'a> {
+    staff_groups: Vec<LilypondStaffGroup<'a>>,
     layout: Option<LilypondLayout>,
     // TODO midi block
 }
 
-impl LilypondScore {
+impl<'a> LilypondScore<'a> {
     pub fn new() -> Self {
         Self {
             staff_groups: vec![],
@@ -23,13 +23,13 @@ impl LilypondScore {
         self
     }
 
-    pub fn staff_group(mut self, staff_group: LilypondStaffGroup) -> Self {
+    pub fn staff_group(mut self, staff_group: LilypondStaffGroup<'a>) -> Self {
         self.staff_groups.push(staff_group);
         self
     }
 }
 
-impl ToLilypondString for LilypondScore {
+impl<'a> ToLilypondString for LilypondScore<'a> {
     fn to_lilypond_string(&self) -> String {
         let mut score_block = self.staff_groups.iter()
             .map(|group| group.to_lilypond_string())
@@ -45,15 +45,15 @@ impl ToLilypondString for LilypondScore {
 }
 
 // TODO bracketed: bool (`\new StaffGroup`)
-pub struct LilypondStaffGroup(Vec<LilypondStaff>);
+pub struct LilypondStaffGroup<'a>(Vec<LilypondStaff<'a>>);
 
-impl LilypondStaffGroup {
-    pub fn new(groups: Vec<LilypondStaff>) -> Self {
+impl<'a> LilypondStaffGroup<'a> {
+    pub fn new(groups: Vec<LilypondStaff<'a>>) -> Self {
         Self(groups)
     }
 }
 
-impl ToLilypondString for LilypondStaffGroup {
+impl<'a> ToLilypondString for LilypondStaffGroup<'a> {
     fn to_lilypond_string(&self) -> String {
         let staves = self.0.iter()
             .map(|staff| staff.to_lilypond_string())

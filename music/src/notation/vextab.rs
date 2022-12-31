@@ -18,8 +18,7 @@ impl ToVexTab for Pitch {
 impl<'a> ToVexTab for SoundedNote<'a> {
     fn to_vextab(&self) -> String {
         let string = (self.fretboard.num_strings() - self.string).to_string();
-        let fret = self.fret.to_string();
-        format!("{}/{}", fret, string)
+        format!("{}/{}", self.fret, string)
     }
 }
 
@@ -34,14 +33,23 @@ impl<'a> ToVexTab for FrettedNote<'a> {
 
 impl<'a> ToVexTab for FretboardShape<'a> {
     fn to_vextab(&self) -> String {
-        let notes = self.fretted_notes.iter()
-            .filter(|item| match &item {
-                FrettedNote::Sounded(_) => true,
-                FrettedNote::Muted { .. } => false,
+        self.fretted_notes.iter()
+            .map(|item| match &item {
+                FrettedNote::Sounded(note) => Some(note),
+                FrettedNote::Muted { .. } => None,
             })
-            .map(|fretted_note| {
-                fretted_note.to_vextab()
-            })
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .to_vextab()
+    }
+}
+
+impl<'a> ToVexTab for Vec<&SoundedNote<'a>> {
+    fn to_vextab(&self) -> String {
+        let notes = self.iter().map(|fretted_note| {
+            fretted_note.to_vextab()
+        })
             .collect::<Vec<String>>()
             .join(".");
         format!("({notes})")
@@ -78,7 +86,7 @@ impl ToVexTab for Duration {
     }
 }
 
-impl ToVexTab for RhythmicNotatedEvent {
+impl<'a> ToVexTab for RhythmicNotatedEvent<'a> {
     fn to_vextab(&self) -> String {
         match &self.event {
             NotatedEvent::SingleEvent(e, d) => {
@@ -91,11 +99,20 @@ impl ToVexTab for RhythmicNotatedEvent {
     }
 }
 
-impl ToVexTab for SingleEvent {
+impl<'a> ToVexTab for SingleEvent<'a> {
     fn to_vextab(&self) -> String {
         match self {
             SingleEvent::Pitch(p) => p.to_vextab(),
             SingleEvent::Voicing(v) => v.to_vextab(),
+            SingleEvent::Fretted(s) => s.to_vextab(),
+            SingleEvent::FrettedMany(notes) => {
+                let notes = notes.iter().map(|fretted_note| {
+                    fretted_note.to_vextab()
+                })
+                    .collect::<Vec<String>>()
+                    .join(".");
+                format!("({notes})")
+            },
             SingleEvent::Rest => "##".to_string(),
         }
     }

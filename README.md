@@ -51,4 +51,5 @@ music theory understanding that we usually only expect of professional musicians
 - Modifiers like `\hide`, `\stemUp`, `\stemDown`, etc
 - Context blocks (create a lazy static `Slashes` context for a useful example)
 - Chord name customization
+- Chord diagrams, custom naming and fingerings
 - Cleaner `.ly` output formatting, particularly with tabs and line breaks.

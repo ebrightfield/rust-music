@@ -4,17 +4,8 @@ use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 use crate::notation::lilypond::ToLilypondString;
 use crate::notation::rhythm::RhythmicNotatedEvent;
 
-// pub struct LilypondVoice(Vec<LilypondVoiceElement>);
-//
-// impl ToLilypondString for LilypondVoice {
-//     fn to_lilypond_string(&self) -> String {
-//         self.0.iter()
-//             .map(|item| item.to_lilypond_string())
-//             .join(" ")
-//     }
-// }
 
-impl ToLilypondString for Vec<LilypondVoiceElement> {
+impl<'a> ToLilypondString for Vec<LilypondVoiceElement<'a>> {
     fn to_lilypond_string(&self) -> String {
         let content = self.iter()
             .map(|item| item.to_lilypond_string())
@@ -28,9 +19,9 @@ impl ToLilypondString for Vec<LilypondVoiceElement> {
 /// Abstraction over common elements (things that other engraving systems
 /// should definitely have, like notes and rests),
 /// with the addition of other elements that may be unique to Lilypond.
-pub enum LilypondVoiceElement {
+pub enum LilypondVoiceElement<'a> {
     /// Note, chord, rest.
-    Common(RhythmicNotatedEvent),
+    Common(RhythmicNotatedEvent<'a>),
     // TODO Replace this with definite types
     /// This enum is meant to be used inside of Voice contexts.
     /// Therefore, any `impl ToLilypondString` that is not valid inside
@@ -38,13 +29,13 @@ pub enum LilypondVoiceElement {
     Other(Box<dyn ToLilypondString>),
 }
 
-impl Into<LilypondVoiceElement> for RhythmicNotatedEvent {
-    fn into(self) -> LilypondVoiceElement {
+impl<'a> Into<LilypondVoiceElement<'a>> for RhythmicNotatedEvent<'a> {
+    fn into(self) -> LilypondVoiceElement<'a> {
         LilypondVoiceElement::Common(self)
     }
 }
 
-impl ToLilypondString for LilypondVoiceElement {
+impl<'a> ToLilypondString for LilypondVoiceElement<'a> {
     fn to_lilypond_string(&self) -> String {
         match &self {
             LilypondVoiceElement::Common(rhythmic_notated_event) => {

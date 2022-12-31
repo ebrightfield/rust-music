@@ -5,16 +5,16 @@ use crate::notation::lilypond::ToLilypondString;
 use crate::notation::lilypond::templates::{NO_AUTOMATIC_BAR_LINES, OMIT_BAR_NUMBER, OMIT_CLEF, OMIT_STRING_NUMBER, OMIT_TIME_SIGNATURE, TEMPLATE_ENGINE};
 use crate::notation::rhythm::meter::Meter;
 
-pub struct LilypondStaff {
+pub struct LilypondStaff<'a> {
     clef: Option<Clef>,
     time_signature: Option<Meter>,
     show_bar_numbers: bool,
     show_string_numbers: bool,
     automatic_bar_lines: bool,
-    voices: Vec<Vec<LilypondVoiceElement>>,
+    voices: Vec<Vec<LilypondVoiceElement<'a>>>,
 }
 
-impl LilypondStaff {
+impl<'a> LilypondStaff<'a> {
     pub fn new() -> Self {
         Self {
             clef: None,
@@ -26,7 +26,7 @@ impl LilypondStaff {
         }
     }
 
-    pub fn add_voice(mut self, voice: Vec<LilypondVoiceElement>) -> Self {
+    pub fn add_voice(mut self, voice: Vec<LilypondVoiceElement<'a>>) -> Self {
         self.voices.push(voice);
         self
     }
@@ -57,7 +57,7 @@ impl LilypondStaff {
     }
 }
 
-impl ToLilypondString for LilypondStaff {
+impl<'a> ToLilypondString for LilypondStaff<'a> {
     fn to_lilypond_string(&self) -> String {
         let mut ctx = Context::new();
         let mut statements = vec![];

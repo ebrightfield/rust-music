@@ -2,20 +2,21 @@ use duration::Duration;
 use crate::notation::rhythm::duration::{DurationKind, DurationTicks};
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
+use crate::SoundedNote;
 
 pub mod duration;
 pub mod meter;
 
 /// A pitch or voicing with a rhythmic duration.
-pub struct RhythmicNotatedEvent {
+pub struct RhythmicNotatedEvent<'a> {
     /// Whether the event is tied to a previous event, and thus
     /// would not be articulated.
     pub tied: bool,
     /// The data representing the notated event.
-    pub event: NotatedEvent,
+    pub event: NotatedEvent<'a>,
 }
 
-impl RhythmicNotatedEvent {
+impl<'a> RhythmicNotatedEvent<'a> {
     pub fn pitch(pitch: Pitch, duration: Duration) -> Self {
         Self {
             tied: false,
@@ -59,14 +60,16 @@ impl RhythmicNotatedEvent {
     }
 }
 
-pub enum NotatedEvent {
-    SingleEvent(SingleEvent, Duration),
-    Tuplet(Tuplet),
+pub enum NotatedEvent<'a> {
+    SingleEvent(SingleEvent<'a>, Duration),
+    Tuplet(Tuplet<'a>),
 }
 
-pub enum SingleEvent {
+pub enum SingleEvent<'a> {
     Pitch(Pitch),
     Voicing(Voicing),
+    Fretted(SoundedNote<'a>),
+    FrettedMany(Vec<SoundedNote<'a>>),
     Rest,
 }
 
@@ -81,10 +84,10 @@ pub enum SingleEvent {
 /// Usually the ratio is implied for the most common tuplets. Triplets are a 3/2 ratio,
 /// and we speak of "eighth note triplets" to denote the magnitude. Similarly,
 /// quintuplets are a 5/4 ratio, and we speak of "quarter-note quintuplets" and so forth.
-pub struct Tuplet {
+pub struct Tuplet<'a> {
     /// A series of rhythmic events that reside inside the tuplet.
     /// Tuplets can be nested.
-    pub events: Vec<RhythmicNotatedEvent>,
+    pub events: Vec<RhythmicNotatedEvent<'a>>,
     /// The number of virtual `base_unit`.
     pub numerator: usize,
     /// The number of actual `base_unit`.
@@ -94,7 +97,7 @@ pub struct Tuplet {
     pub base_unit: DurationKind,
 }
 
-impl Tuplet {
+impl<'a> Tuplet<'a> {
     /// Constructor for dynamically populating a tuplet with its elements.
     pub fn empty(numerator: usize, denominator: usize, base_unit: DurationKind) -> Self {
         Self {
@@ -107,7 +110,7 @@ impl Tuplet {
 
     /// Constructor when you have pre-existing events.
     pub fn new(
-        events: Vec<RhythmicNotatedEvent>,
+        events: Vec<RhythmicNotatedEvent<'a>>,
         numerator: usize,
         denominator: usize,
         base_unit: DurationKind
@@ -121,7 +124,7 @@ impl Tuplet {
     }
 
     /// Push a new event into the tuplet
-    pub fn push(&mut self, event: RhythmicNotatedEvent) {
+    pub fn push(&mut self, event: RhythmicNotatedEvent<'a>) {
         self.events.push(event);
     }
 
@@ -151,8 +154,8 @@ impl Tuplet {
     }
 }
 
-impl Into<RhythmicNotatedEvent> for Tuplet {
-    fn into(self) -> RhythmicNotatedEvent {
+impl<'a> Into<RhythmicNotatedEvent<'a>> for Tuplet<'a> {
+    fn into(self) -> RhythmicNotatedEvent<'a> {
         RhythmicNotatedEvent {
             tied: false,
             event: NotatedEvent::Tuplet(self)
