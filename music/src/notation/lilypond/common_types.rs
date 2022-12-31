@@ -46,6 +46,9 @@ impl ToLilypondString for Clef {
     fn to_lilypond_string(&self) -> String {
         match &self {
             Clef::Treble => "treble",
+            Clef::Treble8va => "treble^8",
+            Clef::Treble8ba => "treble_8",
+            Clef::Bass => "bass",
         }.to_string()
     }
 }
