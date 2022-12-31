@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use crate::notation::lilypond::ToLilypondString;
-use crate::{Note, Pitch, SoundedNote, Spelling, Voicing};
+use crate::{Note, Pitch, Spelling, Voicing};
 use crate::notation::clef::Clef;
 use crate::notation::rhythm::duration::{Duration, DurationKind};
 use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};

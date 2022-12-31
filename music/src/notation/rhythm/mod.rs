@@ -52,6 +52,36 @@ impl<'a> RhythmicNotatedEvent<'a> {
         }
     }
 
+    pub fn fretted(sounded_note: SoundedNote<'a>, duration: Duration) -> Self {
+        Self {
+            tied: false,
+            event: NotatedEvent::SingleEvent(SingleEvent::Fretted(sounded_note), duration)
+        }
+    }
+
+    pub fn fretted_tied(sounded_note: SoundedNote<'a>, duration: Duration) -> Self {
+        Self {
+            tied: true,
+            event: NotatedEvent::SingleEvent(SingleEvent::Fretted(sounded_note), duration)
+        }
+    }
+
+    pub fn fretted_many(notes: Vec<SoundedNote<'a>>, duration: Duration) -> Self {
+        Self {
+            tied: false,
+            event: NotatedEvent::SingleEvent(SingleEvent::FrettedMany(notes), duration)
+        }
+    }
+
+    pub fn fretted_many_tied(notes: Vec<SoundedNote<'a>>, duration: Duration) -> Self {
+        Self {
+            tied: true,
+            event: NotatedEvent::SingleEvent(SingleEvent::FrettedMany(notes), duration)
+        }
+    }
+
+    /// The total duration of the event. In the case of a tuplet, this returns
+    /// the real duration (i.e. quarter-note triplets would return 2 beats of ticks).
     pub fn duration(&self) -> DurationTicks {
         match &self.event {
             NotatedEvent::SingleEvent(_, duration) => duration.ticks(),
@@ -60,16 +90,25 @@ impl<'a> RhythmicNotatedEvent<'a> {
     }
 }
 
+/// A composition over single events and tuplets. You should never need to interact
+/// with this type directly.
 pub enum NotatedEvent<'a> {
     SingleEvent(SingleEvent<'a>, Duration),
     Tuplet(Tuplet<'a>),
 }
 
+/// A wrapper over the various musical events that can be engraved
+/// after pairing with a duration.
 pub enum SingleEvent<'a> {
+    /// Single note, no fretboard information
     Pitch(Pitch),
+    /// Multiple notes, no fretboard information
     Voicing(Voicing),
+    /// Single note, with fretboard information
     Fretted(SoundedNote<'a>),
+    /// Multiple notes, with fretboard information
     FrettedMany(Vec<SoundedNote<'a>>),
+    /// Musical silence
     Rest,
 }
 

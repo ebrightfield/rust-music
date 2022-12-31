@@ -1,3 +1,4 @@
+/// This example requires that you have `lilypond` installed on your system.
 use std::path::PathBuf;
 use music::{pitch, Note, Pitch, voicing, Voicing};
 use music::notation::rhythm::duration::{Duration, DurationKind};
@@ -43,7 +44,7 @@ fn main() {
     let doc = LilypondBuilder::new()
         .path(Some(PathBuf::from("target/test.ly")))
         .score(Some(score));
-    // And build/compile it.
+    // And build/compile it (requires `lilypond` installed).
     LilypondCmdBuilder::new()
         .builder(doc)
         .output(Some(PathBuf::from("target/")))

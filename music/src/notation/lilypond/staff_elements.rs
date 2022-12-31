@@ -20,8 +20,9 @@ impl<'a> ToLilypondString for Vec<LilypondVoiceElement<'a>> {
 /// should definitely have, like notes and rests),
 /// with the addition of other elements that may be unique to Lilypond.
 pub enum LilypondVoiceElement<'a> {
-    /// Note, chord, rest.
+    /// Notes, chords (fretted or otherwise), and rests.
     Common(RhythmicNotatedEvent<'a>),
+    // TODO Repeat block
     // TODO Replace this with definite types
     /// This enum is meant to be used inside of Voice contexts.
     /// Therefore, any `impl ToLilypondString` that is not valid inside
