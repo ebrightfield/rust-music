@@ -2,6 +2,7 @@ use itertools::Itertools;
 use crate::notation::lilypond::ToLilypondString;
 use crate::{Note, Pitch, Spelling, Voicing};
 use crate::notation::clef::Clef;
+use crate::notation::duration::{Duration, DurationKind};
 use crate::notation::rhythm::{DurationIn32ndNotes, Meter, NotatedEvent, RhythmicNotatedEvent, SingleEvent};
 use crate::note::pitch::MIDDLE_C;
 use crate::note::spelling::Accidental;
@@ -9,6 +10,30 @@ use crate::note::spelling::Accidental;
 impl ToLilypondString for Meter {
     fn to_lilypond_string(&self) -> String {
         format!("{}/{}", self.num_beats, self.denominator.to_string())
+    }
+}
+
+impl ToLilypondString for DurationKind {
+    fn to_lilypond_string(&self) -> String {
+        match &self {
+            DurationKind::Breve => "\\breve",
+            DurationKind::Whole => "1",
+            DurationKind::Half => "2",
+            DurationKind::Qtr => "4",
+            DurationKind::Eighth => "8",
+            DurationKind::Sixteenth => "16",
+            DurationKind::ThirtySecond => "32",
+            DurationKind::SixtyFourth => "64",
+            DurationKind::OneTwentyEighth => "128",
+        }.to_string()
+    }
+}
+
+impl ToLilypondString for Duration {
+    fn to_lilypond_string(&self) -> String {
+        let kind = self.kind().to_lilypond_string();
+        let dots = ".".repeat(self.num_dots() as usize);
+        format!("{}{}", kind, dots)
     }
 }
 
@@ -121,8 +146,7 @@ impl ToLilypondString for RhythmicNotatedEvent {
             }
             NotatedEvent::Tuple(_) => todo!()
         };
-        let duration = ly_duration(self.duration)
-            .expect("Not a valid duration");
+        let duration = self.duration.to_lilypond_string();
         format!("{}{}", pitches, duration)
     }
 }

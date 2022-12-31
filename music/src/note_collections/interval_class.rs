@@ -64,13 +64,6 @@ impl From<&IntervalClass> for Pc {
     }
 }
 
-
-impl From<IntervalClass> for Pc {
-    fn from(interval: IntervalClass) -> Pc {
-        Pc::from(&interval)
-    }
-}
-
 impl From<&IntervalClass> for i32 {
     fn from(interval: &IntervalClass) -> Self {
         match interval {
@@ -87,12 +80,6 @@ impl From<&IntervalClass> for i32 {
             IntervalClass::Ic10 => 10,
             IntervalClass::Ic11 => 11,
         }
-    }
-}
-
-impl From<IntervalClass> for i32 {
-    fn from(interval: IntervalClass) -> Self {
-        i32::from(&interval)
     }
 }
 
@@ -117,12 +104,6 @@ impl From<&i32> for IntervalClass {
     }
 }
 
-impl From<i32> for IntervalClass {
-    fn from(pc: i32) -> Self {
-        IntervalClass::from(&pc)
-    }
-}
-
 impl From<&u8> for IntervalClass {
     fn from(pc: &u8) -> Self {
         let pc = pc.rem_euclid(12);
@@ -141,19 +122,6 @@ impl From<&u8> for IntervalClass {
             11 => IntervalClass::Ic11,
             _ => unreachable!(),
         }
-    }
-}
-
-impl From<u8> for IntervalClass {
-    fn from(pc: u8) -> Self {
-        IntervalClass::from(&pc)
-    }
-}
-
-
-impl Into<u8> for IntervalClass {
-    fn into(self) -> u8 {
-        (&self).into()
     }
 }
 

@@ -30,7 +30,7 @@ pub fn generate_alt(pcs: &HashSet<Pc>, triad_context: TriadContext) -> Alt {
         // We can use unwraps in this block because we only use hardcoded numbers that we
         // know are going to be valid for the type conversions.
         let alt_as_u8 = u8::try_from(alt_num).unwrap();
-        if pcs.contains(&Pc::from(alt_as_u8)) {
+        if pcs.contains(&Pc::from(&alt_as_u8)) {
             alterations.push(AltChoice::try_from(alt_num).unwrap())
         }
     }

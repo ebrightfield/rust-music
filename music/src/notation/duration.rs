@@ -1,5 +1,7 @@
 
 
+pub type DurationTicks = usize;
+
 /// Not every tick value can be represented as a singly notated durational symbol.
 /// For example, a five eighth-note duration (i.e. two-and-a-half beats) can't be represented
 /// except for two or more tied rhythmic values. In contrast, durations of four, six,
@@ -27,8 +29,8 @@ pub enum DurationKind {
     OneTwentyEighth, // one "tick"
 }
 
-impl Into<usize> for DurationKind {
-    fn into(self) -> usize {
+impl Into<DurationTicks> for DurationKind {
+    fn into(self) -> DurationTicks {
         match &self {
             DurationKind::Breve => 256,
             DurationKind::Whole => 128,
@@ -61,7 +63,7 @@ impl Into<u32> for DurationKind {
 
 /// A [DurationKind] potentially lengthened with zero to five dots.
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct EngravableDuration {
+pub struct Duration {
     /// Zero to five dots, each of which augment the base value `d`
     /// according to the normal "geometric series" of `d/2 + d/4 + d/8 + ...`
     ///
@@ -75,12 +77,18 @@ pub struct EngravableDuration {
     dur: DurationKind,
 }
 
-impl EngravableDuration {
+impl Duration {
+    pub const QTR: Self = Self {
+        dot: 0, dur: DurationKind::Qtr
+    };
+    pub const EIGHTH: Self = Self {
+        dot: 0, dur: DurationKind::Eighth
+    };
 
     /// A "maybe" constructor.
     /// If the passed number of ticks can be represented as an "atomic" musical duration,
     /// then this constructor returns such an instance.
-    pub fn try_from_ticks(ticks: usize) -> Option<Self> {
+    pub fn try_from_ticks(ticks: DurationTicks) -> Option<Self> {
         for dur in [
             DurationKind::Breve,
             DurationKind::Whole,
@@ -113,6 +121,14 @@ impl EngravableDuration {
         Self { dot, dur }
     }
 
+    pub fn kind(&self) -> DurationKind {
+        self.dur
+    }
+
+    pub fn num_dots(&self) -> u8 {
+        self.dot
+    }
+
     /// Returns the duration in beat "ticks", where one tick = a 128th note.
     /// This entails that 1 beat = 32 ticks.
     pub fn ticks(&self) -> usize {
@@ -138,52 +154,52 @@ mod tests {
         // Dots accumulate duration appropriately
         assert_eq!(
             32,
-            EngravableDuration::new(DurationKind::Qtr, 0).ticks()
+            Duration::new(DurationKind::Qtr, 0).ticks()
         );
         assert_eq!(
             32 + 16,
-            EngravableDuration::new(DurationKind::Qtr, 1).ticks()
+            Duration::new(DurationKind::Qtr, 1).ticks()
         );
         assert_eq!(
             32 + 16 + 8,
-            EngravableDuration::new(DurationKind::Qtr, 2).ticks()
+            Duration::new(DurationKind::Qtr, 2).ticks()
         );
         assert_eq!(
             32 + 16 + 8 + 4,
-            EngravableDuration::new(DurationKind::Qtr, 3).ticks()
+            Duration::new(DurationKind::Qtr, 3).ticks()
         );
         // At the extremes, dots don't add anything
         assert_eq!(
             3,
-            EngravableDuration::new(DurationKind::SixtyFourth, 1).ticks()
+            Duration::new(DurationKind::SixtyFourth, 1).ticks()
         );
         assert_eq!(
             3,
-            EngravableDuration::new(DurationKind::SixtyFourth, 2).ticks()
+            Duration::new(DurationKind::SixtyFourth, 2).ticks()
         );
     }
 
     #[test]
     fn durations_from_ticks() {
-        let d = EngravableDuration::try_from_ticks(32);
+        let d = Duration::try_from_ticks(32);
         assert_eq!(
             d,
-            Some(EngravableDuration::new(DurationKind::Qtr, 0))
+            Some(Duration::new(DurationKind::Qtr, 0))
         );
-        let d = EngravableDuration::try_from_ticks(32 + 16);
+        let d = Duration::try_from_ticks(32 + 16);
         assert_eq!(
             d,
-            Some(EngravableDuration::new(DurationKind::Qtr, 1))
+            Some(Duration::new(DurationKind::Qtr, 1))
         );
-        let d = EngravableDuration::try_from_ticks(32 + 16 + 8);
+        let d = Duration::try_from_ticks(32 + 16 + 8);
         assert_eq!(
             d,
-            Some(EngravableDuration::new(DurationKind::Qtr, 2))
+            Some(Duration::new(DurationKind::Qtr, 2))
         );
-        let d = EngravableDuration::try_from_ticks(64 + 32 + 16 + 8);
+        let d = Duration::try_from_ticks(64 + 32 + 16 + 8);
         assert_eq!(
             d,
-            Some(EngravableDuration::new(DurationKind::Half, 3))
+            Some(Duration::new(DurationKind::Half, 3))
         );
     }
 }

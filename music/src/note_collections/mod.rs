@@ -37,14 +37,14 @@ impl NoteSet {
         if notes.is_empty() {
             return Self(vec![]);
         }
-        let orientation = starting_note.map_or(0, |n| u8::from(Pc::from(n)));
+        let orientation = starting_note.map_or(0, |n| u8::from(&Pc::from(n)));
         notes.sort_by(|a, b| {
             // We add 12 in the arithmetic because we want to ensure
-            let a = (u8::from(Pc::from(a)) + 12 - orientation).rem_euclid(12);
-            let b = (u8::from(Pc::from(b)) + 12 - orientation).rem_euclid(12);
+            let a = (u8::from(&Pc::from(a)) + 12 - orientation).rem_euclid(12);
+            let b = (u8::from(&Pc::from(b)) + 12 - orientation).rem_euclid(12);
             a.partial_cmp(&b).unwrap()
         });
-        notes.dedup_by(|a, b| Pc::from(a.clone()) == Pc::from(b.clone()));
+        notes.dedup_by(|a, b| Pc::from(&*a) == Pc::from(&*b));
         Self(notes)
     }
 

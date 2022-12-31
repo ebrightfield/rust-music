@@ -191,6 +191,7 @@ impl<'a> FrettedNote<'a> {
     }
 }
 
+/// Wrap a [SoundedNote] in a [FrettedNote::Sounded].
 impl<'a> From<SoundedNote<'a>> for FrettedNote<'a> {
     fn from(value: SoundedNote<'a>) -> Self {
         FrettedNote::Sounded(value)

@@ -7,14 +7,15 @@ use crate::error::MusicSemanticsError;
 use crate::note::spelling::Spelling;
 use crate::note_collections::spelling::HasSpelling;
 
-// TODO Expand range out to MIDI note 128
+// TODO Expand range out to MIDI note 128, this may require checking some of the
+//    guitar search algorithms
 
 pub const MIDDLE_C: u8 = 60;
 
 /// This is the MIDI-compliant formula for calculating how:
 /// Note + octave = Pitch
 fn calc_midi_note(note: &Note, octave: &u8) -> u8 {
-    (octave + 1) * 12 + u8::from(Pc::from(note))
+    (octave + 1) * 12 + u8::from(&Pc::from(note))
 }
 
 /// [Note] with octave information.
@@ -53,7 +54,7 @@ impl Pitch {
             return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
         let pc = midi_note_value - (octave * 12);
-        let pc = Pc::from(pc);
+        let pc = Pc::from(&pc);
         let note = pc.notes().first().unwrap().clone();
         Ok(Self {
             note,
@@ -69,7 +70,7 @@ impl Pitch {
             return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
         let pc = midi_note_value - (octave * 12);
-        let pc = Pc::from(pc);
+        let pc = Pc::from(&pc);
         for note in notes {
             if Pc::from(note) == pc {
                 return Ok(Self {
@@ -118,9 +119,9 @@ impl Pitch {
     /// accounting for octaves.
     pub fn diatonic_distance(&self, other: &Pitch) -> i32 {
         let self_diat = (self.octave * 7) as i32
-            + i32::from(Spelling::from(self.note).letter);
+            + i32::from(&Spelling::from(&self.note).letter);
         let other_diat = (other.octave * 7) as i32
-            + i32::from(Spelling::from(other.note).letter);
+            + i32::from(&Spelling::from(&other.note).letter);
         other_diat - self_diat
     }
 

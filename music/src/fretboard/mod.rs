@@ -93,7 +93,7 @@ impl Fretboard {
     /// e.g. "where is the place I can find an F# on the 3rd string of this fretboard?"
     pub fn which_fret(&self, note: &Note, string: u8) -> Result<u8, MusicSemanticsError> {
         let open_string = self.get_string(string)?;
-        let mut pc = Pc::from(open_string.note);
+        let mut pc = Pc::from(&open_string.note);
         let fretted_pc = Pc::from(note);
         for i in 0..12 {
             if pc == fretted_pc {

@@ -28,7 +28,7 @@ pub fn zeroed_pcs(pcs: &[Pc]) -> Vec<Pc> {
             let pc: i32 = pc.into();
             pc - magnitude
         })
-        .map(|i| Pc::from(i))
+        .map(|i| Pc::from(&i))
         .collect()
 }
 

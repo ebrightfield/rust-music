@@ -24,7 +24,7 @@ pub trait TryTranspose: PartialEq + Eq + Hash + Sized {
 
 impl Transpose for Pc {
     fn transpose(&self, semitones: i8) -> Self {
-        Self::from(i32::from(self) + semitones as i32)
+        Self::from(&(i32::from(self) + semitones as i32))
     }
 }
 
@@ -166,7 +166,7 @@ pub fn find_transpositional_symmetries(pcs: &Vec<Pc>) -> TranspositionalSymmetry
 pub fn transpose(pcs: &Vec<Pc>, semitones: u8) -> Vec<Pc> {
     pcs
         .iter()
-        .map(|pc| Pc::from(u8::from(pc) + 12 - semitones.rem_euclid(12)))
+        .map(|pc| Pc::from(&(u8::from(pc) + 12 - semitones.rem_euclid(12))))
         .collect()
 }
 
@@ -266,7 +266,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
             let pt_of_symmetry = u8::from(pc);
             let related_points_of_symmetry: Vec<Pc> = (0u8..(12/symmetry_u8))
                 .map(|i| (pt_of_symmetry + symmetry_u8 * i))
-                .map(|i| Pc::from(i))
+                .map(|i| Pc::from(&i))
                 .collect();
             for pc in related_points_of_symmetry {
                 let entry = symmetries.entry(pc.clone())
@@ -278,7 +278,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
                 }
             }
         }
-        checked_through += (i32::from(rotated[1]) - i32::from(rotated[0])).rem_euclid(12);
+        checked_through += (i32::from(&rotated[1]) - i32::from(&rotated[0])).rem_euclid(12);
         rotated.rotate_left(1);
         rotated.sort();
     }

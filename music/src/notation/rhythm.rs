@@ -1,3 +1,4 @@
+use crate::notation::duration::Duration;
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 
@@ -113,12 +114,6 @@ impl From<&MeterDenominator> for DurationIn32ndNotes {
     }
 }
 
-impl From<MeterDenominator> for DurationIn32ndNotes {
-    fn from(value: MeterDenominator) -> DurationIn32ndNotes {
-        DurationIn32ndNotes::from(&value)
-    }
-}
-
 impl MeterDenominator {
     /// Converts the associated rhythmic value into a [Duration
     pub fn duration_in_32nd_notes(&self) -> DurationIn32ndNotes {
@@ -144,6 +139,7 @@ pub struct Meter {
     /// Denominator of a time signature,
     /// but represented as a duration of 32nd notes.
     pub denominator: MeterDenominator,
+    // TODO DurationTicks
     /// Vec of durations between the "big beats" in a time signature or groove pattern.
     pub beat_pattern: Vec<DurationIn32ndNotes>,
 }
@@ -176,7 +172,7 @@ impl Meter {
 /// A pitch or voicing with a rhythmic duration.
 pub struct RhythmicNotatedEvent {
     /// Maximum duration is a double-whole-note
-    pub duration: DurationIn32ndNotes,
+    pub duration: Duration,
     /// Whether the event is tied to a previous event, and thus
     /// would not be articulated.
     pub tied: bool,
@@ -185,7 +181,7 @@ pub struct RhythmicNotatedEvent {
 }
 
 impl RhythmicNotatedEvent {
-    pub fn pitch(pitch: Pitch, duration: DurationIn32ndNotes) -> Self {
+    pub fn pitch(pitch: Pitch, duration: Duration) -> Self {
         Self {
             duration,
             tied: false,
@@ -193,7 +189,7 @@ impl RhythmicNotatedEvent {
         }
     }
 
-    pub fn pitch_tied(pitch: Pitch, duration: DurationIn32ndNotes) -> Self {
+    pub fn pitch_tied(pitch: Pitch, duration: Duration) -> Self {
         Self {
             duration,
             tied: true,
@@ -201,7 +197,7 @@ impl RhythmicNotatedEvent {
         }
     }
 
-    pub fn voicing(voicing: Voicing, duration: DurationIn32ndNotes) -> Self {
+    pub fn voicing(voicing: Voicing, duration: Duration) -> Self {
         Self {
             duration,
             tied: false,
@@ -209,7 +205,7 @@ impl RhythmicNotatedEvent {
         }
     }
 
-    pub fn voicing_tied(voicing: Voicing, duration: DurationIn32ndNotes) -> Self {
+    pub fn voicing_tied(voicing: Voicing, duration: Duration) -> Self {
         Self {
             duration,
             tied: true,
@@ -217,7 +213,7 @@ impl RhythmicNotatedEvent {
         }
     }
 
-    pub fn rest(duration: DurationIn32ndNotes) -> Self {
+    pub fn rest(duration: Duration) -> Self {
         Self {
             duration,
             tied: false,

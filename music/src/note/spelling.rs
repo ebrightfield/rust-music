@@ -110,12 +110,6 @@ impl From<&Letter> for i32 {
     }
 }
 
-impl From<Letter> for i32 {
-    fn from(value: Letter) -> Self {
-        i32::from(&value)
-    }
-}
-
 impl FromStr for Letter {
     type Err = MusicSemanticsError;
 
@@ -178,12 +172,6 @@ impl FromStr for Spelling {
         let letter = Letter::from_str(&s[0..1])?;
         let acc = Accidental::from_str(&s[1..s.len()])?;
         Ok(Self { letter, acc })
-    }
-}
-
-impl From<Note> for Spelling {
-    fn from(note: Note) -> Self {
-        Spelling::from(&note)
     }
 }
 

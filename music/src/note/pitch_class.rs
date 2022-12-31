@@ -2,7 +2,6 @@ use crate::note::note::Note;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 
 pub struct PcIter {
     curr: Pc,
@@ -92,12 +91,12 @@ pub enum Pc {
 impl Pc {
     /// Step to the next semitone up ("clockwise on the clock-face").
     pub fn next(&self) -> Self {
-        Self::from(u8::from(self) + 1)
+        Self::from(&(u8::from(self) + 1))
     }
 
     /// Step to the next semitone down ("counter-clockwise on the clock-face").
     pub fn previous(&self) -> Self {
-        Self::from(u8::from(self).wrapping_add(12) - 1)
+        Self::from(&(u8::from(self).wrapping_add(12) - 1))
     }
 
     /// Returns the number of semitones up ("clockwise on the clock-face")
@@ -168,12 +167,6 @@ impl Pc {
     }
 }
 
-impl From<Pc> for i32 {
-    fn from(pc: Pc) -> Self {
-        Self::from(&pc)
-    }
-}
-
 impl From<&Pc> for i32 {
     fn from(pc: &Pc) -> Self {
         match pc {
@@ -193,12 +186,6 @@ impl From<&Pc> for i32 {
     }
 }
 
-impl From<Pc> for u8 {
-    fn from(pc: Pc) -> Self {
-        Self::from(&pc)
-    }
-}
-
 impl From<&Pc> for u8 {
     fn from(pc: &Pc) -> Self {
         match pc {
@@ -215,12 +202,6 @@ impl From<&Pc> for u8 {
             Pc::Pc10 => 10,
             Pc::Pc11 => 11,
         }
-    }
-}
-
-impl From<u8> for Pc {
-    fn from(pc: u8) -> Self {
-        Pc::from(&pc)
     }
 }
 
@@ -245,8 +226,8 @@ impl From<&u8> for Pc {
     }
 }
 
-impl From<i32> for Pc {
-    fn from(pc: i32) -> Self {
+impl From<&i32> for Pc {
+    fn from(pc: &i32) -> Self {
         let pc = pc.rem_euclid(12);
         match pc {
             0 => Pc::Pc0,
@@ -263,18 +244,6 @@ impl From<i32> for Pc {
             11 => Pc::Pc11,
             _ => unreachable!(),
         }
-    }
-}
-
-impl From<Note> for Pc {
-    fn from(note: Note) -> Self {
-        Pc::from(&note)
-    }
-}
-
-impl From<&mut Note> for Pc {
-    fn from(note: &mut Note) -> Self {
-        Pc::from(note.deref())
     }
 }
 

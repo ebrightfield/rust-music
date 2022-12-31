@@ -47,13 +47,13 @@ fn main() {
         assert!(n.is_enharmonic(&Note::Bis));
 
         // You can get a Pc from a note (Pc0 = C)
-        assert_eq!(Pc::Pc0, Pc::from(Note::C));
-        assert_eq!(Pc::Pc7, Pc::from(Note::G));
+        assert_eq!(Pc::Pc0, Pc::from(&Note::C));
+        assert_eq!(Pc::Pc7, Pc::from(&Note::G));
 
         // But more than one note maps to any given Pc
         // (more on how to resolve spellings later)
         assert_eq!(Pc::Pc3.notes(), vec![Note::Dis, Note::Ees]);
-        assert_eq!(Pc::from(Note::Cis), Pc::from(Note::Des));
+        assert_eq!(Pc::from(&Note::Cis), Pc::from(&Note::Des));
 
         // We have ways of controlling spellings at a higher level,
         // but transposing a note will return simply a sharp or a natural.
@@ -61,7 +61,7 @@ fn main() {
         assert_eq!(Note::A.transpose(5), Note::D);
 
         // You can introspect on note spellings if need be:
-        let spelling = Spelling::from(n);
+        let spelling = Spelling::from(&n);
         assert_eq!(spelling.letter, Letter::C);
         assert_eq!(spelling.acc, Accidental::Natural);
     }

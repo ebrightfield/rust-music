@@ -107,6 +107,7 @@ const VOICING_TAB: &str = r#"
 {%- endif %}
 "#;
 
+// TODO create this separately as an example.
 /// A staff group where the top has a voicing,
 /// and the bottom has some number of fingerings to match it.
 const VOICING_AND_TAB_FINGERINGS: &str = r#"

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use music::{pitch, Note, Pitch, voicing, Voicing};
+use music::notation::duration::Duration;
 use music::notation::lilypond::command::LilypondCmdBuilder;
 use music::notation::lilypond::document::LilypondBuilder;
 use music::notation::lilypond::document::score::{LilypondScore, LilypondStaffGroup};
@@ -13,13 +14,13 @@ fn main() {
             pitch!(c, 3),
             pitch!(e, 3),
             pitch!(bes, 3)
-        ], 8),
-        RhythmicNotatedEvent::pitch(pitch!(a, 3), 4),
-        RhythmicNotatedEvent::pitch(pitch!(g, 3), 4),
-        RhythmicNotatedEvent::pitch(pitch!(c, 4), 4),
-        RhythmicNotatedEvent::pitch(pitch!(dis, 4), 4),
-        RhythmicNotatedEvent::pitch(pitch!(e, 4), 4),
-        RhythmicNotatedEvent::pitch(pitch!(g, 4), 4),
+        ], Duration::EIGHTH),
+        RhythmicNotatedEvent::pitch(pitch!(a, 3), Duration::QTR),
+        RhythmicNotatedEvent::pitch(pitch!(g, 3), Duration::QTR),
+        RhythmicNotatedEvent::pitch(pitch!(c, 4), Duration::QTR),
+        RhythmicNotatedEvent::pitch(pitch!(dis, 4), Duration::QTR),
+        RhythmicNotatedEvent::pitch(pitch!(e, 4), Duration::QTR),
+        RhythmicNotatedEvent::pitch(pitch!(g, 4), Duration::QTR),
     ];
     // But since Lilypond allows all sorts of markups that are unique to its engraving system,
     // we first convert these into a Lilypond-specific type.
