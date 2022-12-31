@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 use music::{pitch, Note, Pitch, voicing, Voicing};
-use music::notation::rhythm::duration::Duration;
+use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::notation::lilypond::command::LilypondCmdBuilder;
 use music::notation::lilypond::document::LilypondBuilder;
 use music::notation::lilypond::document::score::{LilypondScore, LilypondStaffGroup};
 use music::notation::lilypond::document::staff::LilypondStaff;
-use music::notation::rhythm::RhythmicNotatedEvent;
+use music::notation::rhythm::{RhythmicNotatedEvent, Tuplet};
 
 fn main() {
     // We can assign rhythmic values to musical events like pitches and voicings.
@@ -15,11 +15,16 @@ fn main() {
             pitch!(e, 3),
             pitch!(bes, 3)
         ], Duration::EIGHTH),
-        RhythmicNotatedEvent::pitch(pitch!(a, 3), Duration::QTR),
+        RhythmicNotatedEvent::pitch(pitch!(a, 3), Duration::EIGHTH),
         RhythmicNotatedEvent::pitch(pitch!(g, 3), Duration::QTR),
-        RhythmicNotatedEvent::pitch(pitch!(c, 4), Duration::QTR),
-        RhythmicNotatedEvent::pitch(pitch!(dis, 4), Duration::QTR),
-        RhythmicNotatedEvent::pitch(pitch!(e, 4), Duration::QTR),
+        Tuplet::new(
+            vec![
+                RhythmicNotatedEvent::pitch(pitch!(c, 4), Duration::EIGHTH),
+                RhythmicNotatedEvent::pitch(pitch!(dis, 4), Duration::EIGHTH),
+                RhythmicNotatedEvent::pitch(pitch!(e, 4), Duration::EIGHTH),
+            ],
+            3, 2, DurationKind::Eighth
+        ).into(),
         RhythmicNotatedEvent::pitch(pitch!(g, 4), Duration::QTR),
     ];
     // But since Lilypond allows all sorts of markups that are unique to its engraving system,

@@ -70,18 +70,6 @@ pub enum SingleEvent {
     Rest,
 }
 
-impl Into<SingleEvent> for Pitch {
-    fn into(self) -> SingleEvent {
-        SingleEvent::Pitch(self)
-    }
-}
-
-impl Into<SingleEvent> for Voicing {
-    fn into(self) -> SingleEvent {
-        SingleEvent::Voicing(self)
-    }
-}
-
 /// Tuples satisfy the need to represent divisions of time in ratios other than
 /// the usual "nested halvings" of whole, half, quarter, eighth notes, etc.
 ///
@@ -96,19 +84,19 @@ impl Into<SingleEvent> for Voicing {
 pub struct Tuplet {
     /// A series of rhythmic events that reside inside the tuplet.
     /// Tuplets can be nested.
-    events: Vec<RhythmicNotatedEvent>,
+    pub events: Vec<RhythmicNotatedEvent>,
     /// The number of virtual `base_unit`.
-    numerator: usize,
+    pub numerator: usize,
     /// The number of actual `base_unit`.
-    denominator: usize,
+    pub denominator: usize,
     /// The "magnitude" of a tuplet. e.g. Eighth-note triplets are
     /// twice as short as quarter-note triplets.
-    base_unit: DurationKind,
+    pub base_unit: DurationKind,
 }
 
 impl Tuplet {
     /// Constructor for dynamically populating a tuplet with its elements.
-    pub fn new(numerator: usize, denominator: usize, base_unit: DurationKind) -> Self {
+    pub fn empty(numerator: usize, denominator: usize, base_unit: DurationKind) -> Self {
         Self {
             events: vec![],
             numerator,
@@ -118,7 +106,7 @@ impl Tuplet {
     }
 
     /// Constructor when you have pre-existing events.
-    pub fn with_events(
+    pub fn new(
         events: Vec<RhythmicNotatedEvent>,
         numerator: usize,
         denominator: usize,
@@ -165,6 +153,9 @@ impl Tuplet {
 
 impl Into<RhythmicNotatedEvent> for Tuplet {
     fn into(self) -> RhythmicNotatedEvent {
-        todo!()
+        RhythmicNotatedEvent {
+            tied: false,
+            event: NotatedEvent::Tuplet(self)
+        }
     }
 }

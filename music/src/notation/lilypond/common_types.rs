@@ -112,7 +112,14 @@ impl ToLilypondString for RhythmicNotatedEvent {
                 let duration = duration.to_lilypond_string();
                 format!("{}{}", pitches, duration)
             }
-            NotatedEvent::Tuplet(_) => todo!()
+            NotatedEvent::Tuplet(tuplet) => {
+                let ratio = format!("{}/{}", tuplet.numerator, tuplet.denominator);
+                let content = tuplet.events.iter()
+                    .map(|event| event.to_lilypond_string())
+                    .join(" ");
+                // Notate the tuplet
+                format!("\\tuplet {} {{ {} }}", ratio, content)
+            }
         }
     }
 }

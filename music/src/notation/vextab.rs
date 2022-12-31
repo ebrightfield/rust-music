@@ -80,14 +80,14 @@ impl ToVexTab for Duration {
 
 impl ToVexTab for RhythmicNotatedEvent {
     fn to_vextab(&self) -> String {
-        let pitch_content = match &self.event {
+        match &self.event {
             NotatedEvent::SingleEvent(e, d) => {
                 let pitch_content = e.to_vextab();
                 let duration = d.to_vextab();
-                return format!("{}{}", duration, pitch_content)
+                format!("{}{}", duration, pitch_content)
             }
             NotatedEvent::Tuplet(_) => todo!()
-        };
+        }
     }
 }
 
