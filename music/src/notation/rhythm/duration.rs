@@ -1,5 +1,3 @@
-
-
 pub type DurationTicks = usize;
 
 /// Not every tick value can be represented as a singly notated durational symbol.

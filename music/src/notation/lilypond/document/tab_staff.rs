@@ -1,4 +1,4 @@
-use crate::notation::rhythm::Meter;
+use crate::notation::rhythm::meter::Meter;
 
 pub struct LilypondTabStaff {
     modern_tab_clef: bool,

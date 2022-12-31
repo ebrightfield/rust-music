@@ -1,171 +1,13 @@
 use duration::Duration;
-use crate::notation::rhythm::duration::DurationTicks;
+use crate::notation::rhythm::duration::{DurationKind, DurationTicks};
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 
 pub mod duration;
-
-
-/// Creates a Vector of [DurationTicks] marking
-/// which ticks are metrically prominent, or made prominent by choice.
-/// e.g. This would convert 6/8 time signature to [vec![0, 12]],
-/// as the first and fourth 8th notes in that signature are the strong beats.
-pub fn get_big_beats(
-    num_beats: usize,
-    base_unit_duration: DurationTicks,
-) -> Vec<DurationTicks> {
-    // Compound meters and 4/4
-    for divisor in [7, 5, 3, 2] {
-        if num_beats.rem_euclid(divisor) == 0 && num_beats != divisor {
-            let divided = num_beats / divisor;
-            return (0..divided)
-                .map(|i| i * divisor * base_unit_duration)
-                .collect();
-        }
-    }
-    // Some default patterns for 7/X, 7/X, 11/X, 13/X.
-    if num_beats == 7 {
-        return vec![0, 4 * base_unit_duration];
-    }
-    if num_beats == 5 {
-        return vec![0, 3 * base_unit_duration];
-    }
-    if num_beats == 11 {
-        return vec![
-            0,
-            3 * base_unit_duration,
-            6 * base_unit_duration,
-            9 * base_unit_duration,
-        ];
-    }
-    if num_beats == 13 {
-        return vec![
-            0,
-            3 * base_unit_duration,
-            6 * base_unit_duration,
-            9 * base_unit_duration,
-            11 * base_unit_duration,
-        ];
-    }
-    // Remaining patterns mark strong beats with the denominator
-    // of qtr, half, or whole note
-    if vec![8, 16, 32].contains(&base_unit_duration) {
-        return (0..num_beats).map(|i| i * base_unit_duration).collect();
-    }
-    // Remaining <=8th note meters patterns, leave empty
-    vec![]
-}
-
-/// Returns a Vec of [DurationTicks] representing the
-/// amount of time between temporally adjacent elements.
-pub fn big_beats_to_durations(
-    big_beats: Vec<DurationTicks>,
-    total_duration: DurationTicks,
-) -> Vec<DurationTicks> {
-    let mut beats = big_beats.clone();
-    beats.push(total_duration);
-    beats.as_slice().windows(2).map(|w| w[1] - w[0]).collect()
-}
-
-/// The only valid units in the denominator of a time signature.
-pub enum MeterDenominator {
-    /// Whole-note gets the beat.
-    One,
-    /// Half-note gets the beat.
-    Two,
-    /// Quarter-note gets the beat.
-    Four,
-    /// Eighth-note gets the beat.
-    Eight,
-    /// Sixteenth-note gets the beat.
-    Sixteen,
-}
-
-impl ToString for MeterDenominator {
-    fn to_string(&self) -> String {
-        match &self {
-            MeterDenominator::One => "1".to_string(),
-            MeterDenominator::Two => "2".to_string(),
-            MeterDenominator::Four => "4".to_string(),
-            MeterDenominator::Eight => "8".to_string(),
-            MeterDenominator::Sixteen => "16".to_string(),
-        }
-    }
-}
-
-impl MeterDenominator {
-    /// Converts the associated rhythmic value into a [Duration
-    pub fn ticks(&self) -> DurationTicks {
-        match &self {
-            MeterDenominator::One => 32,
-            MeterDenominator::Two => 16,
-            MeterDenominator::Four => 8,
-            MeterDenominator::Eight => 4,
-            MeterDenominator::Sixteen => 2,
-        }
-    }
-}
-
-impl Into<Duration> for &MeterDenominator {
-    fn into(self) -> Duration {
-        match self {
-            MeterDenominator::One => Duration::WHOLE,
-            MeterDenominator::Two => Duration::HALF,
-            MeterDenominator::Four => Duration::QTR,
-            MeterDenominator::Eight => Duration::EIGHTH,
-            MeterDenominator::Sixteen => Duration::SIXTEENTH,
-        }
-    }
-}
-
-/// A time signature, accompanied with an accent pattern/"big beats"/"groove".
-///
-/// Meter subdivisions take a natural heirarchy of psychological salience,
-/// with a bias toward the wider and more evenly spaced beats in the heirarchy.
-/// This is the origin of the term "big beat", and it can be thought of as a kind of
-/// rhythmic middle-ground between that of the measure as a whole, and the beat grid.
-pub struct Meter {
-    /// Numerator of a time signature, as is.
-    pub num_beats: usize,
-    /// Denominator of a time signature.
-    pub denominator: MeterDenominator,
-    /// Vec of durations between the "big beats" in a time signature or groove pattern.
-    pub beat_pattern: Vec<DurationTicks>,
-}
-
-/// Any duration denominated in quarter-note "beats". We arbitrarily use a quarter-note
-/// grid, even though we still account for e.g. meters like 4/8.
-pub type NumBeats = u8;
-
-impl Meter {
-    /// Takes the numerator and demoninator of a typical non-additive meter,
-    /// and optionally, an accent pattern. A default accent pattern is inferred
-    /// for various meters.
-    pub fn new(
-        numerator: usize,
-        denominator: MeterDenominator,
-        beat_pattern: Option<Vec<DurationTicks>>,
-    ) -> Self {
-        let beat_duration: DurationTicks = denominator.ticks();
-        let big_beats = if let Some(pattern) = beat_pattern {
-            pattern
-        } else {
-            get_big_beats(numerator, beat_duration)
-        };
-        let total_duration = beat_duration * (numerator as usize);
-        let beat_pattern = big_beats_to_durations(big_beats, total_duration);
-        Self {
-            num_beats: numerator,
-            denominator,
-            beat_pattern,
-        }
-    }
-}
+pub mod meter;
 
 /// A pitch or voicing with a rhythmic duration.
 pub struct RhythmicNotatedEvent {
-    /// Maximum duration is a double-whole-note
-    pub duration: Duration,
     /// Whether the event is tied to a previous event, and thus
     /// would not be articulated.
     pub tied: bool,
@@ -176,48 +18,50 @@ pub struct RhythmicNotatedEvent {
 impl RhythmicNotatedEvent {
     pub fn pitch(pitch: Pitch, duration: Duration) -> Self {
         Self {
-            duration,
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch))
+            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch), duration)
         }
     }
 
     pub fn pitch_tied(pitch: Pitch, duration: Duration) -> Self {
         Self {
-            duration,
             tied: true,
-            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch))
+            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch), duration)
         }
     }
 
     pub fn voicing(voicing: Voicing, duration: Duration) -> Self {
         Self {
-            duration,
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing))
+            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing), duration)
         }
     }
 
     pub fn voicing_tied(voicing: Voicing, duration: Duration) -> Self {
         Self {
-            duration,
             tied: true,
-            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing))
+            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing), duration)
         }
     }
 
     pub fn rest(duration: Duration) -> Self {
         Self {
-            duration,
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Rest)
+            event: NotatedEvent::SingleEvent(SingleEvent::Rest, duration)
+        }
+    }
+
+    pub fn duration(&self) -> DurationTicks {
+        match &self.event {
+            NotatedEvent::SingleEvent(_, duration) => duration.ticks(),
+            NotatedEvent::Tuplet(tuplet) => tuplet.real_duration(),
         }
     }
 }
 
 pub enum NotatedEvent {
-    SingleEvent(SingleEvent),
-    Tuple(Vec<SingleEvent>),
+    SingleEvent(SingleEvent, Duration),
+    Tuplet(Tuplet),
 }
 
 pub enum SingleEvent {
@@ -226,20 +70,101 @@ pub enum SingleEvent {
     Rest,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Into<SingleEvent> for Pitch {
+    fn into(self) -> SingleEvent {
+        SingleEvent::Pitch(self)
+    }
+}
 
-    #[test]
-    fn test_get_big_beats() {
-        // 4/4
-        let result = get_big_beats(4, 8);
-        assert_eq!(result, vec![0, 16]);
-        // 3/4
-        let result = get_big_beats(3, 8);
-        assert_eq!(result, vec![0, 8, 16]);
-        // 5/4
-        let result = get_big_beats(5, 8);
-        assert_eq!(result, vec![0, 24]);
+impl Into<SingleEvent> for Voicing {
+    fn into(self) -> SingleEvent {
+        SingleEvent::Voicing(self)
+    }
+}
+
+/// Tuples satisfy the need to represent divisions of time in ratios other than
+/// the usual "nested halvings" of whole, half, quarter, eighth notes, etc.
+///
+/// In general, a tuple has two properties -- a ratio, and a `base_unit` magnitude
+/// (written as a [DurationKind]).
+/// They can be understood roughly as, "putting a `numerator * base_unit`
+/// worth of time in the space of an actual `denominator * base_unit` worth of time."
+///
+/// Usually the ratio is implied for the most common tuplets. Triplets are a 3/2 ratio,
+/// and we speak of "eighth note triplets" to denote the magnitude. Similarly,
+/// quintuplets are a 5/4 ratio, and we speak of "quarter-note quintuplets" and so forth.
+pub struct Tuplet {
+    /// A series of rhythmic events that reside inside the tuplet.
+    /// Tuplets can be nested.
+    events: Vec<RhythmicNotatedEvent>,
+    /// The number of virtual `base_unit`.
+    numerator: usize,
+    /// The number of actual `base_unit`.
+    denominator: usize,
+    /// The "magnitude" of a tuplet. e.g. Eighth-note triplets are
+    /// twice as short as quarter-note triplets.
+    base_unit: DurationKind,
+}
+
+impl Tuplet {
+    /// Constructor for dynamically populating a tuplet with its elements.
+    pub fn new(numerator: usize, denominator: usize, base_unit: DurationKind) -> Self {
+        Self {
+            events: vec![],
+            numerator,
+            denominator,
+            base_unit
+        }
+    }
+
+    /// Constructor when you have pre-existing events.
+    pub fn with_events(
+        events: Vec<RhythmicNotatedEvent>,
+        numerator: usize,
+        denominator: usize,
+        base_unit: DurationKind
+    ) -> Self {
+        Self {
+            events,
+            numerator,
+            denominator,
+            base_unit
+        }
+    }
+
+    /// Push a new event into the tuplet
+    pub fn push(&mut self, event: RhythmicNotatedEvent) {
+        self.events.push(event);
+    }
+
+    /// The total duration of the tuplet's events. If a tuplet is complete,
+    /// this value will be equal to `self.virtual_duration()`.
+    pub fn events_duration(&self) -> DurationTicks {
+        self.events.iter().map(|event| event.duration()).sum()
+    }
+
+    /// "Inside" of the tuplet's space, there is this virtual duration
+    pub fn virtual_duration(&self) -> DurationTicks {
+        let base_ticks: DurationTicks = self.base_unit.into();
+        base_ticks * self.numerator
+    }
+
+    /// "Outside" the tuplet's space, the tuplet spans the same duration
+    /// as its denominator.
+    pub fn real_duration(&self) -> DurationTicks {
+        let base_ticks: DurationTicks = self.base_unit.into();
+        base_ticks * self.denominator
+    }
+
+    /// If a tuplet is complete, all of its events occupy the required amount of
+    /// virtual time.
+    pub fn is_complete(&self) -> bool {
+        self.events_duration() == self.virtual_duration()
+    }
+}
+
+impl Into<RhythmicNotatedEvent> for Tuplet {
+    fn into(self) -> RhythmicNotatedEvent {
+        todo!()
     }
 }

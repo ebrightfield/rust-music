@@ -3,7 +3,8 @@ use crate::notation::lilypond::ToLilypondString;
 use crate::{Note, Pitch, Spelling, Voicing};
 use crate::notation::clef::Clef;
 use crate::notation::rhythm::duration::{Duration, DurationKind};
-use crate::notation::rhythm::{Meter, NotatedEvent, RhythmicNotatedEvent, SingleEvent};
+use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};
+use crate::notation::rhythm::meter::Meter;
 use crate::note::pitch::MIDDLE_C;
 use crate::note::spelling::Accidental;
 
@@ -95,9 +96,9 @@ impl ToLilypondString for Voicing {
 //    some durations into tied composite notated events.
 impl ToLilypondString for RhythmicNotatedEvent {
     fn to_lilypond_string(&self) -> String {
-        let pitches = match &self.event {
-            NotatedEvent::SingleEvent(event) => {
-                match event {
+        match &self.event {
+            NotatedEvent::SingleEvent(event, duration) => {
+                let pitches = match event {
                     SingleEvent::Pitch(p) => {
                         p.to_lilypond_string()
                     }
@@ -107,11 +108,11 @@ impl ToLilypondString for RhythmicNotatedEvent {
                     SingleEvent::Rest => {
                         "r".to_string()
                     }
-                }
+                };
+                let duration = duration.to_lilypond_string();
+                format!("{}{}", pitches, duration)
             }
-            NotatedEvent::Tuple(_) => todo!()
-        };
-        let duration = self.duration.to_lilypond_string();
-        format!("{}{}", pitches, duration)
+            NotatedEvent::Tuplet(_) => todo!()
+        }
     }
 }

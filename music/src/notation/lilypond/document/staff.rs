@@ -3,7 +3,7 @@ use crate::notation::clef::Clef;
 use crate::notation::lilypond::staff_elements::LilypondVoiceElement;
 use crate::notation::lilypond::ToLilypondString;
 use crate::notation::lilypond::templates::{NO_AUTOMATIC_BAR_LINES, OMIT_BAR_NUMBER, OMIT_CLEF, OMIT_STRING_NUMBER, OMIT_TIME_SIGNATURE, TEMPLATE_ENGINE};
-use crate::notation::rhythm::Meter;
+use crate::notation::rhythm::meter::Meter;
 
 pub struct LilypondStaff {
     clef: Option<Clef>,
