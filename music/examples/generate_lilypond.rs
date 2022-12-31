@@ -9,6 +9,8 @@ use music::notation::lilypond::document::staff::LilypondStaff;
 use music::notation::rhythm::{RhythmicNotatedEvent, Tuplet};
 
 fn main() {
+
+    // 1. Produce some musical content
     // We can assign rhythmic values to musical events like pitches and voicings.
     let musical_events = vec![
         RhythmicNotatedEvent::voicing(voicing![
@@ -28,23 +30,28 @@ fn main() {
         ).into(),
         RhythmicNotatedEvent::pitch(pitch!(g, 4), Duration::QTR),
     ];
-    // But since Lilypond allows all sorts of markups that are unique to its engraving system,
+    // 1b. Type-wrap the content for Lilypond engraving.
+    // Since Lilypond allows all sorts of markups that are unique to its engraving system,
     // we first convert these into a Lilypond-specific type.
     let musical_events = musical_events
         .into_iter()
         .map(|e| e.into())
         .collect();
+
+    // 2. Arrange the content into a score.
+    // We can then create a staff, potentially with multiple voices.
     let another_voice = vec![
         RhythmicNotatedEvent::pitch(pitch!(c, 5), Duration::WHOLE).into()
     ];
-    // We can then create a simple staff and score.
     let staff = LilypondStaff::new()
         .add_voice(musical_events)
         .add_voice(another_voice);
+    // And put that staff in a score
     let score = LilypondScore::new()
         .staff_group(LilypondStaffGroup::new(vec![staff]));
 
-    // And create a document.
+    // 3. Create and compile a document with that score.
+    // Create a virtual Lilypond document with that score
     let doc = LilypondBuilder::new()
         .path(Some(PathBuf::from("target/test.ly")))
         .score(Some(score));

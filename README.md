@@ -25,25 +25,25 @@ See the `music/examples` directory for some demonstrations on the basic types.
 ### Philosophy
 This crate takes much influence from Dmitri Tymoczko's work, which you can find in his book Geometry of Music.
 
-My conviction that the combinatoric space that falls out of the twelve notes _is not too big_ for thorough and complete overview, at the very least.
+In addition, it endeavours to achieve the following:
+- Create a type system that enforces clear musical intent while remaining ergonomic.
+- Code solutions for sound music-theoretic inference, deduction, and search.
+- Solutions that apply over combinatorically complete spaces of musical possibilities.
+- Mathemetically precise types that account for the various gradations of information one might have available.
+- Easy-to-use API for converting musical objects into engraved notation.
 
-I also believe that having a solid foundation in "thinking through musical space" is a key
-part of musicianship, no matter whether performing a memorized piece or improvising, composing or analyzing, reading or transcribing.
-
-Good musicianship requires _much_ more than music theory.
-But with the right tools, protocols, and practice, it should be no burden to acquire the kind of
-music theory understanding that we usually only expect of professional musicians.
 
 ### TODO
 - Chord types as enums -- FiveNoteChordQuality, SixNoteChordQuality, IrregularScaleQuality
 - Various geometric calculations of sub-/super-chords, etc.
-- A few more Lilypond code-gen feature
-- A few more Vextab code-gen feature
 - Chord name parsing (regex)
 - Melodic Sequencer
 - PcSet vs PcMultiset
 - Do a pass on ergonomics
 - Common scale check -- Check which common scales a chord fits into.
+
+### VexTab TODO
+- Tuplets
 
 ### Lilypond TODO
 - Repeat blocks
@@ -52,4 +52,3 @@ music theory understanding that we usually only expect of professional musicians
 - Context blocks (create a lazy static `Slashes` context for a useful example)
 - Chord name customization
 - Chord diagrams, custom naming and fingerings
-- Cleaner `.ly` output formatting, particularly with tabs and line breaks.
