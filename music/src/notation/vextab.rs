@@ -1,7 +1,7 @@
 use crate::fretboard::fretboard_shape::FretboardShape;
 use crate::fretboard::fretted_note::{FrettedNote, SoundedNote};
-use crate::notation::duration::{Duration, DurationKind};
-use crate::notation::rhythm::{DurationIn32ndNotes, NotatedEvent, RhythmicNotatedEvent, SingleEvent};
+use crate::notation::rhythm::duration::{Duration, DurationKind};
+use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 
@@ -53,20 +53,6 @@ impl ToVexTab for Voicing {
         format!("({})", self.iter().map(|pitch| {
             pitch.to_vextab()
         }).collect::<Vec<_>>().join("."))
-    }
-}
-
-impl ToVexTab for DurationIn32ndNotes {
-    fn to_vextab(&self) -> String {
-        match self {
-            1 => ":32".to_string(),
-            2 => ":16".to_string(),
-            4 => ":8".to_string(),
-            8 => ":q".to_string(),
-            16 => ":h".to_string(),
-            32 => ":w".to_string(),
-            _ => panic!("Unsupported rhythmic duration for Vextab")
-        }
     }
 }
 

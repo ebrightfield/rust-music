@@ -78,11 +78,20 @@ pub struct Duration {
 }
 
 impl Duration {
+    pub const WHOLE: Self = Self {
+        dot: 0, dur: DurationKind::Whole
+    };
+    pub const HALF: Self = Self {
+        dot: 0, dur: DurationKind::Half
+    };
     pub const QTR: Self = Self {
         dot: 0, dur: DurationKind::Qtr
     };
     pub const EIGHTH: Self = Self {
         dot: 0, dur: DurationKind::Eighth
+    };
+    pub const SIXTEENTH: Self = Self {
+        dot: 0, dur: DurationKind::Sixteenth
     };
 
     /// A "maybe" constructor.

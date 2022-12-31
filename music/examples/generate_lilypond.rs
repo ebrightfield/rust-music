@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use music::{pitch, Note, Pitch, voicing, Voicing};
-use music::notation::duration::Duration;
+use music::notation::rhythm::duration::Duration;
 use music::notation::lilypond::command::LilypondCmdBuilder;
 use music::notation::lilypond::document::LilypondBuilder;
 use music::notation::lilypond::document::score::{LilypondScore, LilypondStaffGroup};
@@ -29,7 +29,7 @@ fn main() {
         .map(|e| e.into())
         .collect();
     // We can then create a simple staff and score.
-    let mut staff = LilypondStaff::new()
+    let staff = LilypondStaff::new()
         .add_voice(musical_events);
     let score = LilypondScore::new()
         .staff_group(LilypondStaffGroup::new(vec![staff]));

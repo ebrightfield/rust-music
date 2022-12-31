@@ -1,33 +1,24 @@
-use crate::notation::duration::Duration;
+use duration::Duration;
+use crate::notation::rhythm::duration::DurationTicks;
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 
-// TODO A better way would be to enumerate the possible durations
-//    that are atomically engravable, then make a special constructor
-//    that potentially returns more than one value, tied, and metrically
-//    sanitized.
-/// A temporal duration, denoted in units of 32nd notes.
-/// This library operates at a 32nd note "resolution",
-/// but can go shorter when factoring in tuplets.
-pub type DurationIn32ndNotes = u8;
+pub mod duration;
 
-/// Creates a Vector of [DurationIn32ndNotes] marking
-/// which 32nd note "ticks" are metrically prominent, or made prominent by choice.
+
+/// Creates a Vector of [DurationTicks] marking
+/// which ticks are metrically prominent, or made prominent by choice.
 /// e.g. This would convert 6/8 time signature to [vec![0, 12]],
 /// as the first and fourth 8th notes in that signature are the strong beats.
 pub fn get_big_beats(
-    num_beats: NumBeats,
-    base_unit_duration: DurationIn32ndNotes,
-    beat_pattern: Option<Vec<DurationIn32ndNotes>>,
-) -> Vec<DurationIn32ndNotes> {
-    if let Some(pattern) = beat_pattern {
-        return pattern;
-    }
+    num_beats: usize,
+    base_unit_duration: DurationTicks,
+) -> Vec<DurationTicks> {
     // Compound meters and 4/4
     for divisor in [7, 5, 3, 2] {
         if num_beats.rem_euclid(divisor) == 0 && num_beats != divisor {
             let divided = num_beats / divisor;
-            return (0u8..divided)
+            return (0..divided)
                 .map(|i| i * divisor * base_unit_duration)
                 .collect();
         }
@@ -65,12 +56,12 @@ pub fn get_big_beats(
     vec![]
 }
 
-/// Returns a Vec of [DurationIn32ndNotes] representing the
+/// Returns a Vec of [DurationTicks] representing the
 /// amount of time between temporally adjacent elements.
 pub fn big_beats_to_durations(
-    big_beats: Vec<DurationIn32ndNotes>,
-    total_duration: u8,
-) -> Vec<DurationIn32ndNotes> {
+    big_beats: Vec<DurationTicks>,
+    total_duration: DurationTicks,
+) -> Vec<DurationTicks> {
     let mut beats = big_beats.clone();
     beats.push(total_duration);
     beats.as_slice().windows(2).map(|w| w[1] - w[0]).collect()
@@ -102,9 +93,10 @@ impl ToString for MeterDenominator {
     }
 }
 
-impl From<&MeterDenominator> for DurationIn32ndNotes {
-    fn from(value: &MeterDenominator) -> DurationIn32ndNotes {
-        match &value {
+impl MeterDenominator {
+    /// Converts the associated rhythmic value into a [Duration
+    pub fn ticks(&self) -> DurationTicks {
+        match &self {
             MeterDenominator::One => 32,
             MeterDenominator::Two => 16,
             MeterDenominator::Four => 8,
@@ -114,15 +106,14 @@ impl From<&MeterDenominator> for DurationIn32ndNotes {
     }
 }
 
-impl MeterDenominator {
-    /// Converts the associated rhythmic value into a [Duration
-    pub fn duration_in_32nd_notes(&self) -> DurationIn32ndNotes {
-        match &self {
-            MeterDenominator::One => 32,
-            MeterDenominator::Two => 16,
-            MeterDenominator::Four => 8,
-            MeterDenominator::Eight => 4,
-            MeterDenominator::Sixteen => 2,
+impl Into<Duration> for &MeterDenominator {
+    fn into(self) -> Duration {
+        match self {
+            MeterDenominator::One => Duration::WHOLE,
+            MeterDenominator::Two => Duration::HALF,
+            MeterDenominator::Four => Duration::QTR,
+            MeterDenominator::Eight => Duration::EIGHTH,
+            MeterDenominator::Sixteen => Duration::SIXTEENTH,
         }
     }
 }
@@ -135,13 +126,11 @@ impl MeterDenominator {
 /// rhythmic middle-ground between that of the measure as a whole, and the beat grid.
 pub struct Meter {
     /// Numerator of a time signature, as is.
-    pub num_beats: u8,
-    /// Denominator of a time signature,
-    /// but represented as a duration of 32nd notes.
+    pub num_beats: usize,
+    /// Denominator of a time signature.
     pub denominator: MeterDenominator,
-    // TODO DurationTicks
     /// Vec of durations between the "big beats" in a time signature or groove pattern.
-    pub beat_pattern: Vec<DurationIn32ndNotes>,
+    pub beat_pattern: Vec<DurationTicks>,
 }
 
 /// Any duration denominated in quarter-note "beats". We arbitrarily use a quarter-note
@@ -153,13 +142,17 @@ impl Meter {
     /// and optionally, an accent pattern. A default accent pattern is inferred
     /// for various meters.
     pub fn new(
-        numerator: NumBeats,
+        numerator: usize,
         denominator: MeterDenominator,
-        beat_pattern: Option<Vec<DurationIn32ndNotes>>,
+        beat_pattern: Option<Vec<DurationTicks>>,
     ) -> Self {
-        let beat_duration: DurationIn32ndNotes = denominator.duration_in_32nd_notes();
-        let big_beats = get_big_beats(numerator, beat_duration, beat_pattern.clone());
-        let total_duration = beat_duration * numerator;
+        let beat_duration: DurationTicks = denominator.ticks();
+        let big_beats = if let Some(pattern) = beat_pattern {
+            pattern
+        } else {
+            get_big_beats(numerator, beat_duration)
+        };
+        let total_duration = beat_duration * (numerator as usize);
         let beat_pattern = big_beats_to_durations(big_beats, total_duration);
         Self {
             num_beats: numerator,
@@ -240,16 +233,13 @@ mod tests {
     #[test]
     fn test_get_big_beats() {
         // 4/4
-        let result = get_big_beats(4, 8, None);
+        let result = get_big_beats(4, 8);
         assert_eq!(result, vec![0, 16]);
         // 3/4
-        let result = get_big_beats(3, 8, None);
+        let result = get_big_beats(3, 8);
         assert_eq!(result, vec![0, 8, 16]);
         // 5/4
-        let result = get_big_beats(5, 8, None);
+        let result = get_big_beats(5, 8);
         assert_eq!(result, vec![0, 24]);
-        // 5/4 - 2 + 3 beat pattern
-        let result = get_big_beats(5, 8, Some(vec![0, 16]));
-        assert_eq!(result, vec![0, 16]);
     }
 }
