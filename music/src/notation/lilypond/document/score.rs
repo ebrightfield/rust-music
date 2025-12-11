@@ -7,7 +7,57 @@ use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 pub struct LilypondScore<'a> {
     staff_groups: Vec<LilypondStaffGroup<'a>>,
     layout: Option<LilypondLayout>,
-    // TODO midi block
+    midi: Option<LilypondMidi>,
+}
+
+/// MIDI output configuration block.
+/// When included in a score, Lilypond will generate a MIDI file alongside the PDF.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LilypondMidi {
+    /// Tempo in quarter notes per minute (e.g., 120 = 120 bpm)
+    tempo: Option<u16>,
+    /// MIDI instrument name (e.g., "acoustic grand", "electric guitar")
+    instrument: Option<String>,
+}
+
+impl LilypondMidi {
+    pub fn new() -> Self {
+        Self {
+            tempo: None,
+            instrument: None,
+        }
+    }
+
+    /// Set the tempo in quarter notes per minute.
+    pub fn tempo(mut self, bpm: u16) -> Self {
+        self.tempo = Some(bpm);
+        self
+    }
+
+    /// Set the MIDI instrument name.
+    pub fn instrument(mut self, instrument: impl Into<String>) -> Self {
+        self.instrument = Some(instrument.into());
+        self
+    }
+}
+
+impl Default for LilypondMidi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ToLilypondString for LilypondMidi {
+    fn to_lilypond_string(&self) -> String {
+        let mut content = String::new();
+        if let Some(tempo) = self.tempo {
+            content.push_str(&format!("    \\tempo 4 = {}\n", tempo));
+        }
+        if let Some(instrument) = &self.instrument {
+            content.push_str(&format!("    \\set Staff.midiInstrument = #\"{}\"\n", instrument));
+        }
+        format!("  \\midi {{\n{}}}\n", content)
+    }
 }
 
 impl<'a> LilypondScore<'a> {
@@ -15,11 +65,18 @@ impl<'a> LilypondScore<'a> {
         Self {
             staff_groups: vec![],
             layout: None,
+            midi: None,
         }
     }
 
     pub fn layout(mut self, layout: Option<LilypondLayout>) -> Self {
         self.layout = layout;
+        self
+    }
+
+    /// Add MIDI output configuration to this score.
+    pub fn midi(mut self, midi: Option<LilypondMidi>) -> Self {
+        self.midi = midi;
         self
     }
 
@@ -38,27 +95,63 @@ impl<'a> ToLilypondString for LilypondScore<'a> {
             score_block.push('\n');
             score_block = score_block + &layout.to_lilypond_string();
         }
+        if let Some(midi) = &self.midi {
+            score_block.push('\n');
+            score_block = score_block + &midi.to_lilypond_string();
+        }
         let mut ctx = Context::new();
         ctx.insert("content", &score_block);
         (*TEMPLATE_ENGINE).render("score", &ctx).unwrap()
     }
 }
 
-// TODO bracketed: bool (`\new StaffGroup`)
-pub struct LilypondStaffGroup<'a>(Vec<LilypondStaff<'a>>);
+/// A group of staves that can optionally be bracketed together.
+/// When bracketed, produces `\new StaffGroup << ... >>` in Lilypond output.
+pub struct LilypondStaffGroup<'a> {
+    staves: Vec<LilypondStaff<'a>>,
+    /// When true, wraps staves in `\new StaffGroup` which adds a bracket
+    bracketed: bool,
+}
 
 impl<'a> LilypondStaffGroup<'a> {
-    pub fn new(groups: Vec<LilypondStaff<'a>>) -> Self {
-        Self(groups)
+    pub fn new(staves: Vec<LilypondStaff<'a>>) -> Self {
+        Self {
+            staves,
+            bracketed: false,
+        }
+    }
+
+    /// Create a bracketed staff group (with connecting bracket on the left).
+    pub fn bracketed(staves: Vec<LilypondStaff<'a>>) -> Self {
+        Self {
+            staves,
+            bracketed: true,
+        }
+    }
+
+    /// Set whether this group should have a bracket.
+    pub fn set_bracketed(mut self, bracketed: bool) -> Self {
+        self.bracketed = bracketed;
+        self
+    }
+
+    /// Add a staff to this group.
+    pub fn add_staff(mut self, staff: LilypondStaff<'a>) -> Self {
+        self.staves.push(staff);
+        self
     }
 }
 
 impl<'a> ToLilypondString for LilypondStaffGroup<'a> {
     fn to_lilypond_string(&self) -> String {
-        let staves = self.0.iter()
+        let staves = self.staves.iter()
             .map(|staff| staff.to_lilypond_string())
             .join("\n");
-        format!("<<{}  >>", staves)
+        if self.bracketed {
+            format!("\\new StaffGroup <<\n{}\n  >>", staves)
+        } else {
+            format!("<<{}  >>", staves)
+        }
     }
 }
 
@@ -104,15 +197,32 @@ impl ToLilypondString for LilypondLayout {
     }
 }
 
-// TODO More types, Staff, StaffGroup, TabStaff, TabVoice, I think there's more...
+/// Context types used within `\layout` blocks to modify engraving behavior.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LayoutContextTy {
+    /// Voice context - individual melodic line
     Voice,
+    /// TabVoice context - voice within a TabStaff
+    TabVoice,
+    /// Staff context - standard notation staff
+    Staff,
+    /// TabStaff context - tablature staff
+    TabStaff,
+    /// StaffGroup context - group of staves with bracket
+    StaffGroup,
+    /// Score context - top-level score settings
+    Score,
 }
 
 impl ToLilypondString for LayoutContextTy {
     fn to_lilypond_string(&self) -> String {
         match &self {
-            LayoutContextTy::Voice => "\\Voice\n"
+            LayoutContextTy::Voice => "\\Voice\n",
+            LayoutContextTy::TabVoice => "\\TabVoice\n",
+            LayoutContextTy::Staff => "\\Staff\n",
+            LayoutContextTy::TabStaff => "\\TabStaff\n",
+            LayoutContextTy::StaffGroup => "\\StaffGroup\n",
+            LayoutContextTy::Score => "\\Score\n",
         }.to_string()
     }
 }

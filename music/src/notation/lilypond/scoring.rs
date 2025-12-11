@@ -32,8 +32,17 @@ pub fn maybe_time_signature(sig: Option<String>) -> String {
 pub fn staff(content: String, time_signature: Option<String>) -> String {
     let time_sig = maybe_time_signature(time_signature);
     let mut ctx = Context::new();
-    ctx.insert("time_signature", &time_sig);
-    ctx.insert("content", &content);
+    // The template expects "statements" (setup commands) and "voices" (content)
+    ctx.insert("statements", &[time_sig.as_str()]);
+    // Wrap content in a voice block for proper rendering
+    let voice = format!(
+        r#"
+        \new Voice {{
+          {}
+        }}"#,
+        content
+    );
+    ctx.insert("voices", &[voice.as_str()]);
     (*TEMPLATE_ENGINE).render("staff", &ctx).unwrap()
 }
 
@@ -41,8 +50,17 @@ pub fn staff(content: String, time_signature: Option<String>) -> String {
 pub fn tab_staff(content: String, time_signature: Option<String>) -> String {
     let time_sig = maybe_time_signature(time_signature);
     let mut ctx = Context::new();
-    ctx.insert("time_signature", &time_sig);
-    ctx.insert("content", &content);
+    // The template expects "statements" (setup commands) and "voices" (content)
+    ctx.insert("statements", &[time_sig.as_str()]);
+    // Wrap content in a TabVoice block for proper rendering
+    let voice = format!(
+        r#"
+            \new TabVoice {{
+              {}
+            }}"#,
+        content
+    );
+    ctx.insert("voices", &[voice.as_str()]);
     (*TEMPLATE_ENGINE).render("tab_staff", &ctx).unwrap()
 }
 

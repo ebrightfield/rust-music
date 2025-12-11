@@ -265,7 +265,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
         if rotated == maybe_same {
             let pt_of_symmetry = u8::from(pc);
             let related_points_of_symmetry: Vec<Pc> = (0u8..(12/symmetry_u8))
-                .map(|i| (pt_of_symmetry + symmetry_u8 * i))
+                .map(|i| pt_of_symmetry + symmetry_u8 * i)
                 .map(|i| Pc::from(&i))
                 .collect();
             for pc in related_points_of_symmetry {

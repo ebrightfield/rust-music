@@ -40,7 +40,7 @@ impl Voiceleading {
             }
         }
         Ok(Self {
-            from: from,
+            from,
             to: Voicing::new(paths_applied),
             paths,
         })
@@ -124,6 +124,11 @@ mod tests {
         let voiceleadings = Voiceleading::find_all(&v1, &ch2,
         Some(&vec![Box::new(NoVoxCrossings)])
         ).unwrap();
-        println!("{:#?}", voiceleadings[2]);
+        // Verify we found some valid voiceleadings
+        assert!(!voiceleadings.is_empty(), "Should find valid voiceleadings from C to F");
+        // Verify the voiceleadings are sorted by distance (first should have lowest score)
+        if voiceleadings.len() > 1 {
+            assert!(voiceleadings[0].0 <= voiceleadings[1].0, "Voiceleadings should be sorted by distance");
+        }
     }
 }

@@ -66,8 +66,11 @@ pub fn find_chord_shapes<'a>(
                 .enumerate()
                 .map(|(i, note)| {
                     let fret = fretboard.which_fret(note, grouping[i])?;
-                    if fret < 6 {
-                        return Ok::<_, MusicSemanticsError>(vec![fret, fret + 12]);
+                    // Include both the base position and octave-up position when within range.
+                    // The AllAbove12thFret classification filters redundant high shapes.
+                    let octave_up = fret + 12;
+                    if octave_up <= Fretboard::MAX {
+                        return Ok::<_, MusicSemanticsError>(vec![fret, octave_up]);
                     }
                     Ok::<_, MusicSemanticsError>(vec![fret])
                 })
@@ -138,4 +141,61 @@ pub fn find_chord_shapes<'a>(
         }
     }
     Ok(valid_shapes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fretboard::STD_6STR_GTR;
+
+    #[test]
+    fn test_high_fret_positions_included() {
+        // Test that high-fret positions (>= 12) are included in search results
+        // Using a G major chord (G, B, D) which can be played at multiple positions
+        let g_chord = vec![Note::G, Note::B, Note::D];
+        let results = find_chord_shapes(&g_chord, &STD_6STR_GTR).unwrap();
+
+        // Check that we have shapes in the all_above_12th_fret category
+        // This proves high-fret positions are being considered
+        let high_fret_count = results.all_above_12th_fret.values()
+            .map(|shapes| shapes.len())
+            .sum::<usize>();
+
+        assert!(
+            high_fret_count > 0,
+            "Should find shapes above 12th fret (found {} shapes)",
+            high_fret_count
+        );
+    }
+
+    #[test]
+    fn test_finds_shapes_with_fret_6_plus_octave() {
+        // Test for a note that naturally falls at fret 6+ on some string
+        // D on the B string is at fret 3, but D on the G string is at fret 7
+        // We want to ensure fret 7 + 12 = 19 is also considered
+        let d_power_chord = vec![Note::D, Note::A];
+        let results = find_chord_shapes(&d_power_chord, &STD_6STR_GTR).unwrap();
+
+        // Verify we find some playable shapes
+        let playable_count = results.playable.values()
+            .map(|shapes| shapes.len())
+            .sum::<usize>();
+
+        assert!(
+            playable_count > 0,
+            "Should find playable shapes for D power chord"
+        );
+
+        // Check we have shapes with high frets in the all_above_12th_fret category
+        let high_fret_count = results.all_above_12th_fret.values()
+            .map(|shapes| shapes.len())
+            .sum::<usize>();
+
+        // With the fix, we should now find high-position shapes even for notes
+        // that naturally fall at fret 6+ (like D on G string at fret 7)
+        assert!(
+            high_fret_count > 0,
+            "Should find shapes above 12th fret for D power chord"
+        );
+    }
 }

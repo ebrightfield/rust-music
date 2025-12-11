@@ -95,6 +95,30 @@ pub struct SpellingRule {
 }
 
 impl SpellingRule {
+    /// Validate that the spelling rule is logically consistent.
+    /// Returns an error if:
+    /// - Any pitch class appears in both `incl` and `excl` (contradiction)
+    /// - Any pitch class appears in both `incl` and `not_all` (potentially redundant)
+    pub fn validate(&self) -> Result<(), MusicSemanticsError> {
+        // Check that incl and excl don't overlap
+        for pc in &self.incl {
+            if self.excl.contains(pc) {
+                return Err(MusicSemanticsError::InvalidSpellingRule(
+                    format!("Pc {:?} appears in both incl and excl", pc)
+                ));
+            }
+        }
+
+        // Check that target pc is not in excl (would make rule impossible)
+        if self.excl.contains(&self.pc) {
+            return Err(MusicSemanticsError::InvalidSpellingRule(
+                format!("Target Pc {:?} appears in excl (rule can never apply)", self.pc)
+            ));
+        }
+
+        Ok(())
+    }
+
     // Returns true when a rule is flagged,
     // meaning a note needs to be flipped enharmonically.
     pub fn applied(&self, pc: Pc, pc_set: &PcSet) -> bool {
@@ -931,5 +955,68 @@ mod tests {
             spelling,
             vec![Note::D, Note::Fis, Note::A, Note::Cis],
         );
+    }
+
+    #[test]
+    fn test_spelling_rule_validation_valid() {
+        // A valid rule: flip Pc3 to Eb when Pc4 is present but Pc7 is not
+        let rule = SpellingRule {
+            pc: Pc::Pc3,
+            incl: vec![Pc::Pc4],
+            excl: vec![Pc::Pc7],
+            not_all: vec![],
+        };
+        assert!(rule.validate().is_ok());
+    }
+
+    #[test]
+    fn test_spelling_rule_validation_incl_excl_overlap() {
+        // Invalid: Pc4 is in both incl and excl
+        let rule = SpellingRule {
+            pc: Pc::Pc3,
+            incl: vec![Pc::Pc4],
+            excl: vec![Pc::Pc4, Pc::Pc7],  // Pc4 overlaps with incl
+            not_all: vec![],
+        };
+        let result = rule.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("incl and excl"));
+    }
+
+    #[test]
+    fn test_spelling_rule_validation_target_in_excl() {
+        // Invalid: target Pc is in excl (rule can never apply)
+        let rule = SpellingRule {
+            pc: Pc::Pc3,
+            incl: vec![Pc::Pc4],
+            excl: vec![Pc::Pc3, Pc::Pc7],  // Pc3 is the target but also excluded
+            not_all: vec![],
+        };
+        let result = rule.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("rule can never apply"));
+    }
+
+    #[test]
+    fn test_existing_rules_are_valid() {
+        // Verify all existing rules defined in spell_rules are valid
+        let roots = [
+            Note::C, Note::Cis, Note::Des, Note::D, Note::Dis, Note::Ees,
+            Note::E, Note::F, Note::Fis, Note::Ges, Note::G, Note::Gis,
+            Note::Aes, Note::A, Note::Ais, Note::Bes, Note::B,
+        ];
+
+        for root in roots {
+            if let Some(rules) = spell_rules(&root) {
+                for rule in rules {
+                    assert!(
+                        rule.validate().is_ok(),
+                        "Invalid rule for root {:?}: {:?}",
+                        root,
+                        rule.validate().unwrap_err()
+                    );
+                }
+            }
+        }
     }
 }

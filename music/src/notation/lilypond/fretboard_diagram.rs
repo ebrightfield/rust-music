@@ -51,6 +51,8 @@ mod tests {
         ];
 
         let result = fretboard_diagram(frets);
-        println!("{}", result);
+        // Verify the result is non-empty and contains expected Lilypond fret-diagram syntax
+        assert!(!result.is_empty(), "Fretboard diagram should produce output");
+        assert!(result.contains("fret-diagram"), "Should contain fret-diagram markup");
     }
 }

@@ -132,27 +132,35 @@ impl Voicing {
             bottom_distance = min.diatonic_distance(&clef_bottom);
             top_distance = clef_top.diatonic_distance(&max);
         }
+        // Final adjustment: if the voicing is biased toward the lower ledger lines
+        // when there's room to move it up, shift up an octave.
+        // We check if:
+        // 1. The lowest note is below the staff bottom (bottom_distance > 0)
+        // 2. There's room to move up (top note is more than an octave below staff top)
+        (min, max) = cloned.span().unwrap();
+        bottom_distance = min.diatonic_distance(&clef_bottom);
+        top_distance = clef_top.diatonic_distance(&max);
+
+        // If the voicing is entirely below the staff and could fit better if raised
+        if bottom_distance > 0 && top_distance > 7 {
+            cloned = cloned.move_by_octaves(1)?;
+        }
+
         Ok(cloned)
-        // TODO Maybe add one more conditional, and potentially
-        //    raise the entire thing up an octave, because we're getting shapes
-        //    biased to the bottom ledger lines when it seemingly doesn't need to.
-        //    So we could maybe assess one more time whether to move up an octave,
-        //    if the low is below X and the high is below Y, where X and Y are defined
-        //    dynamically with the clef.
     }
 }
 
-impl Into<StackedIntervals> for Voicing {
-    fn into(self) -> StackedIntervals {
-        (&self).into()
+impl From<Voicing> for StackedIntervals {
+    fn from(voicing: Voicing) -> Self {
+        Self::from(&voicing)
     }
 }
 
-impl Into<StackedIntervals> for &Voicing {
-    fn into(self) -> StackedIntervals {
+impl From<&Voicing> for StackedIntervals {
+    fn from(voicing: &Voicing) -> Self {
         StackedIntervals(
-            self.0.iter()
-                .zip(&self.0[1..])
+            voicing.0.iter()
+                .zip(&voicing.0[1..])
                 .map(|(a,b)| {
                     b.midi_note - a.midi_note
                 })
@@ -182,11 +190,14 @@ impl Deref for Voicing {
     }
 }
 
-impl Into<NoteSet> for &Voicing {
-    fn into(self) -> NoteSet {
+impl From<&Voicing> for NoteSet {
+    /// Extracts the [Note]s from a [Voicing], discarding octave information.
+    /// The resulting [NoteSet] is sorted by pitch class and deduplicated,
+    /// oriented from the first pitch's note.
+    fn from(voicing: &Voicing) -> Self {
         NoteSet::new(
-            self.iter().map(|p| p.note).collect(),
-            self.first().map(|p|&p.note)
+            voicing.iter().map(|p| p.note).collect(),
+            voicing.first().map(|p| &p.note)
         )
     }
 }
@@ -299,5 +310,35 @@ mod tests {
             v3.normalize_register_to_clef(Clef::Treble).unwrap(),
             v4.normalize_register_to_clef(Clef::Treble).unwrap()
         );
+    }
+
+    #[test]
+    fn low_voicing_gets_raised_to_staff() {
+        // A voicing in the low register below the treble staff
+        // Treble staff bounds: E4 (bottom) to F5 (top)
+        let low = Voicing::new(vec![
+            Pitch::new(Note::C, 2).unwrap(),
+            Pitch::new(Note::E, 2).unwrap(),
+            Pitch::new(Note::G, 2).unwrap(),
+        ]);
+        let normalized = low.normalize_register_to_clef(Clef::Treble).unwrap();
+        // The lowest note should be raised to be closer to the staff
+        let (min, _max) = normalized.span().unwrap();
+        // Should be at least C4 (not C2)
+        assert!(min.midi_note >= 48, "Expected low note to be C4 or higher, got {:?}", min);
+    }
+
+    #[test]
+    fn normalize_to_bass_clef() {
+        // Bass clef bounds: G2 (bottom) to A3 (top)
+        // A high voicing should be moved down
+        let high = Voicing::new(vec![
+            Pitch::new(Note::C, 5).unwrap(),
+            Pitch::new(Note::E, 5).unwrap(),
+        ]);
+        let normalized = high.normalize_register_to_clef(Clef::Bass).unwrap();
+        let (min, _max) = normalized.span().unwrap();
+        // Should be moved much lower for bass clef
+        assert!(min.midi_note < 60, "Expected note below C4 for bass clef, got {:?}", min);
     }
 }

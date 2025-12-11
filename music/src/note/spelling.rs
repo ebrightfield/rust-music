@@ -19,6 +19,18 @@ impl Accidental {
     pub fn is_double(&self) -> bool {
         *self == Accidental::DoubleFlat || *self == Accidental::DoubleSharp
     }
+
+    /// Returns the Unicode representation of the accidental.
+    /// Uses proper music symbols: ♯, ♭, 𝄪 (double sharp), 𝄫 (double flat).
+    pub fn to_unicode(&self) -> &'static str {
+        match self {
+            Accidental::Natural => "",
+            Accidental::Sharp => "♯",
+            Accidental::Flat => "♭",
+            Accidental::DoubleSharp => "𝄪",
+            Accidental::DoubleFlat => "𝄫",
+        }
+    }
 }
 
 impl FromStr for Accidental {
@@ -27,17 +39,23 @@ impl FromStr for Accidental {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "" => Ok(Accidental::Natural),
+            // ASCII representations
             "b" => Ok(Accidental::Flat),
             "#" => Ok(Accidental::Sharp),
             "bb" => Ok(Accidental::DoubleFlat),
             "##" => Ok(Accidental::DoubleSharp),
-            // TODO Match fancy Utf-8 chars
+            // Unicode music symbols
+            "♭" => Ok(Accidental::Flat),
+            "♯" => Ok(Accidental::Sharp),
+            "𝄫" => Ok(Accidental::DoubleFlat),
+            "𝄪" => Ok(Accidental::DoubleSharp),
+            // Double unicode symbols
+            "♭♭" => Ok(Accidental::DoubleFlat),
+            "♯♯" => Ok(Accidental::DoubleSharp),
             _ => Err(MusicSemanticsError::InvalidAccidental(s.to_string())),
         }
     }
 }
-
-// TODO also impl block with a toFancyStr that uses UTF-8 chars.
 
 impl Display for Accidental {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -153,6 +171,12 @@ pub struct Spelling {
 impl Spelling {
     pub fn new(letter: Letter, acc: Accidental) -> Self {
         Self { letter, acc }
+    }
+
+    /// Returns the spelling as a Unicode string with proper music symbols.
+    /// Example: C♯, D♭, E𝄪, F𝄫
+    pub fn to_unicode_string(&self) -> String {
+        format!("{}{}", self.letter, self.acc.to_unicode())
     }
 }
 

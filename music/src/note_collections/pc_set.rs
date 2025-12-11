@@ -44,6 +44,15 @@ impl PcSet {
         Self(zeroed_pcs(&pcs))
     }
 
+    /// Create a PcSet without zeroing (only deduplicated and sorted).
+    /// This is useful when you want to preserve the actual pitch classes
+    /// rather than normalizing them relative to Pc0.
+    pub fn from_unzeroed(pcs: Vec<Pc>) -> Self {
+        let mut pcs = deduplicate_pcs(&pcs);
+        pcs.sort();
+        Self(pcs)
+    }
+
     /// Rotate self backwards by one. This is equivalent to walking
     /// to the previous mode of a scale, or inversion of a chord.
     pub fn rotate_back(&self) -> Self {
@@ -219,6 +228,33 @@ macro_rules! pcs {
     }
 }
 
+/// Validates pitch class values at compile time.
+/// All values must be in the range 0-11.
+///
+/// # Example
+/// ```
+/// use music::note_collections::pc_set::PcSet;
+/// use music::validated_pcs;
+///
+/// // This compiles successfully
+/// let c_major = validated_pcs!(0, 4, 7);
+///
+/// // This would fail at compile time:
+/// // let invalid = validated_pcs!(0, 4, 15);  // 15 > 11
+/// ```
+#[macro_export]
+macro_rules! validated_pcs {
+    ($( $pc:expr ),+ $(,)?) => {{
+        // Compile-time validation using const assertion
+        const _: () = {
+            $(
+                assert!($pc < 12, "Pitch class must be 0-11");
+            )+
+        };
+        PcSet::from([$($pc),+].to_vec())
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +276,34 @@ mod tests {
         let pc_set = PcSet::new(vec![Pc0, Pc4, Pc7]);
         let pc_set2 = vec![Pc0, Pc3, Pc9];
         assert!(!pc_set.is_transposed_version_of(&pc_set2));
+    }
+
+    #[test]
+    fn from_unzeroed() {
+        // G major triad at its actual pitch classes (G=7, B=11, D=2)
+        let unzeroed = PcSet::from_unzeroed(vec![Pc7, Pc11, Pc2]);
+        assert_eq!(unzeroed.0, vec![Pc2, Pc7, Pc11]);  // Sorted but not zeroed
+
+        // Same notes but zeroed would be [0, 4, 7] (major triad pattern)
+        let zeroed = PcSet::new(vec![Pc7, Pc11, Pc2]);
+        assert_eq!(zeroed.0, vec![Pc0, Pc5, Pc9]);  // Zeroed from Pc2
+
+        // Unzeroed preserves the actual pitch classes
+        assert_ne!(unzeroed, zeroed);
+    }
+
+    #[test]
+    fn validated_pcs_macro() {
+        // Valid pitch classes compile successfully
+        let c_major = validated_pcs!(0, 4, 7);
+        assert_eq!(c_major, pcs!(0, 4, 7));
+
+        // Test with trailing comma
+        let minor = validated_pcs!(0, 3, 7,);
+        assert_eq!(minor, pcs!(0, 3, 7));
+
+        // Edge cases: 0 and 11 are valid
+        let edge = validated_pcs!(0, 11);
+        assert_eq!(edge.len(), 2);
     }
 }

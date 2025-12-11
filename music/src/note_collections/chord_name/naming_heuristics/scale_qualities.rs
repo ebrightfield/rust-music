@@ -349,3 +349,79 @@ impl NamingHeuristic for Locrian {
         Some(ScaleQuality::Locrian(seconds, sixths))
     }
 }
+
+// Pentatonic scales - 5 notes
+
+/// Major pentatonic: 1 2 3 5 6 (without root: Pc2, Pc4, Pc7, Pc9)
+static MAJOR_PENTATONIC_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
+    HashSet::from([Pc2, Pc4, Pc7, Pc9])
+});
+#[derive(Debug)]
+pub struct MajorPentatonic;
+impl NamingHeuristic for MajorPentatonic {
+    type T = ScaleQuality;
+
+    fn validate(&self, pcs: &HashSet<Pc>) -> bool {
+        *pcs == *MAJOR_PENTATONIC_NO_ROOT
+    }
+
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+        Some(ScaleQuality::MajorPentatonic)
+    }
+}
+
+/// Minor pentatonic: 1 b3 4 5 b7 (without root: Pc3, Pc5, Pc7, Pc10)
+static MINOR_PENTATONIC_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
+    HashSet::from([Pc3, Pc5, Pc7, Pc10])
+});
+#[derive(Debug)]
+pub struct MinorPentatonic;
+impl NamingHeuristic for MinorPentatonic {
+    type T = ScaleQuality;
+
+    fn validate(&self, pcs: &HashSet<Pc>) -> bool {
+        *pcs == *MINOR_PENTATONIC_NO_ROOT
+    }
+
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+        Some(ScaleQuality::MinorPentatonic)
+    }
+}
+
+/// Blues major scale: 1 2 b3 3 5 6 (without root: Pc2, Pc3, Pc4, Pc7, Pc9)
+/// This is major pentatonic with added b3 (blue note)
+static BLUES_MAJOR_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
+    HashSet::from([Pc2, Pc3, Pc4, Pc7, Pc9])
+});
+#[derive(Debug)]
+pub struct BluesMajor;
+impl NamingHeuristic for BluesMajor {
+    type T = ScaleQuality;
+
+    fn validate(&self, pcs: &HashSet<Pc>) -> bool {
+        *pcs == *BLUES_MAJOR_NO_ROOT
+    }
+
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+        Some(ScaleQuality::BluesMajor)
+    }
+}
+
+/// Blues minor scale: 1 b3 4 b5 5 b7 (without root: Pc3, Pc5, Pc6, Pc7, Pc10)
+/// This is minor pentatonic with added b5 (blue note)
+static BLUES_MINOR_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
+    HashSet::from([Pc3, Pc5, Pc6, Pc7, Pc10])
+});
+#[derive(Debug)]
+pub struct BluesMinor;
+impl NamingHeuristic for BluesMinor {
+    type T = ScaleQuality;
+
+    fn validate(&self, pcs: &HashSet<Pc>) -> bool {
+        *pcs == *BLUES_MINOR_NO_ROOT
+    }
+
+    fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
+        Some(ScaleQuality::BluesMinor)
+    }
+}

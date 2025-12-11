@@ -1,9 +1,11 @@
 use duration::Duration;
+use crate::error::MusicSemanticsError;
 use crate::notation::rhythm::duration::{DurationKind, DurationTicks};
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 use crate::SoundedNote;
 
+pub mod beat_grid;
 pub mod duration;
 pub mod meter;
 
@@ -191,13 +193,309 @@ impl<'a> Tuplet<'a> {
     pub fn is_complete(&self) -> bool {
         self.events_duration() == self.virtual_duration()
     }
+
+    /// Create a triplet (3 notes in the time of 2).
+    ///
+    /// # Arguments
+    /// * `events` - Exactly 3 rhythmic events
+    /// * `base_unit` - The duration kind for each note (e.g., `Eighth` for eighth-note triplets)
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Eighth-note triplet of three C4 pitches
+    /// let events = vec![
+    ///     RhythmicNotatedEvent::pitch(c4.clone(), Duration::new(DurationKind::Eighth, 0)),
+    ///     RhythmicNotatedEvent::pitch(c4.clone(), Duration::new(DurationKind::Eighth, 0)),
+    ///     RhythmicNotatedEvent::pitch(c4.clone(), Duration::new(DurationKind::Eighth, 0)),
+    /// ];
+    /// let triplet = Tuplet::triplet(events, DurationKind::Eighth)?;
+    /// ```
+    pub fn triplet(
+        events: Vec<RhythmicNotatedEvent<'a>>,
+        base_unit: DurationKind,
+    ) -> Result<Self, MusicSemanticsError> {
+        if events.len() != 3 {
+            return Err(MusicSemanticsError::InvalidTuplet(
+                format!("Triplet must have exactly 3 events, got {}", events.len())
+            ));
+        }
+        Ok(Self::new(events, 3, 2, base_unit))
+    }
+
+    /// Create a duplet (2 notes in the time of 3).
+    /// Common in compound meters (e.g., 6/8, 9/8).
+    ///
+    /// # Arguments
+    /// * `events` - Exactly 2 rhythmic events
+    /// * `base_unit` - The duration kind for each note
+    pub fn duplet(
+        events: Vec<RhythmicNotatedEvent<'a>>,
+        base_unit: DurationKind,
+    ) -> Result<Self, MusicSemanticsError> {
+        if events.len() != 2 {
+            return Err(MusicSemanticsError::InvalidTuplet(
+                format!("Duplet must have exactly 2 events, got {}", events.len())
+            ));
+        }
+        Ok(Self::new(events, 2, 3, base_unit))
+    }
+
+    /// Create a quintuplet (5 notes in the time of 4).
+    ///
+    /// # Arguments
+    /// * `events` - Exactly 5 rhythmic events
+    /// * `base_unit` - The duration kind for each note
+    pub fn quintuplet(
+        events: Vec<RhythmicNotatedEvent<'a>>,
+        base_unit: DurationKind,
+    ) -> Result<Self, MusicSemanticsError> {
+        if events.len() != 5 {
+            return Err(MusicSemanticsError::InvalidTuplet(
+                format!("Quintuplet must have exactly 5 events, got {}", events.len())
+            ));
+        }
+        Ok(Self::new(events, 5, 4, base_unit))
+    }
+
+    /// Create a sextuplet (6 notes in the time of 4).
+    ///
+    /// # Arguments
+    /// * `events` - Exactly 6 rhythmic events
+    /// * `base_unit` - The duration kind for each note
+    pub fn sextuplet(
+        events: Vec<RhythmicNotatedEvent<'a>>,
+        base_unit: DurationKind,
+    ) -> Result<Self, MusicSemanticsError> {
+        if events.len() != 6 {
+            return Err(MusicSemanticsError::InvalidTuplet(
+                format!("Sextuplet must have exactly 6 events, got {}", events.len())
+            ));
+        }
+        Ok(Self::new(events, 6, 4, base_unit))
+    }
+
+    /// Create a septuplet (7 notes in the time of 4).
+    ///
+    /// # Arguments
+    /// * `events` - Exactly 7 rhythmic events
+    /// * `base_unit` - The duration kind for each note
+    pub fn septuplet(
+        events: Vec<RhythmicNotatedEvent<'a>>,
+        base_unit: DurationKind,
+    ) -> Result<Self, MusicSemanticsError> {
+        if events.len() != 7 {
+            return Err(MusicSemanticsError::InvalidTuplet(
+                format!("Septuplet must have exactly 7 events, got {}", events.len())
+            ));
+        }
+        Ok(Self::new(events, 7, 4, base_unit))
+    }
+
+    /// Validate that the tuplet's events fill the expected virtual duration.
+    /// Returns an error if the events don't sum to the correct duration.
+    pub fn validate(&self) -> Result<(), MusicSemanticsError> {
+        let events_dur = self.events_duration();
+        let expected_dur = self.virtual_duration();
+        if events_dur != expected_dur {
+            return Err(MusicSemanticsError::InvalidTuplet(
+                format!(
+                    "Tuplet events sum to {} ticks, expected {} ticks",
+                    events_dur, expected_dur
+                )
+            ));
+        }
+        Ok(())
+    }
 }
 
-impl<'a> Into<RhythmicNotatedEvent<'a>> for Tuplet<'a> {
-    fn into(self) -> RhythmicNotatedEvent<'a> {
+impl<'a> From<Tuplet<'a>> for RhythmicNotatedEvent<'a> {
+    fn from(tuplet: Tuplet<'a>) -> Self {
         RhythmicNotatedEvent {
             tied: false,
-            event: NotatedEvent::Tuplet(self)
+            event: NotatedEvent::Tuplet(tuplet)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::note::note::Note;
+
+    fn make_pitch_event(duration_kind: DurationKind) -> RhythmicNotatedEvent<'static> {
+        let pitch = Pitch::new(Note::C, 4).unwrap();
+        RhythmicNotatedEvent::pitch(pitch, Duration::new(duration_kind, 0))
+    }
+
+    fn make_rest_event(duration_kind: DurationKind) -> RhythmicNotatedEvent<'static> {
+        RhythmicNotatedEvent::rest(Duration::new(duration_kind, 0))
+    }
+
+    #[test]
+    fn test_triplet_creation() {
+        let events = vec![
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+        ];
+        let triplet = Tuplet::triplet(events, DurationKind::Eighth).unwrap();
+
+        assert_eq!(triplet.numerator, 3);
+        assert_eq!(triplet.denominator, 2);
+        assert_eq!(triplet.events.len(), 3);
+        assert!(triplet.is_complete());
+
+        // Real duration is 2 eighth notes (32 ticks)
+        assert_eq!(triplet.real_duration(), 32);
+        // Virtual duration is 3 eighth notes (48 ticks)
+        assert_eq!(triplet.virtual_duration(), 48);
+    }
+
+    #[test]
+    fn test_triplet_wrong_count() {
+        let events = vec![
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+        ];
+        let result = Tuplet::triplet(events, DurationKind::Eighth);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(MusicSemanticsError::InvalidTuplet(_))));
+    }
+
+    #[test]
+    fn test_duplet_creation() {
+        let events = vec![
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+        ];
+        let duplet = Tuplet::duplet(events, DurationKind::Eighth).unwrap();
+
+        assert_eq!(duplet.numerator, 2);
+        assert_eq!(duplet.denominator, 3);
+        assert_eq!(duplet.events.len(), 2);
+
+        // Real duration is 3 eighth notes (48 ticks)
+        assert_eq!(duplet.real_duration(), 48);
+        // Virtual duration is 2 eighth notes (32 ticks)
+        assert_eq!(duplet.virtual_duration(), 32);
+    }
+
+    #[test]
+    fn test_duplet_wrong_count() {
+        let events = vec![
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+        ];
+        let result = Tuplet::duplet(events, DurationKind::Eighth);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_quintuplet_creation() {
+        let events = vec![
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+        ];
+        let quintuplet = Tuplet::quintuplet(events, DurationKind::Sixteenth).unwrap();
+
+        assert_eq!(quintuplet.numerator, 5);
+        assert_eq!(quintuplet.denominator, 4);
+        assert_eq!(quintuplet.events.len(), 5);
+
+        // Real duration is 4 sixteenth notes (32 ticks)
+        assert_eq!(quintuplet.real_duration(), 32);
+        // Virtual duration is 5 sixteenth notes (40 ticks)
+        assert_eq!(quintuplet.virtual_duration(), 40);
+    }
+
+    #[test]
+    fn test_sextuplet_creation() {
+        let events = vec![
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+        ];
+        let sextuplet = Tuplet::sextuplet(events, DurationKind::Sixteenth).unwrap();
+
+        assert_eq!(sextuplet.numerator, 6);
+        assert_eq!(sextuplet.denominator, 4);
+        assert_eq!(sextuplet.events.len(), 6);
+    }
+
+    #[test]
+    fn test_septuplet_creation() {
+        let events = vec![
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+            make_pitch_event(DurationKind::Sixteenth),
+        ];
+        let septuplet = Tuplet::septuplet(events, DurationKind::Sixteenth).unwrap();
+
+        assert_eq!(septuplet.numerator, 7);
+        assert_eq!(septuplet.denominator, 4);
+        assert_eq!(septuplet.events.len(), 7);
+    }
+
+    #[test]
+    fn test_tuplet_validate_complete() {
+        let events = vec![
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+        ];
+        let triplet = Tuplet::triplet(events, DurationKind::Eighth).unwrap();
+        assert!(triplet.validate().is_ok());
+    }
+
+    #[test]
+    fn test_tuplet_validate_incomplete() {
+        // Create a triplet with only 2 eighth notes of content
+        let mut triplet = Tuplet::empty(3, 2, DurationKind::Eighth);
+        triplet.push(make_pitch_event(DurationKind::Eighth));
+        triplet.push(make_pitch_event(DurationKind::Eighth));
+
+        assert!(!triplet.is_complete());
+        assert!(triplet.validate().is_err());
+    }
+
+    #[test]
+    fn test_quarter_note_triplet() {
+        // Quarter note triplets - 3 quarters in time of 2
+        let events = vec![
+            make_pitch_event(DurationKind::Qtr),
+            make_pitch_event(DurationKind::Qtr),
+            make_pitch_event(DurationKind::Qtr),
+        ];
+        let triplet = Tuplet::triplet(events, DurationKind::Qtr).unwrap();
+
+        // Real duration is 2 quarter notes (64 ticks)
+        assert_eq!(triplet.real_duration(), 64);
+        // Virtual duration is 3 quarter notes (96 ticks)
+        assert_eq!(triplet.virtual_duration(), 96);
+    }
+
+    #[test]
+    fn test_triplet_with_rest() {
+        // Triplet with a rest in the middle
+        let events = vec![
+            make_pitch_event(DurationKind::Eighth),
+            make_rest_event(DurationKind::Eighth),
+            make_pitch_event(DurationKind::Eighth),
+        ];
+        let triplet = Tuplet::triplet(events, DurationKind::Eighth).unwrap();
+
+        assert!(triplet.is_complete());
+        assert!(triplet.validate().is_ok());
     }
 }

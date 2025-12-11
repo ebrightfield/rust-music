@@ -165,10 +165,75 @@ impl Pc {
             Pc::Pc11 => vec![Note::B, Note::Aisis, Note::Ces],
         }
     }
+
+    /// Returns the default sharp spelling for this pitch class.
+    /// For natural notes (C, D, E, F, G, A, B), returns the natural.
+    /// For accidentals, returns the sharp variant.
+    pub fn default_sharp_spelling(&self) -> Note {
+        match self {
+            Pc::Pc0 => Note::C,
+            Pc::Pc1 => Note::Cis,
+            Pc::Pc2 => Note::D,
+            Pc::Pc3 => Note::Dis,
+            Pc::Pc4 => Note::E,
+            Pc::Pc5 => Note::F,
+            Pc::Pc6 => Note::Fis,
+            Pc::Pc7 => Note::G,
+            Pc::Pc8 => Note::Gis,
+            Pc::Pc9 => Note::A,
+            Pc::Pc10 => Note::Ais,
+            Pc::Pc11 => Note::B,
+        }
+    }
+
+    /// Returns the default flat spelling for this pitch class.
+    /// For natural notes (C, D, E, F, G, A, B), returns the natural.
+    /// For accidentals, returns the flat variant.
+    pub fn default_flat_spelling(&self) -> Note {
+        match self {
+            Pc::Pc0 => Note::C,
+            Pc::Pc1 => Note::Des,
+            Pc::Pc2 => Note::D,
+            Pc::Pc3 => Note::Ees,
+            Pc::Pc4 => Note::E,
+            Pc::Pc5 => Note::F,
+            Pc::Pc6 => Note::Ges,
+            Pc::Pc7 => Note::G,
+            Pc::Pc8 => Note::Aes,
+            Pc::Pc9 => Note::A,
+            Pc::Pc10 => Note::Bes,
+            Pc::Pc11 => Note::B,
+        }
+    }
+}
+
+impl From<Pc> for i32 {
+    fn from(pc: Pc) -> Self {
+        match pc {
+            Pc::Pc0 => 0,
+            Pc::Pc1 => 1,
+            Pc::Pc2 => 2,
+            Pc::Pc3 => 3,
+            Pc::Pc4 => 4,
+            Pc::Pc5 => 5,
+            Pc::Pc6 => 6,
+            Pc::Pc7 => 7,
+            Pc::Pc8 => 8,
+            Pc::Pc9 => 9,
+            Pc::Pc10 => 10,
+            Pc::Pc11 => 11,
+        }
+    }
 }
 
 impl From<&Pc> for i32 {
     fn from(pc: &Pc) -> Self {
+        i32::from(*pc)
+    }
+}
+
+impl From<Pc> for u8 {
+    fn from(pc: Pc) -> Self {
         match pc {
             Pc::Pc0 => 0,
             Pc::Pc1 => 1,
@@ -188,27 +253,19 @@ impl From<&Pc> for i32 {
 
 impl From<&Pc> for u8 {
     fn from(pc: &Pc) -> Self {
-        match pc {
-            Pc::Pc0 => 0,
-            Pc::Pc1 => 1,
-            Pc::Pc2 => 2,
-            Pc::Pc3 => 3,
-            Pc::Pc4 => 4,
-            Pc::Pc5 => 5,
-            Pc::Pc6 => 6,
-            Pc::Pc7 => 7,
-            Pc::Pc8 => 8,
-            Pc::Pc9 => 9,
-            Pc::Pc10 => 10,
-            Pc::Pc11 => 11,
-        }
+        u8::from(*pc)
     }
 }
 
 impl From<&u8> for Pc {
     fn from(pc: &u8) -> Self {
-        let pc = pc.rem_euclid(12);
-        match pc {
+        Pc::from(*pc)
+    }
+}
+
+impl From<u8> for Pc {
+    fn from(pc: u8) -> Self {
+        match pc % 12 {
             0 => Pc::Pc0,
             1 => Pc::Pc1,
             2 => Pc::Pc2,
@@ -228,8 +285,13 @@ impl From<&u8> for Pc {
 
 impl From<&i32> for Pc {
     fn from(pc: &i32) -> Self {
-        let pc = pc.rem_euclid(12);
-        match pc {
+        Pc::from(*pc)
+    }
+}
+
+impl From<i32> for Pc {
+    fn from(pc: i32) -> Self {
+        match pc.rem_euclid(12) {
             0 => Pc::Pc0,
             1 => Pc::Pc1,
             2 => Pc::Pc2,
@@ -337,5 +399,28 @@ mod tests {
         assert_eq!(pc2.distance_up_to(&pc1), 4);
         assert_eq!(pc1.distance_up_to(&pc1), 0);
         assert_eq!(pc2.distance_up_to(&pc2), 0);
+    }
+
+    #[test]
+    fn pc_from_conversions() {
+        // Test From<u8> for Pc
+        assert_eq!(Pc::from(0u8), Pc::Pc0);
+        assert_eq!(Pc::from(7u8), Pc::Pc7);
+        assert_eq!(Pc::from(12u8), Pc::Pc0); // mod 12
+        assert_eq!(Pc::from(15u8), Pc::Pc3); // mod 12
+
+        // Test From<i32> for Pc
+        assert_eq!(Pc::from(0i32), Pc::Pc0);
+        assert_eq!(Pc::from(7i32), Pc::Pc7);
+        assert_eq!(Pc::from(-1i32), Pc::Pc11); // negative wraps
+        assert_eq!(Pc::from(-5i32), Pc::Pc7);  // negative wraps
+
+        // Test From<Pc> for u8
+        assert_eq!(u8::from(Pc::Pc0), 0);
+        assert_eq!(u8::from(Pc::Pc11), 11);
+
+        // Test From<Pc> for i32
+        assert_eq!(i32::from(Pc::Pc0), 0);
+        assert_eq!(i32::from(Pc::Pc11), 11);
     }
 }

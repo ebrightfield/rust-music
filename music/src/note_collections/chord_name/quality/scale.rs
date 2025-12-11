@@ -20,7 +20,6 @@ impl Alt2nd {
                 Pc3 => Some(Alt2nd::Sharp),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -58,7 +57,6 @@ impl Alt2ndMinor {
                 Pc2 => Some(Alt2ndMinor::Natural),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -94,7 +92,6 @@ impl Alt4th {
                 Pc6 => Some(Alt4th::Sharp),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -132,7 +129,6 @@ impl Alt4thMinor {
                 Pc6 => Some(Alt4thMinor::Sharp),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -172,7 +168,6 @@ impl Alt6thMaj7 {
                 Pc10 => Some(Alt6thMaj7::Sharp),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -210,7 +205,6 @@ impl Alt6thDom7 {
                 Pc9 => Some(Alt6thDom7::Natural),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -246,7 +240,6 @@ impl Alt6thAugMaj7 {
                 Pc10 => Some(Alt6thAugMaj7::Sharp),
                 _ => None,
             })
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -291,6 +284,9 @@ pub enum ScaleQuality {
     // Eight Notes
     DimHW,
     DimWH,
-    // TODO Major and minor pentatonic scale I guess?
-    // TODO Any other scales to more-or-less manually index?
+    // Five Notes - Pentatonic
+    MajorPentatonic,
+    MinorPentatonic,
+    BluesMajor,
+    BluesMinor,
 }

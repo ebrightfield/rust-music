@@ -27,9 +27,9 @@ pub enum DurationKind {
     OneTwentyEighth, // one "tick"
 }
 
-impl Into<DurationTicks> for DurationKind {
-    fn into(self) -> DurationTicks {
-        match &self {
+impl From<DurationKind> for DurationTicks {
+    fn from(kind: DurationKind) -> Self {
+        match kind {
             DurationKind::Breve => 256,
             DurationKind::Whole => 128,
             DurationKind::Half => 64,
@@ -43,9 +43,9 @@ impl Into<DurationTicks> for DurationKind {
     }
 }
 
-impl Into<u32> for DurationKind {
-    fn into(self) -> u32 {
-        match &self {
+impl From<DurationKind> for u32 {
+    fn from(kind: DurationKind) -> Self {
+        match kind {
             DurationKind::Breve => 256,
             DurationKind::Whole => 128,
             DurationKind::Half => 64,
@@ -56,6 +56,28 @@ impl Into<u32> for DurationKind {
             DurationKind::SixtyFourth => 2,
             DurationKind::OneTwentyEighth => 1,
         }
+    }
+}
+
+impl DurationKind {
+    /// Returns all duration kinds from longest to shortest.
+    pub const fn all() -> [DurationKind; 9] {
+        [
+            DurationKind::Breve,
+            DurationKind::Whole,
+            DurationKind::Half,
+            DurationKind::Qtr,
+            DurationKind::Eighth,
+            DurationKind::Sixteenth,
+            DurationKind::ThirtySecond,
+            DurationKind::SixtyFourth,
+            DurationKind::OneTwentyEighth,
+        ]
+    }
+
+    /// Returns the tick count for this duration kind.
+    pub fn ticks(self) -> DurationTicks {
+        self.into()
     }
 }
 
@@ -145,9 +167,40 @@ impl Duration {
         let base_dur: u32 = self.dur.into();
         (0u32..self.dot as u32)
             .fold(base_dur, |acc, n| {
-                println!("{}", acc / 2u32.pow((1 + n).try_into().unwrap()));
                 acc + base_dur / 2u32.pow((n + 1).try_into().unwrap())
             }) as usize
+    }
+
+    /// Try to add two durations, returning None if result isn't representable
+    /// as a single (possibly dotted) duration.
+    pub fn try_add(&self, other: &Duration) -> Option<Duration> {
+        let total_ticks = self.ticks() + other.ticks();
+        Duration::try_from_ticks(total_ticks)
+    }
+
+    /// Split a tick count into tied notes that sum to that duration.
+    /// Uses the largest possible durations first (greedy algorithm).
+    /// Returns durations from largest to smallest.
+    pub fn split_ticks_for_ties(mut ticks: DurationTicks) -> Vec<Duration> {
+        let mut result = Vec::new();
+
+        for kind in DurationKind::all() {
+            let kind_ticks = kind.ticks();
+            while kind_ticks <= ticks {
+                result.push(Duration::new(kind, 0));
+                ticks -= kind_ticks;
+            }
+        }
+
+        result
+    }
+
+    /// Split this duration into tied notes that sum to the same total.
+    /// For durations that can be represented atomically (e.g., dotted quarter),
+    /// this returns a single-element vector.
+    /// For durations requiring ties, returns multiple durations.
+    pub fn split_for_ties(&self) -> Vec<Duration> {
+        Duration::split_ticks_for_ties(self.ticks())
     }
 }
 
@@ -208,5 +261,54 @@ mod tests {
             d,
             Some(Duration::new(DurationKind::Half, 3))
         );
+    }
+
+    #[test]
+    fn test_try_add() {
+        // Quarter + quarter = half
+        let qtr = Duration::QTR;
+        let half = qtr.try_add(&qtr);
+        assert_eq!(half, Some(Duration::HALF));
+
+        // Quarter + eighth = dotted quarter
+        let eighth = Duration::EIGHTH;
+        let dotted_qtr = qtr.try_add(&eighth);
+        assert_eq!(dotted_qtr, Some(Duration::new(DurationKind::Qtr, 1)));
+
+        // Two eighths = quarter
+        let result = eighth.try_add(&eighth);
+        assert_eq!(result, Some(Duration::QTR));
+
+        // 5 eighths (80 ticks) can't be represented as single duration
+        // 80 = 64 + 16 (half + eighth) - not a standard notation
+        let five_eighths = Duration::try_from_ticks(80);
+        assert_eq!(five_eighths, None);
+    }
+
+    #[test]
+    fn test_split_for_ties() {
+        // A quarter note splits to just itself
+        let qtr = Duration::QTR;
+        let split = qtr.split_for_ties();
+        assert_eq!(split.len(), 1);
+        assert_eq!(split[0], Duration::QTR);
+
+        // 5 eighth notes (80 ticks) = half + eighth
+        let split = Duration::split_ticks_for_ties(80);
+        assert_eq!(split.len(), 2);
+        assert_eq!(split[0], Duration::HALF);
+        assert_eq!(split[1], Duration::EIGHTH);
+
+        // 3 quarters (96 ticks) = half + quarter
+        let split = Duration::split_ticks_for_ties(96);
+        assert_eq!(split.len(), 2);
+        assert_eq!(split[0], Duration::HALF);
+        assert_eq!(split[1], Duration::QTR);
+
+        // Whole + quarter (160 ticks) = whole + quarter
+        let split = Duration::split_ticks_for_ties(160);
+        assert_eq!(split.len(), 2);
+        assert_eq!(split[0], Duration::WHOLE);
+        assert_eq!(split[1], Duration::QTR);
     }
 }

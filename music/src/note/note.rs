@@ -157,6 +157,12 @@ impl Note {
             &Spelling::from(other).letter
         )
     }
+
+    /// Returns the note as a Unicode string with proper music symbols.
+    /// Example: C♯, D♭, C𝄪, D𝄫
+    pub fn to_unicode_string(&self) -> String {
+        Spelling::from(self).to_unicode_string()
+    }
 }
 
 impl FromStr for Note {
@@ -296,5 +302,32 @@ mod tests {
         assert_eq!(Note::Cisis.enharmonic(), Note::D);
         assert_eq!(Note::Bes.enharmonic(), Note::Ais);
         assert_eq!(Note::C.enharmonic_flip_bcef(), Note::Bis);
+    }
+
+    #[test]
+    fn test_unicode_string() {
+        // Single accidentals
+        assert_eq!(Note::Cis.to_unicode_string(), "C♯");
+        assert_eq!(Note::Des.to_unicode_string(), "D♭");
+        assert_eq!(Note::C.to_unicode_string(), "C");
+
+        // Double accidentals
+        assert_eq!(Note::Cisis.to_unicode_string(), "C𝄪");
+        assert_eq!(Note::Eeses.to_unicode_string(), "E𝄫");
+    }
+
+    #[test]
+    fn test_unicode_parsing() {
+        // Parse Unicode sharp
+        assert_eq!(Note::from_str("C♯").unwrap(), Note::Cis);
+        // Parse Unicode flat
+        assert_eq!(Note::from_str("D♭").unwrap(), Note::Des);
+        // Parse Unicode double sharp
+        assert_eq!(Note::from_str("C𝄪").unwrap(), Note::Cisis);
+        // Parse Unicode double flat
+        assert_eq!(Note::from_str("E𝄫").unwrap(), Note::Eeses);
+        // Parse double Unicode symbols
+        assert_eq!(Note::from_str("C♯♯").unwrap(), Note::Cisis);
+        assert_eq!(Note::from_str("E♭♭").unwrap(), Note::Eeses);
     }
 }

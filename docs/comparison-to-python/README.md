@@ -22,16 +22,17 @@ This directory documents the comparison between the Rust `music` crate and the P
 
 | Aspect | Python `pitch_set_lib` | Rust `music` |
 |--------|------------------------|--------------|
-| **Lines of Code** | ~4,800 | ~6,500+ |
+| **Lines of Code** | ~4,800 | ~8,500+ |
 | **Type Safety** | Runtime checks, memoization | Compile-time guarantees |
 | **Error Handling** | Exceptions, silent failures | `Result<T, E>` types |
 | **Concurrency** | GIL-limited | Thread-safe by default |
 | **Memory Model** | Memoization singletons | Ownership + lifetimes |
-| **Notation Output** | Lilypond only | Lilypond + VexTab |
-| **Test Coverage** | Partial, many print-only | Needs expansion |
+| **Notation Output** | Lilypond only | Lilypond + VexTab + SVG |
+| **Test Coverage** | Partial, many print-only | 187+ tests |
 | **Duration Resolution** | 8th notes | 128th notes |
-| **Known Bugs** | 11 documented | Most fixed by design |
-| **Melodic Sequencer** | Full (~270 lines) | Not implemented |
+| **Known Bugs** | 11 documented | All fixed by design |
+| **Melodic Sequencer** | Full (~270 lines) | Full (~600 lines) |
+| **SVG Generation** | None | Pitch circles, fretboards, interval diagrams |
 | **Fretboard Shapes** | Basic | Advanced (scale shapes) |
 
 ## Key Improvements in Rust
@@ -44,6 +45,8 @@ This directory documents the comparison between the Rust `music` crate and the P
 6. **Lifetime safety** - Fretboard references cannot dangle
 7. **Finer rhythmic resolution** - 128th notes vs Python's 8th note limit
 8. **Structured meter handling** - Type-safe time signatures and beat grids
+9. **SVG generation** - Pitch circle, fretboard, and interval diagrams without external dependencies
+10. **Melodic sequencer** - Multi-level interval patterns with chord progression tracking
 
 ## Python Bugs Fixed in Rust
 
@@ -88,4 +91,12 @@ use music::fretboard::{Fretboard, SoundedNote, FretboardShape, STD_6STR_GTR};
 use music::notation::rhythm::{Duration, DurationKind, Meter};
 use music::notation::lilypond::ToLilypondString;
 use music::notation::vextab::ToVextabString;
+
+// SVG generation
+use music::svg::{PitchCircleBuilder, FretboardBuilder, IntervalBuilder, SvgTheme};
+use music::svg::{ToPitchCircleSvg, ToFretboardSvg, ToIntervalSvg};
+
+// Melodic sequencer
+use music::melody::{MelodicSequencer, IntervalPattern, ChordProgression};
+use music::melody::{Direction, TurnaroundMode, PitchBounds, MelodicEvent};
 ```

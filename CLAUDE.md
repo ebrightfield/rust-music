@@ -23,7 +23,6 @@ cargo run --example collections
 cargo run --example generate_lilypond --features lilypond
 ```
 
-**Note:** This crate uses the nightly feature `concat_idents`. Build with `rustup run nightly cargo build` if needed.
 
 ## Architecture
 
@@ -65,8 +64,20 @@ cargo run --example generate_lilypond --features lilypond
 ### Notation Output (`notation/`)
 - `lilypond/` - Lilypond source generation (feature-gated)
 - `vextab/` - VexTab source generation for JS frontends
-- `rhythm/` - Duration, meter types
+- `rhythm/` - Duration, meter, beat grid, tuplets
 - `clef/` - Clef definitions
+
+### Melody Module (`melody/`)
+- `MelodicSequencer` - Pattern-based melody generation with boundary handling
+- `IntervalPattern` - Multi-level interval patterns with master steps
+- `ChordProgression` - Harmonic context with position tracking
+- `Direction`, `TurnaroundMode`, `PitchBounds` - Configuration types
+
+### SVG Generation (`svg/`)
+- `PitchCircleBuilder` - Pitch class circle diagrams
+- `FretboardBuilder` - Vertical/horizontal fretboard diagrams with barre notation
+- `IntervalBuilder` - Interval vector and matrix visualizations
+- `SvgTheme` - Theme presets (default, dark, print, colorful)
 
 ## Key Design Patterns
 

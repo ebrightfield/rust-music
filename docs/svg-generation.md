@@ -768,33 +768,33 @@ fn roundtrip_pc_set_to_svg() {
 
 ## Implementation Plan
 
-### Phase 1: Core Module
-- [ ] Create `music/src/svg/mod.rs` with module structure
-- [ ] Implement `SvgBuilder` for low-level SVG generation
-- [ ] Implement `pitch_circle_svg()` function
-- [ ] Implement `PitchCircleBuilder`
-- [ ] Add unit tests
+### Phase 1: Core Module ✓
+- [x] Create `music/src/svg/mod.rs` with module structure
+- [x] Implement `SvgBuilder` for low-level SVG generation
+- [x] Implement `pitch_circle_svg()` function
+- [x] Implement `PitchCircleBuilder`
+- [x] Add unit tests
 
-### Phase 2: Fretboard Diagrams
-- [ ] Implement `fretboard_positions_svg()` for vertical orientation
-- [ ] Implement horizontal orientation
-- [ ] Implement `fretboard_shape_svg()` integration
-- [ ] Implement `FretboardBuilder`
-- [ ] Add unit tests
+### Phase 2: Fretboard Diagrams ✓
+- [x] Implement `fretboard_positions_svg()` for vertical orientation
+- [x] Implement horizontal orientation
+- [x] Implement `fretboard_shape_svg()` integration
+- [x] Implement `FretboardBuilder`
+- [x] Add unit tests
 
-### Phase 3: Integration
-- [ ] Implement `ToPitchCircleSvg` trait
-- [ ] Implement `ToFretboardSvg` trait
-- [ ] Add theme presets
-- [ ] Add utility functions (`save_svg`, `svg_to_data_uri`)
-- [ ] Integration tests
+### Phase 3: Integration ✓
+- [x] Implement `ToPitchCircleSvg` trait
+- [x] Implement `ToFretboardSvg` trait
+- [x] Add theme presets
+- [x] Add utility functions (`save_svg`, `svg_to_data_uri`)
+- [x] Integration tests
 
-### Phase 4: Polish
-- [ ] Interval diagrams
-- [ ] Fret markers (dots at frets 3, 5, 7, 9, 12)
-- [ ] Barre notation
-- [ ] Finger numbering
-- [ ] Documentation and examples
+### Phase 4: Polish ✓
+- [x] Interval diagrams
+- [x] Fret markers (dots at frets 3, 5, 7, 9, 12)
+- [x] Barre notation
+- [x] Finger numbering
+- [x] Documentation and examples
 
 ## Open Questions
 

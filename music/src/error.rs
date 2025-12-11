@@ -52,5 +52,17 @@ pub enum MusicSemanticsError {
     #[error("Collection size is not the same: {0} != {1}")]
     MismatchedCollectionSize(usize, usize),
     #[error("The following voiceleading rules were broken: {0:?}")]
-    VoiceleadingViolation(Vec<String>)
+    VoiceleadingViolation(Vec<String>),
+    #[error("Invalid fret notation: {0}")]
+    InvalidFretNotation(String),
+    #[error("Invalid chord quality: {0}")]
+    InvalidChordQuality(String),
+    #[error("Invalid pitch bounds: lowest pitch must be lower than highest pitch")]
+    InvalidPitchBounds,
+    #[error("Melody went out of bounds and could not be corrected")]
+    MelodyOutOfBounds,
+    #[error("Invalid tuplet: {0}")]
+    InvalidTuplet(String),
+    #[error("Invalid spelling rule: {0}")]
+    InvalidSpellingRule(String),
 }

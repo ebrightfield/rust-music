@@ -20,7 +20,6 @@ music = { path = "path/to/music" }
 music = { path = "path/to/music", features = ["lilypond"] }
 ```
 
-**Note:** This crate uses the nightly feature `concat_idents`. You may need to use `rustup run nightly cargo build`.
 
 ## Quick Start
 
@@ -131,6 +130,12 @@ Answer questions like which chords/scales fit into which others, find voice-lead
 
 ### Automated Scoring
 Output Lilypond source code for document generation, or VexTab for integration with JS frontends.
+
+### SVG Diagrams
+Generate pitch circles, fretboard diagrams, and interval visualizations directly as SVG.
+
+### Melodic Generation
+Create pattern-based melodies with the `MelodicSequencer`, supporting multi-level interval patterns, boundary handling modes, and chord progression context.
 
 ### Application Development
 Using WebAssembly, Rust integrates easily into browser-based frontend frameworks. VexTab provides a powerful way to generate music notation in a UI.

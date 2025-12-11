@@ -45,7 +45,16 @@ impl Pitch {
     }
 
     /// Produce a pitch from a MIDI note value. Middle C = 60.
+    /// Uses default spelling (naturals where possible, sharps for accidentals).
     pub fn from_midi(midi_note_value: u8) -> Result<Self, MusicSemanticsError> {
+        Self::from_midi_spelled(midi_note_value, true)
+    }
+
+    /// Produce a pitch from a MIDI note value with a spelling preference.
+    /// When `prefer_sharp` is true, accidentals are spelled as sharps (C#, D#, etc.).
+    /// When `prefer_sharp` is false, accidentals are spelled as flats (Db, Eb, etc.).
+    /// Natural notes (C, D, E, F, G, A, B) are always spelled as naturals.
+    pub fn from_midi_spelled(midi_note_value: u8, prefer_sharp: bool) -> Result<Self, MusicSemanticsError> {
         if midi_note_value >= 108 {
             return Err(MusicSemanticsError::MidiTooHigh(midi_note_value));
         }
@@ -53,9 +62,12 @@ impl Pitch {
         if octave > 8 {
             return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
-        let pc = midi_note_value - (octave * 12);
-        let pc = Pc::from(&pc);
-        let note = pc.notes().first().unwrap().clone();
+        let pc = Pc::from(midi_note_value % 12);
+        let note = if prefer_sharp {
+            pc.default_sharp_spelling()
+        } else {
+            pc.default_flat_spelling()
+        };
         Ok(Self {
             note,
             octave,
@@ -196,6 +208,32 @@ mod tests {
     #[test]
     fn pitch_macro() {
         assert_eq!(Pitch::new(Note::C, 4).unwrap(), pitch!(c, 4));
+    }
+
+    #[test]
+    fn from_midi_spelled_works() {
+        // Middle C (MIDI 60) - natural note
+        let c4_sharp = Pitch::from_midi_spelled(60, true).unwrap();
+        let c4_flat = Pitch::from_midi_spelled(60, false).unwrap();
+        assert_eq!(c4_sharp.note, Note::C);
+        assert_eq!(c4_flat.note, Note::C);
+        assert_eq!(c4_sharp.octave, 4);
+
+        // C# / Db (MIDI 61)
+        let cis4 = Pitch::from_midi_spelled(61, true).unwrap();
+        let des4 = Pitch::from_midi_spelled(61, false).unwrap();
+        assert_eq!(cis4.note, Note::Cis);
+        assert_eq!(des4.note, Note::Des);
+
+        // Bb (MIDI 70)
+        let ais4 = Pitch::from_midi_spelled(70, true).unwrap();
+        let bes4 = Pitch::from_midi_spelled(70, false).unwrap();
+        assert_eq!(ais4.note, Note::Ais);
+        assert_eq!(bes4.note, Note::Bes);
+
+        // from_midi defaults to sharp spelling
+        let default = Pitch::from_midi(61).unwrap();
+        assert_eq!(default.note, Note::Cis);
     }
 
     #[test]
