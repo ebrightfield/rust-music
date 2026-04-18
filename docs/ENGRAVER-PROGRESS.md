@@ -65,3 +65,9 @@
 - Verified: `cargo test -p music-engraver` — 153 unit + 3 integration = 156 tests, all pass. `cargo check --workspace` passes. No warnings.
 - Next: Phase 3 continuation — augmentation dots (layout + render), then flags for eighth/sixteenth notes.
 - Open issues: None.
+
+## 2026-04-18 — Phase 3, augmentation dot layout + rendering
+- Did: Created `layout/dot.rs` with `dot_staff_position()` (shifts dots on lines up to the space above), `first_dot_x()`, `dot_xs()` (computes x-positions for 1–N dots), and constants for padding/spacing. Created `render/dot_renderer.rs` with `draw_dots()` rendering augmentation dot glyphs (`Glyph::AugmentationDot`) at correct positions, returning x past last dot. 17 layout tests (position shifting for all line/space/ledger cases, x-position math, multi-dot spacing), 9 renderer tests (zero/single/double/triple dots, line-shift in SVG, x-position verification, return value).
+- Verified: `cargo test -p music-engraver` — 182 unit + 3 integration = 185 tests, all pass. `cargo check --workspace` passes. No warnings.
+- Next: Phase 3 continuation — flags for eighth/sixteenth notes (layout + render).
+- Open issues: None.
