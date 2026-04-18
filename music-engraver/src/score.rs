@@ -61,25 +61,44 @@ fn duration_kind_to_log2(kind: DurationKind) -> u8 {
     }
 }
 
-/// Whether to show a courtesy accidental (natural sign).
+/// Resolve whether an accidental should be displayed for a given pitch in a key signature.
 ///
-/// For v1 we show naturals only for pitches with an explicit `Natural`
-/// accidental that are sharp/flat in the key signature. A more sophisticated
-/// approach would track accidental state within each measure.
+/// Suppresses accidentals that are redundant with the key signature (e.g., F# in D major).
+/// Shows naturals that cancel key-signature alterations (e.g., F♮ in D major).
+/// Double sharps/flats are always shown since they never appear in key signatures.
+/// Does not track within-measure accidental state — each note is resolved independently.
 fn should_show_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Option<smufl::Glyph> {
     let spelling = Spelling::from(&pitch.note);
     let acc = spelling.acc;
+    let altered = note_altered_in_key(spelling.letter, key_sig);
 
     match acc {
         Accidental::Natural => {
-            // Show natural if the note's letter is altered in the key signature
-            if note_altered_in_key(spelling.letter, key_sig) {
+            if altered {
+                // Letter is sharped/flatted in key sig — show natural to cancel
                 accidental_glyph(Accidental::Natural, true)
             } else {
                 None
             }
         }
-        _ => accidental_glyph(acc, false),
+        Accidental::Sharp => {
+            if altered && matches!(key_sig, KeySignature::Sharps(_)) {
+                // Sharp is already in the key signature — suppress
+                None
+            } else {
+                accidental_glyph(Accidental::Sharp, false)
+            }
+        }
+        Accidental::Flat => {
+            if altered && matches!(key_sig, KeySignature::Flats(_)) {
+                // Flat is already in the key signature — suppress
+                None
+            } else {
+                accidental_glyph(Accidental::Flat, false)
+            }
+        }
+        // Double accidentals are never part of a key signature
+        Accidental::DoubleSharp | Accidental::DoubleFlat => accidental_glyph(acc, false),
     }
 }
 
@@ -439,14 +458,12 @@ mod tests {
     }
 
     #[test]
-    fn sharp_note_in_sharp_key_still_shows_sharp() {
-        // F# in D major (2 sharps) — F is in the key sig, but the note itself
-        // has a sharp accidental spelling, so we show it. The key sig already
-        // shows it; a smarter system would suppress this, but v1 shows all
-        // non-natural accidentals.
+    fn sharp_note_suppressed_when_in_sharp_key() {
+        // F# in D major (2 sharps) — F is sharped in the key sig, so the
+        // accidental is redundant and suppressed.
         let pitch = Pitch::new(Note::Fis, 4).unwrap();
         let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
-        assert_eq!(glyph, Some(smufl::Glyph::AccidentalSharp));
+        assert_eq!(glyph, None);
     }
 
     #[test]
@@ -472,10 +489,65 @@ mod tests {
     }
 
     #[test]
+    fn sharp_note_shown_in_flat_key() {
+        // F# in Bb major (2 flats) — F is not flatted, so sharp is shown
+        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
+        assert_eq!(glyph, Some(smufl::Glyph::AccidentalSharp));
+    }
+
+    #[test]
+    fn sharp_note_shown_when_not_in_key() {
+        // G# in D major (2 sharps: F#, C#) — G is not altered, so show the sharp
+        let pitch = Pitch::new(Note::Gis, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
+        assert_eq!(glyph, Some(smufl::Glyph::AccidentalSharp));
+    }
+
+    #[test]
+    fn flat_note_suppressed_when_in_flat_key() {
+        // Bb in Bb major (2 flats: Bb, Eb) — B is flatted in key sig, suppress
+        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
+        assert_eq!(glyph, None);
+    }
+
+    #[test]
+    fn flat_note_shown_in_sharp_key() {
+        // Bb in G major (1 sharp) — B is not altered, show the flat
+        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(1));
+        assert_eq!(glyph, Some(smufl::Glyph::AccidentalFlat));
+    }
+
+    #[test]
+    fn flat_note_shown_when_not_in_key() {
+        // Ab in Bb major (2 flats: Bb, Eb) — A is not flatted, show the flat
+        let pitch = Pitch::new(Note::Aes, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
+        assert_eq!(glyph, Some(smufl::Glyph::AccidentalFlat));
+    }
+
+    #[test]
     fn double_sharp_shows_double_sharp() {
         let pitch = Pitch::new(Note::Fisis, 4).unwrap();
         let glyph = should_show_accidental(&pitch, &KeySignature::Open);
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalDoubleSharp));
+    }
+
+    #[test]
+    fn double_sharp_shown_even_in_sharp_key() {
+        // F## in D major — double sharps are never in key signatures
+        let pitch = Pitch::new(Note::Fisis, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
+        assert_eq!(glyph, Some(smufl::Glyph::AccidentalDoubleSharp));
+    }
+
+    #[test]
+    fn double_flat_shown_even_in_flat_key() {
+        let pitch = Pitch::new(Note::Beses, 4).unwrap();
+        let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
+        assert_eq!(glyph, Some(smufl::Glyph::AccidentalDoubleFlat));
     }
 
     // --- ScoreBuilder ---
