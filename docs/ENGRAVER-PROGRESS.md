@@ -113,3 +113,9 @@
 - Verified: `cargo test -p music-engraver` — 326 unit + 3 integration = 329 tests, all pass. `cargo check --workspace` passes.
 - Next: Phase 5 continuation — create `examples/measure.rs` rendering a complete measure (clef + key sig + time sig + notes + barline) to `examples/output/measure.svg`.
 - Open issues: None.
+
+## 2026-04-18 — Phase 5, measure example
+- Did: Created `examples/measure.rs` rendering a complete measure in D major 3/4 time: treble clef + 2-sharp key sig + 3/4 time sig + dotted quarter F4 + eighth A4 with natural accidental + quarter rest + final barline. All element types exercised in one SVG. Output: 11 paths, 9 lines — exact match with expected counts.
+- Verified: `cargo run --example measure` produces valid SVG (8492 bytes). `cargo test -p music-engraver` — 326 unit + 3 integration = 329 tests, all pass. `cargo check --workspace` passes.
+- Next: Phase 5 completion check. Phase 5 elements complete: measure layout (proportional spacing), measure renderer (composing all element renderers), measure example. Consider multi-measure rendering or begin Phase 6 (beams, ties, slurs). Next concrete chunk: multi-measure layout or beam grouping.
+- Open issues: None.
