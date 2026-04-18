@@ -213,3 +213,9 @@
 - Verified: `cargo test -p music-engraver` — 539 unit + 3 integration + 2 doc-tests = 544 tests, all pass. 7 new measure_renderer beam tests (two eighths, four sixteenths, accidental, ledger lines, empty, differs-from-flagged, mixed durations). 4 new score tests (SVG with polygons, differs from individual eighths, convert_event mapping, tracked accidental suppression). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
 - Next: Create `examples/beamed_score.rs` showing beam groups via ScoreBuilder API, or consider v1 scope complete.
 - Open issues: None.
+
+## 2026-04-18 — Phase 8, beamed score example (v1 scope complete)
+- Did: Created `examples/beamed_score.rs` rendering 4 measures across 2 systems in G major 4/4 using ScoreBuilder API with beam groups: (1) four ascending beamed eighths + quarter + quarter rest, (2) two sixteenths + eighth rest + two descending eighths + half, (3) four beamed sixteenths + dotted half, (4) mixed beam group (eighth + two sixteenths) + quarter + quarter with final barline. Output: 29 paths, 35 lines, 8 polygons (16663 bytes).
+- Verified: `cargo run --example beamed_score` produces valid SVG. `cargo test -p music-engraver` — 539 unit + 3 integration + 2 doc-tests = 544 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
+- Next: v1 scope is functionally complete. All phases 0–8 implemented: font pipeline, staff/clef/note/stem/accidental/dot/flag/rest/barline/time sig/key sig layout+rendering, measure/system/page layout, beams, ties, chords, beam groups, ScoreBuilder API with smart accidentals. 17 examples, 544 tests. Remaining polish: additional pub doc comments, error handling refinement, or begin post-v1 features (slurs, dynamics, tuplet brackets, PNG export).
+- Open issues: None.
