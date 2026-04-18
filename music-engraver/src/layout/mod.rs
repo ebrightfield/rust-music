@@ -10,6 +10,7 @@ pub mod note_placement;
 pub mod rest;
 pub mod staff;
 pub mod stem;
+pub mod tie;
 pub mod time_signature;
 
 pub use barline::{BarlineLayout, BarlineStyle};
@@ -27,4 +28,5 @@ pub use measure::{
 pub use note_placement::pitch_to_staff_position;
 pub use staff::{StaffLayout, StaffPosition, BOTTOM_LINE, STANDARD_LINE_COUNT, TOP_LINE};
 pub use stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
+pub use tie::{layout_tie, tie_direction_from_stem, TieDirection, TieLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};

@@ -77,6 +77,17 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
+    /// Add a `<path>` element with pre-built path data, a fill color, and no stroke.
+    /// Unlike `add_path`, this accepts a `String` directly to avoid double-allocation
+    /// when the caller has already assembled the path data.
+    pub fn add_filled_path(&mut self, path_data: &str, fill: &str) {
+        let _ = write!(
+            self.elements,
+            r#"  <path d="{path_data}" fill="{fill}" stroke="none"/>"#,
+        );
+        self.elements.push('\n');
+    }
+
     /// Produce the complete SVG document as a string.
     pub fn to_svg(&self) -> String {
         let (vx, vy, vw, vh) = self.view_box;

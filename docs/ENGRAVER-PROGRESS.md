@@ -131,3 +131,9 @@
 - Verified: `cargo test -p music-engraver` — 364 unit + 3 integration = 367 tests, all pass. 11 beam renderer tests (two eighths, two sixteenths, four eighths, stems down, mixed, empty, polygon points, beam thickness, 32nds, single note fractional, stem x direction) + 3 svg_writer tests (rect, polygon, empty polygon). `cargo run --example beamed_notes` produces valid SVG (5399 bytes). `cargo check --workspace` passes.
 - Next: Phase 6 continuation — tie/slur rendering (curved paths between notes), or consider Phase 6 exit criteria check. Beam rendering is complete for v1 scope.
 - Open issues: None.
+
+## 2026-04-18 — Phase 6, tie layout + rendering
+- Did: Created `layout/tie.rs` with `TieDirection` enum (Over/Under), `tie_direction_from_stem()`, and `layout_tie()` — computes cubic Bézier control points for a filled crescent shape representing a tie. Height scales with span (0.15× ratio, clamped 0.4–1.5 staff spaces). Crescent thickness derived from `tie_endpoint_thickness` / `tie_midpoint_thickness` in `EngravingConfig`. Created `render/tie_renderer.rs` with `draw_tie()` rendering two cubic Bézier curves (outer + inner) as a closed filled path. Added `add_filled_path()` to SvgWriter. Wired into `layout/mod.rs` and `render/mod.rs`.
+- Verified: `cargo test -p music-engraver` — 385 unit + 3 integration = 388 tests, all pass. 12 tie layout tests (direction mapping, endpoint above/below, apex geometry, control points, height scaling, symmetry, crescent thickness, min height). 9 tie renderer tests (path structure, Bézier count, over/under differentiation, SVG element attributes, short/long ties). `cargo check --workspace` passes.
+- Next: Phase 6 continuation — create a ties example SVG showing tied notes on a staff, then consider slur rendering (similar curve but different attachment points) or Phase 6 exit criteria check.
+- Open issues: None.
