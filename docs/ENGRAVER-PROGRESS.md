@@ -29,3 +29,9 @@
 - Verified: `cargo test -p music-engraver` — 46 tests pass (43 unit + 3 integration). `cargo check --workspace` passes.
 - Next: Phase 2 continuation — add clef placement to layout (map clef type to SMuFL glyph + staff position), then staff rendering function that draws staff lines + clef via SvgWriter.
 - Open issues: None. Note: `CARGO_HOME` must be set to `$HOME/.cargo` due to read-only `/opt/rust/cargo/` in this environment.
+
+## 2026-04-18 — Phase 2, clef placement + staff rendering
+- Did: Created `layout/clef.rs` with `ClefLayout` (maps `music::Clef` → SMuFL `Glyph` + staff position). Created `render/staff_renderer.rs` with `draw_staff_lines()` and `draw_clef()` functions. Added `examples/staff_with_clef.rs` that renders treble and bass clef staves to `examples/output/`. 6 clef layout tests, 7 staff renderer tests.
+- Verified: `cargo test -p music-engraver` — 59 tests pass (56 unit + 3 integration). `cargo run --example staff_with_clef` produces valid SVGs with 5 lines + clef path. `cargo check --workspace` passes.
+- Next: Phase 2 continuation — add `add_text()` to SvgWriter (needed for time signatures and other text), or begin note placement layout (mapping pitch to staff position for a given clef).
+- Open issues: None.
