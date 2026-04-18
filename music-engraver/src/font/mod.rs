@@ -1,6 +1,8 @@
+mod engraving_config;
 mod glyph_outline;
 mod music_font;
 
+pub use engraving_config::EngravingConfig;
 pub use glyph_outline::GlyphOutline;
 pub use music_font::{FontError, MusicFont};
 

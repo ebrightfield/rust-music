@@ -1,6 +1,7 @@
 use smufl::Glyph;
 use ttf_parser::Face;
 
+use super::engraving_config::EngravingConfig;
 use super::glyph_outline::{GlyphOutline, SvgPathBuilder};
 
 /// Errors from font operations.
@@ -81,6 +82,13 @@ impl<'a> MusicFont<'a> {
     pub fn glyph_advance(&self, glyph: Glyph) -> Result<u16, FontError> {
         let gid = self.glyph_id(glyph)?;
         Ok(self.face.glyph_hor_advance(gid).unwrap_or(0))
+    }
+
+    /// Build an `EngravingConfig` from this font's metadata, with all values
+    /// resolved (no `Option`s). Missing metadata values fall back to
+    /// SMuFL-recommended defaults.
+    pub fn engraving_config(&self) -> EngravingConfig {
+        EngravingConfig::from_smufl(&self.metadata.engraving_defaults, self.face.units_per_em())
     }
 }
 
