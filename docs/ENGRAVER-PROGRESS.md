@@ -83,3 +83,9 @@
 - Verified: `cargo test -p music-engraver` — 229 unit + 3 integration = 232 tests, all pass. `cargo run --example flagged_notes` produces valid SVG (15 paths, 14 lines — exact match). `cargo check --workspace` passes.
 - Next: Phase 3 completion — create a rest example SVG, then Phase 3 exit criteria check. Phase 3 elements complete: accidentals, dots, flags, rests. Next after that: Phase 4 (measure layout, barlines, time/key signatures).
 - Open issues: None.
+
+## 2026-04-18 — Phase 3 complete + Phase 4, barline layout + rendering
+- Did: Created `examples/rests.rs` rendering all 8 rest durations (whole through 128th) on treble staff — completes Phase 3 examples. **Phase 3 exit criteria met**: accidentals (5 types), augmentation dots (up to triple), flags (8th–128th, up/down), rests (whole–128th), all with layout + renderer + tests + examples. Then started Phase 4: created `layout/barline.rs` with `BarlineStyle` enum (Single/Double/Final/StartRepeat/EndRepeat), `BarlineLayout` struct (strokes + optional repeat dots + width), `barline_layout()` function. Created `render/barline_renderer.rs` with `draw_barline()`. 13 layout tests + 9 renderer tests covering all 5 styles, dimensions, stroke ordering, repeat dots.
+- Verified: `cargo test -p music-engraver` — 251 unit + 3 integration = 254 tests, all pass. `cargo run --example rests` produces valid SVG (9 paths, 5 lines). `cargo check --workspace` passes.
+- Next: Phase 4 continuation — create barlines example SVG showing all 5 styles, then begin time signature rendering (text-based numerals or SMuFL time sig glyphs).
+- Open issues: None.

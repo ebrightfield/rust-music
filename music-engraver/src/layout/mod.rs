@@ -1,4 +1,5 @@
 pub mod accidental;
+pub mod barline;
 pub mod clef;
 pub mod dot;
 pub mod flag;
@@ -7,6 +8,7 @@ pub mod rest;
 pub mod staff;
 pub mod stem;
 
+pub use barline::{BarlineLayout, BarlineStyle};
 pub use clef::ClefLayout;
 pub use dot::{dot_staff_position, dot_xs};
 pub use flag::flag_glyph;
