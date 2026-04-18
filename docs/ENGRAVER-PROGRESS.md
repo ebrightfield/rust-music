@@ -41,3 +41,9 @@
 - Verified: `cargo test -p music-engraver` — 84 tests pass (81 unit + 3 integration). 22 new note_placement tests cover all 4 clef types, accidentals (sharp, flat, double), enharmonic distinctions, ledger-line territory above/below, extreme registers. `cargo check --workspace` passes.
 - Next: Phase 2 continuation — notehead rendering (draw a notehead glyph at the correct staff position given a pitch), then an example that renders a single note on a staff with clef and ledger lines.
 - Open issues: None.
+
+## 2026-04-18 — Phase 2, notehead rendering + ledger lines
+- Did: Created `render/note_renderer.rs` with `NoteheadKind` enum (Whole/Half/Filled → SMuFL glyph), `draw_notehead()`, `draw_ledger_lines()`, and `draw_note()` (composite). Ledger lines extend symmetrically past notehead by `leger_line_extension`. Created `examples/single_note.rs` rendering 5 notes on a treble staff (middle C with ledger line below, E4 on bottom line, B4 half note, F5 on top line, A5 whole note with ledger line above).
+- Verified: `cargo test -p music-engraver` — 102 tests pass (99 unit + 3 integration). 18 new note_renderer tests cover notehead placement, ledger line counts, extension geometry, thickness from config, composite draw, advance width comparison. `cargo run --example single_note` produces valid SVG (6 paths, 7 lines). `cargo check --workspace` passes.
+- Next: Phase 2 completion — add `add_text()` to SvgWriter for time signatures, or begin stem rendering (stem direction rules, draw stem line from notehead). Then Phase 2 exit criteria check.
+- Open issues: None.

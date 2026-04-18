@@ -1,0 +1,346 @@
+use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::staff::StaffLayout;
+use crate::layout::StaffPosition;
+use crate::render::SvgWriter;
+use smufl::Glyph;
+
+/// Which notehead glyph to use, determined by duration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteheadKind {
+    Whole,
+    Half,
+    Filled,
+}
+
+impl NoteheadKind {
+    /// Map to the corresponding SMuFL glyph.
+    pub fn glyph(self) -> Glyph {
+        match self {
+            NoteheadKind::Whole => Glyph::NoteheadWhole,
+            NoteheadKind::Half => Glyph::NoteheadHalf,
+            NoteheadKind::Filled => Glyph::NoteheadBlack,
+        }
+    }
+}
+
+/// Draw ledger lines for a note at the given staff position.
+///
+/// Ledger lines extend symmetrically past the notehead by `leger_line_extension`
+/// on each side.
+pub fn draw_ledger_lines(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    config: &EngravingConfig,
+    note_x: f64,
+    notehead_width: f64,
+    position: StaffPosition,
+) {
+    let ys = staff.ledger_line_ys(position);
+    if ys.is_empty() {
+        return;
+    }
+
+    let extension = config.leger_line_extension_fu();
+    let thickness = config.leger_line_thickness_fu();
+    let x1 = note_x - extension;
+    let x2 = note_x + notehead_width + extension;
+
+    for y in ys {
+        svg.add_line(x1, y, x2, y, "black", thickness);
+    }
+}
+
+/// Draw a notehead glyph at a given x-position and staff position.
+///
+/// Returns the advance width of the notehead in font design units, useful
+/// for positioning subsequent elements (stems, accidentals, dots).
+pub fn draw_notehead(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    x: f64,
+    position: StaffPosition,
+    kind: NoteheadKind,
+) -> Result<f64, FontError> {
+    let outline = font.glyph_outline(kind.glyph())?;
+    let y = staff.y_of(position);
+    let transform = format!("translate({x}, {y})");
+    svg.add_path(&outline.path_data, "black", Some(&transform));
+    Ok(outline.advance_width as f64)
+}
+
+/// Draw a complete note: notehead + ledger lines (if needed).
+///
+/// Returns the advance width of the notehead.
+pub fn draw_note(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    x: f64,
+    position: StaffPosition,
+    kind: NoteheadKind,
+) -> Result<f64, FontError> {
+    let advance = draw_notehead(svg, staff, font, x, position, kind)?;
+    draw_ledger_lines(svg, staff, config, x, advance, position);
+    Ok(advance)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::bravura_font;
+
+    fn setup() -> (MusicFont<'static>, EngravingConfig, StaffLayout) {
+        let font = bravura_font();
+        let config = font.engraving_config();
+        let staff = StaffLayout::from_config(0.0, 0.0, 5000.0, &config);
+        (font, config, staff)
+    }
+
+    // --- NoteheadKind ---
+
+    #[test]
+    fn notehead_kind_whole_maps_to_correct_glyph() {
+        assert_eq!(NoteheadKind::Whole.glyph(), Glyph::NoteheadWhole);
+    }
+
+    #[test]
+    fn notehead_kind_half_maps_to_correct_glyph() {
+        assert_eq!(NoteheadKind::Half.glyph(), Glyph::NoteheadHalf);
+    }
+
+    #[test]
+    fn notehead_kind_filled_maps_to_correct_glyph() {
+        assert_eq!(NoteheadKind::Filled.glyph(), Glyph::NoteheadBlack);
+    }
+
+    // --- draw_notehead ---
+
+    #[test]
+    fn draw_notehead_produces_path_element() {
+        let (font, _, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_notehead(&mut svg, &staff, &font, 500.0, 0, NoteheadKind::Filled).unwrap();
+        let output = svg.to_svg();
+        assert!(output.contains("<path "), "should produce a <path> element");
+        assert!(output.contains("fill=\"black\""));
+    }
+
+    #[test]
+    fn draw_notehead_at_bottom_line_has_correct_y() {
+        let (font, _, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_notehead(&mut svg, &staff, &font, 500.0, 0, NoteheadKind::Filled).unwrap();
+        let output = svg.to_svg();
+
+        // Bottom line (pos 0): y = (8 - 0) * 125 = 1000
+        let expected_y = staff.y_of(0);
+        assert!((expected_y - 1000.0).abs() < f64::EPSILON);
+        assert!(
+            output.contains("translate(500, 1000)"),
+            "notehead should be translated to (500, 1000), got: {output}"
+        );
+    }
+
+    #[test]
+    fn draw_notehead_at_top_line_has_correct_y() {
+        let (font, _, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_notehead(&mut svg, &staff, &font, 500.0, 8, NoteheadKind::Filled).unwrap();
+        let output = svg.to_svg();
+
+        // Top line (pos 8): y = 0
+        assert!(output.contains("translate(500, 0)"));
+    }
+
+    #[test]
+    fn draw_notehead_returns_positive_advance_width() {
+        let (font, _, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        let advance =
+            draw_notehead(&mut svg, &staff, &font, 500.0, 4, NoteheadKind::Filled).unwrap();
+        // Bravura noteheadBlack advance is ~295 font units
+        assert!(advance > 200.0, "advance should be > 200, got {advance}");
+        assert!(advance < 500.0, "advance should be < 500, got {advance}");
+    }
+
+    #[test]
+    fn different_notehead_kinds_produce_different_paths() {
+        let (font, _, staff) = setup();
+        let mut svg1 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_notehead(&mut svg1, &staff, &font, 0.0, 4, NoteheadKind::Filled).unwrap();
+        let mut svg2 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_notehead(&mut svg2, &staff, &font, 0.0, 4, NoteheadKind::Whole).unwrap();
+        assert_ne!(
+            svg1.to_svg(),
+            svg2.to_svg(),
+            "filled and whole noteheads should differ"
+        );
+    }
+
+    // --- draw_ledger_lines ---
+
+    #[test]
+    fn no_ledger_lines_for_note_on_staff() {
+        let (_, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 4);
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches("<line ").count(),
+            0,
+            "position 4 (middle line) needs no ledger lines"
+        );
+    }
+
+    #[test]
+    fn one_ledger_line_below_for_middle_c_in_treble() {
+        let (_, config, staff) = setup();
+        // Middle C in treble = position -2
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -2);
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches("<line ").count(),
+            1,
+            "position -2 needs exactly 1 ledger line"
+        );
+    }
+
+    #[test]
+    fn two_ledger_lines_below() {
+        let (_, config, staff) = setup();
+        // Position -4: two ledger lines at -2 and -4
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -4);
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches("<line ").count(),
+            2,
+            "position -4 needs exactly 2 ledger lines"
+        );
+    }
+
+    #[test]
+    fn ledger_lines_extend_past_notehead() {
+        let (_, config, staff) = setup();
+        let note_x = 500.0;
+        let notehead_width = 295.0;
+        let extension = config.leger_line_extension_fu();
+
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, note_x, notehead_width, -2);
+        let output = svg.to_svg();
+
+        let expected_x1 = note_x - extension;
+        let expected_x2 = note_x + notehead_width + extension;
+        let x1_str = format!("x1=\"{expected_x1}\"");
+        let x2_str = format!("x2=\"{expected_x2}\"");
+        assert!(
+            output.contains(&x1_str),
+            "ledger line should start at {expected_x1}"
+        );
+        assert!(
+            output.contains(&x2_str),
+            "ledger line should end at {expected_x2}"
+        );
+    }
+
+    #[test]
+    fn ledger_lines_use_correct_thickness() {
+        let (_, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -2);
+        let output = svg.to_svg();
+
+        let expected_sw = format!("stroke-width=\"{}\"", config.leger_line_thickness_fu());
+        assert!(
+            output.contains(&expected_sw),
+            "ledger lines should use leger_line_thickness from config"
+        );
+    }
+
+    #[test]
+    fn one_ledger_line_above() {
+        let (_, config, staff) = setup();
+        // Position 10: one ledger line above
+        let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -500.0, 6000.0, 2000.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 10);
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches("<line ").count(),
+            1,
+            "position 10 needs exactly 1 ledger line"
+        );
+
+        // y of position 10 = (8 - 10) * 125 = -250
+        let expected_y = staff.y_of(10);
+        assert!((expected_y - -250.0).abs() < f64::EPSILON);
+        let y_str = format!("y1=\"{expected_y}\"");
+        assert!(output.contains(&y_str));
+    }
+
+    #[test]
+    fn no_ledger_lines_in_first_space_outside_staff() {
+        let (_, config, staff) = setup();
+        // Position -1 and 9: just outside but no ledger line needed
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -1);
+        assert_eq!(svg.to_svg().matches("<line ").count(), 0);
+
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 9);
+        assert_eq!(svg.to_svg().matches("<line ").count(), 0);
+    }
+
+    // --- draw_note (composite) ---
+
+    #[test]
+    fn draw_note_on_staff_has_path_no_ledger_lines() {
+        let (font, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        draw_note(&mut svg, &staff, &font, &config, 500.0, 4, NoteheadKind::Filled).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
+        assert_eq!(output.matches("<line ").count(), 0, "no ledger lines");
+    }
+
+    #[test]
+    fn draw_note_with_ledger_lines_has_path_and_lines() {
+        let (font, config, staff) = setup();
+        // Middle C in treble: position -2, needs one ledger line
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 2000.0);
+        draw_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            500.0,
+            -2,
+            NoteheadKind::Filled,
+        )
+        .unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
+        assert_eq!(output.matches("<line ").count(), 1, "one ledger line");
+    }
+
+    #[test]
+    fn draw_whole_note_has_wider_advance_than_filled() {
+        let (font, config, staff) = setup();
+        let mut svg1 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        let advance_filled =
+            draw_note(&mut svg1, &staff, &font, &config, 0.0, 4, NoteheadKind::Filled).unwrap();
+        let mut svg2 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        let advance_whole =
+            draw_note(&mut svg2, &staff, &font, &config, 0.0, 4, NoteheadKind::Whole).unwrap();
+        // Whole notes are wider than filled noteheads in Bravura
+        assert!(
+            advance_whole > advance_filled,
+            "whole note advance ({advance_whole}) should be > filled ({advance_filled})"
+        );
+    }
+}
