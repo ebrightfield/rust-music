@@ -1,8 +1,19 @@
+mod glyph_outline;
+mod music_font;
+
+pub use glyph_outline::GlyphOutline;
+pub use music_font::{FontError, MusicFont};
+
 /// Bravura OTF font bytes, bundled at compile time.
 pub static BRAVURA_OTF: &[u8] = include_bytes!("../../fonts/Bravura.otf");
 
 /// Bravura font metadata JSON, bundled at compile time.
 pub static BRAVURA_METADATA: &[u8] = include_bytes!("../../fonts/bravura_metadata.json");
+
+/// Convenience: create a `MusicFont` backed by the bundled Bravura font.
+pub fn bravura_font() -> MusicFont<'static> {
+    MusicFont::new(BRAVURA_OTF, BRAVURA_METADATA).expect("bundled Bravura font should be valid")
+}
 
 #[cfg(test)]
 mod tests {
@@ -10,7 +21,6 @@ mod tests {
 
     #[test]
     fn bravura_otf_is_valid_opentype() {
-        // OTF files start with the "OTTO" magic bytes for CFF-based OpenType
         assert_eq!(&BRAVURA_OTF[..4], b"OTTO", "Expected CFF-based OpenType magic");
         assert!(BRAVURA_OTF.len() > 100_000, "Font file suspiciously small");
     }
@@ -20,18 +30,27 @@ mod tests {
         let face = ttf_parser::Face::parse(BRAVURA_OTF, 0)
             .expect("ttf-parser should parse Bravura.otf");
         assert!(face.units_per_em() > 0);
-        assert!(face.number_of_glyphs() > 2000, "Bravura should have thousands of glyphs");
+        assert!(
+            face.number_of_glyphs() > 2000,
+            "Bravura should have thousands of glyphs"
+        );
     }
 
     #[test]
     fn bravura_metadata_is_valid_json() {
-        let value: serde_json::Value = serde_json::from_slice(BRAVURA_METADATA)
-            .expect("metadata should be valid JSON");
+        let value: serde_json::Value =
+            serde_json::from_slice(BRAVURA_METADATA).expect("metadata should be valid JSON");
         assert!(value.is_object());
-        // Bravura metadata should have engravingDefaults
         assert!(
             value.get("engravingDefaults").is_some(),
             "metadata should contain engravingDefaults"
         );
+    }
+
+    #[test]
+    fn bravura_font_convenience_works() {
+        let font = bravura_font();
+        assert_eq!(font.units_per_em(), 1000);
+        assert_eq!(font.metadata().font_name, "Bravura");
     }
 }
