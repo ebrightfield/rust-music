@@ -71,3 +71,9 @@
 - Verified: `cargo test -p music-engraver` — 182 unit + 3 integration = 185 tests, all pass. `cargo check --workspace` passes. No warnings.
 - Next: Phase 3 continuation — flags for eighth/sixteenth notes (layout + render).
 - Open issues: None.
+
+## 2026-04-18 — Phase 3, flag layout + rendering
+- Did: Created `layout/flag.rs` with `flag_glyph()` (maps flag count 1–5 + `StemDirection` → SMuFL `Glyph` for 8th through 128th flags), `flag_position()` (documents convention: flag placed at stem tip). Created `render/flag_renderer.rs` with `draw_flag()` that renders flag glyph at stem tip position, returning `Ok(true)` if drawn, `Ok(false)` for 0 flags. 13 layout tests (all durations × both directions, zero/out-of-range, direction symmetry), 10 renderer tests (eighth/sixteenth/32nd/64th/128th glyphs, up vs down differentiation, zero count, realistic stem-tip coordinates).
+- Verified: `cargo test -p music-engraver` — 206 unit + 3 integration = 209 tests, all pass. `cargo check --workspace` passes. No warnings.
+- Next: Phase 3 continuation — create an example rendering flagged notes (8th, 16th, 32nd) on a staff combining stem + flag + notehead. Then consider rest glyphs or begin Phase 3 exit criteria check.
+- Open issues: None.
