@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="-100 -600 1400 1200">
+  <line x1="0" y1="-500" x2="1200" y2="-500" stroke="#999" stroke-width="10"/>
+  <line x1="0" y1="-250" x2="1200" y2="-250" stroke="#999" stroke-width="10"/>
+  <line x1="0" y1="0" x2="1200" y2="0" stroke="#999" stroke-width="10"/>
+  <line x1="0" y1="250" x2="1200" y2="250" stroke="#999" stroke-width="10"/>
+  <line x1="0" y1="500" x2="1200" y2="500" stroke="#999" stroke-width="10"/>
+  <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(400, 0)"/>
+</svg>
