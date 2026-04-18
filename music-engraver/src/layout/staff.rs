@@ -36,6 +36,7 @@ pub struct StaffLayout {
 }
 
 impl StaffLayout {
+    /// Create a staff layout with explicit geometry.
     pub fn new(x: f64, y_origin: f64, width: f64, staff_space: f64) -> Self {
         Self {
             x,

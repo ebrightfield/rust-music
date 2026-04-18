@@ -332,11 +332,11 @@ impl ScoreBuilder {
         self
     }
 
-    /// Render the score to an SVG string.
+    /// Render the score to an SVG string, returning an error if font operations fail.
     ///
     /// Flushes any pending events as a final measure (with `Final` barline)
     /// if no explicit end barline was provided.
-    pub fn render_svg(mut self) -> String {
+    pub fn try_render_svg(mut self) -> Result<String, crate::font::FontError> {
         // Flush any pending events
         if !self.current_events.is_empty() {
             let events = std::mem::take(&mut self.current_events);
@@ -344,7 +344,7 @@ impl ScoreBuilder {
         }
 
         if self.measures.is_empty() {
-            return String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>");
+            return Ok(String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
         }
 
         let font = bravura_font();
@@ -405,9 +405,16 @@ impl ScoreBuilder {
             &breaking,
         );
 
-        draw_page(&font, &config, &page_layout)
+        Ok(draw_page(&font, &config, &page_layout)?.to_svg())
+    }
+
+    /// Render the score to an SVG string.
+    ///
+    /// Convenience wrapper around [`try_render_svg`](Self::try_render_svg) that
+    /// panics on font errors. For error handling, use `try_render_svg` instead.
+    pub fn render_svg(self) -> String {
+        self.try_render_svg()
             .expect("font rendering should not fail for valid input")
-            .to_svg()
     }
 
     /// Convert a `ScoreEvent` into a `MeasureEvent` for the layout engine.
@@ -962,6 +969,53 @@ mod tests {
             .render_svg();
         assert!(svg.starts_with("<svg"));
         assert!(svg.contains("<path"));
+    }
+
+    #[test]
+    fn try_render_svg_returns_ok_for_valid_input() {
+        let result = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .try_render_svg();
+        assert!(result.is_ok());
+        let svg = result.unwrap();
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("<path"));
+    }
+
+    #[test]
+    fn try_render_svg_empty_score_returns_ok() {
+        let result = ScoreBuilder::new().try_render_svg();
+        assert!(result.is_ok());
+        let svg = result.unwrap();
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("</svg>"));
+    }
+
+    #[test]
+    fn try_render_svg_matches_render_svg() {
+        let svg_try = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Sharps(2))
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .barline()
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .try_render_svg()
+            .unwrap();
+        let svg_direct = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Sharps(2))
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .barline()
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert_eq!(svg_try, svg_direct);
     }
 
     // --- within-measure accidental tracking ---

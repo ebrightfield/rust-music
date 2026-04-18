@@ -47,6 +47,7 @@ pub enum ClefKind {
 }
 
 impl ClefKind {
+    /// Convert a `&Clef` reference into its `ClefKind` equivalent.
     pub fn from_clef(clef: &Clef) -> Self {
         match clef {
             Clef::Treble => Self::Treble,
@@ -56,6 +57,7 @@ impl ClefKind {
         }
     }
 
+    /// Convert back to a `music::Clef` value.
     pub fn to_clef(self) -> Clef {
         match self {
             Self::Treble => Clef::Treble,

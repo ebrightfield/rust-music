@@ -183,3 +183,9 @@
 - Verified: `cargo test -p music-engraver` — 486 unit + 3 integration + 2 doc-tests = 491 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo doc -p music-engraver --no-deps` — clean. `cargo check --workspace` passes.
 - Next: Phase 8 polish — add doc comments to remaining public types/functions across layout/render submodules, or consider the crate done for v1 scope.
 - Open issues: None.
+
+## 2026-04-18 — Phase 8, try_render_svg + remaining doc comments
+- Did: Added `try_render_svg()` method to `ScoreBuilder` returning `Result<String, FontError>` instead of panicking. Existing `render_svg()` now delegates to `try_render_svg().expect(...)`. Added doc comments to `StaffLayout::new()`, `ClefKind::from_clef()`, `ClefKind::to_clef()`. 3 new tests: `try_render_svg` returns Ok for valid input, empty score, and matches `render_svg` output.
+- Verified: `cargo test -p music-engraver` — 489 unit + 3 integration + 2 doc-tests = 494 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Consider the crate done for v1 scope, or add chord support (multiple simultaneous pitches) to ScoreBuilder as a stretch goal.
+- Open issues: None.
