@@ -137,3 +137,9 @@
 - Verified: `cargo test -p music-engraver` — 385 unit + 3 integration = 388 tests, all pass. 12 tie layout tests (direction mapping, endpoint above/below, apex geometry, control points, height scaling, symmetry, crescent thickness, min height). 9 tie renderer tests (path structure, Bézier count, over/under differentiation, SVG element attributes, short/long ties). `cargo check --workspace` passes.
 - Next: Phase 6 continuation — create a ties example SVG showing tied notes on a staff, then consider slur rendering (similar curve but different attachment points) or Phase 6 exit criteria check.
 - Open issues: None.
+
+## 2026-04-18 — Phase 6, tied notes example
+- Did: Created `examples/tied_notes.rs` rendering 5 tied note pairs on treble staff: (1) E4 quarter–quarter stems up, tie under; (2) B4 half–quarter stems down, tie over; (3) A5 quarter–quarter above staff with ledger lines, tie over; (4) C4 quarter–quarter below staff with ledger lines, short tie under; (5) G4 with explicit Over direction override. Output: 16 paths (10 noteheads + 1 clef + 5 ties), 19 lines (5 staff + 10 stems + 4 ledger).
+- Verified: `cargo run --example tied_notes` produces valid SVG (5533 bytes). `cargo test -p music-engraver` — 385 unit + 3 integration = 388 tests, all pass. `cargo check --workspace` passes (via build).
+- Next: Phase 6 completion check — beam rendering complete, tie rendering complete. Consider slur rendering (optional for v1?) or Phase 6 exit criteria assessment and move to Phase 7 (multi-measure systems, line breaking).
+- Open issues: Slurs are architecturally similar to ties but with different attachment points (near notehead vs at stem tip); could reuse TieLayout with different parameters. Deferring slurs to post-v1 is reasonable since ties cover the basic curved-path rendering proof-of-concept.
