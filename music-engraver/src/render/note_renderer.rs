@@ -1,6 +1,8 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::staff::StaffLayout;
+use crate::layout::stem::StemDirection;
 use crate::layout::StaffPosition;
+use crate::render::stem_renderer::draw_stem;
 use crate::render::SvgWriter;
 use smufl::Glyph;
 
@@ -83,6 +85,29 @@ pub fn draw_note(
 ) -> Result<f64, FontError> {
     let advance = draw_notehead(svg, staff, font, x, position, kind)?;
     draw_ledger_lines(svg, staff, config, x, advance, position);
+    Ok(advance)
+}
+
+/// Draw a complete note with stem: notehead + ledger lines + stem.
+///
+/// Whole notes have no stem; pass `None` for direction to skip the stem,
+/// or this function will draw one regardless of kind when direction is `Some`.
+///
+/// Returns the advance width of the notehead.
+pub fn draw_stemmed_note(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    x: f64,
+    position: StaffPosition,
+    kind: NoteheadKind,
+    direction: Option<StemDirection>,
+) -> Result<f64, FontError> {
+    let advance = draw_note(svg, staff, font, config, x, position, kind)?;
+    if let Some(dir) = direction {
+        draw_stem(svg, staff, config, x, advance, position, dir);
+    }
     Ok(advance)
 }
 
@@ -341,6 +366,132 @@ mod tests {
         assert!(
             advance_whole > advance_filled,
             "whole note advance ({advance_whole}) should be > filled ({advance_filled})"
+        );
+    }
+
+    // --- draw_stemmed_note ---
+
+    #[test]
+    fn stemmed_note_with_stem_up_has_path_and_stem_line() {
+        let (font, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        draw_stemmed_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            500.0,
+            0,
+            NoteheadKind::Filled,
+            Some(StemDirection::Up),
+        )
+        .unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
+        // 1 stem line, no ledger lines (position 0 = bottom line)
+        assert_eq!(
+            output.matches("<line ").count(),
+            1,
+            "one stem line for on-staff note"
+        );
+    }
+
+    #[test]
+    fn stemmed_note_with_ledger_lines_has_stem_plus_ledger() {
+        let (font, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        // Position -2 (middle C in treble): 1 ledger line + 1 stem = 2 lines
+        draw_stemmed_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            500.0,
+            -2,
+            NoteheadKind::Filled,
+            Some(StemDirection::Up),
+        )
+        .unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
+        assert_eq!(
+            output.matches("<line ").count(),
+            2,
+            "one ledger line + one stem"
+        );
+    }
+
+    #[test]
+    fn stemmed_note_none_direction_skips_stem() {
+        let (font, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_stemmed_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            500.0,
+            4,
+            NoteheadKind::Whole,
+            None,
+        )
+        .unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
+        assert_eq!(output.matches("<line ").count(), 0, "no stem for whole note");
+    }
+
+    #[test]
+    fn stemmed_note_returns_same_advance_as_draw_note() {
+        let (font, config, staff) = setup();
+        let mut svg1 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        let adv1 =
+            draw_note(&mut svg1, &staff, &font, &config, 0.0, 4, NoteheadKind::Filled).unwrap();
+        let mut svg2 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
+        let adv2 = draw_stemmed_note(
+            &mut svg2,
+            &staff,
+            &font,
+            &config,
+            0.0,
+            4,
+            NoteheadKind::Filled,
+            Some(StemDirection::Down),
+        )
+        .unwrap();
+        assert!(
+            (adv1 - adv2).abs() < f64::EPSILON,
+            "advance width should be identical"
+        );
+    }
+
+    #[test]
+    fn stemmed_note_stem_down_has_correct_y_range() {
+        let (font, config, staff) = setup();
+        let mut svg = SvgWriter::new(800.0, 300.0, -200.0, -500.0, 6000.0, 3000.0);
+        // Position 6 (top space), stem down — tip should extend below
+        draw_stemmed_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            500.0,
+            6,
+            NoteheadKind::Filled,
+            Some(StemDirection::Down),
+        )
+        .unwrap();
+        let output = svg.to_svg();
+
+        // The stem's y1 should be the notehead y, y2 should be below
+        let notehead_y = staff.y_of(6);
+        let y1_str = format!("y1=\"{notehead_y}\"");
+        assert!(
+            output.contains(&y1_str),
+            "stem y1 should be at notehead y={notehead_y}"
         );
     }
 }
