@@ -35,3 +35,9 @@
 - Verified: `cargo test -p music-engraver` — 59 tests pass (56 unit + 3 integration). `cargo run --example staff_with_clef` produces valid SVGs with 5 lines + clef path. `cargo check --workspace` passes.
 - Next: Phase 2 continuation — add `add_text()` to SvgWriter (needed for time signatures and other text), or begin note placement layout (mapping pitch to staff position for a given clef).
 - Open issues: None.
+
+## 2026-04-18 — Phase 2, note placement (pitch → staff position)
+- Did: Created `layout/note_placement.rs` with `pitch_to_staff_position(pitch, clef) -> StaffPosition`. Maps any `Pitch` + `Clef` to vertical staff position using diatonic distance from clef reference pitch (treble: G4 at pos 2, bass: F3 at pos 6, octave-transposing clefs shift reference octave). Accidentals don't affect position; enharmonic spellings (B#3 vs C4) produce distinct positions as expected.
+- Verified: `cargo test -p music-engraver` — 84 tests pass (81 unit + 3 integration). 22 new note_placement tests cover all 4 clef types, accidentals (sharp, flat, double), enharmonic distinctions, ledger-line territory above/below, extreme registers. `cargo check --workspace` passes.
+- Next: Phase 2 continuation — notehead rendering (draw a notehead glyph at the correct staff position given a pitch), then an example that renders a single note on a staff with clef and ledger lines.
+- Open issues: None.
