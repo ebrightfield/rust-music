@@ -3,6 +3,7 @@ pub mod clef;
 pub mod dot;
 pub mod flag;
 pub mod note_placement;
+pub mod rest;
 pub mod staff;
 pub mod stem;
 

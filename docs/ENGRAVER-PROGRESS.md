@@ -77,3 +77,9 @@
 - Verified: `cargo test -p music-engraver` — 206 unit + 3 integration = 209 tests, all pass. `cargo check --workspace` passes. No warnings.
 - Next: Phase 3 continuation — create an example rendering flagged notes (8th, 16th, 32nd) on a staff combining stem + flag + notehead. Then consider rest glyphs or begin Phase 3 exit criteria check.
 - Open issues: None.
+
+## 2026-04-18 — Phase 3, flagged notes example + rest glyphs
+- Did: Created `examples/flagged_notes.rs` rendering 7 notes (C4–A5) with flags (8th, 16th, 32nd) on a treble staff — combines noteheads, stems, flags, and ledger lines in one SVG. Created `layout/rest.rs` with `rest_glyph()` (maps log2 duration 0–7 to SMuFL rest glyphs), `rest_staff_position()` (whole at pos 6, half at pos 4, others at pos 4), `rest_y()`. Created `render/rest_renderer.rs` with `draw_rest()`. 16 layout tests + 8 renderer tests covering all 8 rest durations, distinct paths, advance widths, invalid input.
+- Verified: `cargo test -p music-engraver` — 229 unit + 3 integration = 232 tests, all pass. `cargo run --example flagged_notes` produces valid SVG (15 paths, 14 lines — exact match). `cargo check --workspace` passes.
+- Next: Phase 3 completion — create a rest example SVG, then Phase 3 exit criteria check. Phase 3 elements complete: accidentals, dots, flags, rests. Next after that: Phase 4 (measure layout, barlines, time/key signatures).
+- Open issues: None.
