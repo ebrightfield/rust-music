@@ -101,3 +101,9 @@
 - Verified: `cargo test -p music-engraver` — 294 unit + 3 integration = 297 tests, all pass. `cargo run --example time_signatures` produces valid SVG. `cargo check --workspace` passes. 17 key_sig layout tests + 9 renderer tests.
 - Next: Phase 4 continuation — create key signatures example SVG showing sharps and flats on treble and bass staves, then Phase 4 exit criteria check.
 - Open issues: None.
+
+## 2026-04-18 — Phase 4 complete + Phase 5, measure layout types
+- Did: Created `examples/key_signatures.rs` rendering sharps (1–4) and flats (1–4) on treble staff, sharps (5–7) and flats (5–7) on bass staff → `examples/output/key_signatures.svg` (58 paths, 10 lines). **Phase 4 exit criteria met**: barlines (5 styles), time signatures (numeric/common/cut), key signatures (sharps/flats, treble/bass), all with layout+renderer+tests+examples. Then started Phase 5: created `layout/measure.rs` with `MeasureElement` enum (Clef/KeySig/TimeSig/Note/Rest/Barline), `NoteEvent`/`RestEvent` structs, `MeasureLayoutConfig`, `MeasureLayout`, and `layout_measure()` function implementing proportional duration spacing (Gourlay-style power-of-ratio model). Fixed `Clef` not deriving Clone/Debug by using `ClefLayout` wrapper in enum.
+- Verified: `cargo test -p music-engraver` — 310 unit + 3 integration = 313 tests, all pass (16 new measure layout tests). `cargo run --example key_signatures` produces valid SVG. `cargo check --workspace` passes.
+- Next: Phase 5 continuation — create a measure renderer that uses `MeasureLayout` to draw a complete measure (composing staff lines, clef, key sig, time sig, notes, barline), then an example rendering a simple measure.
+- Open issues: None.

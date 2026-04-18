@@ -4,6 +4,7 @@ pub mod clef;
 pub mod dot;
 pub mod flag;
 pub mod key_signature;
+pub mod measure;
 pub mod note_placement;
 pub mod rest;
 pub mod staff;
@@ -14,8 +15,12 @@ pub use barline::{BarlineLayout, BarlineStyle};
 pub use clef::ClefLayout;
 pub use dot::{dot_staff_position, dot_xs};
 pub use flag::flag_glyph;
+pub use key_signature::{KeySignature, KeySignatureLayout};
+pub use measure::{
+    layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent, PositionedElement,
+    RestEvent,
+};
 pub use note_placement::pitch_to_staff_position;
 pub use staff::{StaffLayout, StaffPosition, BOTTOM_LINE, STANDARD_LINE_COUNT, TOP_LINE};
 pub use stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
-pub use key_signature::{KeySignature, KeySignatureLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
