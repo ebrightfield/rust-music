@@ -4,6 +4,19 @@ use crate::layout::key_signature::KeySignature;
 use crate::layout::stem::StemDirection;
 use crate::layout::time_signature::TimeSignatureKind;
 
+/// A group of notes to be beamed together.
+///
+/// All notes in a beam group share a common beam line; individual notes
+/// must have `duration_log2 >= 3` (eighth notes or shorter).
+#[derive(Clone, Debug)]
+pub struct BeamGroupEvent {
+    /// The notes in the beam group, in temporal order.
+    pub notes: Vec<NoteEvent>,
+    /// Stem direction override. `None` uses auto-detection based on the
+    /// group's collective staff positions.
+    pub stem_direction: Option<StemDirection>,
+}
+
 /// A chord (multiple simultaneous notes) to be laid out within a measure.
 #[derive(Clone, Debug)]
 pub struct ChordEvent {
@@ -39,6 +52,8 @@ pub enum MeasureElement {
     Rest(RestEvent),
     /// A chord (multiple simultaneous notes).
     Chord(ChordEvent),
+    /// A beam group: multiple notes connected by beam lines instead of flags.
+    BeamGroup(BeamGroupEvent),
     /// Barline at the end of the measure.
     Barline(BarlineStyle),
 }
@@ -156,6 +171,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             MeasureElement::Note(n) => Some(n.duration_log2),
             MeasureElement::Rest(r) => Some(r.duration_log2),
             MeasureElement::Chord(c) => Some(c.duration_log2),
+            MeasureElement::BeamGroup(bg) => bg.notes.iter().map(|n| n.duration_log2).max(),
             _ => None,
         })
         .max()
@@ -213,6 +229,22 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                 let factor =
                     duration_spacing_factor(c.duration_log2, shortest_log2, config.spacing_ratio);
                 config.min_note_spacing * factor
+            }
+            MeasureElement::BeamGroup(bg) => {
+                // Total width is the sum of each note's proportional spacing
+                let total: f64 = bg
+                    .notes
+                    .iter()
+                    .map(|n| {
+                        let factor = duration_spacing_factor(
+                            n.duration_log2,
+                            shortest_log2,
+                            config.spacing_ratio,
+                        );
+                        config.min_note_spacing * factor
+                    })
+                    .sum();
+                total
             }
             MeasureElement::Barline(_) => config.barline_width,
         };

@@ -37,7 +37,7 @@ use crate::font::bravura_font;
 use crate::layout::accidental::accidental_glyph;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent};
+use crate::layout::measure::{BeamGroupEvent, ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
@@ -213,6 +213,7 @@ enum ScoreEvent {
     Note { pitch: Pitch, duration: Duration },
     Rest { duration: Duration },
     Chord { pitches: Vec<Pitch>, duration: Duration },
+    BeamGroup { notes: Vec<(Pitch, Duration)> },
 }
 
 /// Builder for constructing a score from `music` crate types and rendering to SVG.
@@ -311,6 +312,25 @@ impl ScoreBuilder {
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
         self.current_events.push(ScoreEvent::Chord { pitches, duration });
+        self
+    }
+
+    /// Add a beam group (multiple notes connected by beams) to the current measure.
+    ///
+    /// All notes must be eighth notes or shorter (duration_log2 >= 3).
+    /// Stem direction is auto-detected from the group's staff positions.
+    ///
+    /// # Example
+    /// ```ignore
+    /// builder.beam_group(vec![
+    ///     (pitch_e4, Duration::EIGHTH),
+    ///     (pitch_f4, Duration::EIGHTH),
+    ///     (pitch_g4, Duration::EIGHTH),
+    ///     (pitch_a4, Duration::EIGHTH),
+    /// ])
+    /// ```
+    pub fn beam_group(mut self, notes: Vec<(Pitch, Duration)>) -> Self {
+        self.current_events.push(ScoreEvent::BeamGroup { notes });
         self
     }
 
@@ -475,6 +495,28 @@ impl ScoreBuilder {
                     stem_direction: None,
                 })
             }
+            ScoreEvent::BeamGroup { notes } => {
+                let note_events: Vec<NoteEvent> = notes
+                    .iter()
+                    .map(|(pitch, duration)| {
+                        let staff_pos = pitch_to_staff_position(pitch, clef);
+                        let log2 = duration_kind_to_log2(duration.kind());
+                        let dots = duration.num_dots();
+                        let acc = should_show_accidental(pitch, &self.key_sig);
+                        NoteEvent {
+                            staff_position: staff_pos,
+                            duration_log2: log2,
+                            dots,
+                            accidental: acc,
+                            stem_direction: None,
+                        }
+                    })
+                    .collect();
+                MeasureEvent::BeamGroup(BeamGroupEvent {
+                    notes: note_events,
+                    stem_direction: None,
+                })
+            }
         }
     }
 
@@ -548,6 +590,37 @@ impl ScoreBuilder {
                     duration_log2: log2,
                     dots,
                     accidentals,
+                    stem_direction: None,
+                })
+            }
+            ScoreEvent::BeamGroup { notes } => {
+                let note_events: Vec<NoteEvent> = notes
+                    .iter()
+                    .map(|(pitch, duration)| {
+                        let staff_pos = pitch_to_staff_position(pitch, clef);
+                        let log2 = duration_kind_to_log2(duration.kind());
+                        let dots = duration.num_dots();
+                        let acc = resolve_accidental(pitch, &self.key_sig, Some(seen));
+
+                        // Update tracking
+                        let key = note_key(pitch);
+                        if let Some(eff) = effective_accidental(pitch, &self.key_sig) {
+                            seen.insert(key, eff);
+                        } else {
+                            seen.remove(&key);
+                        }
+
+                        NoteEvent {
+                            staff_position: staff_pos,
+                            duration_log2: log2,
+                            dots,
+                            accidental: acc,
+                            stem_direction: None,
+                        }
+                    })
+                    .collect();
+                MeasureEvent::BeamGroup(BeamGroupEvent {
+                    notes: note_events,
                     stem_direction: None,
                 })
             }
@@ -1476,6 +1549,110 @@ mod tests {
                 assert_eq!(c.accidentals[1], None, "A4 should have no accidental");
             }
             _ => panic!("expected Chord event"),
+        }
+    }
+
+    // --- beam group ---
+
+    #[test]
+    fn beam_group_renders_svg_with_polygons() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .beam_group(vec![
+                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
+            ])
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<svg"));
+        // 4 noteheads + clef + time sig digits
+        let path_count = svg.matches("<path ").count();
+        assert!(path_count >= 4, "at least 4 paths for noteheads, got {path_count}");
+        // Beam polygons (1 primary for all eighth notes)
+        let polygon_count = svg.matches("<polygon ").count();
+        assert!(polygon_count >= 1, "at least 1 beam polygon, got {polygon_count}");
+    }
+
+    #[test]
+    fn beam_group_differs_from_individual_eighth_notes() {
+        let e4 = Pitch::new(Note::E, 4).unwrap();
+        let f4 = Pitch::new(Note::F, 4).unwrap();
+
+        let svg_beamed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .beam_group(vec![
+                (e4.clone(), Duration::EIGHTH),
+                (f4.clone(), Duration::EIGHTH),
+            ])
+            .end_barline()
+            .render_svg();
+
+        let svg_flagged = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(e4, Duration::EIGHTH)
+            .note(f4, Duration::EIGHTH)
+            .end_barline()
+            .render_svg();
+
+        // Beamed version should have polygons, flagged should not
+        assert!(svg_beamed.matches("<polygon ").count() >= 1, "beamed has polygons");
+        assert_eq!(svg_flagged.matches("<polygon ").count(), 0, "flagged has no polygons");
+    }
+
+    #[test]
+    fn beam_group_convert_event_produces_beam_group_measure_event() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::BeamGroup {
+            notes: vec![
+                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+            ],
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::BeamGroup(bg) => {
+                assert_eq!(bg.notes.len(), 2);
+                // E4 in treble: pos 0, G4: pos 2
+                assert_eq!(bg.notes[0].staff_position, 0);
+                assert_eq!(bg.notes[1].staff_position, 2);
+                assert_eq!(bg.notes[0].duration_log2, 3);
+                assert_eq!(bg.notes[1].duration_log2, 3);
+                assert!(bg.stem_direction.is_none());
+            }
+            _ => panic!("expected BeamGroup event"),
+        }
+    }
+
+    #[test]
+    fn beam_group_tracked_accidentals() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+
+        // First F#4 note (standalone)
+        let ev1 = ScoreEvent::Note {
+            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            duration: Duration::QTR,
+        };
+        let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+
+        // Then beam group with F#4 again — should suppress repeated accidental
+        let ev2 = ScoreEvent::BeamGroup {
+            notes: vec![
+                (Pitch::new(Note::Fis, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
+            ],
+        };
+        let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::BeamGroup(bg) => {
+                assert!(bg.notes[0].accidental.is_none(), "F#4 accidental suppressed");
+                assert!(bg.notes[1].accidental.is_none(), "A4 has no accidental");
+            }
+            _ => panic!("expected BeamGroup event"),
         }
     }
 }

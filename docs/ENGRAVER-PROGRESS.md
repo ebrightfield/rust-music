@@ -207,3 +207,9 @@
 - Verified: `cargo run --example chords` produces valid SVG (33 paths, 32 lines, 15409 bytes). `cargo test -p music-engraver` — 528 unit + 3 integration + 2 doc-tests = 533 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
 - Next: Consider v1 scope complete. Remaining polish options: dotted chord example, beam groups across measure API, or pub doc comments on remaining public items.
 - Open issues: None.
+
+## 2026-04-18 — Phase 8, beam group integration through full pipeline
+- Did: Integrated beam groups into the measure layout → renderer → ScoreBuilder pipeline. Added `BeamGroupEvent` struct to `layout/measure.rs`, `MeasureElement::BeamGroup` and `MeasureEvent::BeamGroup` variants. `layout_measure()` distributes proportional spacing across beam group notes. `draw_beam_group_event()` in `render/measure_renderer.rs` computes per-note x-positions, draws noteheads + accidentals + ledger lines + dots, then delegates to `layout_beam_group()` + `draw_beam_group()` for stems/beams. Added `ScoreBuilder::beam_group(notes)` method accepting `Vec<(Pitch, Duration)>` with full accidental tracking. Updated `system.rs` event conversion.
+- Verified: `cargo test -p music-engraver` — 539 unit + 3 integration + 2 doc-tests = 544 tests, all pass. 7 new measure_renderer beam tests (two eighths, four sixteenths, accidental, ledger lines, empty, differs-from-flagged, mixed durations). 4 new score tests (SVG with polygons, differs from individual eighths, convert_event mapping, tracked accidental suppression). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Create `examples/beamed_score.rs` showing beam groups via ScoreBuilder API, or consider v1 scope complete.
+- Open issues: None.

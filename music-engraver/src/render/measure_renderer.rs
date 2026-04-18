@@ -1,13 +1,17 @@
 use music::notation::clef::Clef;
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::beam::{layout_beam_group, BeamedNote};
 use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::dot::dot_staff_position;
-use crate::layout::measure::{ChordEvent, MeasureElement, MeasureLayout, NoteEvent};
+use crate::layout::measure::{
+    BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, NoteEvent,
+};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{
     auto_stem_direction, auto_stem_direction_chord, stem_length_staff_spaces, StemDirection,
 };
+use crate::render::beam_renderer::draw_beam_group;
 use crate::render::barline_renderer::draw_barline;
 use crate::render::dot_renderer::draw_dots;
 use crate::render::flag_renderer::draw_flag;
@@ -51,6 +55,17 @@ pub fn draw_measure(
             }
             MeasureElement::Chord(chord) => {
                 draw_chord_event(svg, staff, font, config, elem_x, chord)?;
+            }
+            MeasureElement::BeamGroup(bg) => {
+                draw_beam_group_event(
+                    svg,
+                    staff,
+                    font,
+                    config,
+                    elem_x,
+                    positioned.width,
+                    bg,
+                )?;
             }
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
@@ -268,6 +283,106 @@ fn draw_chord_event(
     Ok(())
 }
 
+/// Draw a beam group event: noteheads + ledger lines + accidentals + dots,
+/// then beams and stems via `draw_beam_group`.
+///
+/// Sub-notes are distributed across `total_width` using proportional spacing,
+/// then beam geometry is computed from the resulting x-coordinates.
+fn draw_beam_group_event(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    group_x: f64,
+    total_width: f64,
+    bg: &BeamGroupEvent,
+) -> Result<(), FontError> {
+    let n = bg.notes.len();
+    if n == 0 {
+        return Ok(());
+    }
+
+    // Compute x-positions for each note within the group using proportional spacing.
+    // The shortest note gets factor 1.0; each doubling gets `ratio` more.
+    let shortest_log2 = bg.notes.iter().map(|n| n.duration_log2).max().unwrap_or(3);
+    let spacing_ratio = 1.6_f64;
+
+    let factors: Vec<f64> = bg
+        .notes
+        .iter()
+        .map(|note| {
+            let steps = shortest_log2 as f64 - note.duration_log2 as f64;
+            spacing_ratio.powf(steps)
+        })
+        .collect();
+    let total_factor: f64 = factors.iter().sum();
+
+    // Distribute total_width across notes proportionally
+    let mut note_xs = Vec::with_capacity(n);
+    let mut x = 0.0_f64;
+    for factor in &factors {
+        note_xs.push(group_x + x);
+        x += total_width * factor / total_factor;
+    }
+
+    // Get notehead advance width
+    let notehead_glyph = NoteheadKind::Filled.glyph();
+    let outline = font.glyph_outline(notehead_glyph)?;
+    let advance = outline.advance_width as f64;
+
+    // Draw noteheads, accidentals, ledger lines, and dots for each note
+    for (i, note) in bg.notes.iter().enumerate() {
+        let nx = note_xs[i];
+
+        // Accidental
+        if let Some(acc_glyph) = note.accidental {
+            let acc_outline = font.glyph_outline(acc_glyph)?;
+            let acc_advance = acc_outline.advance_width as f64;
+            let padding = 0.12 * staff.staff_space;
+            let acc_x = nx - acc_advance - padding;
+            let acc_y = staff.y_of(note.staff_position);
+            let transform = format!("translate({acc_x}, {acc_y})");
+            svg.add_path(&acc_outline.path_data, "black", Some(&transform));
+        }
+
+        // Notehead (beamed notes are always filled)
+        draw_notehead(svg, staff, font, nx, note.staff_position, NoteheadKind::Filled)?;
+
+        // Ledger lines
+        draw_ledger_lines(svg, staff, config, nx, advance, note.staff_position);
+
+        // Augmentation dots
+        if note.dots > 0 {
+            let dot_pos = dot_staff_position(note.staff_position);
+            draw_dots(svg, staff, font, nx, advance, dot_pos, note.dots)?;
+        }
+    }
+
+    // Build BeamedNote list for beam layout computation
+    let beamed_notes: Vec<BeamedNote> = bg
+        .notes
+        .iter()
+        .enumerate()
+        .map(|(i, note)| BeamedNote {
+            x: note_xs[i],
+            staff_position: note.staff_position,
+            duration_log2: note.duration_log2,
+        })
+        .collect();
+
+    // Determine stem direction
+    let positions: Vec<i8> = bg.notes.iter().map(|n| n.staff_position).collect();
+    let direction = bg
+        .stem_direction
+        .unwrap_or_else(|| auto_stem_direction_chord(&positions));
+
+    // Compute beam layout and render
+    let beam_layout = layout_beam_group(&beamed_notes, direction, staff.staff_space);
+    draw_beam_group(svg, staff, config, &beamed_notes, &beam_layout, advance);
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,7 +390,7 @@ mod tests {
     use crate::layout::barline::BarlineStyle;
     use crate::layout::clef::ClefLayout;
     use crate::layout::key_signature::KeySignature;
-    use crate::layout::measure::{layout_measure, MeasureLayoutConfig, RestEvent};
+    use crate::layout::measure::{layout_measure, BeamGroupEvent, MeasureLayoutConfig, RestEvent};
     use crate::layout::time_signature::TimeSignatureKind;
     use crate::render::staff_renderer::draw_staff_lines;
     use smufl::Glyph;
@@ -880,6 +995,221 @@ mod tests {
             svg_up.to_svg(),
             svg_down.to_svg(),
             "up vs down stem should differ"
+        );
+    }
+
+    // --- beam group rendering ---
+
+    #[test]
+    fn beam_group_two_eighths() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![
+                NoteEvent {
+                    staff_position: 0,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                },
+                NoteEvent {
+                    staff_position: 2,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                },
+            ],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads as paths
+        assert_eq!(output.matches("<path ").count(), 2, "two noteheads");
+        // 2 stems as lines
+        assert_eq!(output.matches("<line ").count(), 2, "two stems");
+        // 1 primary beam as polygon
+        assert_eq!(output.matches("<polygon ").count(), 1, "one beam polygon");
+    }
+
+    #[test]
+    fn beam_group_four_sixteenths() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![
+                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+            ],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 4, "four noteheads");
+        assert_eq!(output.matches("<line ").count(), 4, "four stems");
+        // Primary + secondary beam = 2 polygons
+        assert_eq!(output.matches("<polygon ").count(), 2, "two beam polygons (primary + secondary)");
+    }
+
+    #[test]
+    fn beam_group_with_accidental() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![
+                NoteEvent {
+                    staff_position: 2,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: Some(Glyph::AccidentalSharp),
+                    stem_direction: None,
+                },
+                NoteEvent {
+                    staff_position: 4,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                },
+            ],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 1 accidental + 2 noteheads = 3 paths
+        assert_eq!(output.matches("<path ").count(), 3, "accidental + 2 noteheads");
+        assert_eq!(output.matches("<line ").count(), 2, "two stems");
+        assert_eq!(output.matches("<polygon ").count(), 1, "one beam");
+    }
+
+    #[test]
+    fn beam_group_with_ledger_lines() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        // Notes below the staff requiring ledger lines
+        let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![
+                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+            ],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 2, "two noteheads");
+        // 2 stems + ledger lines (1 for pos -2, 2 for pos -4)
+        let line_count = output.matches("<line ").count();
+        assert!(line_count >= 5, "stems + ledger lines: got {line_count}");
+    }
+
+    #[test]
+    fn beam_group_empty() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 0);
+        assert_eq!(output.matches("<line ").count(), 0);
+        assert_eq!(output.matches("<polygon ").count(), 0);
+    }
+
+    #[test]
+    fn beam_group_differs_from_flagged_notes() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+        // Two separate eighth notes (flagged)
+        let flagged = vec![
+            MeasureElement::Note(NoteEvent {
+                staff_position: 0,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+            }),
+            MeasureElement::Note(NoteEvent {
+                staff_position: 2,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+            }),
+        ];
+        // Same notes but beamed
+        let beamed = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![
+                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+            ],
+            stem_direction: None,
+        })];
+
+        let layout_f = layout_measure(&flagged, &cfg);
+        let layout_b = layout_measure(&beamed, &cfg);
+
+        let mut svg_f = make_svg();
+        draw_measure(&mut svg_f, &staff, &font, &config, &layout_f, 0.0, &Clef::Treble).unwrap();
+        let mut svg_b = make_svg();
+        draw_measure(&mut svg_b, &staff, &font, &config, &layout_b, 0.0, &Clef::Treble).unwrap();
+
+        let out_f = svg_f.to_svg();
+        let out_b = svg_b.to_svg();
+
+        // Flagged: 2 noteheads + 2 flags = 4 paths, 0 polygons
+        assert_eq!(out_f.matches("<path ").count(), 4, "flagged: 2 noteheads + 2 flags");
+        assert_eq!(out_f.matches("<polygon ").count(), 0, "flagged: no polygons");
+
+        // Beamed: 2 noteheads = 2 paths, 1 polygon
+        assert_eq!(out_b.matches("<path ").count(), 2, "beamed: 2 noteheads only");
+        assert_eq!(out_b.matches("<polygon ").count(), 1, "beamed: 1 beam polygon");
+    }
+
+    #[test]
+    fn beam_group_mixed_durations() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        // Eighth + two sixteenths
+        let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: vec![
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+            ],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 3, "three noteheads");
+        assert_eq!(output.matches("<line ").count(), 3, "three stems");
+        // Primary beam spanning all + secondary beam for 16th notes
+        assert!(
+            output.matches("<polygon ").count() >= 2,
+            "at least 2 beam polygons"
         );
     }
 }
