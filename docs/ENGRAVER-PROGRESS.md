@@ -95,3 +95,9 @@
 - Verified: `cargo test -p music-engraver` — 270 unit + 3 integration = 273 tests, all pass. `cargo run --example barlines` produces valid SVG (5 paths, 14 lines). `cargo check --workspace` passes.
 - Next: Phase 4 continuation — create time signatures example SVG (showing 4/4, 6/8, 12/8, common, cut-common on a staff), then begin key signature layout.
 - Open issues: None.
+
+## 2026-04-18 — Phase 4, time signatures example + key signature layout & rendering
+- Did: Created `examples/time_signatures.rs` rendering 5 time signatures (4/4, 6/8, 12/8, common, cut common) on treble staff → `examples/output/time_signatures.svg` (10 paths, 5 lines). Created `layout/key_signature.rs` with `KeySignature` enum (Sharps/Flats/Open), `key_signature_layout()` (maps key to ordered accidental positions per clef — treble, treble 8va/8ba, bass), `sharp_positions()`/`flat_positions()` tables, spacing at 1 staff space. Created `render/key_sig_renderer.rs` with `draw_key_signature()`. Handles Treble/Treble8va/Treble8ba/Bass clefs (no Alto/Tenor since `music::Clef` doesn't have them).
+- Verified: `cargo test -p music-engraver` — 294 unit + 3 integration = 297 tests, all pass. `cargo run --example time_signatures` produces valid SVG. `cargo check --workspace` passes. 17 key_sig layout tests + 9 renderer tests.
+- Next: Phase 4 continuation — create key signatures example SVG showing sharps and flats on treble and bass staves, then Phase 4 exit criteria check.
+- Open issues: None.
