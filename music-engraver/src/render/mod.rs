@@ -1,5 +1,6 @@
 pub mod accidental_renderer;
 pub mod barline_renderer;
+pub mod beam_renderer;
 pub mod dot_renderer;
 pub mod flag_renderer;
 pub mod key_sig_renderer;
@@ -13,6 +14,7 @@ pub mod time_sig_renderer;
 
 pub use accidental_renderer::draw_accidental;
 pub use barline_renderer::draw_barline;
+pub use beam_renderer::draw_beam_group;
 pub use dot_renderer::draw_dots;
 pub use flag_renderer::draw_flag;
 pub use key_sig_renderer::draw_key_signature;

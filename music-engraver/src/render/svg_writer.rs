@@ -55,6 +55,28 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
+    /// Add a filled rectangle (axis-aligned).
+    pub fn add_rect(&mut self, x: f64, y: f64, width: f64, height: f64, fill: &str) {
+        let _ = write!(
+            self.elements,
+            r#"  <rect x="{x}" y="{y}" width="{width}" height="{height}" fill="{fill}"/>"#
+        );
+        self.elements.push('\n');
+    }
+
+    /// Add a filled polygon defined by an array of (x, y) points.
+    pub fn add_polygon(&mut self, points: &[(f64, f64)], fill: &str) {
+        let _ = write!(self.elements, r#"  <polygon points=""#);
+        for (i, &(x, y)) in points.iter().enumerate() {
+            if i > 0 {
+                self.elements.push(' ');
+            }
+            let _ = write!(self.elements, "{x},{y}");
+        }
+        let _ = write!(self.elements, r#"" fill="{fill}"/>"#);
+        self.elements.push('\n');
+    }
+
     /// Produce the complete SVG document as a string.
     pub fn to_svg(&self) -> String {
         let (vx, vy, vw, vh) = self.view_box;
@@ -110,5 +132,36 @@ mod tests {
         assert!(svg.contains(r#"x2="100""#));
         assert!(svg.contains(r##"stroke="#000""##));
         assert!(svg.contains(r#"stroke-width="2""#));
+    }
+
+    #[test]
+    fn svg_writer_rect_element() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        w.add_rect(10.0, 20.0, 50.0, 30.0, "blue");
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"<rect "#));
+        assert!(svg.contains(r#"x="10""#));
+        assert!(svg.contains(r#"y="20""#));
+        assert!(svg.contains(r#"width="50""#));
+        assert!(svg.contains(r#"height="30""#));
+        assert!(svg.contains(r#"fill="blue""#));
+    }
+
+    #[test]
+    fn svg_writer_polygon_element() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        w.add_polygon(&[(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 30.0)], "red");
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"<polygon "#));
+        assert!(svg.contains(r#"points="0,0 50,0 50,30 0,30""#));
+        assert!(svg.contains(r#"fill="red""#));
+    }
+
+    #[test]
+    fn svg_writer_polygon_empty_points() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        w.add_polygon(&[], "black");
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"points="""#));
     }
 }
