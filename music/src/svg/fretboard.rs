@@ -372,6 +372,24 @@ pub fn fretboard_shape_svg(
     fretboard_positions_svg(&positions, root_positions, barres, fingerings, &adjusted_config)
 }
 
+/// Translate an absolute fret number into the index of the visible fret space
+/// (1-based) within the diagram window defined by `config.start_fret` and
+/// `config.num_frets`. Returns `None` if the fret is below the visible window,
+/// so callers can skip it cleanly. Values greater than `config.num_frets` are
+/// returned and expected to be filtered by the caller's upper-bound check.
+///
+/// When `start_fret == 0`, the leftmost (top) diagram line is the nut and the
+/// first visible space is fret 1. When `start_fret > 0`, the leftmost line
+/// represents the wire between fret `start_fret` and `start_fret + 1`, so the
+/// first visible space is `start_fret + 1`.
+fn relative_fret(fret: u8, config: &FretboardConfig) -> Option<u8> {
+    if fret < config.start_fret + 1 && config.start_fret > 0 {
+        // Note sits at or below the hidden boundary.
+        return None;
+    }
+    Some(fret.saturating_sub(config.start_fret))
+}
+
 /// Generate SVG from raw fret positions.
 pub fn fretboard_positions_svg(
     positions: &[FretPosition],
@@ -522,13 +540,9 @@ fn draw_vertical_fretboard(
 
     // Draw barres first (before dots so dots can overlay)
     for barre in barres {
-        let relative_fret = if config.start_fret == 0 {
-            barre.fret
-        } else {
-            barre.fret.saturating_sub(config.start_fret) + 1
-        };
+        let Some(relative_fret) = relative_fret(barre.fret, config) else { continue };
 
-        if relative_fret > 0 && relative_fret <= config.num_frets {
+        if relative_fret >= 1 && relative_fret <= config.num_frets {
             let x1 = (margin_left + barre.from_string as u32 * string_spacing) as f64;
             let x2 = (margin_left + barre.to_string as u32 * string_spacing) as f64;
             let y = margin_top as f64
@@ -568,15 +582,9 @@ fn draw_vertical_fretboard(
                     continue;
                 }
 
-                // Calculate relative fret position
-                let relative_fret = if config.start_fret == 0 {
-                    *fret
-                } else {
-                    fret.saturating_sub(config.start_fret) + 1
-                };
-
                 // Only draw if within visible range
-                if relative_fret > 0 && relative_fret <= config.num_frets {
+                let Some(relative_fret) = relative_fret(*fret, config) else { continue };
+                if relative_fret >= 1 && relative_fret <= config.num_frets {
                     let x = (margin_left + *string as u32 * string_spacing) as f64;
                     let y = margin_top as f64
                         + (relative_fret as f64 * fret_spacing as f64)
@@ -698,13 +706,9 @@ fn draw_horizontal_fretboard(
 
     // Draw barres (horizontal bar in horizontal view means vertical rectangle)
     for barre in barres {
-        let relative_fret = if config.start_fret == 0 {
-            barre.fret
-        } else {
-            barre.fret.saturating_sub(config.start_fret) + 1
-        };
+        let Some(relative_fret) = relative_fret(barre.fret, config) else { continue };
 
-        if relative_fret > 0 && relative_fret <= config.num_frets {
+        if relative_fret >= 1 && relative_fret <= config.num_frets {
             let x = margin_left as f64 + (relative_fret as f64 - 0.5) * fret_spacing as f64;
             let y1 = (margin_top + (num_strings - 1 - barre.to_string) as u32 * string_spacing) as f64;
             let y2 = (margin_top + (num_strings - 1 - barre.from_string) as u32 * string_spacing) as f64;
@@ -732,8 +736,11 @@ fn draw_horizontal_fretboard(
                 svg.text_colored(x, y, "×", "string-text", config.theme.text_color);
             }
             FretPosition::Open { string } => {
+                // Place the open-string indicator straddling the nut with the
+                // bulk of the circle to its left (players read open strings as
+                // living "before" the nut, not in the first fret space).
                 let y = (margin_top + (num_strings - 1 - *string) as u32 * string_spacing) as f64;
-                let x = (margin_left + 5) as f64;
+                let x = margin_left as f64 - 3.0;
                 svg.circle(x, y, 5, "none", config.theme.stroke_color, 1.5);
             }
             FretPosition::Fretted { string, fret } => {
@@ -742,13 +749,9 @@ fn draw_horizontal_fretboard(
                     continue;
                 }
 
-                let relative_fret = if config.start_fret == 0 {
-                    *fret
-                } else {
-                    fret.saturating_sub(config.start_fret) + 1
-                };
+                let Some(relative_fret) = relative_fret(*fret, config) else { continue };
 
-                if relative_fret > 0 && relative_fret <= config.num_frets {
+                if relative_fret >= 1 && relative_fret <= config.num_frets {
                     let x = margin_left as f64
                         + (relative_fret as f64 - 0.5) * fret_spacing as f64;
                     let y =
@@ -1008,9 +1011,11 @@ mod tests {
 
     #[test]
     fn test_barre_at_method() {
+        // start_fret(4) means the first visible space is fret 5, so a barre
+        // at fret 5 lands in the first visible space and renders.
         let svg = FretboardBuilder::new()
-            .barre_at(5, 0, 5)  // Full barre at 5th fret
-            .start_fret(5)
+            .barre_at(5, 0, 5)
+            .start_fret(4)
             .build();
 
         assert!(svg.contains("<rect"));
