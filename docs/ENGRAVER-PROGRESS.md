@@ -201,3 +201,9 @@
 - Verified: `cargo test -p music-engraver` — 528 unit + 3 integration + 2 doc-tests = 533 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
 - Next: Create a chord example SVG (`examples/chords.rs`) showing various chord types on a staff, or consider the crate done for v1 scope.
 - Open issues: None.
+
+## 2026-04-18 — Phase 8, chords example
+- Did: Created `examples/chords.rs` rendering 4 measures across 2 systems: open fifth (C-G), C major triad, D minor triad, second interval (E-F, tests notehead offset), G major low voicing, 3-note cluster (C-D-E, adjacent seconds), Bb major with accidental, wide voicing (C4-G4-E5), whole-note 4-note chord (C-E-G-C). Exercises chord noteheads, stem sharing, accidentals in chords, second-avoidance x-offsets, ledger lines, and whole-note (stemless) chords.
+- Verified: `cargo run --example chords` produces valid SVG (33 paths, 32 lines, 15409 bytes). `cargo test -p music-engraver` — 528 unit + 3 integration + 2 doc-tests = 533 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
+- Next: Consider v1 scope complete. Remaining polish options: dotted chord example, beam groups across measure API, or pub doc comments on remaining public items.
+- Open issues: None.
