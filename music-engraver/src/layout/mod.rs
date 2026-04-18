@@ -1,5 +1,6 @@
 pub mod accidental;
 pub mod barline;
+pub mod beam;
 pub mod clef;
 pub mod dot;
 pub mod flag;
@@ -12,6 +13,9 @@ pub mod stem;
 pub mod time_signature;
 
 pub use barline::{BarlineLayout, BarlineStyle};
+pub use beam::{
+    beam_group_stem_direction, compute_beam_counts, layout_beam_group, BeamGroupLayout, BeamedNote,
+};
 pub use clef::ClefLayout;
 pub use dot::{dot_staff_position, dot_xs};
 pub use flag::flag_glyph;

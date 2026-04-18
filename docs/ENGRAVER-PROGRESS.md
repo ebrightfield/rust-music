@@ -119,3 +119,9 @@
 - Verified: `cargo run --example measure` produces valid SVG (8492 bytes). `cargo test -p music-engraver` — 326 unit + 3 integration = 329 tests, all pass. `cargo check --workspace` passes.
 - Next: Phase 5 completion check. Phase 5 elements complete: measure layout (proportional spacing), measure renderer (composing all element renderers), measure example. Consider multi-measure rendering or begin Phase 6 (beams, ties, slurs). Next concrete chunk: multi-measure layout or beam grouping.
 - Open issues: None.
+
+## 2026-04-18 — Phase 6, beam layout
+- Did: Created `layout/beam.rs` with beam grouping and geometry computation. `BeamedNote` struct (x, staff_position, duration_log2). `beam_group_stem_direction()` (farthest-from-middle-line rule). `compute_beam_counts()` (left/right beam connectivity per note — handles primary beams, secondary beams for 16th/32nd, fractional beams). `layout_beam_group()` (computes stem tip y-coordinates via linear interpolation between first/last note tips, slope clamping to ~18°, minimum stem length enforcement, extra stem length for secondary beams). Helper `staff_position_to_y()`.
+- Verified: `cargo test -p music-engraver` — 347 unit + 3 integration = 350 tests, all pass. 21 new beam layout tests covering: direction selection (empty, below/above/mixed/equidistant), beam counts (single/pair/four eighths, sixteenths, mixed, 32nds, empty), layout geometry (ascending/descending, flat beam, minimum stem length, slope constraint, interpolation, mixed durations, single note, stems-down). No warnings. `cargo check --workspace` passes.
+- Next: Phase 6 continuation — create `render/beam_renderer.rs` with `draw_beam_group()` that renders beam lines (primary + secondary) and stems for a beam group, then an example SVG.
+- Open issues: None.
