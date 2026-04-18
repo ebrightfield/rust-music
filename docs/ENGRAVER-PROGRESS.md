@@ -89,3 +89,9 @@
 - Verified: `cargo test -p music-engraver` — 251 unit + 3 integration = 254 tests, all pass. `cargo run --example rests` produces valid SVG (9 paths, 5 lines). `cargo check --workspace` passes.
 - Next: Phase 4 continuation — create barlines example SVG showing all 5 styles, then begin time signature rendering (text-based numerals or SMuFL time sig glyphs).
 - Open issues: None.
+
+## 2026-04-18 — Phase 4, barlines example + time signature layout & rendering
+- Did: Created `examples/barlines.rs` rendering all 5 barline styles (single, double, final, start repeat, end repeat) on a treble staff — produces `examples/output/barlines.svg`. Created `layout/time_signature.rs` with `TimeSignatureKind` enum (Numeric/Common/CutCommon), `digit_glyph()`, `time_signature_layout()` (resolves digit glyphs, centres numerator at staff pos 6 and denominator at pos 2, handles multi-digit numbers up to 99). Created `render/time_sig_renderer.rs` with `draw_time_signature()`. 12 layout tests (digit mapping, centering, all kinds, multi-digit), 8 renderer tests (path counts, positions, differentiation).
+- Verified: `cargo test -p music-engraver` — 270 unit + 3 integration = 273 tests, all pass. `cargo run --example barlines` produces valid SVG (5 paths, 14 lines). `cargo check --workspace` passes.
+- Next: Phase 4 continuation — create time signatures example SVG (showing 4/4, 6/8, 12/8, common, cut-common on a staff), then begin key signature layout.
+- Open issues: None.

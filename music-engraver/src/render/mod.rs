@@ -7,6 +7,7 @@ pub mod rest_renderer;
 pub mod staff_renderer;
 pub mod stem_renderer;
 mod svg_writer;
+pub mod time_sig_renderer;
 
 pub use accidental_renderer::draw_accidental;
 pub use barline_renderer::draw_barline;
@@ -17,3 +18,4 @@ pub use rest_renderer::draw_rest;
 pub use staff_renderer::{draw_clef, draw_staff_lines};
 pub use stem_renderer::draw_stem;
 pub use svg_writer::SvgWriter;
+pub use time_sig_renderer::draw_time_signature;

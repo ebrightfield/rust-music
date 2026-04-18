@@ -7,6 +7,7 @@ pub mod note_placement;
 pub mod rest;
 pub mod staff;
 pub mod stem;
+pub mod time_signature;
 
 pub use barline::{BarlineLayout, BarlineStyle};
 pub use clef::ClefLayout;
@@ -15,3 +16,4 @@ pub use flag::flag_glyph;
 pub use note_placement::pitch_to_staff_position;
 pub use staff::{StaffLayout, StaffPosition, BOTTOM_LINE, STANDARD_LINE_COUNT, TOP_LINE};
 pub use stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
+pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
