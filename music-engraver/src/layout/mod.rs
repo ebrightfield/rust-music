@@ -9,6 +9,7 @@
 pub mod accidental;
 pub mod barline;
 pub mod beam;
+pub mod chord;
 pub mod clef;
 pub mod dot;
 pub mod flag;
@@ -26,6 +27,10 @@ pub mod time_signature;
 pub use barline::{BarlineLayout, BarlineStyle};
 pub use beam::{
     beam_group_stem_direction, compute_beam_counts, layout_beam_group, BeamGroupLayout, BeamedNote,
+};
+pub use chord::{
+    chord_extent, chord_has_offsets, layout_chord_noteheads, notehead_x_offset, ChordNote,
+    ChordNoteLayout,
 };
 pub use clef::ClefLayout;
 pub use dot::{dot_staff_position, dot_xs};

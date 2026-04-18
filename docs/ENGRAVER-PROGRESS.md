@@ -178,6 +178,12 @@
 - Next: Phase 8 polish — add pub doc comments on all public types/functions, or consider the crate done for v1 scope.
 - Open issues: None.
 
+## 2026-04-18 — Phase 8, chord layout module
+- Did: Created `layout/chord.rs` with chord notehead stacking logic. `ChordNote` and `ChordNoteLayout` structs. `layout_chord_noteheads()` determines which notes in a chord need x-offset to avoid collision when notes are a second apart — stem-up offsets upper note right, stem-down offsets lower note left, clusters alternate. `notehead_x_offset()`, `chord_has_offsets()`, `chord_extent()` helpers. Wired into `layout/mod.rs` with public exports.
+- Verified: `cargo test -p music-engraver` — 513 unit + 3 integration + 2 doc-tests = 518 tests, all pass. 24 new chord layout tests covering: empty, single note, seconds (both directions), clusters of 3 and 5 consecutive, mixed intervals, unsorted input, unisons, accidental preservation, x-offset values, extent computation. `cargo check --workspace` passes.
+- Next: Phase 8 continuation — add `ChordEvent` to `MeasureEvent` enum, update measure renderer to draw chords, then add `.chord()` method to `ScoreBuilder`.
+- Open issues: None.
+
 ## 2026-04-18 — Phase 8, clippy cleanup + crate/module doc comments
 - Did: Fixed all 9 clippy warnings in `music-engraver`: needless borrows in `key_signature.rs`, manual `RangeInclusive::contains` in `staff.rs`, `saturating_sub` for arithmetic check in `measure_renderer.rs`, `#[allow(clippy::too_many_arguments)]` on 3 private beam_renderer helpers + 1 pub `draw_stemmed_note`. Added crate-level doc comment to `lib.rs` (with usage example), module-level doc comments to `font/mod.rs`, `layout/mod.rs`, `render/mod.rs`. Crate-level doc example is now a doc-test (2 doc-tests total).
 - Verified: `cargo test -p music-engraver` — 486 unit + 3 integration + 2 doc-tests = 491 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo doc -p music-engraver --no-deps` — clean. `cargo check --workspace` passes.
