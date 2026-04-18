@@ -47,3 +47,9 @@
 - Verified: `cargo test -p music-engraver` — 102 tests pass (99 unit + 3 integration). 18 new note_renderer tests cover notehead placement, ledger line counts, extension geometry, thickness from config, composite draw, advance width comparison. `cargo run --example single_note` produces valid SVG (6 paths, 7 lines). `cargo check --workspace` passes.
 - Next: Phase 2 completion — add `add_text()` to SvgWriter for time signatures, or begin stem rendering (stem direction rules, draw stem line from notehead). Then Phase 2 exit criteria check.
 - Open issues: None.
+
+## 2026-04-18 — Phase 2, stem layout + rendering
+- Did: Created `layout/stem.rs` with `StemDirection` enum, `auto_stem_direction()` (single note — on/above middle line → down, below → up), `auto_stem_direction_chord()` (farthest-from-middle-line rule, ties → down), `stem_length_staff_spaces()` (default 3.5ss, extends so tip reaches middle line for distant notes, min 2.5ss). Created `render/stem_renderer.rs` with `stem_x()` (right side for up, left for down), `stem_endpoints()` (y_top, y_bottom), `draw_stem()`. 15 layout tests + 12 renderer tests.
+- Verified: `cargo test -p music-engraver` — 129 unit + 3 integration = 132 tests, all pass. No warnings. `cargo check --workspace` passes.
+- Next: Phase 2 continuation — create an example that renders stemmed notes on a staff (combining draw_note + draw_stem with auto stem direction). Then consider `add_text()` for time signatures, or Phase 2 exit criteria check.
+- Open issues: None.
