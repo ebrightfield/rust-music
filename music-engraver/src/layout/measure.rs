@@ -4,6 +4,24 @@ use crate::layout::key_signature::KeySignature;
 use crate::layout::stem::StemDirection;
 use crate::layout::time_signature::TimeSignatureKind;
 
+/// A chord (multiple simultaneous notes) to be laid out within a measure.
+#[derive(Clone, Debug)]
+pub struct ChordEvent {
+    /// Staff positions of notes in the chord (bottom line = 0), in any order.
+    /// Will be sorted during layout.
+    pub staff_positions: Vec<i8>,
+    /// Log2 of the duration denominator: 0=whole, 1=half, 2=quarter, 3=eighth, etc.
+    /// All notes in a chord share the same duration.
+    pub duration_log2: u8,
+    /// Number of augmentation dots (0–3).
+    pub dots: u8,
+    /// Accidental glyphs to display, parallel to `staff_positions`.
+    /// `None` entries mean no accidental for that note.
+    pub accidentals: Vec<Option<smufl::Glyph>>,
+    /// Stem direction override. `None` uses auto-detection based on chord extent.
+    pub stem_direction: Option<StemDirection>,
+}
+
 /// A musical event within a measure that occupies horizontal space.
 #[derive(Clone, Debug)]
 pub enum MeasureElement {
@@ -19,6 +37,8 @@ pub enum MeasureElement {
     Note(NoteEvent),
     /// A rest event: log2 duration (0=whole, 1=half, 2=quarter, etc.), dot count.
     Rest(RestEvent),
+    /// A chord (multiple simultaneous notes).
+    Chord(ChordEvent),
     /// Barline at the end of the measure.
     Barline(BarlineStyle),
 }
@@ -135,6 +155,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
         .filter_map(|e| match e {
             MeasureElement::Note(n) => Some(n.duration_log2),
             MeasureElement::Rest(r) => Some(r.duration_log2),
+            MeasureElement::Chord(c) => Some(c.duration_log2),
             _ => None,
         })
         .max()
@@ -186,6 +207,11 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             MeasureElement::Rest(r) => {
                 let factor =
                     duration_spacing_factor(r.duration_log2, shortest_log2, config.spacing_ratio);
+                config.min_note_spacing * factor
+            }
+            MeasureElement::Chord(c) => {
+                let factor =
+                    duration_spacing_factor(c.duration_log2, shortest_log2, config.spacing_ratio);
                 config.min_note_spacing * factor
             }
             MeasureElement::Barline(_) => config.barline_width,

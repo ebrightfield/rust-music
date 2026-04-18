@@ -4,7 +4,8 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
-    layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent, RestEvent,
+    layout_measure, ChordEvent, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent,
+    RestEvent,
 };
 use crate::layout::time_signature::TimeSignatureKind;
 
@@ -17,11 +18,12 @@ pub struct MeasureContent {
     pub barline: BarlineStyle,
 }
 
-/// A rhythmic event within a measure — either a note or a rest.
+/// A rhythmic event within a measure — a note, rest, or chord.
 #[derive(Clone, Debug)]
 pub enum MeasureEvent {
     Note(NoteEvent),
     Rest(RestEvent),
+    Chord(ChordEvent),
 }
 
 /// Describes the frontmatter (clef, key, time sig) that appears at the start of a system.
@@ -201,6 +203,7 @@ fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
     match event {
         MeasureEvent::Note(n) => MeasureElement::Note(n.clone()),
         MeasureEvent::Rest(r) => MeasureElement::Rest(r.clone()),
+        MeasureEvent::Chord(c) => MeasureElement::Chord(c.clone()),
     }
 }
 

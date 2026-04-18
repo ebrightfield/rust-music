@@ -37,7 +37,7 @@ use crate::font::bravura_font;
 use crate::layout::accidental::accidental_glyph;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{MeasureLayoutConfig, NoteEvent, RestEvent};
+use crate::layout::measure::{ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
@@ -212,6 +212,7 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 enum ScoreEvent {
     Note { pitch: Pitch, duration: Duration },
     Rest { duration: Duration },
+    Chord { pitches: Vec<Pitch>, duration: Duration },
 }
 
 /// Builder for constructing a score from `music` crate types and rendering to SVG.
@@ -301,6 +302,15 @@ impl ScoreBuilder {
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
         self.current_events.push(ScoreEvent::Note { pitch, duration });
+        self
+    }
+
+    /// Add a chord (multiple simultaneous pitches) to the current measure.
+    ///
+    /// All notes in the chord share the same duration. Noteheads that are a
+    /// second apart are automatically offset to avoid collision.
+    pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
+        self.current_events.push(ScoreEvent::Chord { pitches, duration });
         self
     }
 
@@ -445,6 +455,26 @@ impl ScoreBuilder {
                     dots,
                 })
             }
+            ScoreEvent::Chord { pitches, duration } => {
+                let log2 = duration_kind_to_log2(duration.kind());
+                let dots = duration.num_dots();
+                let staff_positions: Vec<i8> = pitches
+                    .iter()
+                    .map(|p| pitch_to_staff_position(p, clef))
+                    .collect();
+                let accidentals: Vec<Option<smufl::Glyph>> = pitches
+                    .iter()
+                    .map(|p| should_show_accidental(p, &self.key_sig))
+                    .collect();
+
+                MeasureEvent::Chord(ChordEvent {
+                    staff_positions,
+                    duration_log2: log2,
+                    dots,
+                    accidentals,
+                    stem_direction: None,
+                })
+            }
         }
     }
 
@@ -471,8 +501,6 @@ impl ScoreBuilder {
                 if let Some(eff) = effective_accidental(pitch, &self.key_sig) {
                     seen.insert(key, eff);
                 } else {
-                    // Natural on unaltered note — remove any tracked accidental
-                    // (a courtesy natural was shown if needed by resolve_accidental)
                     seen.remove(&key);
                 }
 
@@ -491,6 +519,36 @@ impl ScoreBuilder {
                 MeasureEvent::Rest(RestEvent {
                     duration_log2: log2,
                     dots,
+                })
+            }
+            ScoreEvent::Chord { pitches, duration } => {
+                let log2 = duration_kind_to_log2(duration.kind());
+                let dots = duration.num_dots();
+                let staff_positions: Vec<i8> = pitches
+                    .iter()
+                    .map(|p| pitch_to_staff_position(p, clef))
+                    .collect();
+                let accidentals: Vec<Option<smufl::Glyph>> = pitches
+                    .iter()
+                    .map(|p| {
+                        let acc = resolve_accidental(p, &self.key_sig, Some(seen));
+                        // Update tracking for each note in the chord
+                        let key = note_key(p);
+                        if let Some(eff) = effective_accidental(p, &self.key_sig) {
+                            seen.insert(key, eff);
+                        } else {
+                            seen.remove(&key);
+                        }
+                        acc
+                    })
+                    .collect();
+
+                MeasureEvent::Chord(ChordEvent {
+                    staff_positions,
+                    duration_log2: log2,
+                    dots,
+                    accidentals,
+                    stem_direction: None,
                 })
             }
         }
@@ -1265,5 +1323,159 @@ mod tests {
         let p1 = Pitch::new(Note::Cis, 4).unwrap();
         let p2 = Pitch::new(Note::Des, 4).unwrap();
         assert_ne!(note_key(&p1), note_key(&p2));
+    }
+
+    // --- chord support in ScoreBuilder ---
+
+    #[test]
+    fn chord_produces_multiple_noteheads() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).unwrap(),
+                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::G, 4).unwrap(),
+                ],
+                Duration::QTR,
+            )
+            .render_svg();
+        let path_count = svg.matches("<path").count();
+        // clef(1) + 3 noteheads = 4 paths minimum
+        assert!(
+            path_count >= 4,
+            "expected >= 4 paths (clef + 3 noteheads), got {}",
+            path_count
+        );
+    }
+
+    #[test]
+    fn chord_has_more_paths_than_single_note() {
+        let svg_note = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .render_svg();
+        let svg_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).unwrap(),
+                    Pitch::new(Note::E, 4).unwrap(),
+                ],
+                Duration::QTR,
+            )
+            .render_svg();
+        let paths_note = svg_note.matches("<path").count();
+        let paths_chord = svg_chord.matches("<path").count();
+        assert!(
+            paths_chord > paths_note,
+            "chord ({} paths) should have more paths than single note ({} paths)",
+            paths_chord,
+            paths_note
+        );
+    }
+
+    #[test]
+    fn chord_with_accidentals_in_key() {
+        // In D major (F#, C#): chord with F#4 and A4
+        // F# is suppressed (in key sig), A has no accidental
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Sharps(2))
+            .chord(
+                vec![
+                    Pitch::new(Note::Fis, 4).unwrap(),
+                    Pitch::new(Note::A, 4).unwrap(),
+                ],
+                Duration::QTR,
+            )
+            .render_svg();
+        let path_count = svg.matches("<path").count();
+        // clef(1) + 2 key sig sharps + 2 noteheads + 0 accidentals = 5
+        assert_eq!(
+            path_count, 5,
+            "expected 5 paths (clef + 2 key sharps + 2 noteheads, no extra accidentals), got {}",
+            path_count
+        );
+    }
+
+    #[test]
+    fn chord_with_natural_accidental() {
+        // In D major, chord with F♮4 and G4 — natural should appear on F
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Sharps(2))
+            .chord(
+                vec![
+                    Pitch::new(Note::F, 4).unwrap(),
+                    Pitch::new(Note::G, 4).unwrap(),
+                ],
+                Duration::QTR,
+            )
+            .render_svg();
+        let path_count = svg.matches("<path").count();
+        // clef(1) + 2 key sharps + 2 noteheads + 1 natural = 6
+        assert_eq!(
+            path_count, 6,
+            "expected 6 paths (clef + 2 key sharps + 2 noteheads + 1 natural), got {}",
+            path_count
+        );
+    }
+
+    #[test]
+    fn convert_event_chord_maps_pitches() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::E, 4).unwrap(),
+                Pitch::new(Note::G, 4).unwrap(),
+            ],
+            duration: Duration::QTR,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.staff_positions.len(), 2);
+                // E4 in treble = pos 0, G4 = pos 2
+                assert_eq!(c.staff_positions[0], 0);
+                assert_eq!(c.staff_positions[1], 2);
+                assert_eq!(c.duration_log2, 2);
+                assert_eq!(c.dots, 0);
+                assert_eq!(c.accidentals.len(), 2);
+            }
+            _ => panic!("expected Chord event"),
+        }
+    }
+
+    #[test]
+    fn convert_event_tracked_chord_suppresses_repeated_accidental() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+
+        // First: single F#4 note
+        let ev1 = ScoreEvent::Note {
+            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            duration: Duration::QTR,
+        };
+        let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+
+        // Then: chord with F#4 (should be suppressed) and A4
+        let ev2 = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::Fis, 4).unwrap(),
+                Pitch::new(Note::A, 4).unwrap(),
+            ],
+            duration: Duration::QTR,
+        };
+        let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::Chord(c) => {
+                // F#4's accidental should be suppressed (already shown)
+                assert_eq!(c.accidentals[0], None, "F#4 accidental should be suppressed");
+                // A4 has no accidental in C major
+                assert_eq!(c.accidentals[1], None, "A4 should have no accidental");
+            }
+            _ => panic!("expected Chord event"),
+        }
     }
 }

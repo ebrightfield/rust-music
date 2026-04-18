@@ -1,10 +1,13 @@
 use music::notation::clef::Clef;
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::dot::dot_staff_position;
-use crate::layout::measure::{MeasureElement, MeasureLayout, NoteEvent};
+use crate::layout::measure::{ChordEvent, MeasureElement, MeasureLayout, NoteEvent};
 use crate::layout::staff::StaffLayout;
-use crate::layout::stem::{auto_stem_direction, StemDirection};
+use crate::layout::stem::{
+    auto_stem_direction, auto_stem_direction_chord, stem_length_staff_spaces, StemDirection,
+};
 use crate::render::barline_renderer::draw_barline;
 use crate::render::dot_renderer::draw_dots;
 use crate::render::flag_renderer::draw_flag;
@@ -45,6 +48,9 @@ pub fn draw_measure(
             }
             MeasureElement::Note(note) => {
                 draw_note_event(svg, staff, font, config, elem_x, note)?;
+            }
+            MeasureElement::Chord(chord) => {
+                draw_chord_event(svg, staff, font, config, elem_x, chord)?;
             }
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
@@ -130,6 +136,133 @@ fn draw_note_event(
     if note.dots > 0 {
         let dot_pos = dot_staff_position(position);
         draw_dots(svg, staff, font, x, advance, dot_pos, note.dots)?;
+    }
+
+    Ok(())
+}
+
+/// Draw a chord event: multiple noteheads + shared stem + ledger lines + accidentals + flag + dots.
+///
+/// Uses `layout_chord_noteheads` to compute notehead offsets for seconds, then draws
+/// each notehead at the correct x-offset, a single shared stem spanning the full chord,
+/// and optional flags/dots.
+fn draw_chord_event(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    x: f64,
+    chord: &ChordEvent,
+) -> Result<(), FontError> {
+    if chord.staff_positions.is_empty() {
+        return Ok(());
+    }
+
+    let kind = notehead_kind_from_log2(chord.duration_log2);
+    let direction = chord.stem_direction.unwrap_or_else(|| {
+        auto_stem_direction_chord(&chord.staff_positions)
+    });
+
+    // Build ChordNote list for layout
+    let chord_notes: Vec<ChordNote> = chord
+        .staff_positions
+        .iter()
+        .zip(chord.accidentals.iter().chain(std::iter::repeat(&None)))
+        .map(|(&pos, acc)| ChordNote {
+            staff_position: pos,
+            accidental: *acc,
+        })
+        .collect();
+
+    let layouts = layout_chord_noteheads(&chord_notes, direction);
+
+    // We need the notehead advance width for positioning
+    let notehead_glyph = kind.glyph();
+    let outline = font.glyph_outline(notehead_glyph)?;
+    let advance = outline.advance_width as f64;
+
+    // Draw each notehead (with offset for seconds)
+    for note_layout in &layouts {
+        let x_off = notehead_x_offset(note_layout.offset, direction) * advance;
+        let note_x = x + x_off;
+
+        // Draw accidental
+        if let Some(acc_glyph) = note_layout.accidental {
+            let acc_outline = font.glyph_outline(acc_glyph)?;
+            let acc_advance = acc_outline.advance_width as f64;
+            let padding = 0.12 * staff.staff_space;
+            let acc_x = note_x - acc_advance - padding;
+            let acc_y = staff.y_of(note_layout.staff_position);
+            let transform = format!("translate({acc_x}, {acc_y})");
+            svg.add_path(&acc_outline.path_data, "black", Some(&transform));
+        }
+
+        // Draw notehead
+        draw_notehead(svg, staff, font, note_x, note_layout.staff_position, kind)?;
+
+        // Draw ledger lines for this note
+        draw_ledger_lines(svg, staff, config, note_x, advance, note_layout.staff_position);
+    }
+
+    // Draw shared stem spanning from the closest to farthest note
+    let needs_stem = chord.duration_log2 >= 1;
+    if needs_stem {
+        let min_pos = layouts.iter().map(|n| n.staff_position).min().unwrap();
+        let max_pos = layouts.iter().map(|n| n.staff_position).max().unwrap();
+
+        // Stem attaches at the note closest to the tip direction:
+        // stem up → bottom note is the attachment, tip extends above top note
+        // stem down → top note is the attachment, tip extends below bottom note
+        let (attach_pos, far_pos) = match direction {
+            StemDirection::Up => (min_pos, max_pos),
+            StemDirection::Down => (max_pos, min_pos),
+        };
+
+        // Compute stem tip: start from the far note and extend by standard stem length
+        let stem_len_ss = stem_length_staff_spaces(far_pos, direction);
+        let stem_len_fu = stem_len_ss * staff.staff_space;
+
+        let attach_y = staff.y_of(attach_pos);
+        let far_y = staff.y_of(far_pos);
+
+        let (y_top, y_bottom) = match direction {
+            StemDirection::Up => {
+                let tip_y = far_y - stem_len_fu;
+                (tip_y, attach_y)
+            }
+            StemDirection::Down => {
+                let tip_y = far_y + stem_len_fu;
+                (attach_y, tip_y)
+            }
+        };
+
+        let thickness = config.stem_thickness_fu();
+        let sx = stem_x(x, advance, direction, thickness);
+        svg.add_line(sx, y_top, sx, y_bottom, "black", thickness);
+
+        // Draw flag
+        let flags = flag_count_from_log2(chord.duration_log2);
+        if flags > 0 {
+            let tip_y = match direction {
+                StemDirection::Up => y_top,
+                StemDirection::Down => y_bottom,
+            };
+            draw_flag(svg, font, sx, tip_y, flags, direction)?;
+        }
+    }
+
+    // Draw augmentation dots (placed relative to the topmost note for stem-down,
+    // bottommost for stem-up — convention: dots placed to avoid staff lines)
+    if chord.dots > 0 {
+        // Place dots after the rightmost notehead column
+        let has_offset = layouts.iter().any(|n| n.offset);
+        let dot_base_x = if has_offset { x + advance } else { x };
+
+        // Draw dots for each note in the chord
+        for note_layout in &layouts {
+            let dot_pos = dot_staff_position(note_layout.staff_position);
+            draw_dots(svg, staff, font, dot_base_x, advance, dot_pos, chord.dots)?;
+        }
     }
 
     Ok(())
@@ -492,6 +625,215 @@ mod tests {
         // 1 notehead, 1 stem + 1 ledger line = 2 lines
         assert_eq!(output.matches("<path ").count(), 1);
         assert_eq!(output.matches("<line ").count(), 2, "stem + 1 ledger line");
+    }
+
+    // --- chord rendering ---
+
+    #[test]
+    fn chord_two_notes_third_apart() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4], // E4 and B4 in treble — a fifth
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads, 1 stem
+        assert_eq!(output.matches("<path ").count(), 2, "two noteheads");
+        assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
+    }
+
+    #[test]
+    fn chord_with_second_has_two_noteheads() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        // Adjacent positions 4 and 5 — a second, one notehead should be offset
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![4, 5],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads (at different x-offsets due to second), 1 stem
+        assert_eq!(output.matches("<path ").count(), 2, "two noteheads");
+        assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
+        // Verify both noteheads have different translate positions
+        let translates: Vec<&str> = output.matches("translate(").collect();
+        assert_eq!(translates.len(), 2, "two translate transforms for two noteheads");
+    }
+
+    #[test]
+    fn chord_with_accidentals() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![Some(Glyph::AccidentalSharp), None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 1 accidental + 2 noteheads = 3 paths, 1 stem
+        assert_eq!(output.matches("<path ").count(), 3, "accidental + 2 noteheads");
+        assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
+    }
+
+    #[test]
+    fn chord_whole_note_no_stem() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 8],
+            duration_log2: 0, // whole note chord
+            dots: 0,
+            accidentals: vec![None, None, None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 3 noteheads, no stem
+        assert_eq!(output.matches("<path ").count(), 3, "three noteheads");
+        assert_eq!(output.matches("<line ").count(), 0, "no stem for whole note chord");
+    }
+
+    #[test]
+    fn chord_eighth_note_has_flag() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4],
+            duration_log2: 3, // eighth note
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads + 1 flag = 3 paths, 1 stem
+        assert_eq!(output.matches("<path ").count(), 3, "2 noteheads + flag");
+        assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
+    }
+
+    #[test]
+    fn chord_with_ledger_lines() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        // Chord spanning from below staff to on staff
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![-2, 4], // C4 (ledger line) and B4
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads, 1 stem + 1 ledger line = 2 lines
+        assert_eq!(output.matches("<path ").count(), 2, "two noteheads");
+        assert_eq!(output.matches("<line ").count(), 2, "stem + ledger line");
+    }
+
+    #[test]
+    fn chord_empty_produces_nothing() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 0, "empty chord = no paths");
+        assert_eq!(output.matches("<line ").count(), 0, "empty chord = no lines");
+    }
+
+    #[test]
+    fn chord_dotted_quarter() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![3, 5], // in spaces, so dots don't need line avoidance
+            duration_log2: 2,
+            dots: 1,
+            accidentals: vec![None, None],
+            stem_direction: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads + 2 dots = 4 paths, 1 stem
+        assert_eq!(output.matches("<path ").count(), 4, "2 noteheads + 2 dots");
+        assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
+    }
+
+    #[test]
+    fn chord_differs_from_single_note() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+        let single = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+        })];
+        let chord = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+        })];
+
+        let layout_s = layout_measure(&single, &cfg);
+        let layout_c = layout_measure(&chord, &cfg);
+
+        let mut svg_s = make_svg();
+        draw_measure(&mut svg_s, &staff, &font, &config, &layout_s, 0.0, &Clef::Treble).unwrap();
+        let mut svg_c = make_svg();
+        draw_measure(&mut svg_c, &staff, &font, &config, &layout_c, 0.0, &Clef::Treble).unwrap();
+
+        // Chord should have more paths (2 noteheads vs 1)
+        assert!(
+            svg_c.to_svg().matches("<path ").count() > svg_s.to_svg().matches("<path ").count(),
+            "chord should have more noteheads than single note"
+        );
     }
 
     #[test]

@@ -63,7 +63,7 @@ pub fn layout_chord_noteheads(
                 if is_second {
                     // Previous note was normal → this one is offset
                     // But if previous was already offset, this one goes back to normal
-                    let prev_offset = result.last().map_or(false, |r| r.offset);
+                    let prev_offset = result.last().is_some_and(|r| r.offset);
                     result.push(ChordNoteLayout {
                         staff_position: sorted[i].staff_position,
                         offset: !prev_offset,

@@ -193,5 +193,11 @@
 ## 2026-04-18 — Phase 8, try_render_svg + remaining doc comments
 - Did: Added `try_render_svg()` method to `ScoreBuilder` returning `Result<String, FontError>` instead of panicking. Existing `render_svg()` now delegates to `try_render_svg().expect(...)`. Added doc comments to `StaffLayout::new()`, `ClefKind::from_clef()`, `ClefKind::to_clef()`. 3 new tests: `try_render_svg` returns Ok for valid input, empty score, and matches `render_svg` output.
 - Verified: `cargo test -p music-engraver` — 489 unit + 3 integration + 2 doc-tests = 494 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
-- Next: Consider the crate done for v1 scope, or add chord support (multiple simultaneous pitches) to ScoreBuilder as a stretch goal.
+- Next: Add chord support through the full pipeline.
+- Open issues: None.
+
+## 2026-04-18 — Phase 8, chord support through full pipeline
+- Did: Integrated chord support from layout through renderer to ScoreBuilder API. Added `ChordEvent` struct to `layout/measure.rs` (staff_positions, duration_log2, dots, accidentals, stem_direction). Added `MeasureElement::Chord` variant and `MeasureEvent::Chord` variant. Updated `layout_measure()` for chord duration spacing. Created `draw_chord_event()` in `render/measure_renderer.rs` — uses `layout_chord_noteheads()` for second-avoidance offsets, draws multiple noteheads at correct x-offsets, shared stem spanning chord extent, flags, ledger lines per note, accidentals per note, and dots per note. Updated `system.rs` `measure_event_to_element()` for chords. Added `.chord(pitches, duration)` method to `ScoreBuilder`, with full accidental tracking per chord note. Fixed one clippy warning in `chord.rs` (`map_or` → `is_some_and`). 10 new measure_renderer tests (two-note chord, second with offset, accidentals, whole note no stem, eighth with flag, ledger lines, empty chord, dotted chord, chord vs single note comparison). 6 new score tests (multiple noteheads, more paths than single, key sig suppression, natural accidental, convert_event mapping, tracked accidental suppression in chords).
+- Verified: `cargo test -p music-engraver` — 528 unit + 3 integration + 2 doc-tests = 533 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Create a chord example SVG (`examples/chords.rs`) showing various chord types on a staff, or consider the crate done for v1 scope.
 - Open issues: None.
