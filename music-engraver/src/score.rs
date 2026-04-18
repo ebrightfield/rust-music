@@ -155,6 +155,9 @@ pub struct ScoreBuilder {
     clef: ClefKind,
     key_sig: KeySignature,
     time_sig: Option<(u8, u8)>,
+    /// Override for time signature display style (Common/CutCommon).
+    /// When None and time_sig is Some, uses Numeric display.
+    time_sig_kind: Option<TimeSignatureKind>,
     /// Events accumulated for the current (in-progress) measure.
     current_events: Vec<ScoreEvent>,
     /// Completed measures.
@@ -172,6 +175,7 @@ impl ScoreBuilder {
             clef: ClefKind::Treble,
             key_sig: KeySignature::Open,
             time_sig: None,
+            time_sig_kind: None,
             current_events: Vec::new(),
             measures: Vec::new(),
             measures_per_system: 4,
@@ -194,6 +198,21 @@ impl ScoreBuilder {
     /// Set the time signature (numerator, denominator).
     pub fn time_signature(mut self, numerator: u8, denominator: u8) -> Self {
         self.time_sig = Some((numerator, denominator));
+        self.time_sig_kind = None;
+        self
+    }
+
+    /// Set the time signature to common time (C symbol = 4/4).
+    pub fn common_time(mut self) -> Self {
+        self.time_sig = Some((4, 4));
+        self.time_sig_kind = Some(TimeSignatureKind::Common);
+        self
+    }
+
+    /// Set the time signature to cut time / alla breve (₵ symbol = 2/2).
+    pub fn cut_time(mut self) -> Self {
+        self.time_sig = Some((2, 2));
+        self.time_sig_kind = Some(TimeSignatureKind::CutCommon);
         self
     }
 
@@ -282,10 +301,14 @@ impl ScoreBuilder {
             .collect();
 
         // Build system prefix
-        let time_sig_kind = self.time_sig.map(|(n, d)| TimeSignatureKind::Numeric {
-            numerator: n,
-            denominator: d,
-        });
+        let time_sig_kind = match (&self.time_sig_kind, self.time_sig) {
+            (Some(kind), _) => Some(kind.clone()),
+            (None, Some((n, d))) => Some(TimeSignatureKind::Numeric {
+                numerator: n,
+                denominator: d,
+            }),
+            (None, None) => None,
+        };
 
         let prefix = SystemPrefix::new(&clef, self.key_sig.clone(), time_sig_kind);
         let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
@@ -759,6 +782,55 @@ mod tests {
             }
             _ => panic!("expected Rest event"),
         }
+    }
+
+    #[test]
+    fn common_time_uses_common_symbol() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .common_time()
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .render_svg();
+        // Common time uses a single glyph (timeSigCommon), not two digit glyphs.
+        // With numeric 4/4 we'd get 2 digit paths; with common we get 1 symbol path.
+        let svg_numeric = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .render_svg();
+        // The SVGs should differ because different glyphs are used
+        assert_ne!(svg, svg_numeric);
+    }
+
+    #[test]
+    fn cut_time_uses_cut_common_symbol() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .cut_time()
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .render_svg();
+        let svg_common = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .common_time()
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .render_svg();
+        // Cut time and common time produce different SVGs
+        assert_ne!(svg, svg_common);
+    }
+
+    #[test]
+    fn cut_time_differs_from_numeric_2_2() {
+        let svg_cut = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .cut_time()
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .render_svg();
+        let svg_numeric = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(2, 2)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .render_svg();
+        assert_ne!(svg_cut, svg_numeric);
     }
 
     #[test]
