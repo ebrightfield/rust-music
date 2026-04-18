@@ -13,7 +13,7 @@ pub fn draw_key_signature(
     font: &MusicFont,
     x: f64,
     key: &KeySignature,
-    clef: Clef,
+    clef: &Clef,
 ) -> Result<f64, FontError> {
     let config = font.engraving_config();
     let layout = key_signature_layout(key, clef, |g| {
@@ -58,7 +58,7 @@ mod tests {
         let (font, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
         let width =
-            draw_key_signature(&mut svg, &staff, &font, 500.0, &KeySignature::Open, Clef::Treble)
+            draw_key_signature(&mut svg, &staff, &font, 500.0, &KeySignature::Open, &Clef::Treble)
                 .unwrap();
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 0);
@@ -75,7 +75,7 @@ mod tests {
             &font,
             500.0,
             &KeySignature::Sharps(1),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let output = svg.to_svg();
@@ -93,7 +93,7 @@ mod tests {
             &font,
             500.0,
             &KeySignature::Sharps(4),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let output = svg.to_svg();
@@ -110,7 +110,7 @@ mod tests {
             &font,
             500.0,
             &KeySignature::Flats(7),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let output = svg.to_svg();
@@ -127,7 +127,7 @@ mod tests {
             &font,
             500.0,
             &KeySignature::Sharps(1),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let output = svg.to_svg();
@@ -150,7 +150,7 @@ mod tests {
             &font,
             500.0,
             &KeySignature::Flats(1),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let output = svg.to_svg();
@@ -173,7 +173,7 @@ mod tests {
             &font,
             0.0,
             &KeySignature::Sharps(2),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let mut svg2 = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
@@ -183,7 +183,7 @@ mod tests {
             &font,
             0.0,
             &KeySignature::Sharps(5),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         assert!(w2 > w1, "5 sharps should be wider than 2 sharps");
@@ -199,7 +199,7 @@ mod tests {
             &font,
             0.0,
             &KeySignature::Sharps(3),
-            Clef::Treble,
+            &Clef::Treble,
         )
         .unwrap();
         let mut svg_bass = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
@@ -209,7 +209,7 @@ mod tests {
             &font,
             0.0,
             &KeySignature::Sharps(3),
-            Clef::Bass,
+            &Clef::Bass,
         )
         .unwrap();
         // Same glyph shapes but different y-positions

@@ -107,3 +107,9 @@
 - Verified: `cargo test -p music-engraver` — 310 unit + 3 integration = 313 tests, all pass (16 new measure layout tests). `cargo run --example key_signatures` produces valid SVG. `cargo check --workspace` passes.
 - Next: Phase 5 continuation — create a measure renderer that uses `MeasureLayout` to draw a complete measure (composing staff lines, clef, key sig, time sig, notes, barline), then an example rendering a simple measure.
 - Open issues: None.
+
+## 2026-04-18 — Phase 5, measure renderer
+- Did: Created `render/measure_renderer.rs` with `draw_measure()` that composes all existing renderers (clef, key sig, time sig, notehead, stem, flag, dot, accidental, rest, barline) using a `MeasureLayout`. Includes `draw_note_event()` helper that renders a complete note (accidental + notehead + ledger lines + stem + flag + dots). Also refactored `key_signature_layout()` and `draw_key_signature()` to take `&Clef` instead of `Clef` (since `music::Clef` doesn't impl Copy/Clone), propagated change to examples. 18 new measure renderer tests covering: empty, single note, whole note (no stem), eighth (flag), dotted quarter, accidental, rest, barline, clef+key sig, time sig, x_offset, full measure with all elements, ledger lines, stem direction override.
+- Verified: `cargo test -p music-engraver` — 326 unit + 3 integration = 329 tests, all pass. `cargo check --workspace` passes.
+- Next: Phase 5 continuation — create `examples/measure.rs` rendering a complete measure (clef + key sig + time sig + notes + barline) to `examples/output/measure.svg`.
+- Open issues: None.
