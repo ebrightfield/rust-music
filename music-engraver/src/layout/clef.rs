@@ -19,7 +19,29 @@ pub struct ClefLayout {
 }
 
 impl ClefLayout {
-    /// Resolve a `Clef` to its SMuFL glyph and staff position.
+    /// Resolve a `&Clef` to its SMuFL glyph and staff position.
+    pub fn from_clef_ref(clef: &Clef) -> Self {
+        match clef {
+            Clef::Treble => Self {
+                glyph: Glyph::GClef,
+                staff_position: 2,
+            },
+            Clef::Treble8va => Self {
+                glyph: Glyph::GClef8Va,
+                staff_position: 2,
+            },
+            Clef::Treble8ba => Self {
+                glyph: Glyph::GClef8Vb,
+                staff_position: 2,
+            },
+            Clef::Bass => Self {
+                glyph: Glyph::FClef,
+                staff_position: 6,
+            },
+        }
+    }
+
+    /// Resolve a `Clef` to its SMuFL glyph and staff position (consumes value).
     pub fn from_clef(clef: Clef) -> Self {
         match clef {
             Clef::Treble => Self {
