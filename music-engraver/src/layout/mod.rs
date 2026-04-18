@@ -1,3 +1,4 @@
+pub mod accidental;
 pub mod clef;
 pub mod note_placement;
 pub mod staff;

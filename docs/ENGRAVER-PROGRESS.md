@@ -59,3 +59,9 @@
 - Verified: `cargo test -p music-engraver` — 134 unit + 3 integration = 137 tests, all pass. `cargo run --example stemmed_notes` produces valid SVG (8 paths, 14 lines — exact match). `cargo check --workspace` passes.
 - Next: Phase 2 completion check — add `add_text()` to SvgWriter for time signatures (needed for key/time sig rendering), or assess Phase 2 exit criteria and begin Phase 3 (accidentals, dots, flags).
 - Open issues: None.
+
+## 2026-04-18 — Phase 3, accidental layout + rendering
+- Did: Created `layout/accidental.rs` with `accidental_glyph()` (maps `music::Accidental` → `smufl::Glyph`, with `show_natural` toggle), `accidental_x()` (computes x-position left of notehead with standard padding of 0.12 staff spaces), and `ACCIDENTAL_NOTEHEAD_PADDING_SS` constant. Created `render/accidental_renderer.rs` with `draw_accidental()` (renders accidental glyph at correct position, returns drawn x-pos or None). 10 layout tests + 9 renderer tests covering all 5 accidental types, natural visibility, padding math, position differentiation.
+- Verified: `cargo test -p music-engraver` — 153 unit + 3 integration = 156 tests, all pass. `cargo check --workspace` passes. No warnings.
+- Next: Phase 3 continuation — augmentation dots (layout + render), then flags for eighth/sixteenth notes.
+- Open issues: None.
