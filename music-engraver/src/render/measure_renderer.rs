@@ -69,11 +69,7 @@ fn notehead_kind_from_log2(duration_log2: u8) -> NoteheadKind {
 
 /// Number of flags from log2 duration: 0–2 have no flags, 3=one flag, 4=two, etc.
 fn flag_count_from_log2(duration_log2: u8) -> u8 {
-    if duration_log2 <= 2 {
-        0
-    } else {
-        duration_log2 - 2
-    }
+    duration_log2.saturating_sub(2)
 }
 
 /// Draw a complete note event: accidental + notehead + ledger lines + stem + flag + dots.

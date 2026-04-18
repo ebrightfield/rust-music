@@ -82,7 +82,7 @@ impl StaffLayout {
 
     /// Returns true if the position sits on a staff line (even positions 0–8).
     pub fn is_on_line(position: StaffPosition) -> bool {
-        position % 2 == 0 && position >= BOTTOM_LINE && position <= TOP_LINE
+        position % 2 == 0 && (BOTTOM_LINE..=TOP_LINE).contains(&position)
     }
 
     /// Returns true if the position is in a staff space (odd positions 1–7).
@@ -92,7 +92,7 @@ impl StaffLayout {
 
     /// Returns true if the position requires ledger lines.
     pub fn needs_ledger_lines(position: StaffPosition) -> bool {
-        position < BOTTOM_LINE || position > TOP_LINE
+        !(BOTTOM_LINE..=TOP_LINE).contains(&position)
     }
 
     /// How many ledger lines are needed for a given position.

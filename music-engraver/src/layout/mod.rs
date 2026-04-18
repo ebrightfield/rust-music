@@ -1,3 +1,11 @@
+//! Geometry and positioning for all notation elements.
+//!
+//! Each submodule handles one element type (staff, clef, notehead, stem, beam,
+//! accidental, dot, flag, rest, barline, key/time signature) and produces
+//! layout structs consumed by the corresponding renderer in [`crate::render`].
+//! Higher-level modules ([`measure`], [`system`], [`page`]) compose elements
+//! into complete scored layouts.
+
 pub mod accidental;
 pub mod barline;
 pub mod beam;

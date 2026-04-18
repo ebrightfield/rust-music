@@ -1,3 +1,9 @@
+//! Font loading, glyph outline extraction, and engraving configuration.
+//!
+//! The bundled Bravura OTF is the default font. All glyph lookups use
+//! `smufl::Glyph` enum variants so that layout and render code remain
+//! font-agnostic — only this module touches the raw OTF bytes.
+
 mod engraving_config;
 mod glyph_outline;
 mod music_font;

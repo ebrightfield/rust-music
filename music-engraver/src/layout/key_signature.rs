@@ -79,14 +79,14 @@ pub fn key_signature_layout(
         },
         KeySignature::Sharps(count) => {
             let n = (*count).min(7) as usize;
-            let positions = sharp_positions(&clef);
+            let positions = sharp_positions(clef);
             let glyph = Glyph::AccidentalSharp;
             let glyph_width = advance_of(glyph);
             build_accidentals(glyph, &positions[..n], glyph_width, staff_space)
         }
         KeySignature::Flats(count) => {
             let n = (*count).min(7) as usize;
-            let positions = flat_positions(&clef);
+            let positions = flat_positions(clef);
             let glyph = Glyph::AccidentalFlat;
             let glyph_width = advance_of(glyph);
             build_accidentals(glyph, &positions[..n], glyph_width, staff_space)

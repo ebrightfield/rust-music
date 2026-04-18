@@ -94,6 +94,7 @@ pub fn draw_note(
 /// or this function will draw one regardless of kind when direction is `Some`.
 ///
 /// Returns the advance width of the notehead.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_stemmed_note(
     svg: &mut SvgWriter,
     staff: &StaffLayout,

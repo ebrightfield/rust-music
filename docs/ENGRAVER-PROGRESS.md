@@ -177,3 +177,9 @@
 - Verified: `cargo test -p music-engraver` — 486 unit + 3 integration + 1 doc-test = 490 tests, all pass. `cargo check --workspace` passes. No warnings.
 - Next: Phase 8 polish — add pub doc comments on all public types/functions, or consider the crate done for v1 scope.
 - Open issues: None.
+
+## 2026-04-18 — Phase 8, clippy cleanup + crate/module doc comments
+- Did: Fixed all 9 clippy warnings in `music-engraver`: needless borrows in `key_signature.rs`, manual `RangeInclusive::contains` in `staff.rs`, `saturating_sub` for arithmetic check in `measure_renderer.rs`, `#[allow(clippy::too_many_arguments)]` on 3 private beam_renderer helpers + 1 pub `draw_stemmed_note`. Added crate-level doc comment to `lib.rs` (with usage example), module-level doc comments to `font/mod.rs`, `layout/mod.rs`, `render/mod.rs`. Crate-level doc example is now a doc-test (2 doc-tests total).
+- Verified: `cargo test -p music-engraver` — 486 unit + 3 integration + 2 doc-tests = 491 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings. `cargo doc -p music-engraver --no-deps` — clean. `cargo check --workspace` passes.
+- Next: Phase 8 polish — add doc comments to remaining public types/functions across layout/render submodules, or consider the crate done for v1 scope.
+- Open issues: None.

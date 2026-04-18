@@ -64,6 +64,7 @@ pub fn draw_beam_group(
 }
 
 /// Draw all beam segments at a given level (0 = primary, 1 = secondary, etc.).
+#[allow(clippy::too_many_arguments)]
 fn draw_beam_level(
     svg: &mut SvgWriter,
     notes: &[BeamedNote],
@@ -143,6 +144,7 @@ fn draw_beam_level(
 }
 
 /// Draw a beam segment connecting notes[start] to notes[end].
+#[allow(clippy::too_many_arguments)]
 fn draw_beam_segment(
     svg: &mut SvgWriter,
     notes: &[BeamedNote],
@@ -181,6 +183,7 @@ fn draw_beam_segment(
 }
 
 /// Draw a fractional (stub) beam for an isolated secondary beam.
+#[allow(clippy::too_many_arguments)]
 fn draw_fractional_beam(
     svg: &mut SvgWriter,
     notes: &[BeamedNote],

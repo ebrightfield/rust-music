@@ -1,3 +1,10 @@
+//! SVG rendering for all notation elements.
+//!
+//! Each renderer module converts layout structs from [`crate::layout`] into SVG
+//! elements via [`SvgWriter`]. Higher-level renderers ([`measure_renderer`],
+//! [`system_renderer`], [`page_renderer`]) compose element renderers into
+//! complete SVG documents.
+
 pub mod accidental_renderer;
 pub mod barline_renderer;
 pub mod beam_renderer;
