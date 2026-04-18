@@ -26,6 +26,8 @@
 //!     .render_svg();
 //! ```
 
+use std::collections::HashMap;
+
 use music::notation::clef::Clef;
 use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::note::pitch::Pitch;
@@ -67,7 +69,28 @@ fn duration_kind_to_log2(kind: DurationKind) -> u8 {
 /// Shows naturals that cancel key-signature alterations (e.g., F♮ in D major).
 /// Double sharps/flats are always shown since they never appear in key signatures.
 /// Does not track within-measure accidental state — each note is resolved independently.
+#[cfg(test)]
 fn should_show_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Option<smufl::Glyph> {
+    resolve_accidental(pitch, key_sig, None)
+}
+
+/// Key for tracking accidentals within a measure: (diatonic letter index 0–6, octave).
+/// Uses `i32::from(&Letter)` since `Letter` doesn't implement `Hash`/`Eq`.
+type NoteKey = (i32, u8);
+
+/// Map tracking which accidental was last shown for each note (letter+octave) in a measure.
+type AccidentalTracker = HashMap<NoteKey, Accidental>;
+
+fn note_key(pitch: &Pitch) -> NoteKey {
+    let spelling = Spelling::from(&pitch.note);
+    (i32::from(&spelling.letter), pitch.octave)
+}
+
+/// The effective accidental state for a note: what accidental applies to this letter+octave.
+///
+/// For tracking purposes: Natural on an unaltered note = None (no accidental in effect),
+/// Natural on an altered note = Natural (cancelling), Sharp/Flat/Double = themselves.
+fn effective_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Option<Accidental> {
     let spelling = Spelling::from(&pitch.note);
     let acc = spelling.acc;
     let altered = note_altered_in_key(spelling.letter, key_sig);
@@ -75,15 +98,63 @@ fn should_show_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Option<smufl
     match acc {
         Accidental::Natural => {
             if altered {
-                // Letter is sharped/flatted in key sig — show natural to cancel
+                Some(Accidental::Natural)
+            } else {
+                None
+            }
+        }
+        _ => Some(acc),
+    }
+}
+
+/// Resolve whether an accidental should be displayed, with optional within-measure tracking.
+///
+/// `seen_in_measure`: if Some, maps note identity (letter+octave) to the last accidental
+/// shown for that note in this measure. Suppresses repeated accidentals and shows courtesy
+/// naturals when a previous accidental in the measure is cancelled.
+fn resolve_accidental(
+    pitch: &Pitch,
+    key_sig: &KeySignature,
+    seen_in_measure: Option<&AccidentalTracker>,
+) -> Option<smufl::Glyph> {
+    let spelling = Spelling::from(&pitch.note);
+    let acc = spelling.acc;
+    let altered = note_altered_in_key(spelling.letter, key_sig);
+    let key = note_key(pitch);
+
+    // Check within-measure tracking
+    if let Some(seen) = seen_in_measure {
+        if let Some(&prev_acc) = seen.get(&key) {
+            let current_effective = effective_accidental(pitch, key_sig);
+            if current_effective == Some(prev_acc) {
+                // Same accidental already displayed — suppress
+                return None;
+            }
+            // Different accidental — show it, including naturals cancelling
+            // a previous accidental shown within this measure
+            if acc == Accidental::Natural {
+                return accidental_glyph(Accidental::Natural, true);
+            }
+        }
+    }
+
+    match acc {
+        Accidental::Natural => {
+            if altered {
                 accidental_glyph(Accidental::Natural, true)
             } else {
+                // Courtesy natural: if a previous note in this measure had an accidental
+                // on the same letter+octave, show a natural to clarify
+                if let Some(seen) = seen_in_measure {
+                    if seen.contains_key(&key) {
+                        return accidental_glyph(Accidental::Natural, true);
+                    }
+                }
                 None
             }
         }
         Accidental::Sharp => {
             if altered && matches!(key_sig, KeySignature::Sharps(_)) {
-                // Sharp is already in the key signature — suppress
                 None
             } else {
                 accidental_glyph(Accidental::Sharp, false)
@@ -91,13 +162,11 @@ fn should_show_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Option<smufl
         }
         Accidental::Flat => {
             if altered && matches!(key_sig, KeySignature::Flats(_)) {
-                // Flat is already in the key signature — suppress
                 None
             } else {
                 accidental_glyph(Accidental::Flat, false)
             }
         }
-        // Double accidentals are never part of a key signature
         Accidental::DoubleSharp | Accidental::DoubleFlat => accidental_glyph(acc, false),
     }
 }
@@ -284,14 +353,15 @@ impl ScoreBuilder {
 
         let clef = self.clef.to_clef();
 
-        // Convert ScoreEvents to MeasureContent
+        // Convert ScoreEvents to MeasureContent, tracking accidentals within each measure
         let measure_contents: Vec<MeasureContent> = self
             .measures
             .iter()
             .map(|(events, barline)| {
+                let mut seen: AccidentalTracker = HashMap::new();
                 let measure_events: Vec<MeasureEvent> = events
                     .iter()
-                    .map(|e| self.convert_event(e, &clef))
+                    .map(|e| self.convert_event_tracked(e, &clef, &mut seen))
                     .collect();
                 MeasureContent {
                     events: measure_events,
@@ -341,6 +411,8 @@ impl ScoreBuilder {
     }
 
     /// Convert a `ScoreEvent` into a `MeasureEvent` for the layout engine.
+    /// Does not track within-measure accidental state (each note resolved independently).
+    #[cfg(test)]
     fn convert_event(&self, event: &ScoreEvent, clef: &Clef) -> MeasureEvent {
         match event {
             ScoreEvent::Note { pitch, duration } => {
@@ -348,6 +420,54 @@ impl ScoreBuilder {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let acc = should_show_accidental(pitch, &self.key_sig);
+
+                MeasureEvent::Note(NoteEvent {
+                    staff_position: staff_pos,
+                    duration_log2: log2,
+                    dots,
+                    accidental: acc,
+                    stem_direction: None,
+                })
+            }
+            ScoreEvent::Rest { duration } => {
+                let log2 = duration_kind_to_log2(duration.kind());
+                let dots = duration.num_dots();
+
+                MeasureEvent::Rest(RestEvent {
+                    duration_log2: log2,
+                    dots,
+                })
+            }
+        }
+    }
+
+    /// Convert a `ScoreEvent` into a `MeasureEvent`, tracking accidentals within the measure.
+    ///
+    /// `seen` maps note identity (letter+octave) to the accidental last displayed for that
+    /// note in this measure. Suppresses redundant accidentals and shows courtesy naturals.
+    /// Resets at each measure boundary (caller provides a fresh map per measure).
+    fn convert_event_tracked(
+        &self,
+        event: &ScoreEvent,
+        clef: &Clef,
+        seen: &mut AccidentalTracker,
+    ) -> MeasureEvent {
+        match event {
+            ScoreEvent::Note { pitch, duration } => {
+                let staff_pos = pitch_to_staff_position(pitch, clef);
+                let log2 = duration_kind_to_log2(duration.kind());
+                let dots = duration.num_dots();
+                let acc = resolve_accidental(pitch, &self.key_sig, Some(seen));
+
+                // Update tracking: record what accidental state this note establishes
+                let key = note_key(pitch);
+                if let Some(eff) = effective_accidental(pitch, &self.key_sig) {
+                    seen.insert(key, eff);
+                } else {
+                    // Natural on unaltered note — remove any tracked accidental
+                    // (a courtesy natural was shown if needed by resolve_accidental)
+                    seen.remove(&key);
+                }
 
                 MeasureEvent::Note(NoteEvent {
                     staff_position: staff_pos,
@@ -842,5 +962,254 @@ mod tests {
             .render_svg();
         assert!(svg.starts_with("<svg"));
         assert!(svg.contains("<path"));
+    }
+
+    // --- within-measure accidental tracking ---
+
+    #[test]
+    fn resolve_accidental_with_tracking_suppresses_repeated_sharp() {
+        let key = KeySignature::Open;
+        let mut seen: AccidentalTracker = HashMap::new();
+        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+
+        // First occurrence: show sharp
+        let first = resolve_accidental(&pitch, &key, Some(&seen));
+        assert_eq!(first, Some(smufl::Glyph::AccidentalSharp));
+
+        // Record it
+        seen.insert(note_key(&pitch), Accidental::Sharp);
+
+        // Second occurrence: suppress (same accidental already shown)
+        let second = resolve_accidental(&pitch, &key, Some(&seen));
+        assert_eq!(second, None, "repeated sharp should be suppressed");
+    }
+
+    #[test]
+    fn resolve_accidental_with_tracking_suppresses_repeated_flat() {
+        let key = KeySignature::Open;
+        let mut seen: AccidentalTracker = HashMap::new();
+        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+
+        let first = resolve_accidental(&pitch, &key, Some(&seen));
+        assert_eq!(first, Some(smufl::Glyph::AccidentalFlat));
+        seen.insert(note_key(&pitch), Accidental::Flat);
+
+        let second = resolve_accidental(&pitch, &key, Some(&seen));
+        assert_eq!(second, None, "repeated flat should be suppressed");
+    }
+
+    #[test]
+    fn resolve_accidental_shows_courtesy_natural_after_sharp() {
+        let key = KeySignature::Open;
+        let mut seen: AccidentalTracker = HashMap::new();
+        let sharp_pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let natural_pitch = Pitch::new(Note::F, 4).unwrap();
+
+        // Show sharp on F#4
+        seen.insert(note_key(&sharp_pitch), Accidental::Sharp);
+
+        // F4 natural should show a courtesy natural
+        let result = resolve_accidental(&natural_pitch, &key, Some(&seen));
+        assert_eq!(
+            result,
+            Some(smufl::Glyph::AccidentalNatural),
+            "natural should show after sharp on same letter+octave"
+        );
+    }
+
+    #[test]
+    fn resolve_accidental_shows_courtesy_natural_after_flat() {
+        let key = KeySignature::Open;
+        let mut seen: AccidentalTracker = HashMap::new();
+        let flat_pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let natural_pitch = Pitch::new(Note::B, 4).unwrap();
+
+        seen.insert(note_key(&flat_pitch), Accidental::Flat);
+
+        let result = resolve_accidental(&natural_pitch, &key, Some(&seen));
+        assert_eq!(
+            result,
+            Some(smufl::Glyph::AccidentalNatural),
+            "natural should show after flat on same letter+octave"
+        );
+    }
+
+    #[test]
+    fn resolve_accidental_different_octaves_independent() {
+        let key = KeySignature::Open;
+        let mut seen: AccidentalTracker = HashMap::new();
+        let fis4 = Pitch::new(Note::Fis, 4).unwrap();
+        let fis5 = Pitch::new(Note::Fis, 5).unwrap();
+
+        // Show sharp on F#4
+        seen.insert(note_key(&fis4), Accidental::Sharp);
+
+        // F#5 is a different octave — should still show sharp
+        let result = resolve_accidental(&fis5, &key, Some(&seen));
+        assert_eq!(
+            result,
+            Some(smufl::Glyph::AccidentalSharp),
+            "sharp on different octave should not be suppressed"
+        );
+    }
+
+    #[test]
+    fn convert_event_tracked_suppresses_repeated_accidental() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+
+        let ev1 = ScoreEvent::Note {
+            pitch: pitch.clone(),
+            duration: Duration::QTR,
+        };
+        let ev2 = ScoreEvent::Note {
+            pitch: pitch.clone(),
+            duration: Duration::QTR,
+        };
+
+        let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+        let r2 = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+
+        match (&r1, &r2) {
+            (MeasureEvent::Note(n1), MeasureEvent::Note(n2)) => {
+                assert!(
+                    n1.accidental.is_some(),
+                    "first F#4 should show accidental"
+                );
+                assert!(
+                    n2.accidental.is_none(),
+                    "second F#4 should suppress accidental"
+                );
+            }
+            _ => panic!("expected Note events"),
+        }
+    }
+
+    #[test]
+    fn convert_event_tracked_shows_natural_after_sharp() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+
+        let ev_sharp = ScoreEvent::Note {
+            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            duration: Duration::QTR,
+        };
+        let ev_natural = ScoreEvent::Note {
+            pitch: Pitch::new(Note::F, 4).unwrap(),
+            duration: Duration::QTR,
+        };
+
+        let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
+        let r2 = builder.convert_event_tracked(&ev_natural, &Clef::Treble, &mut seen);
+
+        match r2 {
+            MeasureEvent::Note(n) => {
+                assert_eq!(
+                    n.accidental,
+                    Some(smufl::Glyph::AccidentalNatural),
+                    "F natural after F# should show courtesy natural"
+                );
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn tracking_resets_between_measures_in_render() {
+        // F#4 in measure 1, then F#4 in measure 2 — both should show sharp
+        // (tracking resets at barline)
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR) // suppressed
+            .barline()
+            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR) // should show (new measure)
+            .end_barline()
+            .render_svg();
+
+        // Count accidental paths: measure 1 has 1 sharp, measure 2 has 1 sharp = 2 sharps
+        // Each measure also has noteheads. Clef adds 1 path.
+        // Without tracking: 3 sharps. With tracking: 2 sharps.
+        let path_count = svg.matches("<path").count();
+        // clef(1) + 3 noteheads + 2 sharps = 6 paths
+        assert_eq!(
+            path_count, 6,
+            "expected 6 paths (1 clef + 3 noteheads + 2 sharps, with 1 suppressed), got {}",
+            path_count
+        );
+    }
+
+    #[test]
+    fn tracking_within_measure_suppresses_duplicate() {
+        // Two F#4 in one measure — second should not show sharp
+        let svg_tracked = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // One F#4 alone for comparison
+        let svg_single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let paths_tracked = svg_tracked.matches("<path").count();
+        let paths_single = svg_single.matches("<path").count();
+
+        // Tracked: clef + 2 noteheads + 1 sharp = 4
+        // Single: clef + 1 notehead + 1 sharp = 3
+        // Difference should be exactly 1 (one extra notehead, no extra sharp)
+        assert_eq!(
+            paths_tracked - paths_single,
+            1,
+            "adding duplicate F# should add only 1 path (notehead), not 2 (notehead+sharp)"
+        );
+    }
+
+    #[test]
+    fn effective_accidental_natural_on_altered() {
+        let pitch = Pitch::new(Note::F, 4).unwrap();
+        let eff = effective_accidental(&pitch, &KeySignature::Sharps(1));
+        assert_eq!(eff, Some(Accidental::Natural));
+    }
+
+    #[test]
+    fn effective_accidental_natural_on_unaltered() {
+        let pitch = Pitch::new(Note::C, 4).unwrap();
+        let eff = effective_accidental(&pitch, &KeySignature::Open);
+        assert_eq!(eff, None);
+    }
+
+    #[test]
+    fn effective_accidental_sharp() {
+        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let eff = effective_accidental(&pitch, &KeySignature::Open);
+        assert_eq!(eff, Some(Accidental::Sharp));
+    }
+
+    #[test]
+    fn note_key_same_letter_different_octave() {
+        let p1 = Pitch::new(Note::C, 3).unwrap();
+        let p2 = Pitch::new(Note::C, 5).unwrap();
+        assert_ne!(note_key(&p1), note_key(&p2));
+    }
+
+    #[test]
+    fn note_key_same_note_same_octave() {
+        let p1 = Pitch::new(Note::C, 4).unwrap();
+        let p2 = Pitch::new(Note::C, 4).unwrap();
+        assert_eq!(note_key(&p1), note_key(&p2));
+    }
+
+    #[test]
+    fn note_key_enharmonic_different() {
+        // C# and Db are different letters
+        let p1 = Pitch::new(Note::Cis, 4).unwrap();
+        let p2 = Pitch::new(Note::Des, 4).unwrap();
+        assert_ne!(note_key(&p1), note_key(&p2));
     }
 }
