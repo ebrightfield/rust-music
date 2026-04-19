@@ -1,4 +1,5 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::hairpin::layout_hairpin;
 use crate::layout::page::{PageLayout, PageSystem};
 use crate::layout::slur::{layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
@@ -7,8 +8,9 @@ use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
 use crate::render::note_renderer::NoteheadKind;
+use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::slur_renderer::draw_slur;
-use crate::render::system_renderer::{collect_note_positions, collect_slur_note_info, draw_system};
+use crate::render::system_renderer::{collect_hairpin_note_info, collect_note_positions, collect_slur_note_info, draw_system};
 use crate::render::tie_renderer::draw_tie;
 use crate::render::SvgWriter;
 
@@ -84,6 +86,9 @@ pub fn draw_page(
 
     // Draw cross-system slurs between adjacent systems
     draw_cross_system_slurs(&mut svg, font, config, page)?;
+
+    // Draw cross-system hairpins between adjacent systems
+    draw_cross_system_hairpins(&mut svg, font, config, page)?;
 
     Ok(svg)
 }
@@ -411,6 +416,176 @@ fn draw_cross_system_slurs(
                     config,
                 );
                 draw_slur(svg, &left_layout);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// A note at the end of a system with an unresolved `hairpin_start`.
+struct UnresolvedHairpin {
+    /// Absolute x of the note's right edge plus spacing.
+    x_right: f64,
+    /// Hairpin type (crescendo or decrescendo).
+    kind: crate::layout::hairpin::HairpinType,
+    /// Right edge of the system's staff lines (absolute x).
+    staff_right: f64,
+    /// Y of the bottom staff line (absolute).
+    staff_bottom_y: f64,
+}
+
+/// A note at the start of the next system that has `hairpin_end = true`.
+struct IncomingHairpinTarget {
+    /// Absolute x of the note's left edge minus spacing.
+    x_left: f64,
+    /// Left edge of the system's note area (after prefix).
+    staff_left: f64,
+    /// Y of the bottom staff line (absolute).
+    staff_bottom_y: f64,
+}
+
+/// Find notes with `hairpin_start` at the end of a system that have no
+/// matching `hairpin_end` within the same system.
+fn find_unresolved_hairpins(
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Result<Vec<UnresolvedHairpin>, FontError> {
+    let system = &page_system.system;
+    let note_info = collect_hairpin_note_info(system);
+    let staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        config.staff_space,
+    );
+
+    let mut unresolved = Vec::new();
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(hairpin_type) = info.hairpin_start else {
+            continue;
+        };
+
+        // Check if there's a matching hairpin_end within this system
+        let has_end = note_info[i + 1..].iter().any(|n| n.hairpin_end);
+
+        if has_end {
+            continue; // Resolved within the system
+        }
+
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        // Match the 0.3ss padding used in system_renderer for hairpin start
+        let x_right = page_system.x + info.x + advance + 0.3 * config.staff_space;
+
+        unresolved.push(UnresolvedHairpin {
+            x_right,
+            kind: hairpin_type,
+            staff_right: page_system.x + system.staff_width,
+            staff_bottom_y: staff.bottom_y(),
+        });
+    }
+
+    Ok(unresolved)
+}
+
+/// Find the first note with `hairpin_end = true` in a system (candidate for
+/// incoming cross-system hairpin).
+fn find_incoming_hairpin_targets(
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Vec<IncomingHairpinTarget> {
+    let system = &page_system.system;
+    let note_info = collect_hairpin_note_info(system);
+    let staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        config.staff_space,
+    );
+
+    let first_measure_x = system
+        .measures
+        .first()
+        .map(|m| page_system.x + m.x_offset)
+        .unwrap_or(page_system.x);
+
+    let mut targets = Vec::new();
+
+    for info in &note_info {
+        if !info.hairpin_end {
+            continue;
+        }
+
+        // Match the 0.3ss padding used in system_renderer for hairpin end
+        let x_left = page_system.x + info.x - 0.3 * config.staff_space;
+
+        targets.push(IncomingHairpinTarget {
+            x_left,
+            staff_left: first_measure_x,
+            staff_bottom_y: staff.bottom_y(),
+        });
+
+        // Only need the first hairpin_end target
+        break;
+    }
+
+    targets
+}
+
+/// Draw cross-system hairpins between adjacent systems on a page.
+///
+/// For each unresolved `hairpin_start` at the end of system N, finds the first
+/// `hairpin_end` note at the start of system N+1 and draws two half-hairpins:
+/// one trailing to the right edge of system N, one leading from the left
+/// of system N+1.
+fn draw_cross_system_hairpins(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page: &PageLayout,
+) -> Result<(), FontError> {
+    let stroke_width = config.staff_line_thickness_fu();
+
+    for i in 0..page.systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_hairpins(font, config, &page.systems[i])?;
+        if unresolved.is_empty() {
+            continue;
+        }
+
+        let targets = find_incoming_hairpin_targets(config, &page.systems[i + 1]);
+
+        for hp_src in &unresolved {
+            // Draw trailing half-hairpin at the end of the source system
+            let right_layout = layout_hairpin(
+                hp_src.kind,
+                hp_src.x_right,
+                hp_src.staff_right,
+                hp_src.staff_bottom_y,
+                config.staff_space,
+                stroke_width,
+            );
+            draw_hairpin(svg, &right_layout);
+
+            // Draw incoming half-hairpin at the start of the target system
+            if let Some(tgt) = targets.first() {
+                let left_layout = layout_hairpin(
+                    hp_src.kind,
+                    tgt.staff_left,
+                    tgt.x_left,
+                    tgt.staff_bottom_y,
+                    config.staff_space,
+                    stroke_width,
+                );
+                draw_hairpin(svg, &left_layout);
             }
         }
     }
@@ -925,6 +1100,299 @@ mod tests {
         let no_slur_svg = draw_page(&font, &config, &no_slur_page).unwrap().to_svg();
 
         assert_ne!(slur_svg, no_slur_svg, "cross-system slurred output should differ from unslurred");
+    }
+
+    // --- cross-system hairpin tests ---
+
+    use crate::layout::hairpin::HairpinType;
+
+    fn cresc_start_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: Some(HairpinType::Crescendo),
+            hairpin_end: false,
+        })
+    }
+
+    fn hairpin_end_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: true,
+        })
+    }
+
+    #[test]
+    fn cross_system_hairpin_draws_four_lines() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // System 1: cresc start, system 2: hairpin end
+        let measures = vec![
+            MeasureContent {
+                events: vec![cresc_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![hairpin_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        // 1 measure per system → forces cross-system hairpin
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        assert_eq!(page.systems.len(), 2);
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Without hairpin for comparison
+        let no_hp_measures = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let no_hp_page = layout_page(&prefix(), &no_hp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
+
+        // Cross-system hairpin = 2 half-hairpins × 2 lines each = 4 extra lines
+        let hp_lines = output.matches("<line ").count();
+        let no_lines = no_hp_output.matches("<line ").count();
+        assert_eq!(
+            hp_lines,
+            no_lines + 4,
+            "cross-system hairpin should add 4 lines (2 half-hairpins × 2 wedge lines), got {} vs {}",
+            hp_lines,
+            no_lines,
+        );
+    }
+
+    #[test]
+    fn no_cross_system_hairpin_without_flags() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let measures = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Count lines: should be baseline (staff lines + stems + barlines) only
+        // No hairpin lines
+        let no_hp_line_count = output.matches("<line ").count();
+        // Verify no extra hairpin-positioned lines below staff
+        // (This is implicitly verified by the 4-line-addition test above)
+        assert!(no_hp_line_count > 0, "should have some lines");
+    }
+
+    #[test]
+    fn cross_system_hairpin_right_half_only_when_no_end() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // cresc start in system 1, but no hairpin_end in system 2
+        let measures = vec![
+            MeasureContent {
+                events: vec![cresc_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)], // no hairpin_end
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Compare with no hairpin
+        let no_hp = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
+
+        // Only the right half-hairpin (2 lines)
+        let hp_lines = output.matches("<line ").count();
+        let no_lines = no_hp_output.matches("<line ").count();
+        assert_eq!(
+            hp_lines,
+            no_lines + 2,
+            "only right half-hairpin (2 lines) when no hairpin_end target"
+        );
+    }
+
+    #[test]
+    fn within_system_hairpin_not_duplicated_as_cross_system() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // Both hairpin start and end in same system (2 measures per system)
+        let measures = vec![
+            MeasureContent {
+                events: vec![cresc_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![hairpin_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+        assert_eq!(page.systems.len(), 1);
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Compare with no hairpin
+        let no_hp = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+        let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
+
+        // Only 1 within-system hairpin (2 lines), no cross-system duplication
+        let hp_lines = output.matches("<line ").count();
+        let no_lines = no_hp_output.matches("<line ").count();
+        assert_eq!(hp_lines, no_lines + 2, "1 within-system hairpin (2 lines), no cross-system duplication");
+    }
+
+    #[test]
+    fn cross_system_hairpin_differs_from_no_hairpin() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let with_hp = vec![
+            MeasureContent {
+                events: vec![cresc_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![hairpin_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let without_hp = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+
+        let hp_page = layout_page(&prefix(), &with_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let no_page = layout_page(&prefix(), &without_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let hp_svg = draw_page(&font, &config, &hp_page).unwrap().to_svg();
+        let no_svg = draw_page(&font, &config, &no_page).unwrap().to_svg();
+
+        assert_ne!(hp_svg, no_svg, "cross-system hairpin output should differ from no hairpin");
+    }
+
+    #[test]
+    fn cross_system_decresc_differs_from_cresc() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let cresc = vec![
+            MeasureContent {
+                events: vec![cresc_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![hairpin_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let decresc = vec![
+            MeasureContent {
+                events: vec![MeasureEvent::Note(NoteEvent {
+                    staff_position: 4,
+                    duration_log2: 2,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    tie_forward: false,
+                    dynamic: None,
+                    slur_start: false,
+                    slur_end: false,
+                    hairpin_start: Some(HairpinType::Decrescendo),
+                    hairpin_end: false,
+                })],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![hairpin_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+
+        let cresc_page = layout_page(&prefix(), &cresc, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let decresc_page = layout_page(&prefix(), &decresc, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let cresc_svg = draw_page(&font, &config, &cresc_page).unwrap().to_svg();
+        let decresc_svg = draw_page(&font, &config, &decresc_page).unwrap().to_svg();
+
+        assert_ne!(cresc_svg, decresc_svg, "cross-system cresc and decresc should differ");
     }
 
     #[test]

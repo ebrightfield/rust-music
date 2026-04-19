@@ -266,14 +266,14 @@ fn draw_system_slurs(
 }
 
 /// Positional info for a note relevant to hairpin drawing.
-struct HairpinNoteInfo {
-    x: f64,
-    duration_log2: u8,
-    hairpin_start: Option<HairpinType>,
-    hairpin_end: bool,
+pub(crate) struct HairpinNoteInfo {
+    pub(crate) x: f64,
+    pub(crate) duration_log2: u8,
+    pub(crate) hairpin_start: Option<HairpinType>,
+    pub(crate) hairpin_end: bool,
 }
 
-fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
+pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for elem in &measure.layout.elements {

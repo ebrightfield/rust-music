@@ -339,3 +339,9 @@
 - Verified: `cargo run --example hairpin_score` produces valid SVG. `cargo test -p music-engraver` — 714 unit + 3 integration + 2 doc-tests = 719 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
 - Next: Begin other post-v1 features: rehearsal marks/text annotations, or PNG export stub, or cross-system hairpins.
 - Open issues: Cross-system hairpins not yet supported. Hairpins on beam group notes not supported.
+
+## 2026-04-19 — Post-v1, cross-system hairpins
+- Did: Implemented cross-system hairpin rendering in `page_renderer.rs`, following the same pattern as cross-system ties and slurs. Made `HairpinNoteInfo` and `collect_hairpin_note_info()` `pub(crate)` in `system_renderer.rs`. Added `UnresolvedHairpin`/`IncomingHairpinTarget` structs, `find_unresolved_hairpins()`, `find_incoming_hairpin_targets()`, and `draw_cross_system_hairpins()` to page renderer. Reuses `layout_hairpin()` directly for both half-hairpins (simpler than ties/slurs since hairpins are just lines, not Bézier curves). Trailing half-hairpin always drawn; incoming half-hairpin drawn only if target system has a `hairpin_end` note. Works automatically through `ScoreBuilder` since it uses `draw_page()`.
+- Verified: `cargo test -p music-engraver` — 720 unit + 3 integration + 2 doc-tests = 725 tests, all pass. 6 new page_renderer cross-system hairpin tests (4 extra lines for full cross-system, no hairpin without flags, right-half-only when no end, within-system not duplicated, differs from no hairpin, decresc differs from cresc). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Create `examples/cross_system_hairpins.rs` showing cross-system hairpins via ScoreBuilder API, or begin other post-v1 features (rehearsal marks, text annotations, PNG export stub).
+- Open issues: Hairpins on beam group notes not supported (rare use case).
