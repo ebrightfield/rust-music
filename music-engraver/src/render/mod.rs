@@ -22,6 +22,7 @@ mod svg_writer;
 pub mod system_renderer;
 pub mod tie_renderer;
 pub mod time_sig_renderer;
+pub mod tuplet_renderer;
 
 pub use accidental_renderer::draw_accidental;
 pub use barline_renderer::draw_barline;
@@ -40,3 +41,4 @@ pub use svg_writer::SvgWriter;
 pub use system_renderer::draw_system;
 pub use tie_renderer::draw_tie;
 pub use time_sig_renderer::draw_time_signature;
+pub use tuplet_renderer::draw_tuplet_bracket;

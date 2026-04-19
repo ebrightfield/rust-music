@@ -24,6 +24,7 @@ pub mod stem;
 pub mod system;
 pub mod tie;
 pub mod time_signature;
+pub mod tuplet;
 
 pub use barline::{BarlineLayout, BarlineStyle};
 pub use beam::{
@@ -54,3 +55,7 @@ pub use tie::{
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
+pub use tuplet::{
+    layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
+    TupletPlacement,
+};
