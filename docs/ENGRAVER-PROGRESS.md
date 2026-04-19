@@ -333,3 +333,9 @@
 - Verified: `cargo test -p music-engraver` — 714 unit + 3 integration + 2 doc-tests = 719 tests, all pass. 5 new system_renderer hairpin tests (within-measure draws 2 lines, no hairpin without flags, start-without-end no-op, decresc differs from cresc, across barline). 6 new score tests (hairpin adds lines, decresc vs cresc differ, rest no-op, convert_event preserves fields, tracked preserves fields, chord preserves fields). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
 - Next: Create `examples/hairpin_score.rs` showing hairpins via ScoreBuilder API, or begin other post-v1 features (PNG export stub, rehearsal marks, text annotations).
 - Open issues: Cross-system hairpins not yet supported (hairpin spanning a system break). Hairpins on beam group notes not supported (rare — hairpins typically span between notes, not within a beam group).
+
+## 2026-04-19 — Post-v1, hairpin score example via ScoreBuilder API
+- Did: Created `examples/hairpin_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.cresc()`, `.decresc()`, `.hairpin_end()`, and `.dynamic()` methods. Demonstrates: (1) ascending crescendo from p to f across 4 quarter notes, (2) half-note decrescendo from ff to p, (3) crescendo spanning barline from system 1 to system 2, (4) decrescendo to pp with dynamics. Output: 24 paths, 38 lines (19736 bytes).
+- Verified: `cargo run --example hairpin_score` produces valid SVG. `cargo test -p music-engraver` — 714 unit + 3 integration + 2 doc-tests = 719 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
+- Next: Begin other post-v1 features: rehearsal marks/text annotations, or PNG export stub, or cross-system hairpins.
+- Open issues: Cross-system hairpins not yet supported. Hairpins on beam group notes not supported.
