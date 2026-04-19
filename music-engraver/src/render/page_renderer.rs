@@ -266,6 +266,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })
     }
 
@@ -389,6 +390,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
             tie_forward: true,
+            dynamic: None,
         })
     }
 

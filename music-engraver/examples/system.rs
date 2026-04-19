@@ -35,6 +35,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -43,6 +44,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -51,6 +53,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 6, // D5
@@ -59,6 +62,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
             ],
             barline: BarlineStyle::Single,
@@ -73,6 +77,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Rest(RestEvent {
                     duration_log2: 2,
@@ -91,6 +96,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -99,6 +105,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 2, // G4
@@ -107,6 +114,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -115,6 +123,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 4, // B4
@@ -123,6 +132,7 @@ fn main() {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 }),
             ],
             barline: BarlineStyle::Final,

@@ -14,6 +14,7 @@ use crate::layout::stem::{
 use crate::render::beam_renderer::draw_beam_group;
 use crate::render::barline_renderer::draw_barline;
 use crate::render::dot_renderer::draw_dots;
+use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::flag_renderer::draw_flag;
 use crate::render::key_sig_renderer::draw_key_signature;
 use crate::render::note_renderer::{draw_ledger_lines, draw_notehead, NoteheadKind};
@@ -153,6 +154,12 @@ fn draw_note_event(
         draw_dots(svg, staff, font, x, advance, dot_pos, note.dots)?;
     }
 
+    // Draw dynamic marking below the staff if present
+    if let Some(dyn_mark) = note.dynamic {
+        let note_center_x = x + advance / 2.0;
+        draw_dynamic(svg, staff, font, dyn_mark, note_center_x)?;
+    }
+
     Ok(())
 }
 
@@ -278,6 +285,12 @@ fn draw_chord_event(
             let dot_pos = dot_staff_position(note_layout.staff_position);
             draw_dots(svg, staff, font, dot_base_x, advance, dot_pos, chord.dots)?;
         }
+    }
+
+    // Draw dynamic marking below the staff if present
+    if let Some(dyn_mark) = chord.dynamic {
+        let chord_center_x = x + advance / 2.0;
+        draw_dynamic(svg, staff, font, dyn_mark, chord_center_x)?;
     }
 
     Ok(())
@@ -432,6 +445,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -454,6 +468,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -475,6 +490,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -497,6 +513,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -519,6 +536,7 @@ mod tests {
             accidental: Some(Glyph::AccidentalSharp),
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -559,6 +577,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -586,6 +605,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -615,6 +635,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -637,6 +658,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
 
@@ -703,6 +725,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -711,6 +734,7 @@ mod tests {
                 accidental: Some(Glyph::AccidentalNatural),
                 stem_direction: Some(StemDirection::Down),
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Rest(RestEvent {
                 duration_log2: 2,
@@ -743,6 +767,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -767,6 +792,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -790,6 +816,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -815,6 +842,7 @@ mod tests {
             accidentals: vec![Some(Glyph::AccidentalSharp), None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -837,6 +865,7 @@ mod tests {
             accidentals: vec![None, None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -859,6 +888,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -882,6 +912,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -904,6 +935,7 @@ mod tests {
             accidentals: vec![],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -925,6 +957,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -948,6 +981,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let chord = vec![MeasureElement::Chord(ChordEvent {
             staff_positions: vec![0, 4],
@@ -956,6 +990,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })];
 
         let layout_s = layout_measure(&single, &cfg);
@@ -986,6 +1021,7 @@ mod tests {
             accidental: None,
             stem_direction: Some(StemDirection::Up),
         tie_forward: false,
+        dynamic: None,
         })];
         let elements_down = vec![MeasureElement::Note(NoteEvent {
             staff_position: 0,
@@ -994,6 +1030,7 @@ mod tests {
             accidental: None,
             stem_direction: Some(StemDirection::Down),
         tie_forward: false,
+        dynamic: None,
         })];
 
         let layout_up = layout_measure(&elements_up, &cfg);
@@ -1037,6 +1074,7 @@ mod tests {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 },
                 NoteEvent {
                     staff_position: 2,
@@ -1045,6 +1083,7 @@ mod tests {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 },
             ],
             stem_direction: None,
@@ -1068,10 +1107,10 @@ mod tests {
         let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
             ],
             stem_direction: None,
         })];
@@ -1099,6 +1138,7 @@ mod tests {
                     accidental: Some(Glyph::AccidentalSharp),
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 },
                 NoteEvent {
                     staff_position: 4,
@@ -1107,6 +1147,7 @@ mod tests {
                     accidental: None,
                     stem_direction: None,
                 tie_forward: false,
+                dynamic: None,
                 },
             ],
             stem_direction: None,
@@ -1129,8 +1170,8 @@ mod tests {
         // Notes below the staff requiring ledger lines
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
             ],
             stem_direction: None,
         })];
@@ -1177,6 +1218,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 2,
@@ -1185,13 +1227,14 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         // Same notes but beamed
         let beamed = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
             ],
             stem_direction: None,
         })];
@@ -1223,9 +1266,9 @@ mod tests {
         // Eighth + two sixteenths
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
             ],
             stem_direction: None,
         })];
@@ -1241,5 +1284,133 @@ mod tests {
             output.matches("<polygon ").count() >= 2,
             "at least 2 beam polygons"
         );
+    }
+
+    // --- dynamics rendering in measure ---
+
+    use crate::layout::dynamics::Dynamic;
+
+    #[test]
+    fn note_with_dynamic_adds_extra_path() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: Some(Dynamic::Forte),
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 1 notehead + 1 dynamic glyph = 2 paths, 1 stem
+        assert_eq!(output.matches("<path ").count(), 2, "notehead + dynamic");
+        assert_eq!(output.matches("<line ").count(), 1, "one stem");
+    }
+
+    #[test]
+    fn note_without_dynamic_no_extra_path() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 1 notehead, no dynamic
+        assert_eq!(output.matches("<path ").count(), 1, "notehead only");
+    }
+
+    #[test]
+    fn chord_with_dynamic_adds_extra_path() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: Some(Dynamic::Pp),
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 2 noteheads + 1 dynamic = 3 paths, 1 stem
+        assert_eq!(output.matches("<path ").count(), 3, "2 noteheads + dynamic");
+        assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
+    }
+
+    #[test]
+    fn dynamic_glyph_positioned_below_staff() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: Some(Dynamic::Mf),
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // Dynamic should be rendered with a translate below the staff.
+        // The staff bottom_y is at position 0. The dynamic is 2.5 staff spaces below.
+        let bottom_y = staff.bottom_y();
+        let dynamic_y = bottom_y + 2.5 * staff.staff_space;
+        // The SVG should contain a translate with the dynamic y coordinate
+        let y_str = format!("{dynamic_y}");
+        assert!(
+            output.contains(&y_str),
+            "dynamic translate should contain y={dynamic_y}"
+        );
+    }
+
+    #[test]
+    fn different_dynamics_on_notes_produce_different_svgs() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+        let make = |dyn_mark: Dynamic| {
+            let elements = vec![MeasureElement::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 2,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                tie_forward: false,
+                dynamic: Some(dyn_mark),
+            })];
+            let layout = layout_measure(&elements, &cfg);
+            let mut svg = make_svg();
+            draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+            svg.to_svg()
+        };
+
+        let svg_p = make(Dynamic::Piano);
+        let svg_f = make(Dynamic::Forte);
+        assert_ne!(svg_p, svg_f, "different dynamics should produce different SVGs");
     }
 }

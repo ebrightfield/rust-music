@@ -36,6 +36,7 @@ use music::note::spelling::{Accidental, Spelling};
 use crate::font::bravura_font;
 use crate::layout::accidental::accidental_glyph;
 use crate::layout::barline::BarlineStyle;
+use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{BeamGroupEvent, ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
@@ -210,9 +211,9 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
 enum ScoreEvent {
-    Note { pitch: Pitch, duration: Duration, tie_forward: bool },
+    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic> },
     Rest { duration: Duration },
-    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool },
+    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic> },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
 }
 
@@ -302,7 +303,7 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false });
+        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None });
         self
     }
 
@@ -321,12 +322,27 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a dynamic marking (e.g. pp, mf, ff) to the most recently added
+    /// note or chord. The dynamic is rendered below the staff, centered on
+    /// the note it applies to.
+    ///
+    /// Must be called immediately after `.note()` or `.chord()`. Has no effect
+    /// if the last event is not a note or chord.
+    pub fn dynamic(mut self, dyn_mark: Dynamic) -> Self {
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { dynamic, .. }) => *dynamic = Some(dyn_mark),
+            Some(ScoreEvent::Chord { dynamic, .. }) => *dynamic = Some(dyn_mark),
+            _ => {}
+        }
+        self
+    }
+
     /// Add a chord (multiple simultaneous pitches) to the current measure.
     ///
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false });
+        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None });
         self
     }
 
@@ -467,7 +483,7 @@ impl ScoreBuilder {
     #[cfg(test)]
     fn convert_event(&self, event: &ScoreEvent, clef: &Clef) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -480,6 +496,7 @@ impl ScoreBuilder {
                     accidental: acc,
                     stem_direction: None,
                     tie_forward: *tie_forward,
+                    dynamic: *dynamic,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -491,7 +508,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -510,6 +527,7 @@ impl ScoreBuilder {
                     accidentals,
                     stem_direction: None,
                     tie_forward: *tie_forward,
+                    dynamic: *dynamic,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -527,6 +545,7 @@ impl ScoreBuilder {
                             accidental: acc,
                             stem_direction: None,
                             tie_forward: false,
+                            dynamic: None,
                         }
                     })
                     .collect();
@@ -550,7 +569,7 @@ impl ScoreBuilder {
         seen: &mut AccidentalTracker,
     ) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -571,6 +590,7 @@ impl ScoreBuilder {
                     accidental: acc,
                     stem_direction: None,
                     tie_forward: *tie_forward,
+                    dynamic: *dynamic,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -582,7 +602,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -611,6 +631,7 @@ impl ScoreBuilder {
                     accidentals,
                     stem_direction: None,
                     tie_forward: *tie_forward,
+                    dynamic: *dynamic,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -637,6 +658,7 @@ impl ScoreBuilder {
                             accidental: acc,
                             stem_direction: None,
                             tie_forward: false,
+                            dynamic: None,
                         }
                     })
                     .collect();
@@ -1035,7 +1057,8 @@ mod tests {
         let event = ScoreEvent::Note {
             pitch: pitch.clone(),
             duration: Duration::QTR,
-        tie_forward: false,
+            tie_forward: false,
+            dynamic: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1270,11 +1293,13 @@ mod tests {
             pitch: pitch.clone(),
             duration: Duration::QTR,
         tie_forward: false,
+        dynamic: None,
         };
         let ev2 = ScoreEvent::Note {
             pitch: pitch.clone(),
             duration: Duration::QTR,
         tie_forward: false,
+        dynamic: None,
         };
 
         let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
@@ -1304,11 +1329,13 @@ mod tests {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
             tie_forward: false,
+            dynamic: None,
         };
         let ev_natural = ScoreEvent::Note {
             pitch: Pitch::new(Note::F, 4).unwrap(),
             duration: Duration::QTR,
             tie_forward: false,
+            dynamic: None,
         };
 
         let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
@@ -1531,6 +1558,7 @@ mod tests {
             ],
             duration: Duration::QTR,
             tie_forward: false,
+            dynamic: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1557,6 +1585,7 @@ mod tests {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
             tie_forward: false,
+            dynamic: None,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1568,6 +1597,7 @@ mod tests {
             ],
             duration: Duration::QTR,
             tie_forward: false,
+            dynamic: None,
         };
         let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
         match result {
@@ -1666,6 +1696,7 @@ mod tests {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
             tie_forward: false,
+            dynamic: None,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1781,6 +1812,7 @@ mod tests {
             pitch: Pitch::new(Note::E, 4).unwrap(),
             duration: Duration::QTR,
             tie_forward: true,
+            dynamic: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1803,6 +1835,7 @@ mod tests {
             ],
             duration: Duration::QTR,
             tie_forward: true,
+            dynamic: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1917,6 +1950,7 @@ mod tests {
             ],
             duration: Duration::QTR,
             tie_forward: true,
+            dynamic: None,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -1925,5 +1959,178 @@ mod tests {
             }
             _ => panic!("expected Chord event"),
         }
+    }
+
+    // --- dynamics integration ---
+
+    #[test]
+    fn dynamic_on_note_produces_extra_path() {
+        let svg_with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .dynamic(Dynamic::Forte)
+            .end_barline()
+            .render_svg();
+        let svg_without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let paths_with = svg_with.matches("<path ").count();
+        let paths_without = svg_without.matches("<path ").count();
+        assert_eq!(
+            paths_with,
+            paths_without + 1,
+            "dynamic should add exactly 1 path (the dynamic glyph)"
+        );
+    }
+
+    #[test]
+    fn different_dynamics_produce_different_svg() {
+        let svg_p = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .dynamic(Dynamic::Piano)
+            .render_svg();
+        let svg_f = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .dynamic(Dynamic::Forte)
+            .render_svg();
+        assert_ne!(svg_p, svg_f, "p and f should produce different SVGs");
+    }
+
+    #[test]
+    fn dynamic_on_chord_produces_extra_path() {
+        let svg_with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).unwrap(),
+                    Pitch::new(Note::E, 4).unwrap(),
+                ],
+                Duration::QTR,
+            )
+            .dynamic(Dynamic::Ff)
+            .end_barline()
+            .render_svg();
+        let svg_without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).unwrap(),
+                    Pitch::new(Note::E, 4).unwrap(),
+                ],
+                Duration::QTR,
+            )
+            .end_barline()
+            .render_svg();
+
+        let paths_with = svg_with.matches("<path ").count();
+        let paths_without = svg_without.matches("<path ").count();
+        assert_eq!(
+            paths_with,
+            paths_without + 1,
+            "dynamic on chord should add exactly 1 path"
+        );
+    }
+
+    #[test]
+    fn dynamic_on_rest_has_no_effect() {
+        let svg_with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .dynamic(Dynamic::Mf) // should be ignored — last event is a rest
+            .end_barline()
+            .render_svg();
+        let svg_without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(svg_with, svg_without, "dynamic on rest should have no effect");
+    }
+
+    #[test]
+    fn convert_event_preserves_dynamic() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::E, 4).unwrap(),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: Some(Dynamic::Pp),
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.dynamic, Some(Dynamic::Pp), "dynamic should be preserved");
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn convert_event_tracked_preserves_dynamic() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::E, 4).unwrap(),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: Some(Dynamic::Fff),
+        };
+        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.dynamic, Some(Dynamic::Fff), "tracked conversion preserves dynamic");
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn convert_event_chord_preserves_dynamic() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::C, 4).unwrap(),
+                Pitch::new(Note::E, 4).unwrap(),
+            ],
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: Some(Dynamic::Sfz),
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.dynamic, Some(Dynamic::Sfz), "chord dynamic should be preserved");
+            }
+            _ => panic!("expected Chord event"),
+        }
+    }
+
+    #[test]
+    fn multiple_dynamics_in_score() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .dynamic(Dynamic::Piano)
+            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::B, 4).unwrap(), Duration::QTR)
+            .dynamic(Dynamic::Forte)
+            .note(Pitch::new(Note::D, 5).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // Should have clef + 2 time sig digits + 4 noteheads + 2 dynamics = 9 paths
+        let path_count = svg.matches("<path ").count();
+        assert_eq!(
+            path_count, 9,
+            "expected 9 paths (clef + 2 time digits + 4 noteheads + 2 dynamics), got {}",
+            path_count
+        );
     }
 }

@@ -124,6 +124,7 @@ fn quarter(pos: i8) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
     tie_forward: false,
+    dynamic: None,
     })
 }
 
@@ -135,6 +136,7 @@ fn half(pos: i8) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
     tie_forward: false,
+    dynamic: None,
     })
 }
 
@@ -146,6 +148,7 @@ fn whole(pos: i8) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
     tie_forward: false,
+    dynamic: None,
     })
 }
 
@@ -157,6 +160,7 @@ fn dotted_half(pos: i8) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
     tie_forward: false,
+    dynamic: None,
     })
 }
 

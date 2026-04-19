@@ -1,5 +1,6 @@
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
+use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::stem::StemDirection;
 use crate::layout::time_signature::TimeSignatureKind;
@@ -37,6 +38,9 @@ pub struct ChordEvent {
     /// notes at the same staff positions. Tie curves are drawn by the system
     /// renderer after all measures are laid out.
     pub tie_forward: bool,
+    /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
+    /// centered on this chord.
+    pub dynamic: Option<Dynamic>,
 }
 
 /// A musical event within a measure that occupies horizontal space.
@@ -78,6 +82,9 @@ pub struct NoteEvent {
     /// Whether this note is tied forward to the next note at the same staff position.
     /// The tie curve is drawn by the system renderer after all measures are laid out.
     pub tie_forward: bool,
+    /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
+    /// centered on this note.
+    pub dynamic: Option<Dynamic>,
 }
 
 /// A rest to be laid out within a measure.
@@ -296,6 +303,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -320,6 +328,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -351,6 +360,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -382,6 +392,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -390,6 +401,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -413,6 +425,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -421,6 +434,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -444,6 +458,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -452,6 +467,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -460,6 +476,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -483,6 +500,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -505,6 +523,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -527,6 +546,7 @@ mod tests {
                 accidental: None,
                 stem_direction: None,
             tie_forward: false,
+            dynamic: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];

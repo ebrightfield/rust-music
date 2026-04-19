@@ -236,6 +236,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })
     }
 

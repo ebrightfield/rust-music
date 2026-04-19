@@ -180,6 +180,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         })
     }
 
@@ -366,6 +367,7 @@ mod tests {
             accidental: None,
             stem_direction: None,
             tie_forward: true,
+            dynamic: None,
         })
     }
 
@@ -523,6 +525,7 @@ mod tests {
             accidentals: vec![None, None],
             stem_direction: None,
             tie_forward: true,
+            dynamic: None,
         })
     }
 
@@ -535,6 +538,7 @@ mod tests {
             accidentals: vec![None; acc_count],
             stem_direction: None,
             tie_forward: false,
+            dynamic: None,
         })
     }
 

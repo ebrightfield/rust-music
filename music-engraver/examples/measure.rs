@@ -39,6 +39,7 @@ fn main() {
             accidental: None, // F# implied by key signature
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         }),
         // Eighth note on staff position 5 (A4 in treble clef) with a natural
         MeasureElement::Note(NoteEvent {
@@ -48,6 +49,7 @@ fn main() {
             accidental: Some(Glyph::AccidentalNatural),
             stem_direction: None,
         tie_forward: false,
+        dynamic: None,
         }),
         // Quarter rest
         MeasureElement::Rest(RestEvent {
