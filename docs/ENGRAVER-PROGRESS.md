@@ -267,3 +267,9 @@
 - Verified: `cargo test -p music-engraver` — 604 unit + 3 integration + 2 doc-tests = 609 tests, all pass. 13 new tests: 5 measure_renderer tests (note with/without dynamic, chord with dynamic, dynamic positioning below staff, different dynamics differ), 8 score tests (dynamic adds path, different dynamics differ, chord dynamic, rest ignored, convert_event preserves dynamic, tracked preserves dynamic, chord preserves dynamic, multiple dynamics path count). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
 - Next: Create a dynamics example via ScoreBuilder API (`examples/dynamics_score.rs`), or begin other post-v1 features (tuplet brackets, slurs, PNG export stub).
 - Open issues: None. Dynamics now fully integrated for notes and chords. Beam group notes do not carry dynamics (rare use case — dynamics typically apply to the group as a whole, not individual beamed notes).
+
+## 2026-04-19 — Post-v1, dynamics score example via ScoreBuilder API
+- Did: Created `examples/dynamics_score.rs` rendering 4 measures across 2 systems in Bb major 4/4 using ScoreBuilder API with `.dynamic()` method. Demonstrates: (1) ascending line with crescendo-like dynamics (p, mp, mf, f), (2) descending with diminuendo-like dynamics (ff, mf, p), (3) chord with fff + rest (no dynamic on rest), (4) sfz accent followed by pp subito and ppp. Exercises 9 of 11 dynamic types, dynamics on single notes and chords, no-op on rests. Output: 34 paths, 29 lines (28680 bytes).
+- Verified: `cargo run --example dynamics_score` produces valid SVG. `cargo test -p music-engraver` — 604 unit + 3 integration + 2 doc-tests = 609 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings on engraver crate. `cargo check --workspace` passes.
+- Next: Begin other post-v1 features: tuplet brackets (layout + rendering), slurs (similar to ties but different attachment), or PNG export stub.
+- Open issues: None.
