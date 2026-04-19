@@ -249,3 +249,9 @@
 - Verified: `cargo test -p music-engraver` — 570 unit + 3 integration + 2 doc-tests = 575 tests, all pass. 9 new tests: 4 half-tie layout tests (right valid, left valid, right over apex, left under apex), 5 page_renderer cross-system tie tests (two half-ties drawn, no tie without flag, right-half-only when no target, within-system not duplicated, tied vs untied differ). `cargo clippy -p music-engraver` — 0 warnings.
 - Next: Create a cross-system tie example via ScoreBuilder, or begin other post-v1 features (dynamics, tuplet brackets, slurs, PNG export stub).
 - Open issues: None — cross-system ties now supported for both single notes and chords.
+
+## 2026-04-19 — Post-v1, cross-system ties example
+- Did: Created `examples/cross_system_ties.rs` — renders 4 measures across 2 systems in G major 4/4 demonstrating: (1) cross-system tie on G4 from last note of system 1 (measure 2) to first note of system 2 (measure 3), rendered as two half-ties (trailing + incoming), (2) within-system cross-barline tie on B4 from measure 3 to measure 4, rendered as a full tie curve. Output: 21 paths, 27 lines, 3 ties (12533 bytes). Assertions verify at least 3 tie curves.
+- Verified: `cargo run --example cross_system_ties` produces valid SVG. `cargo test -p music-engraver` — 570 unit + 3 integration + 2 doc-tests = 575 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings on engraver crate.
+- Next: Consider other post-v1 features: dynamics text annotations, tuplet brackets, slurs, PNG export stub, or additional polish.
+- Open issues: None.
