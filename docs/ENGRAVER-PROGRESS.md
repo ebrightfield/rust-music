@@ -303,3 +303,9 @@
 - Verified: `cargo test -p music-engraver` — 675 unit + 3 integration + 2 doc-tests = 680 tests, all pass. 5 new system_renderer slur tests (within-measure slur, cross-barline slur, no slur without flags, slurred vs un-slurred differ, slur_start without end draws nothing). 7 new score tests (slur produces filled path, slurred vs unslurred differ, rest no-op, convert_event preserves flags, convert_event_tracked preserves flags, chord slur preserves flags). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
 - Next: Create `examples/slur_score.rs` showing slurs via ScoreBuilder API, or begin other post-v1 features (hairpins/crescendo wedges, PNG export stub).
 - Open issues: Cross-system slurs not yet supported (same limitation as cross-system ties had before implementation). Slurs only work within a single system currently.
+
+## 2026-04-19 — Post-v1, slur score example via ScoreBuilder API
+- Did: Created `examples/slur_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.slur_start()`/`.slur_end()` methods. Demonstrates: (1) ascending 3-note slur C4–E4–G4 + rest, (2) descending 4-note slur B4–A4–G4–F4, (3) same-pitch slur D5–D5 (legato articulation), (4) wide ascending slur C4–G5 (large interval). All 4 slurs rendered as filled crescent paths. Output: 20 paths, 28 lines, 4 slurs (10573 bytes).
+- Verified: `cargo run --example slur_score` produces valid SVG. `cargo test -p music-engraver` — 675 unit + 3 integration + 2 doc-tests = 680 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
+- Next: Implement cross-system slurs (analogous to cross-system ties), or begin other post-v1 features (hairpins/crescendo wedges, PNG export stub, rehearsal marks).
+- Open issues: Cross-system slurs not yet supported.
