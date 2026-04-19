@@ -19,6 +19,7 @@ pub mod measure;
 pub mod note_placement;
 pub mod page;
 pub mod rest;
+pub mod slur;
 pub mod staff;
 pub mod stem;
 pub mod system;
@@ -54,6 +55,7 @@ pub use tie::{
     TieLayout,
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
+pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
