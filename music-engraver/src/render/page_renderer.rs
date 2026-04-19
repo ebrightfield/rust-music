@@ -1,12 +1,14 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::page::{PageLayout, PageSystem};
+use crate::layout::slur::{layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::auto_stem_direction;
 use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
 use crate::render::note_renderer::NoteheadKind;
-use crate::render::system_renderer::{collect_note_positions, draw_system};
+use crate::render::slur_renderer::draw_slur;
+use crate::render::system_renderer::{collect_note_positions, collect_slur_note_info, draw_system};
 use crate::render::tie_renderer::draw_tie;
 use crate::render::SvgWriter;
 
@@ -79,6 +81,9 @@ pub fn draw_page(
 
     // Draw cross-system ties between adjacent systems
     draw_cross_system_ties(&mut svg, font, config, page)?;
+
+    // Draw cross-system slurs between adjacent systems
+    draw_cross_system_slurs(&mut svg, font, config, page)?;
 
     Ok(svg)
 }
@@ -233,6 +238,179 @@ fn draw_cross_system_ties(
                     config,
                 );
                 draw_tie(svg, &left_layout);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// A note at the end of a system with an unresolved `slur_start`.
+struct UnresolvedSlur {
+    /// Absolute x of the note's right edge.
+    x_right: f64,
+    /// Y of the notehead center (absolute, in font design units).
+    note_y: f64,
+    /// Slur direction (derived from stem direction).
+    direction: crate::layout::slur::SlurDirection,
+    /// Right edge of the system's staff lines (absolute x).
+    staff_right: f64,
+}
+
+/// A note at the start of the next system that has `slur_end = true`.
+struct IncomingSlurTarget {
+    /// Absolute x of the note's left edge.
+    x_left: f64,
+    /// Y of the notehead center.
+    note_y: f64,
+    /// Slur direction.
+    direction: crate::layout::slur::SlurDirection,
+    /// Left edge of the system's note area (after prefix).
+    staff_left: f64,
+}
+
+/// Find notes with `slur_start = true` at the end of a system that have no
+/// matching `slur_end` within the same system.
+fn find_unresolved_slurs(
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Result<Vec<UnresolvedSlur>, FontError> {
+    let system = &page_system.system;
+    let note_info = collect_slur_note_info(system);
+    let staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        config.staff_space,
+    );
+
+    let mut unresolved = Vec::new();
+
+    for (i, info) in note_info.iter().enumerate() {
+        if !info.slur_start {
+            continue;
+        }
+
+        // Check if there's a matching slur_end within this system
+        let has_end = note_info[i + 1..].iter().any(|n| n.slur_end);
+
+        if has_end {
+            continue; // Resolved within the system
+        }
+
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        let stem_dir = info
+            .stem_direction
+            .unwrap_or_else(|| auto_stem_direction(info.staff_position));
+        let direction = slur_direction_from_stem(stem_dir);
+
+        unresolved.push(UnresolvedSlur {
+            x_right: page_system.x + info.x + advance,
+            note_y: staff.y_of(info.staff_position),
+            direction,
+            staff_right: page_system.x + system.staff_width,
+        });
+    }
+
+    Ok(unresolved)
+}
+
+/// Find the first note with `slur_end = true` in a system (candidate for
+/// incoming cross-system slur).
+fn find_incoming_slur_targets(
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Vec<IncomingSlurTarget> {
+    let system = &page_system.system;
+    let note_info = collect_slur_note_info(system);
+    let staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        config.staff_space,
+    );
+
+    let first_measure_x = system
+        .measures
+        .first()
+        .map(|m| page_system.x + m.x_offset)
+        .unwrap_or(page_system.x);
+
+    let mut targets = Vec::new();
+
+    for info in &note_info {
+        if !info.slur_end {
+            continue;
+        }
+
+        let stem_dir = info
+            .stem_direction
+            .unwrap_or_else(|| auto_stem_direction(info.staff_position));
+        let direction = slur_direction_from_stem(stem_dir);
+
+        targets.push(IncomingSlurTarget {
+            x_left: page_system.x + info.x,
+            note_y: staff.y_of(info.staff_position),
+            direction,
+            staff_left: first_measure_x,
+        });
+
+        // Only need the first slur_end target per unresolved slur_start
+        break;
+    }
+
+    targets
+}
+
+/// Draw cross-system slurs between adjacent systems on a page.
+///
+/// For each unresolved `slur_start` at the end of system N, finds the first
+/// `slur_end` note at the start of system N+1 and draws two half-slurs:
+/// one trailing to the right edge of system N, one leading from the left
+/// of system N+1.
+fn draw_cross_system_slurs(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page: &PageLayout,
+) -> Result<(), FontError> {
+    for i in 0..page.systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_slurs(font, config, &page.systems[i])?;
+        if unresolved.is_empty() {
+            continue;
+        }
+
+        let targets = find_incoming_slur_targets(config, &page.systems[i + 1]);
+
+        for slur_src in &unresolved {
+            // Draw trailing half-slur at the end of the source system
+            let right_layout = layout_half_slur_right(
+                slur_src.x_right,
+                slur_src.staff_right,
+                slur_src.note_y,
+                slur_src.direction,
+                config,
+            );
+            draw_slur(svg, &right_layout);
+
+            // Draw incoming half-slur at the start of the target system
+            if let Some(tgt) = targets.first() {
+                let left_layout = layout_half_slur_left(
+                    tgt.staff_left,
+                    tgt.x_left,
+                    tgt.note_y,
+                    tgt.direction,
+                    config,
+                );
+                draw_slur(svg, &left_layout);
             }
         }
     }
@@ -553,6 +731,192 @@ mod tests {
         let untied_svg = draw_page(&font, &config, &untied_page).unwrap().to_svg();
 
         assert_ne!(tied_svg, untied_svg, "cross-system tied output should differ from untied");
+    }
+
+    // --- cross-system slur tests ---
+
+    fn slur_start_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: true,
+            slur_end: false,
+        })
+    }
+
+    fn slur_end_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: true,
+        })
+    }
+
+    #[test]
+    fn cross_system_slur_draws_two_half_slurs() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // System 1: slur_start note, system 2: slur_end note
+        let measures = vec![
+            MeasureContent {
+                events: vec![slur_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![slur_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        // 1 measure per system → forces cross-system slur
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        assert_eq!(page.systems.len(), 2);
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Should have 2 filled slur paths (right half-slur + left half-slur)
+        let filled_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            filled_count, 2,
+            "expected 2 half-slurs for cross-system slur, got {filled_count}"
+        );
+    }
+
+    #[test]
+    fn no_cross_system_slur_without_flags() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let measures = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        let filled_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(filled_count, 0, "no slurs without slur flags");
+    }
+
+    #[test]
+    fn cross_system_slur_right_half_only_when_no_end() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // slur_start in system 1, but no slur_end in system 2
+        let measures = vec![
+            MeasureContent {
+                events: vec![slur_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],  // no slur_end
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Only the right half-slur
+        let filled_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            filled_count, 1,
+            "only right half-slur when no slur_end target, got {filled_count}"
+        );
+    }
+
+    #[test]
+    fn within_system_slur_not_duplicated_as_cross_system() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // Both slur start and end in same system (2 measures per system)
+        let measures = vec![
+            MeasureContent {
+                events: vec![slur_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![slur_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+        assert_eq!(page.systems.len(), 1);
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Only 1 slur (within-system), no cross-system duplication
+        let filled_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(filled_count, 1, "1 within-system slur, no cross-system slur");
+    }
+
+    #[test]
+    fn cross_system_slur_differs_from_no_slur() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let with_slur = vec![
+            MeasureContent {
+                events: vec![slur_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![slur_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let without_slur = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+
+        let slur_page = layout_page(&prefix(), &with_slur, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let no_slur_page = layout_page(&prefix(), &without_slur, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let slur_svg = draw_page(&font, &config, &slur_page).unwrap().to_svg();
+        let no_slur_svg = draw_page(&font, &config, &no_slur_page).unwrap().to_svg();
+
+        assert_ne!(slur_svg, no_slur_svg, "cross-system slurred output should differ from unslurred");
     }
 
     #[test]

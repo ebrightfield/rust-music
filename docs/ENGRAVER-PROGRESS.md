@@ -309,3 +309,9 @@
 - Verified: `cargo run --example slur_score` produces valid SVG. `cargo test -p music-engraver` — 675 unit + 3 integration + 2 doc-tests = 680 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
 - Next: Implement cross-system slurs (analogous to cross-system ties), or begin other post-v1 features (hairpins/crescendo wedges, PNG export stub, rehearsal marks).
 - Open issues: Cross-system slurs not yet supported.
+
+## 2026-04-19 — Post-v1, cross-system slurs
+- Did: Implemented cross-system slur rendering in `page_renderer.rs`, analogous to cross-system ties. Added `layout_half_slur_right()` and `layout_half_slur_left()` to `layout/slur.rs` (symmetric y endpoints since target pitch is unknown across system break). Made `SlurNoteInfo` and `collect_slur_note_info()` `pub(crate)` in `system_renderer.rs`. Added `find_unresolved_slurs()`, `find_incoming_slur_targets()`, and `draw_cross_system_slurs()` to page renderer. Works automatically through `ScoreBuilder` since it uses `draw_page()`. Trailing half-slur always drawn (convention); incoming half-slur drawn only if target system has a `slur_end` note.
+- Verified: `cargo test -p music-engraver` — 684 unit + 3 integration + 2 doc-tests = 689 tests, all pass. 4 new half-slur layout tests + 5 new page_renderer cross-system slur tests (two half-slurs drawn, no slur without flags, right-half-only when no end, within-system not duplicated, slurred vs unslurred differ). `cargo check --workspace` passes.
+- Next: Create `examples/cross_system_slurs.rs` showing cross-system slurs via ScoreBuilder API, or begin other post-v1 features (hairpins/crescendo wedges, PNG export stub).
+- Open issues: None — cross-system slurs now supported for both single notes and chords.

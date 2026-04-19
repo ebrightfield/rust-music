@@ -115,6 +115,36 @@ pub fn layout_slur(
     }
 }
 
+/// Compute a half-slur trailing off the right edge of a system.
+///
+/// Used when a slur's end note is in the next system. The slur starts at the
+/// source note and extends to `x_right_edge`. Since we don't know the target
+/// note's pitch, both endpoints use the source note's y-position.
+pub fn layout_half_slur_right(
+    x_start: f64,
+    x_right_edge: f64,
+    note_y: f64,
+    direction: SlurDirection,
+    config: &EngravingConfig,
+) -> SlurLayout {
+    layout_slur(x_start, x_right_edge, note_y, note_y, direction, config)
+}
+
+/// Compute a half-slur leading from the left edge of a system to a note.
+///
+/// Used when a slur's start note is in the previous system. The slur starts
+/// at `x_left_edge` and ends at the target note. Since we don't know the
+/// source note's pitch, both endpoints use the target note's y-position.
+pub fn layout_half_slur_left(
+    x_left_edge: f64,
+    x_end: f64,
+    note_y: f64,
+    direction: SlurDirection,
+    config: &EngravingConfig,
+) -> SlurLayout {
+    layout_slur(x_left_edge, x_end, note_y, note_y, direction, config)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,5 +305,52 @@ mod tests {
         // Under apex should be below (greater y than) both endpoints
         assert!(layout.y_outer_apex > layout.y_start);
         assert!(layout.y_outer_apex > layout.y_end);
+    }
+
+    // --- half-slur tests ---
+
+    #[test]
+    fn half_slur_right_produces_valid_layout() {
+        let cfg = test_config();
+        let layout = layout_half_slur_right(100.0, 800.0, 500.0, SlurDirection::Under, &cfg);
+        assert!((layout.x_start - 100.0).abs() < f64::EPSILON);
+        assert!((layout.x_end - 800.0).abs() < f64::EPSILON);
+        assert!(layout.outer_cp1.0 > 100.0);
+        assert!(layout.outer_cp2.0 < 800.0);
+        // Under: apex below endpoint
+        assert!(layout.y_outer_apex > layout.y_start);
+    }
+
+    #[test]
+    fn half_slur_left_produces_valid_layout() {
+        let cfg = test_config();
+        let layout = layout_half_slur_left(50.0, 400.0, 500.0, SlurDirection::Over, &cfg);
+        assert!((layout.x_start - 50.0).abs() < f64::EPSILON);
+        assert!((layout.x_end - 400.0).abs() < f64::EPSILON);
+        assert!(layout.outer_cp1.0 > 50.0);
+        assert!(layout.outer_cp2.0 < 400.0);
+        // Over: apex above endpoint
+        assert!(layout.y_outer_apex < layout.y_start);
+    }
+
+    #[test]
+    fn half_slur_right_symmetric_endpoints() {
+        let cfg = test_config();
+        let layout = layout_half_slur_right(100.0, 600.0, 400.0, SlurDirection::Over, &cfg);
+        // Both y_start and y_end derive from the same note_y, so they should be equal
+        assert!(
+            (layout.y_start - layout.y_end).abs() < 1e-6,
+            "half-slur right should have symmetric y endpoints"
+        );
+    }
+
+    #[test]
+    fn half_slur_left_symmetric_endpoints() {
+        let cfg = test_config();
+        let layout = layout_half_slur_left(50.0, 400.0, 500.0, SlurDirection::Under, &cfg);
+        assert!(
+            (layout.y_start - layout.y_end).abs() < 1e-6,
+            "half-slur left should have symmetric y endpoints"
+        );
     }
 }

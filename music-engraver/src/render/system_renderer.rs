@@ -143,17 +143,17 @@ fn draw_system_ties(
 }
 
 /// Positional info for a note relevant to slur drawing.
-struct SlurNoteInfo {
-    x: f64,
-    staff_position: i8,
-    duration_log2: u8,
-    stem_direction: Option<StemDirection>,
-    slur_start: bool,
-    slur_end: bool,
+pub(crate) struct SlurNoteInfo {
+    pub(crate) x: f64,
+    pub(crate) staff_position: i8,
+    pub(crate) duration_log2: u8,
+    pub(crate) stem_direction: Option<StemDirection>,
+    pub(crate) slur_start: bool,
+    pub(crate) slur_end: bool,
 }
 
 /// Collect slur-relevant note info from the system.
-fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo> {
+pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for elem in &measure.layout.elements {
