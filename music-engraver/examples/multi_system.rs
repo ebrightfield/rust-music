@@ -125,6 +125,8 @@ fn quarter(pos: i8) -> MeasureEvent {
         stem_direction: None,
     tie_forward: false,
     dynamic: None,
+    slur_start: false,
+    slur_end: false,
     })
 }
 
@@ -137,6 +139,8 @@ fn half(pos: i8) -> MeasureEvent {
         stem_direction: None,
     tie_forward: false,
     dynamic: None,
+    slur_start: false,
+    slur_end: false,
     })
 }
 
@@ -149,6 +153,8 @@ fn whole(pos: i8) -> MeasureEvent {
         stem_direction: None,
     tie_forward: false,
     dynamic: None,
+    slur_start: false,
+    slur_end: false,
     })
 }
 
@@ -161,6 +167,8 @@ fn dotted_half(pos: i8) -> MeasureEvent {
         stem_direction: None,
     tie_forward: false,
     dynamic: None,
+    slur_start: false,
+    slur_end: false,
     })
 }
 

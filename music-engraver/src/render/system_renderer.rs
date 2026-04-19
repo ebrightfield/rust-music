@@ -1,11 +1,13 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::measure::MeasureElement;
+use crate::layout::slur::{layout_slur, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, StemDirection};
 use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::render::measure_renderer::draw_measure;
 use crate::render::note_renderer::NoteheadKind;
+use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
 use crate::render::SvgWriter;
@@ -77,6 +79,9 @@ pub fn draw_system(
     // Draw ties between notes with tie_forward = true and their target notes
     draw_system_ties(svg, font, config, system, &staff, x)?;
 
+    // Draw slurs between notes marked with slur_start and slur_end
+    draw_system_slurs(svg, font, config, system, &staff, x)?;
+
     Ok(())
 }
 
@@ -137,6 +142,124 @@ fn draw_system_ties(
     Ok(())
 }
 
+/// Positional info for a note relevant to slur drawing.
+struct SlurNoteInfo {
+    x: f64,
+    staff_position: i8,
+    duration_log2: u8,
+    stem_direction: Option<StemDirection>,
+    slur_start: bool,
+    slur_end: bool,
+}
+
+/// Collect slur-relevant note info from the system.
+fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for elem in &measure.layout.elements {
+            let elem_x = measure.x_offset + elem.x;
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push(SlurNoteInfo {
+                        x: elem_x,
+                        staff_position: n.staff_position,
+                        duration_log2: n.duration_log2,
+                        stem_direction: n.stem_direction,
+                        slur_start: n.slur_start,
+                        slur_end: n.slur_end,
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    // For slurs, use the chord's outer note (top for stems up,
+                    // bottom for stems down) as the attachment point.
+                    let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
+                    let bot_pos = c.staff_positions.iter().copied().min().unwrap_or(0);
+                    let dir = c.stem_direction.unwrap_or_else(|| auto_stem_direction(top_pos));
+                    let attach_pos = match dir {
+                        StemDirection::Up => bot_pos,
+                        StemDirection::Down => top_pos,
+                    };
+                    notes.push(SlurNoteInfo {
+                        x: elem_x,
+                        staff_position: attach_pos,
+                        duration_log2: c.duration_log2,
+                        stem_direction: c.stem_direction,
+                        slur_start: c.slur_start,
+                        slur_end: c.slur_end,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+/// Draw slur curves between notes marked with `slur_start` and `slur_end`.
+///
+/// For each note with `slur_start = true`, finds the next note with
+/// `slur_end = true` and draws a slur curve between them. Slur direction
+/// is determined from the start note's stem direction.
+fn draw_system_slurs(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) -> Result<(), FontError> {
+    let note_info = collect_slur_note_info(system);
+
+    for (i, info) in note_info.iter().enumerate() {
+        if !info.slur_start {
+            continue;
+        }
+
+        // Find the next note with slur_end = true
+        let target = note_info[i + 1..]
+            .iter()
+            .find(|n| n.slur_end);
+
+        let Some(target) = target else {
+            continue;
+        };
+
+        // Compute notehead advance width for slur endpoint positioning
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        // Slur starts at right edge of first notehead, ends at left edge of last
+        let slur_x_start = system_x + info.x + advance;
+        let slur_x_end = system_x + target.x;
+
+        // Determine slur direction from start note's stem
+        let stem_dir = info.stem_direction
+            .unwrap_or_else(|| auto_stem_direction(info.staff_position));
+        let direction = slur_direction_from_stem(stem_dir);
+
+        // Y-coordinates at attachment points
+        let start_y = staff.y_of(info.staff_position);
+        let end_y = staff.y_of(target.staff_position);
+
+        let slur_layout = layout_slur(
+            slur_x_start,
+            slur_x_end,
+            start_y,
+            end_y,
+            direction,
+            config,
+        );
+        draw_slur(svg, &slur_layout);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,6 +304,8 @@ mod tests {
             stem_direction: None,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         })
     }
 
@@ -368,6 +493,8 @@ mod tests {
             stem_direction: None,
             tie_forward: true,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         })
     }
 
@@ -526,6 +653,8 @@ mod tests {
             stem_direction: None,
             tie_forward: true,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         })
     }
 
@@ -539,6 +668,8 @@ mod tests {
             stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         })
     }
 
@@ -635,5 +766,135 @@ mod tests {
 
         let tie_count = output.matches(r#"stroke="none""#).count();
         assert_eq!(tie_count, 2, "2 ties across barline (one per chord note)");
+    }
+
+    // --- slur rendering ---
+
+    fn slur_start_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: true,
+            slur_end: false,
+        })
+    }
+
+    fn slur_end_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: true,
+        })
+    }
+
+    #[test]
+    fn slur_within_measure_draws_filled_path() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![slur_start_note(2), quarter_note(4), slur_end_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        // Should have 1 filled path (the slur curve)
+        let filled = output.matches(r#"stroke="none""#).count();
+        assert_eq!(filled, 1, "expected 1 slur curve, got {filled}");
+        // Slur should contain Bézier curves
+        assert!(output.contains(" C"), "slur should contain cubic Bézier commands");
+    }
+
+    #[test]
+    fn slur_across_barline() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![
+            MeasureContent {
+                events: vec![slur_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![slur_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        let filled = output.matches(r#"stroke="none""#).count();
+        assert_eq!(filled, 1, "slur across barline should draw 1 curve");
+    }
+
+    #[test]
+    fn no_slur_without_flags() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![quarter_note(2), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        let filled = output.matches(r#"stroke="none""#).count();
+        assert_eq!(filled, 0, "no slur when no slur_start/slur_end flags");
+    }
+
+    #[test]
+    fn slur_differs_from_no_slur() {
+        let (font, config, mcfg) = setup();
+        let with_slur = vec![MeasureContent {
+            events: vec![slur_start_note(2), slur_end_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let without_slur = vec![MeasureContent {
+            events: vec![quarter_note(2), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+
+        let sys_s = layout_system(&treble_prefix(), &with_slur, &mcfg, None);
+        let sys_n = layout_system(&treble_prefix(), &without_slur, &mcfg, None);
+
+        let mut svg_s = make_svg();
+        draw_system(&mut svg_s, &font, &config, &sys_s, 0.0, 0.0).unwrap();
+        let mut svg_n = make_svg();
+        draw_system(&mut svg_n, &font, &config, &sys_n, 0.0, 0.0).unwrap();
+
+        assert_ne!(svg_s.to_svg(), svg_n.to_svg(), "slurred vs un-slurred should differ");
+    }
+
+    #[test]
+    fn slur_start_without_end_draws_nothing() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![slur_start_note(4), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        let filled = output.matches(r#"stroke="none""#).count();
+        assert_eq!(filled, 0, "no slur without matching slur_end");
     }
 }

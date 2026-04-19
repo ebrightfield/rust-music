@@ -54,6 +54,10 @@ pub struct ChordEvent {
     /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
     /// centered on this chord.
     pub dynamic: Option<Dynamic>,
+    /// Whether this chord is the start of a slur.
+    pub slur_start: bool,
+    /// Whether this chord is the end of a slur.
+    pub slur_end: bool,
 }
 
 /// A musical event within a measure that occupies horizontal space.
@@ -100,6 +104,11 @@ pub struct NoteEvent {
     /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
     /// centered on this note.
     pub dynamic: Option<Dynamic>,
+    /// Whether this note is the start of a slur (curved line to a following note).
+    /// The slur curve is drawn by the system renderer after all measures are laid out.
+    pub slur_start: bool,
+    /// Whether this note is the end of a slur.
+    pub slur_end: bool,
 }
 
 /// A rest to be laid out within a measure.
@@ -335,6 +344,8 @@ mod tests {
             stem_direction: None,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -360,6 +371,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -392,6 +405,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -424,6 +439,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -433,6 +450,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -457,6 +476,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -466,6 +487,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -490,6 +513,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -499,6 +524,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -508,6 +535,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -532,6 +561,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -555,6 +586,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -578,6 +611,8 @@ mod tests {
                 stem_direction: None,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];

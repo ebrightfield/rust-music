@@ -215,6 +215,8 @@ mod tests {
             stem_direction: None,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         })
     }
 

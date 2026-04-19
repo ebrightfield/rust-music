@@ -267,6 +267,8 @@ mod tests {
             stem_direction: None,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         })
     }
 
@@ -391,6 +393,8 @@ mod tests {
             stem_direction: None,
             tie_forward: true,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         })
     }
 

@@ -211,9 +211,9 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
 enum ScoreEvent {
-    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic> },
+    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool },
     Rest { duration: Duration },
-    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic> },
+    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
     TupletGroup { notes: Vec<(Pitch, Duration)>, tuplet_number: u32 },
 }
@@ -304,7 +304,7 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None });
+        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false });
         self
     }
 
@@ -318,6 +318,33 @@ impl ScoreBuilder {
         match self.current_events.last_mut() {
             Some(ScoreEvent::Note { tie_forward, .. }) => *tie_forward = true,
             Some(ScoreEvent::Chord { tie_forward, .. }) => *tie_forward = true,
+            _ => {}
+        }
+        self
+    }
+
+    /// Mark the most recently added note or chord as the start of a slur.
+    ///
+    /// The slur curve is drawn from this note to the next note/chord that has
+    /// `slur_end()` called on it, within the same system. The curve direction
+    /// is determined by the stem direction of the start note.
+    pub fn slur_start(mut self) -> Self {
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { slur_start, .. }) => *slur_start = true,
+            Some(ScoreEvent::Chord { slur_start, .. }) => *slur_start = true,
+            _ => {}
+        }
+        self
+    }
+
+    /// Mark the most recently added note or chord as the end of a slur.
+    ///
+    /// Pairs with a preceding `slur_start()` call. The slur is drawn between
+    /// the most recent `slur_start` note and this note.
+    pub fn slur_end(mut self) -> Self {
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { slur_end, .. }) => *slur_end = true,
+            Some(ScoreEvent::Chord { slur_end, .. }) => *slur_end = true,
             _ => {}
         }
         self
@@ -343,7 +370,7 @@ impl ScoreBuilder {
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None });
+        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false });
         self
     }
 
@@ -502,7 +529,7 @@ impl ScoreBuilder {
     #[cfg(test)]
     fn convert_event(&self, event: &ScoreEvent, clef: &Clef) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward, dynamic } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -516,6 +543,8 @@ impl ScoreBuilder {
                     stem_direction: None,
                     tie_forward: *tie_forward,
                     dynamic: *dynamic,
+                    slur_start: *slur_start,
+                    slur_end: *slur_end,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -527,7 +556,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -547,6 +576,8 @@ impl ScoreBuilder {
                     stem_direction: None,
                     tie_forward: *tie_forward,
                     dynamic: *dynamic,
+                    slur_start: *slur_start,
+                    slur_end: *slur_end,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -565,6 +596,8 @@ impl ScoreBuilder {
                             stem_direction: None,
                             tie_forward: false,
                             dynamic: None,
+                            slur_start: false,
+                            slur_end: false,
                         }
                     })
                     .collect();
@@ -589,6 +622,8 @@ impl ScoreBuilder {
                             stem_direction: None,
                             tie_forward: false,
                             dynamic: None,
+                            slur_start: false,
+                            slur_end: false,
                         }
                     })
                     .collect();
@@ -615,7 +650,7 @@ impl ScoreBuilder {
         seen: &mut AccidentalTracker,
     ) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward, dynamic } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -637,6 +672,8 @@ impl ScoreBuilder {
                     stem_direction: None,
                     tie_forward: *tie_forward,
                     dynamic: *dynamic,
+                    slur_start: *slur_start,
+                    slur_end: *slur_end,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -648,7 +685,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -678,6 +715,8 @@ impl ScoreBuilder {
                     stem_direction: None,
                     tie_forward: *tie_forward,
                     dynamic: *dynamic,
+                    slur_start: *slur_start,
+                    slur_end: *slur_end,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -705,6 +744,8 @@ impl ScoreBuilder {
                             stem_direction: None,
                             tie_forward: false,
                             dynamic: None,
+                            slur_start: false,
+                            slur_end: false,
                         }
                     })
                     .collect();
@@ -737,6 +778,8 @@ impl ScoreBuilder {
                             stem_direction: None,
                             tie_forward: false,
                             dynamic: None,
+                            slur_start: false,
+                            slur_end: false,
                         }
                     })
                     .collect();
@@ -1140,6 +1183,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1375,12 +1420,16 @@ mod tests {
             duration: Duration::QTR,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         };
         let ev2 = ScoreEvent::Note {
             pitch: pitch.clone(),
             duration: Duration::QTR,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         };
 
         let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
@@ -1411,12 +1460,16 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let ev_natural = ScoreEvent::Note {
             pitch: Pitch::new(Note::F, 4).unwrap(),
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
 
         let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
@@ -1640,6 +1693,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1667,6 +1722,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1679,6 +1736,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
         match result {
@@ -1778,6 +1837,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1894,6 +1955,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: true,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1917,6 +1980,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: true,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2032,6 +2097,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: true,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2142,6 +2209,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: Some(Dynamic::Pp),
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2161,6 +2230,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: Some(Dynamic::Fff),
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2182,6 +2253,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: Some(Dynamic::Sfz),
+            slur_start: false,
+            slur_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2313,6 +2386,8 @@ mod tests {
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
+            slur_start: false,
+            slur_end: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -2353,5 +2428,129 @@ mod tests {
         // 5 noteheads + clef + 1 tuplet number = 7 paths
         let path_count = svg.matches("<path ").count();
         assert_eq!(path_count, 7, "expected 7 paths, got {path_count}");
+    }
+
+    // --- slur tests ---
+
+    #[test]
+    fn slur_start_end_produces_filled_path() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .slur_start()
+            .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .slur_end()
+            .end_barline()
+            .render_svg();
+
+        // Should contain a filled slur path (Bézier curves)
+        let filled_count = svg.matches(r#"stroke="none""#).count();
+        assert!(filled_count >= 1, "expected at least 1 filled slur path, got {filled_count}");
+        assert!(svg.contains(" C"), "slur should contain cubic Bézier commands");
+    }
+
+    #[test]
+    fn slurred_differs_from_unslurred() {
+        let slurred = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .slur_start()
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .slur_end()
+            .end_barline()
+            .render_svg();
+
+        let unslurred = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(slurred, unslurred, "slurred should differ from un-slurred");
+    }
+
+    #[test]
+    fn slur_on_rest_is_noop() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .slur_start()
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // slur_start on a rest is a no-op; no slur_end anywhere, so no slur
+        let filled_count = svg.matches(r#"stroke="none""#).count();
+        assert_eq!(filled_count, 0, "slur_start on rest should be a no-op");
+    }
+
+    #[test]
+    fn convert_event_preserves_slur_flags() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::E, 4).unwrap(),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: true,
+            slur_end: false,
+        };
+        let clef = Clef::Treble;
+        let result = builder.convert_event(&event, &clef);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert!(n.slur_start, "slur_start should be preserved");
+                assert!(!n.slur_end, "slur_end should be false");
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn convert_event_tracked_preserves_slur_flags() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::G, 4).unwrap(),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: true,
+        };
+        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert!(!n.slur_start, "slur_start should be false");
+                assert!(n.slur_end, "slur_end should be preserved");
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn chord_slur_preserves_flags() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::C, 4).unwrap(),
+                Pitch::new(Note::E, 4).unwrap(),
+            ],
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: true,
+            slur_end: false,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert!(c.slur_start, "chord slur_start should be preserved");
+                assert!(!c.slur_end);
+            }
+            _ => panic!("expected Chord event"),
+        }
     }
 }

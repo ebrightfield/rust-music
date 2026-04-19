@@ -40,6 +40,8 @@ fn main() {
             stem_direction: None,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         }),
         // Eighth note on staff position 5 (A4 in treble clef) with a natural
         MeasureElement::Note(NoteEvent {
@@ -50,6 +52,8 @@ fn main() {
             stem_direction: None,
         tie_forward: false,
         dynamic: None,
+        slur_start: false,
+        slur_end: false,
         }),
         // Quarter rest
         MeasureElement::Rest(RestEvent {
