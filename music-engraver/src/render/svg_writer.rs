@@ -88,6 +88,68 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
+    /// Add a `<text>` element at the given position.
+    ///
+    /// `font_size` is in the same coordinate system as the viewBox.
+    /// `anchor` is an SVG `text-anchor` value: "start", "middle", or "end".
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_text(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font_family: &str,
+        font_size: f64,
+        fill: &str,
+        anchor: &str,
+    ) {
+        let _ = write!(
+            self.elements,
+            r#"  <text x="{x}" y="{y}" font-family="{font_family}" font-size="{font_size}" fill="{fill}" text-anchor="{anchor}">{text}</text>"#,
+        );
+        self.elements.push('\n');
+    }
+
+    /// Add a `<text>` element with additional styling (font-weight, font-style).
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_styled_text(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font_family: &str,
+        font_size: f64,
+        fill: &str,
+        anchor: &str,
+        font_weight: &str,
+        font_style: &str,
+    ) {
+        let _ = write!(
+            self.elements,
+            r#"  <text x="{x}" y="{y}" font-family="{font_family}" font-size="{font_size}" fill="{fill}" text-anchor="{anchor}" font-weight="{font_weight}" font-style="{font_style}">{text}</text>"#,
+        );
+        self.elements.push('\n');
+    }
+
+    /// Add a stroked rectangle (for boxed rehearsal marks, etc.).
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_stroked_rect(
+        &mut self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        fill: &str,
+        stroke: &str,
+        stroke_width: f64,
+    ) {
+        let _ = write!(
+            self.elements,
+            r#"  <rect x="{x}" y="{y}" width="{width}" height="{height}" fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}"/>"#,
+        );
+        self.elements.push('\n');
+    }
+
     /// Produce the complete SVG document as a string.
     pub fn to_svg(&self) -> String {
         let (vx, vy, vw, vh) = self.view_box;
@@ -174,5 +236,51 @@ mod tests {
         w.add_polygon(&[], "black");
         let svg = w.to_svg();
         assert!(svg.contains(r#"points="""#));
+    }
+
+    #[test]
+    fn svg_writer_text_element() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        w.add_text(250.0, 100.0, "A", "serif", 200.0, "black", "middle");
+        let svg = w.to_svg();
+        assert!(svg.contains("<text "));
+        assert!(svg.contains(r#"x="250""#));
+        assert!(svg.contains(r#"y="100""#));
+        assert!(svg.contains(r#"font-family="serif""#));
+        assert!(svg.contains(r#"font-size="200""#));
+        assert!(svg.contains(r#"text-anchor="middle""#));
+        assert!(svg.contains(">A</text>"));
+    }
+
+    #[test]
+    fn svg_writer_styled_text_element() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        w.add_styled_text(
+            50.0, 60.0, "cresc.", "Times", 150.0, "black", "start", "normal", "italic",
+        );
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"font-weight="normal""#));
+        assert!(svg.contains(r#"font-style="italic""#));
+        assert!(svg.contains(">cresc.</text>"));
+    }
+
+    #[test]
+    fn svg_writer_stroked_rect_element() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        w.add_stroked_rect(10.0, 20.0, 300.0, 200.0, "none", "black", 5.0);
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"<rect "#));
+        assert!(svg.contains(r#"fill="none""#));
+        assert!(svg.contains(r#"stroke="black""#));
+        assert!(svg.contains(r#"stroke-width="5""#));
+        assert!(svg.contains(r#"width="300""#));
+    }
+
+    #[test]
+    fn svg_writer_text_with_special_chars() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        w.add_text(0.0, 0.0, "12", "sans-serif", 50.0, "black", "middle");
+        let svg = w.to_svg();
+        assert!(svg.contains(">12</text>"));
     }
 }
