@@ -33,6 +33,10 @@ pub struct ChordEvent {
     pub accidentals: Vec<Option<smufl::Glyph>>,
     /// Stem direction override. `None` uses auto-detection based on chord extent.
     pub stem_direction: Option<StemDirection>,
+    /// Whether all notes in this chord are tied forward to the next chord or
+    /// notes at the same staff positions. Tie curves are drawn by the system
+    /// renderer after all measures are laid out.
+    pub tie_forward: bool,
 }
 
 /// A musical event within a measure that occupies horizontal space.

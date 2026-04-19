@@ -212,7 +212,7 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 enum ScoreEvent {
     Note { pitch: Pitch, duration: Duration, tie_forward: bool },
     Rest { duration: Duration },
-    Chord { pitches: Vec<Pitch>, duration: Duration },
+    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
 }
 
@@ -313,8 +313,10 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()`. Has no effect if the last event
     /// is not a note.
     pub fn tie(mut self) -> Self {
-        if let Some(ScoreEvent::Note { tie_forward, .. }) = self.current_events.last_mut() {
-            *tie_forward = true;
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { tie_forward, .. }) => *tie_forward = true,
+            Some(ScoreEvent::Chord { tie_forward, .. }) => *tie_forward = true,
+            _ => {}
         }
         self
     }
@@ -324,7 +326,7 @@ impl ScoreBuilder {
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration });
+        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false });
         self
     }
 
@@ -489,7 +491,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -507,6 +509,7 @@ impl ScoreBuilder {
                     dots,
                     accidentals,
                     stem_direction: None,
+                    tie_forward: *tie_forward,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -579,7 +582,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -607,6 +610,7 @@ impl ScoreBuilder {
                     dots,
                     accidentals,
                     stem_direction: None,
+                    tie_forward: *tie_forward,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -1526,6 +1530,7 @@ mod tests {
                 Pitch::new(Note::G, 4).unwrap(),
             ],
             duration: Duration::QTR,
+            tie_forward: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1562,6 +1567,7 @@ mod tests {
                 Pitch::new(Note::A, 4).unwrap(),
             ],
             duration: Duration::QTR,
+            tie_forward: false,
         };
         let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
         match result {
@@ -1782,6 +1788,142 @@ mod tests {
                 assert!(n.tie_forward, "tie_forward should be preserved");
             }
             _ => panic!("expected Note event"),
+        }
+    }
+
+    // --- chord tie support ---
+
+    #[test]
+    fn tie_after_chord_sets_tie_forward() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::C, 4).unwrap(),
+                Pitch::new(Note::E, 4).unwrap(),
+            ],
+            duration: Duration::QTR,
+            tie_forward: true,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert!(c.tie_forward, "chord tie_forward should be preserved");
+            }
+            _ => panic!("expected Chord event"),
+        }
+    }
+
+    #[test]
+    fn chord_tie_produces_filled_paths() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).unwrap(),
+                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::G, 4).unwrap(),
+                ],
+                Duration::HALF,
+            )
+            .tie()
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).unwrap(),
+                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::G, 4).unwrap(),
+                ],
+                Duration::HALF,
+            )
+            .end_barline()
+            .render_svg();
+
+        // 3 notes in the chord → 3 ties
+        let tie_count = svg.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 3, "expected 3 ties (one per chord note), got {tie_count}");
+    }
+
+    #[test]
+    fn chord_tie_differs_from_untied_chord() {
+        let build = || {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .chord(
+                    vec![
+                        Pitch::new(Note::E, 4).unwrap(),
+                        Pitch::new(Note::G, 4).unwrap(),
+                    ],
+                    Duration::HALF,
+                )
+        };
+
+        let svg_tied = build()
+            .tie()
+            .chord(
+                vec![
+                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::G, 4).unwrap(),
+                ],
+                Duration::HALF,
+            )
+            .end_barline()
+            .render_svg();
+
+        let svg_untied = build()
+            .chord(
+                vec![
+                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::G, 4).unwrap(),
+                ],
+                Duration::HALF,
+            )
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(svg_tied, svg_untied, "tied chord should differ from untied");
+        assert!(
+            svg_tied.len() > svg_untied.len(),
+            "tied chord SVG should be larger (contains tie paths)"
+        );
+    }
+
+    #[test]
+    fn chord_tie_no_effect_without_tie_call() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![Pitch::new(Note::C, 4).unwrap(), Pitch::new(Note::E, 4).unwrap()],
+                Duration::HALF,
+            )
+            .chord(
+                vec![Pitch::new(Note::C, 4).unwrap(), Pitch::new(Note::E, 4).unwrap()],
+                Duration::HALF,
+            )
+            .end_barline()
+            .render_svg();
+
+        let tie_count = svg.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 0, "no ties without .tie() call");
+    }
+
+    #[test]
+    fn convert_event_tracked_chord_preserves_tie_forward() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+        let event = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::C, 4).unwrap(),
+                Pitch::new(Note::G, 4).unwrap(),
+            ],
+            duration: Duration::QTR,
+            tie_forward: true,
+        };
+        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert!(c.tie_forward, "tracked conversion should preserve tie_forward");
+            }
+            _ => panic!("expected Chord event"),
         }
     }
 }

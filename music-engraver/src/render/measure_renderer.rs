@@ -766,6 +766,7 @@ mod tests {
             dots: 0,
             accidentals: vec![None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -788,6 +789,7 @@ mod tests {
             dots: 0,
             accidentals: vec![None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -812,6 +814,7 @@ mod tests {
             dots: 0,
             accidentals: vec![Some(Glyph::AccidentalSharp), None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -833,6 +836,7 @@ mod tests {
             dots: 0,
             accidentals: vec![None, None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -854,6 +858,7 @@ mod tests {
             dots: 0,
             accidentals: vec![None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -876,6 +881,7 @@ mod tests {
             dots: 0,
             accidentals: vec![None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -897,6 +903,7 @@ mod tests {
             dots: 0,
             accidentals: vec![],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -917,6 +924,7 @@ mod tests {
             dots: 1,
             accidentals: vec![None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -947,6 +955,7 @@ mod tests {
             dots: 0,
             accidentals: vec![None, None],
             stem_direction: None,
+            tie_forward: false,
         })];
 
         let layout_s = layout_measure(&single, &cfg);

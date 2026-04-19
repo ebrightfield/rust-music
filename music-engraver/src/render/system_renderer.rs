@@ -12,14 +12,25 @@ use crate::render::SvgWriter;
 
 /// Collect notes from the system's positioned elements in order, yielding
 /// (x_in_system, staff_position, duration_log2, tie_forward, stem_direction_override)
-/// for each note event. Skips clefs, rests, barlines, etc.
+/// for each note event. Chord notes are expanded into individual entries so
+/// each chord note can be tied independently. Skips clefs, rests, barlines, etc.
 fn collect_note_positions(system: &SystemLayout) -> Vec<(f64, i8, u8, bool, Option<StemDirection>)> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for elem in &measure.layout.elements {
             let elem_x = measure.x_offset + elem.x;
-            if let MeasureElement::Note(n) = &elem.element {
-                notes.push((elem_x, n.staff_position, n.duration_log2, n.tie_forward, n.stem_direction));
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push((elem_x, n.staff_position, n.duration_log2, n.tie_forward, n.stem_direction));
+                }
+                MeasureElement::Chord(c) => {
+                    // Each note in the chord gets its own entry so ties can
+                    // match by staff position independently.
+                    for &pos in &c.staff_positions {
+                        notes.push((elem_x, pos, c.duration_log2, c.tie_forward, c.stem_direction));
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -498,5 +509,127 @@ mod tests {
         let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
         let positions = collect_note_positions(&system);
         assert_eq!(positions.len(), 2, "only 2 notes, rest is skipped");
+    }
+
+    // --- chord tie rendering ---
+
+    use crate::layout::measure::ChordEvent;
+
+    fn tied_chord(positions: Vec<i8>) -> MeasureEvent {
+        MeasureEvent::Chord(ChordEvent {
+            staff_positions: positions,
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None],
+            stem_direction: None,
+            tie_forward: true,
+        })
+    }
+
+    fn untied_chord(positions: Vec<i8>) -> MeasureEvent {
+        let acc_count = positions.len();
+        MeasureEvent::Chord(ChordEvent {
+            staff_positions: positions,
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None; acc_count],
+            stem_direction: None,
+            tie_forward: false,
+        })
+    }
+
+    #[test]
+    fn collect_note_positions_includes_chord_notes() {
+        let (_, _, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![
+                untied_chord(vec![0, 4]),
+                quarter_note(2),
+            ],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+        let positions = collect_note_positions(&system);
+        // Chord expands to 2 entries + 1 single note = 3
+        assert_eq!(positions.len(), 3, "chord (2 notes) + single note = 3 entries");
+    }
+
+    #[test]
+    fn chord_tie_draws_ties_for_all_notes() {
+        let (font, config, mcfg) = setup();
+        // Tied chord at pos [0, 4] followed by another chord at [0, 4]
+        let measures = vec![MeasureContent {
+            events: vec![tied_chord(vec![0, 4]), untied_chord(vec![0, 4])],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        // Two ties: one for pos 0 and one for pos 4
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 2, "expected 2 ties (one per chord note), got {tie_count}");
+    }
+
+    #[test]
+    fn chord_tie_to_single_note_at_matching_position() {
+        let (font, config, mcfg) = setup();
+        // Tied chord [0, 4], followed by single note at pos 4
+        // Only pos 4 has a target, so only 1 tie should be drawn
+        let measures = vec![MeasureContent {
+            events: vec![tied_chord(vec![0, 4]), quarter_note(4)],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        // Only 1 tie: pos 4 matches, pos 0 has no target
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 1, "expected 1 tie (only pos 4 matches), got {tie_count}");
+    }
+
+    #[test]
+    fn untied_chord_draws_no_ties() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![untied_chord(vec![0, 4]), untied_chord(vec![0, 4])],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 0, "no ties when tie_forward is false");
+    }
+
+    #[test]
+    fn chord_tie_across_barline() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![
+            MeasureContent {
+                events: vec![tied_chord(vec![2, 6])],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![untied_chord(vec![2, 6])],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 2, "2 ties across barline (one per chord note)");
     }
 }

@@ -231,3 +231,9 @@
 - Verified: `cargo run --example tied_score` produces valid SVG. `cargo test -p music-engraver` — 551 unit + 3 integration + 2 doc-tests = 556 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
 - Next: Add tie support for chords (ChordEvent), implement cross-system ties, or begin other post-v1 features (dynamics, tuplet brackets, slurs).
 - Open issues: Cross-system ties not yet supported. Chord ties not yet supported.
+
+## 2026-04-19 — Post-v1, chord tie support
+- Did: Added `tie_forward: bool` field to `ChordEvent`. Updated `ScoreEvent::Chord` to carry `tie_forward`. `ScoreBuilder::tie()` now handles both notes and chords. `collect_note_positions()` in system_renderer now expands chord notes into individual entries so each chord note gets its own tie matched by staff position. Updated `convert_event()` and `convert_event_tracked()` to propagate `tie_forward` for chords. Added `tie_forward: false` to all existing `ChordEvent` constructions across measure_renderer tests and score tests.
+- Verified: `cargo test -p music-engraver` — 561 unit + 3 integration + 2 doc-tests = 566 tests, all pass. 10 new tests: 5 system_renderer tests (collect includes chord notes, chord tie draws 2 ties, chord-to-single-note partial match, untied chord no ties, chord tie across barline), 5 score tests (tie_forward preserved in convert_event, chord tie produces 3 filled paths for 3-note chord, tied vs untied chord differs, no tie without .tie() call, tracked conversion preserves tie_forward). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Create a chord tie example, implement cross-system ties, or begin other post-v1 features (dynamics, tuplet brackets, slurs).
+- Open issues: Cross-system ties not yet supported.
