@@ -255,3 +255,9 @@
 - Verified: `cargo run --example cross_system_ties` produces valid SVG. `cargo test -p music-engraver` — 570 unit + 3 integration + 2 doc-tests = 575 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings on engraver crate.
 - Next: Consider other post-v1 features: dynamics text annotations, tuplet brackets, slurs, PNG export stub, or additional polish.
 - Open issues: None.
+
+## 2026-04-19 — Post-v1, dynamics layout + rendering
+- Did: Created `layout/dynamics.rs` with `Dynamic` enum (Ppp/Pp/Piano/Mp/Mf/Forte/Ff/Fff/Fp/Sfz/Sfp), each mapping to a dedicated SMuFL composite glyph. `layout_dynamic()` positions the dynamic glyph centered horizontally on a note and 2.5 staff spaces below the bottom staff line. `DynamicLayout` result struct. Created `render/dynamics_renderer.rs` with `draw_dynamic()`. Added `StaffLayout::bottom_y()` convenience method. Created `examples/dynamics.rs` rendering 7 notes (E4–G5) with dynamics (pp, p, mp, mf, f, ff, fff) on treble staff → `examples/output/dynamics.svg` (15 paths, 12 lines, 13477 bytes). Wired into layout/render mod.rs with public exports.
+- Verified: `cargo test -p music-engraver` — 591 unit + 3 integration + 2 doc-tests = 596 tests, all pass. 12 dynamics layout tests (glyph uniqueness, centering, below-staff placement, scaling). 9 dynamics renderer tests (all 11 dynamics render, path counts, position verification, coordinate embedding). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Integrate dynamics into ScoreBuilder pipeline (add `.dynamic()` method that attaches a dynamic to the most recent note, pass through system/page renderer), or begin tuplet brackets.
+- Open issues: Dynamics not yet integrated into the measure/system pipeline — currently only usable via direct `draw_dynamic()` calls. ScoreBuilder integration is the next step.

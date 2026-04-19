@@ -61,6 +61,11 @@ impl StaffLayout {
         self.staff_space * (STANDARD_LINE_COUNT - 1) as f64
     }
 
+    /// Y-coordinate of the bottom staff line.
+    pub fn bottom_y(&self) -> f64 {
+        self.y_of(BOTTOM_LINE)
+    }
+
     /// Convert a staff position to a y-coordinate.
     ///
     /// Position 8 (top line) maps to `y_origin`.

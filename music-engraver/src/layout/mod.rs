@@ -12,6 +12,7 @@ pub mod beam;
 pub mod chord;
 pub mod clef;
 pub mod dot;
+pub mod dynamics;
 pub mod flag;
 pub mod key_signature;
 pub mod measure;
@@ -51,4 +52,5 @@ pub use tie::{
     layout_half_tie_left, layout_half_tie_right, layout_tie, tie_direction_from_stem, TieDirection,
     TieLayout,
 };
+pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
