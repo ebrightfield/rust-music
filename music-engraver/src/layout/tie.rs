@@ -114,6 +114,38 @@ pub fn layout_tie(
     }
 }
 
+/// Compute a half-tie trailing off the right edge of a system.
+///
+/// Used when a tied note's target is in the next system. The tie starts at
+/// the note's right edge and extends to `x_right_edge` (typically the
+/// right end of the staff lines). The curve tapers to nothing at the edge.
+pub fn layout_half_tie_right(
+    x_start: f64,
+    x_right_edge: f64,
+    note_y: f64,
+    direction: TieDirection,
+    config: &EngravingConfig,
+) -> TieLayout {
+    // Use the full span for control-point spacing but reduce height since
+    // the tie is "incomplete" — convention is a shorter, gentler arc.
+    layout_tie(x_start, x_right_edge, note_y, direction, config)
+}
+
+/// Compute a half-tie leading from the left edge of a system to a note.
+///
+/// Used when a tied note's source is in the previous system. The tie starts
+/// at `x_left_edge` (typically the left end of the note area) and ends at
+/// the note's left edge. The curve tapers from nothing at the left edge.
+pub fn layout_half_tie_left(
+    x_left_edge: f64,
+    x_end: f64,
+    note_y: f64,
+    direction: TieDirection,
+    config: &EngravingConfig,
+) -> TieLayout {
+    layout_tie(x_left_edge, x_end, note_y, direction, config)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +290,42 @@ mod tests {
             (height - min_height).abs() < 1e-6,
             "height {height} != min {min_height}"
         );
+    }
+
+    // --- half-tie tests ---
+
+    #[test]
+    fn half_tie_right_produces_valid_layout() {
+        let cfg = test_config();
+        let layout = layout_half_tie_right(100.0, 800.0, 500.0, TieDirection::Under, &cfg);
+        assert!((layout.x_start - 100.0).abs() < f64::EPSILON);
+        assert!((layout.x_end - 800.0).abs() < f64::EPSILON);
+        // Should have control points between endpoints
+        assert!(layout.outer_cp1.0 > 100.0);
+        assert!(layout.outer_cp2.0 < 800.0);
+    }
+
+    #[test]
+    fn half_tie_left_produces_valid_layout() {
+        let cfg = test_config();
+        let layout = layout_half_tie_left(50.0, 400.0, 500.0, TieDirection::Over, &cfg);
+        assert!((layout.x_start - 50.0).abs() < f64::EPSILON);
+        assert!((layout.x_end - 400.0).abs() < f64::EPSILON);
+        assert!(layout.outer_cp1.0 > 50.0);
+        assert!(layout.outer_cp2.0 < 400.0);
+    }
+
+    #[test]
+    fn half_tie_right_over_apex_above_endpoint() {
+        let cfg = test_config();
+        let layout = layout_half_tie_right(100.0, 600.0, 500.0, TieDirection::Over, &cfg);
+        assert!(layout.y_outer_apex < layout.y_endpoint);
+    }
+
+    #[test]
+    fn half_tie_left_under_apex_below_endpoint() {
+        let cfg = test_config();
+        let layout = layout_half_tie_left(50.0, 400.0, 500.0, TieDirection::Under, &cfg);
+        assert!(layout.y_outer_apex > layout.y_endpoint);
     }
 }

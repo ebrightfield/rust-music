@@ -1,12 +1,50 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::page::PageLayout;
-use crate::render::system_renderer::draw_system;
+use crate::layout::page::{PageLayout, PageSystem};
+use crate::layout::staff::StaffLayout;
+use crate::layout::stem::auto_stem_direction;
+use crate::layout::tie::{
+    layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
+};
+use crate::render::note_renderer::NoteheadKind;
+use crate::render::system_renderer::{collect_note_positions, draw_system};
+use crate::render::tie_renderer::draw_tie;
 use crate::render::SvgWriter;
+
+/// A note at the end of a system that has an unresolved `tie_forward`.
+struct UnresolvedTie {
+    /// Absolute x of the note's right edge (system_x + note_x + advance).
+    x_right: f64,
+    /// Staff position of the tied note.
+    staff_position: i8,
+    /// Y of the notehead center (absolute, in font design units).
+    note_y: f64,
+    /// Tie direction.
+    direction: TieDirection,
+    /// Right edge of the system's staff lines (absolute x).
+    staff_right: f64,
+}
+
+/// A note at the start of the next system that could receive an incoming tie.
+struct IncomingTieTarget {
+    /// Absolute x of the note's left edge.
+    x_left: f64,
+    /// Staff position.
+    staff_position: i8,
+    /// Y of the notehead center.
+    note_y: f64,
+    /// Tie direction (matches the source note's direction).
+    direction: TieDirection,
+    /// Left edge of the system's note area (after prefix: clef, key sig, etc.).
+    staff_left: f64,
+}
 
 /// Draw a complete page of music (multiple systems stacked vertically).
 ///
 /// Returns an `SvgWriter` ready to be converted to an SVG string via `to_svg()`.
 /// The caller can also add additional elements before finalizing.
+///
+/// Cross-system ties are rendered as two half-ties: one trailing off the
+/// right edge of the source system, one leading from the left of the target system.
 pub fn draw_page(
     font: &MusicFont,
     config: &EngravingConfig,
@@ -39,7 +77,167 @@ pub fn draw_page(
         )?;
     }
 
+    // Draw cross-system ties between adjacent systems
+    draw_cross_system_ties(&mut svg, font, config, page)?;
+
     Ok(svg)
+}
+
+/// Find tied notes at the end of a system that have no matching target
+/// within the same system (unresolved ties needing cross-system continuation).
+fn find_unresolved_ties(
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Result<Vec<UnresolvedTie>, FontError> {
+    let system = &page_system.system;
+    let note_positions = collect_note_positions(system);
+    let staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        config.staff_space,
+    );
+
+    let mut unresolved = Vec::new();
+
+    for (i, &(nx, pos, dur_log2, tie_forward, stem_dir)) in note_positions.iter().enumerate() {
+        if !tie_forward {
+            continue;
+        }
+
+        // Check if there's a matching target within this system
+        let has_target = note_positions[i + 1..]
+            .iter()
+            .any(|&(_, target_pos, _, _, _)| target_pos == pos);
+
+        if has_target {
+            continue; // Resolved within the system
+        }
+
+        // Unresolved — compute absolute coordinates for the half-tie
+        let notehead_kind = match dur_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        let direction = stem_dir.unwrap_or_else(|| auto_stem_direction(pos));
+        let tie_dir = tie_direction_from_stem(direction);
+
+        unresolved.push(UnresolvedTie {
+            x_right: page_system.x + nx + advance,
+            staff_position: pos,
+            note_y: staff.y_of(pos),
+            direction: tie_dir,
+            staff_right: page_system.x + system.staff_width,
+        });
+    }
+
+    Ok(unresolved)
+}
+
+/// Find the first note at each staff position in a system (candidates for
+/// incoming cross-system ties).
+fn find_incoming_tie_targets(
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Vec<IncomingTieTarget> {
+    let system = &page_system.system;
+    let note_positions = collect_note_positions(system);
+    let staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        config.staff_space,
+    );
+
+    // The left edge of the note area is after the system prefix (clef, key sig).
+    // Use the x-offset of the first measure's first element as an approximation,
+    // or fall back to the system x-offset.
+    let first_measure_x = system
+        .measures
+        .first()
+        .map(|m| page_system.x + m.x_offset)
+        .unwrap_or(page_system.x);
+
+    // For each staff position, record only the first occurrence
+    let mut seen_positions = std::collections::HashSet::new();
+    let mut targets = Vec::new();
+
+    for &(nx, pos, _dur_log2, _tie_forward, stem_dir) in &note_positions {
+        if !seen_positions.insert(pos) {
+            continue; // Already have this position
+        }
+
+        let direction = stem_dir.unwrap_or_else(|| auto_stem_direction(pos));
+        let tie_dir = tie_direction_from_stem(direction);
+
+        targets.push(IncomingTieTarget {
+            x_left: page_system.x + nx,
+            staff_position: pos,
+            note_y: staff.y_of(pos),
+            direction: tie_dir,
+            staff_left: first_measure_x,
+        });
+    }
+
+    targets
+}
+
+/// Draw cross-system ties between adjacent systems on a page.
+///
+/// For each unresolved tie at the end of system N, finds the matching note
+/// at the start of system N+1 and draws two half-ties: one trailing to the
+/// right edge of system N, one leading from the left of system N+1.
+fn draw_cross_system_ties(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page: &PageLayout,
+) -> Result<(), FontError> {
+    for i in 0..page.systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_ties(font, config, &page.systems[i])?;
+        if unresolved.is_empty() {
+            continue;
+        }
+
+        let targets = find_incoming_tie_targets(config, &page.systems[i + 1]);
+
+        for tie_src in &unresolved {
+            // Find matching target in the next system
+            let target = targets
+                .iter()
+                .find(|t| t.staff_position == tie_src.staff_position);
+
+            // Draw trailing half-tie at the end of the source system
+            // (even if no target found — convention is to show the outgoing tie)
+            let right_layout = layout_half_tie_right(
+                tie_src.x_right,
+                tie_src.staff_right,
+                tie_src.note_y,
+                tie_src.direction,
+                config,
+            );
+            draw_tie(svg, &right_layout);
+
+            // Draw incoming half-tie at the start of the target system
+            if let Some(tgt) = target {
+                let left_layout = layout_half_tie_left(
+                    tgt.staff_left,
+                    tgt.x_left,
+                    tgt.note_y,
+                    tgt.direction,
+                    config,
+                );
+                draw_tie(svg, &left_layout);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -179,6 +377,176 @@ mod tests {
         assert!(output.contains("height=\""));
         // Check viewBox has positive dimensions
         assert!(output.contains("viewBox=\""));
+    }
+
+    // --- cross-system tie tests ---
+
+    fn tied_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: true,
+        })
+    }
+
+    #[test]
+    fn cross_system_tie_draws_two_half_ties() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // System 1: tied note at pos 4, system 2: note at pos 4
+        let measures = vec![
+            MeasureContent {
+                events: vec![tied_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        // 1 measure per system → forces cross-system tie
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        assert_eq!(page.systems.len(), 2);
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Should have 2 filled tie paths (right half-tie + left half-tie)
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            tie_count, 2,
+            "expected 2 half-ties for cross-system tie, got {tie_count}"
+        );
+    }
+
+    #[test]
+    fn no_cross_system_tie_without_tie_forward() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let measures = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 0, "no ties without tie_forward");
+    }
+
+    #[test]
+    fn cross_system_tie_with_no_matching_target_draws_right_half_only() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // Tied note at pos 4 in system 1, but note at pos 6 in system 2 (different position)
+        let measures = vec![
+            MeasureContent {
+                events: vec![tied_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Only the right half-tie should be drawn (outgoing tie at end of system 1)
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            tie_count, 1,
+            "only right half-tie when no matching target, got {tie_count}"
+        );
+    }
+
+    #[test]
+    fn within_system_tie_does_not_produce_cross_system_tie() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        // Both tied note and target in same system (2 measures per system)
+        let measures = vec![
+            MeasureContent {
+                events: vec![tied_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+        assert_eq!(page.systems.len(), 1);
+
+        let svg = draw_page(&font, &config, &page).unwrap();
+        let output = svg.to_svg();
+
+        // Only 1 within-system tie, no cross-system ties
+        let tie_count = output.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 1, "1 within-system tie, no cross-system tie");
+    }
+
+    #[test]
+    fn cross_system_tie_differs_from_no_tie() {
+        let (font, config) = setup();
+        let ss = config.staff_space;
+        let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+        let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+        let tied_measures = vec![
+            MeasureContent {
+                events: vec![tied_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+
+        let untied_measures = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+
+        let tied_page = layout_page(&prefix(), &tied_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+        let untied_page = layout_page(&prefix(), &untied_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+        let tied_svg = draw_page(&font, &config, &tied_page).unwrap().to_svg();
+        let untied_svg = draw_page(&font, &config, &untied_page).unwrap().to_svg();
+
+        assert_ne!(tied_svg, untied_svg, "cross-system tied output should differ from untied");
     }
 
     #[test]

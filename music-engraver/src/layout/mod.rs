@@ -47,5 +47,8 @@ pub use stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
 pub use system::{
     layout_system, ClefKind, MeasureContent, MeasureEvent, SystemLayout, SystemMeasure, SystemPrefix,
 };
-pub use tie::{layout_tie, tie_direction_from_stem, TieDirection, TieLayout};
+pub use tie::{
+    layout_half_tie_left, layout_half_tie_right, layout_tie, tie_direction_from_stem, TieDirection,
+    TieLayout,
+};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};

@@ -14,7 +14,7 @@ use crate::render::SvgWriter;
 /// (x_in_system, staff_position, duration_log2, tie_forward, stem_direction_override)
 /// for each note event. Chord notes are expanded into individual entries so
 /// each chord note can be tied independently. Skips clefs, rests, barlines, etc.
-fn collect_note_positions(system: &SystemLayout) -> Vec<(f64, i8, u8, bool, Option<StemDirection>)> {
+pub(crate) fn collect_note_positions(system: &SystemLayout) -> Vec<(f64, i8, u8, bool, Option<StemDirection>)> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for elem in &measure.layout.elements {
