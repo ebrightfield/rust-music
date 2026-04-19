@@ -285,3 +285,9 @@
 - Verified: `cargo test -p music-engraver` — 640 unit + 3 integration + 2 doc-tests = 645 tests, all pass. 5 new measure_renderer tests (triplet renders beams+bracket, differs from plain beam, quintuplet, empty, different numbers differ). 5 new score tests (renders with bracket, differs from beam group, convert_event mapping, tracked accidentals, quintuplet). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
 - Next: Create `examples/tuplet_score.rs` showing tuplets via ScoreBuilder API, or begin other post-v1 features (slurs, PNG export stub).
 - Open issues: None. Tuplet brackets now fully integrated for any tuplet number via `.tuplet(n, notes)` on ScoreBuilder.
+
+## 2026-04-19 — Post-v1, tuplet score example via ScoreBuilder API
+- Did: Created `examples/tuplet_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.tuplet()` method. Demonstrates: (1) eighth-note triplet ascending C-E-G + quarter + rest, (2) descending triplet D-C-B + half note, (3) sixteenth-note quintuplet G-A-B-C-D + dotted quarter + eighth, (4) two consecutive triplets filling the bar. Exercises triplets and quintuplets with beams and brackets. Output: 33 paths, 57 lines, 6 polygons (19488 bytes).
+- Verified: `cargo run --example tuplet_score` produces valid SVG. `cargo test -p music-engraver` — 640 unit + 3 integration + 2 doc-tests = 645 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings on engraver crate.
+- Next: Begin other post-v1 features: slurs (curved paths similar to ties but with different attachment semantics), PNG export stub, or additional polish.
+- Open issues: None.
