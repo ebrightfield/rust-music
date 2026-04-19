@@ -38,6 +38,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -49,6 +51,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -60,6 +64,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 6, // D5
@@ -71,6 +77,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
             ],
             barline: BarlineStyle::Single,
@@ -88,6 +96,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Rest(RestEvent {
                     duration_log2: 2,
@@ -109,6 +119,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -120,6 +132,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 2, // G4
@@ -131,6 +145,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -142,6 +158,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 4, // B4
@@ -153,6 +171,8 @@ fn main() {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 }),
             ],
             barline: BarlineStyle::Final,

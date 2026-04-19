@@ -36,6 +36,7 @@ use music::note::spelling::{Accidental, Spelling};
 use crate::font::bravura_font;
 use crate::layout::accidental::accidental_glyph;
 use crate::layout::barline::BarlineStyle;
+use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{BeamGroupEvent, ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent, TupletGroupEvent};
@@ -211,9 +212,9 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
 enum ScoreEvent {
-    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool },
+    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool, hairpin_start: Option<HairpinType>, hairpin_end: bool },
     Rest { duration: Duration },
-    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool },
+    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool, hairpin_start: Option<HairpinType>, hairpin_end: bool },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
     TupletGroup { notes: Vec<(Pitch, Duration)>, tuplet_number: u32 },
 }
@@ -304,7 +305,7 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false });
+        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false });
         self
     }
 
@@ -365,12 +366,44 @@ impl ScoreBuilder {
         self
     }
 
+    /// Mark the start of a hairpin (crescendo or decrescendo wedge) at the most
+    /// recently added note or chord. The wedge extends from this note to the
+    /// next note/chord with `hairpin_end()`.
+    pub fn hairpin_start(mut self, kind: HairpinType) -> Self {
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { hairpin_start, .. }) => *hairpin_start = Some(kind),
+            Some(ScoreEvent::Chord { hairpin_start, .. }) => *hairpin_start = Some(kind),
+            _ => {}
+        }
+        self
+    }
+
+    /// Mark the most recently added note or chord as the end of a hairpin wedge.
+    pub fn hairpin_end(mut self) -> Self {
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { hairpin_end, .. }) => *hairpin_end = true,
+            Some(ScoreEvent::Chord { hairpin_end, .. }) => *hairpin_end = true,
+            _ => {}
+        }
+        self
+    }
+
+    /// Convenience: mark the start of a crescendo at the most recent note.
+    pub fn cresc(self) -> Self {
+        self.hairpin_start(HairpinType::Crescendo)
+    }
+
+    /// Convenience: mark the start of a decrescendo at the most recent note.
+    pub fn decresc(self) -> Self {
+        self.hairpin_start(HairpinType::Decrescendo)
+    }
+
     /// Add a chord (multiple simultaneous pitches) to the current measure.
     ///
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false });
+        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false });
         self
     }
 
@@ -529,7 +562,7 @@ impl ScoreBuilder {
     #[cfg(test)]
     fn convert_event(&self, event: &ScoreEvent, clef: &Clef) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -545,6 +578,8 @@ impl ScoreBuilder {
                     dynamic: *dynamic,
                     slur_start: *slur_start,
                     slur_end: *slur_end,
+                    hairpin_start: *hairpin_start,
+                    hairpin_end: *hairpin_end,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -556,7 +591,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -578,6 +613,8 @@ impl ScoreBuilder {
                     dynamic: *dynamic,
                     slur_start: *slur_start,
                     slur_end: *slur_end,
+                    hairpin_start: *hairpin_start,
+                    hairpin_end: *hairpin_end,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -598,6 +635,8 @@ impl ScoreBuilder {
                             dynamic: None,
                             slur_start: false,
                             slur_end: false,
+                            hairpin_start: None,
+                            hairpin_end: false,
                         }
                     })
                     .collect();
@@ -624,6 +663,8 @@ impl ScoreBuilder {
                             dynamic: None,
                             slur_start: false,
                             slur_end: false,
+                            hairpin_start: None,
+                            hairpin_end: false,
                         }
                     })
                     .collect();
@@ -650,7 +691,7 @@ impl ScoreBuilder {
         seen: &mut AccidentalTracker,
     ) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -674,6 +715,8 @@ impl ScoreBuilder {
                     dynamic: *dynamic,
                     slur_start: *slur_start,
                     slur_end: *slur_end,
+                    hairpin_start: *hairpin_start,
+                    hairpin_end: *hairpin_end,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -685,7 +728,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -717,6 +760,8 @@ impl ScoreBuilder {
                     dynamic: *dynamic,
                     slur_start: *slur_start,
                     slur_end: *slur_end,
+                    hairpin_start: *hairpin_start,
+                    hairpin_end: *hairpin_end,
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -746,6 +791,8 @@ impl ScoreBuilder {
                             dynamic: None,
                             slur_start: false,
                             slur_end: false,
+                            hairpin_start: None,
+                            hairpin_end: false,
                         }
                     })
                     .collect();
@@ -780,6 +827,8 @@ impl ScoreBuilder {
                             dynamic: None,
                             slur_start: false,
                             slur_end: false,
+                            hairpin_start: None,
+                            hairpin_end: false,
                         }
                     })
                     .collect();
@@ -1185,6 +1234,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1422,6 +1473,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         };
         let ev2 = ScoreEvent::Note {
             pitch: pitch.clone(),
@@ -1430,6 +1483,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         };
 
         let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
@@ -1462,6 +1517,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let ev_natural = ScoreEvent::Note {
             pitch: Pitch::new(Note::F, 4).unwrap(),
@@ -1470,6 +1527,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
 
         let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
@@ -1695,6 +1754,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1724,6 +1785,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1738,6 +1801,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
         match result {
@@ -1839,6 +1904,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1957,6 +2024,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1982,6 +2051,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2099,6 +2170,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2211,6 +2284,8 @@ mod tests {
             dynamic: Some(Dynamic::Pp),
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2232,6 +2307,8 @@ mod tests {
             dynamic: Some(Dynamic::Fff),
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2255,6 +2332,8 @@ mod tests {
             dynamic: Some(Dynamic::Sfz),
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2388,6 +2467,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -2496,6 +2577,8 @@ mod tests {
             dynamic: None,
             slur_start: true,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let clef = Clef::Treble;
         let result = builder.convert_event(&event, &clef);
@@ -2519,6 +2602,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: true,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2543,6 +2628,8 @@ mod tests {
             dynamic: None,
             slur_start: true,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2551,6 +2638,165 @@ mod tests {
                 assert!(!c.slur_end);
             }
             _ => panic!("expected Chord event"),
+        }
+    }
+
+    // --- hairpin tests ---
+
+    use crate::layout::hairpin::HairpinType;
+
+    /// Helper to create a Pitch from a note name string and octave.
+    fn p(name: &str, octave: u8) -> Pitch {
+        let note = match name {
+            "C" => Note::C,
+            "D" => Note::D,
+            "E" => Note::E,
+            "F" => Note::F,
+            "G" => Note::G,
+            "A" => Note::A,
+            "B" => Note::B,
+            _ => panic!("unsupported note name: {name}"),
+        };
+        Pitch::new(note, octave).unwrap()
+    }
+
+    #[test]
+    fn hairpin_adds_lines_to_svg() {
+        let svg_hp = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_no = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let hp_lines = svg_hp.matches("<line ").count();
+        let no_lines = svg_no.matches("<line ").count();
+        assert_eq!(hp_lines, no_lines + 2, "hairpin adds 2 lines");
+    }
+
+    #[test]
+    fn decresc_differs_from_cresc() {
+        let svg_c = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+
+        let svg_d = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).decresc()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(svg_c, svg_d, "cresc and decresc should differ");
+    }
+
+    #[test]
+    fn hairpin_on_rest_is_noop() {
+        let svg1 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR).cresc()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+
+        let svg2 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // cresc() on a rest is a no-op, so hairpin_start is never set
+        // hairpin_end without matching start produces no hairpin
+        assert_eq!(svg1, svg2, "hairpin on rest should be no-op");
+    }
+
+    #[test]
+    fn convert_event_preserves_hairpin_fields() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: p("C", 4),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: Some(HairpinType::Crescendo),
+            hairpin_end: false,
+        };
+        let clef = Clef::Treble;
+        let result = builder.convert_event(&event, &clef);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.hairpin_start, Some(HairpinType::Crescendo));
+                assert!(!n.hairpin_end);
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn convert_event_tracked_preserves_hairpin_fields() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: p("C", 4),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: true,
+        };
+        let clef = Clef::Treble;
+        let mut seen = HashMap::new();
+        let result = builder.convert_event_tracked(&event, &clef, &mut seen);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert!(n.hairpin_start.is_none());
+                assert!(n.hairpin_end);
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn chord_hairpin_preserved_in_convert() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Chord {
+            pitches: vec![p("C", 4), p("E", 4)],
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: Some(HairpinType::Decrescendo),
+            hairpin_end: false,
+        };
+        let clef = Clef::Treble;
+        let result = builder.convert_event(&event, &clef);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.hairpin_start, Some(HairpinType::Decrescendo));
+                assert!(!c.hairpin_end);
+            }
+            _ => panic!("expected Chord"),
         }
     }
 }

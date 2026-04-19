@@ -242,6 +242,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })
     }
 

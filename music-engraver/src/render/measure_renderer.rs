@@ -516,6 +516,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -541,6 +543,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -565,6 +569,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -590,6 +596,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -615,6 +623,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -658,6 +668,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -688,6 +700,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -720,6 +734,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -745,6 +761,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
 
@@ -814,6 +832,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -825,6 +845,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Rest(RestEvent {
                 duration_log2: 2,
@@ -860,6 +882,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -887,6 +911,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -913,6 +939,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -941,6 +969,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -966,6 +996,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -991,6 +1023,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1017,6 +1051,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1042,6 +1078,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1066,6 +1104,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1092,6 +1132,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let chord = vec![MeasureElement::Chord(ChordEvent {
             staff_positions: vec![0, 4],
@@ -1103,6 +1145,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
 
         let layout_s = layout_measure(&single, &cfg);
@@ -1136,6 +1180,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let elements_down = vec![MeasureElement::Note(NoteEvent {
             staff_position: 0,
@@ -1147,6 +1193,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
 
         let layout_up = layout_measure(&elements_up, &cfg);
@@ -1193,6 +1241,8 @@ mod tests {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 },
                 NoteEvent {
                     staff_position: 2,
@@ -1204,6 +1254,8 @@ mod tests {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 },
             ],
             stem_direction: None,
@@ -1227,10 +1279,10 @@ mod tests {
         let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
             ],
             stem_direction: None,
         })];
@@ -1261,6 +1313,8 @@ mod tests {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 },
                 NoteEvent {
                     staff_position: 4,
@@ -1272,6 +1326,8 @@ mod tests {
                 dynamic: None,
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
                 },
             ],
             stem_direction: None,
@@ -1294,8 +1350,8 @@ mod tests {
         // Notes below the staff requiring ledger lines
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
             ],
             stem_direction: None,
         })];
@@ -1345,6 +1401,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 2,
@@ -1356,13 +1414,15 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         // Same notes but beamed
         let beamed = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
             ],
             stem_direction: None,
         })];
@@ -1394,9 +1454,9 @@ mod tests {
         // Eighth + two sixteenths
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
             ],
             stem_direction: None,
         })];
@@ -1432,6 +1492,8 @@ mod tests {
             dynamic: Some(Dynamic::Forte),
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1457,6 +1519,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1481,6 +1545,8 @@ mod tests {
             dynamic: Some(Dynamic::Pp),
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1506,6 +1572,8 @@ mod tests {
             dynamic: Some(Dynamic::Mf),
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -1540,6 +1608,8 @@ mod tests {
                 dynamic: Some(dyn_mark),
                 slur_start: false,
                 slur_end: false,
+                hairpin_start: None,
+                hairpin_end: false,
             })];
             let layout = layout_measure(&elements, &cfg);
             let mut svg = make_svg();
@@ -1563,9 +1633,9 @@ mod tests {
         let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
             beam_group: BeamGroupEvent {
                 notes: vec![
-                    NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                    NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                    NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+                    NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                    NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                    NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
                 ],
                 stem_direction: None,
             },
@@ -1589,9 +1659,9 @@ mod tests {
         let (font, config, staff) = setup();
         let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
         let notes = vec![
-            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-            NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+            NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
         ];
 
         let plain = vec![MeasureElement::BeamGroup(BeamGroupEvent {
@@ -1634,11 +1704,11 @@ mod tests {
         let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
             beam_group: BeamGroupEvent {
                 notes: vec![
-                    NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                    NoteEvent { staff_position: 3, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                    NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                    NoteEvent { staff_position: 5, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-                    NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+                    NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                    NoteEvent { staff_position: 3, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                    NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                    NoteEvent { staff_position: 5, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+                    NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
                 ],
                 stem_direction: None,
             },
@@ -1678,9 +1748,9 @@ mod tests {
         let (font, config, staff) = setup();
         let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
         let notes = vec![
-            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
-            NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false },
+            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
+            NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false },
         ];
 
         let make = |number: u32| {

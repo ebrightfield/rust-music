@@ -1,4 +1,5 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::hairpin::{layout_hairpin, HairpinType};
 use crate::layout::measure::MeasureElement;
 use crate::layout::slur::{layout_slur, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
@@ -7,6 +8,7 @@ use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::render::measure_renderer::draw_measure;
 use crate::render::note_renderer::NoteheadKind;
+use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
@@ -81,6 +83,9 @@ pub fn draw_system(
 
     // Draw slurs between notes marked with slur_start and slur_end
     draw_system_slurs(svg, font, config, system, &staff, x)?;
+
+    // Draw hairpins between notes marked with hairpin_start and hairpin_end
+    draw_system_hairpins(svg, font, config, system, &staff, x)?;
 
     Ok(())
 }
@@ -260,6 +265,97 @@ fn draw_system_slurs(
     Ok(())
 }
 
+/// Positional info for a note relevant to hairpin drawing.
+struct HairpinNoteInfo {
+    x: f64,
+    duration_log2: u8,
+    hairpin_start: Option<HairpinType>,
+    hairpin_end: bool,
+}
+
+fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for elem in &measure.layout.elements {
+            let elem_x = measure.x_offset + elem.x;
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push(HairpinNoteInfo {
+                        x: elem_x,
+                        duration_log2: n.duration_log2,
+                        hairpin_start: n.hairpin_start,
+                        hairpin_end: n.hairpin_end,
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    notes.push(HairpinNoteInfo {
+                        x: elem_x,
+                        duration_log2: c.duration_log2,
+                        hairpin_start: c.hairpin_start,
+                        hairpin_end: c.hairpin_end,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+fn draw_system_hairpins(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) -> Result<(), FontError> {
+    let note_info = collect_hairpin_note_info(system);
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(hairpin_type) = info.hairpin_start else {
+            continue;
+        };
+
+        // Find the next note with hairpin_end = true
+        let target = note_info[i + 1..]
+            .iter()
+            .find(|n| n.hairpin_end);
+
+        let Some(target) = target else {
+            continue;
+        };
+
+        // Compute notehead advance width for hairpin start positioning
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        // Hairpin starts right of the first notehead, ends at left of the target
+        let hp_x_start = system_x + info.x + advance + 0.3 * config.staff_space;
+        let hp_x_end = system_x + target.x - 0.3 * config.staff_space;
+
+        // Use staff line thickness as hairpin stroke width
+        let stroke_width = config.staff_line_thickness_fu();
+
+        let hp_layout = layout_hairpin(
+            hairpin_type,
+            hp_x_start,
+            hp_x_end,
+            staff.bottom_y(),
+            config.staff_space,
+            stroke_width,
+        );
+        draw_hairpin(svg, &hp_layout);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,6 +402,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })
     }
 
@@ -495,6 +593,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })
     }
 
@@ -655,6 +755,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })
     }
 
@@ -670,6 +772,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })
     }
 
@@ -781,6 +885,8 @@ mod tests {
             dynamic: None,
             slur_start: true,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
         })
     }
 
@@ -795,6 +901,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: true,
+            hairpin_start: None,
+            hairpin_end: false,
         })
     }
 
@@ -896,5 +1004,188 @@ mod tests {
 
         let filled = output.matches(r#"stroke="none""#).count();
         assert_eq!(filled, 0, "no slur without matching slur_end");
+    }
+
+    // --- hairpin rendering ---
+
+    use crate::layout::hairpin::HairpinType;
+
+    fn cresc_start_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: Some(HairpinType::Crescendo),
+            hairpin_end: false,
+        })
+    }
+
+    fn hairpin_end_note(pos: i8) -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: pos,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: true,
+        })
+    }
+
+    #[test]
+    fn hairpin_within_measure_draws_two_lines() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![cresc_start_note(4), quarter_note(6), hairpin_end_note(8)],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg_hp = make_svg();
+        draw_system(&mut svg_hp, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output_hp = svg_hp.to_svg();
+
+        // Without hairpin for comparison
+        let measures_no = vec![MeasureContent {
+            events: vec![quarter_note(4), quarter_note(6), quarter_note(8)],
+            barline: BarlineStyle::Single,
+        }];
+        let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+        let mut svg_no = make_svg();
+        draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+        let output_no = svg_no.to_svg();
+
+        // Hairpin adds exactly 2 lines (wedge)
+        let hp_lines = output_hp.matches("<line ").count();
+        let no_lines = output_no.matches("<line ").count();
+        assert_eq!(hp_lines, no_lines + 2, "hairpin should add 2 lines");
+    }
+
+    #[test]
+    fn no_hairpin_without_flags() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![MeasureContent {
+            events: vec![quarter_note(4), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg1 = make_svg();
+        draw_system(&mut svg1, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg1.to_svg();
+
+        // Count lines: 5 staff + 2 stems + 1 barline = 8 (no hairpin lines)
+        let line_count = output.matches("<line ").count();
+        assert_eq!(line_count, 8, "no extra hairpin lines without flags");
+    }
+
+    #[test]
+    fn hairpin_start_without_end_draws_nothing_extra() {
+        let (font, config, mcfg) = setup();
+        let with_start = vec![MeasureContent {
+            events: vec![cresc_start_note(4), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let without = vec![MeasureContent {
+            events: vec![quarter_note(4), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let sys_s = layout_system(&treble_prefix(), &with_start, &mcfg, None);
+        let sys_n = layout_system(&treble_prefix(), &without, &mcfg, None);
+
+        let mut svg_s = make_svg();
+        draw_system(&mut svg_s, &font, &config, &sys_s, 0.0, 0.0).unwrap();
+        let mut svg_n = make_svg();
+        draw_system(&mut svg_n, &font, &config, &sys_n, 0.0, 0.0).unwrap();
+
+        // Same output — hairpin_start without hairpin_end produces nothing
+        assert_eq!(svg_s.to_svg(), svg_n.to_svg());
+    }
+
+    #[test]
+    fn decrescendo_differs_from_crescendo() {
+        let (font, config, mcfg) = setup();
+        let cresc_measures = vec![MeasureContent {
+            events: vec![cresc_start_note(4), hairpin_end_note(6)],
+            barline: BarlineStyle::Single,
+        }];
+        let decresc_measures = vec![MeasureContent {
+            events: vec![
+                MeasureEvent::Note(NoteEvent {
+                    staff_position: 4,
+                    duration_log2: 2,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    tie_forward: false,
+                    dynamic: None,
+                    slur_start: false,
+                    slur_end: false,
+                    hairpin_start: Some(HairpinType::Decrescendo),
+                    hairpin_end: false,
+                }),
+                hairpin_end_note(6),
+            ],
+            barline: BarlineStyle::Single,
+        }];
+
+        let sys_c = layout_system(&treble_prefix(), &cresc_measures, &mcfg, None);
+        let sys_d = layout_system(&treble_prefix(), &decresc_measures, &mcfg, None);
+
+        let mut svg_c = make_svg();
+        draw_system(&mut svg_c, &font, &config, &sys_c, 0.0, 0.0).unwrap();
+        let mut svg_d = make_svg();
+        draw_system(&mut svg_d, &font, &config, &sys_d, 0.0, 0.0).unwrap();
+
+        assert_ne!(svg_c.to_svg(), svg_d.to_svg(), "cresc and decresc should differ");
+    }
+
+    #[test]
+    fn hairpin_across_barline() {
+        let (font, config, mcfg) = setup();
+        let measures = vec![
+            MeasureContent {
+                events: vec![cresc_start_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![hairpin_end_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        let output = svg.to_svg();
+
+        // Should have hairpin lines (the wedge crosses the barline)
+        let without_measures = vec![
+            MeasureContent {
+                events: vec![quarter_note(4)],
+                barline: BarlineStyle::Single,
+            },
+            MeasureContent {
+                events: vec![quarter_note(6)],
+                barline: BarlineStyle::Final,
+            },
+        ];
+        let sys_no = layout_system(&treble_prefix(), &without_measures, &mcfg, None);
+        let mut svg_no = make_svg();
+        draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
+
+        let hp_lines = output.matches("<line ").count();
+        let no_lines = svg_no.to_svg().matches("<line ").count();
+        assert_eq!(hp_lines, no_lines + 2, "cross-barline hairpin adds 2 lines");
     }
 }

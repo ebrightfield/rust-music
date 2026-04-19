@@ -1,6 +1,7 @@
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::dynamics::Dynamic;
+use crate::layout::hairpin::HairpinType;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::stem::StemDirection;
 use crate::layout::time_signature::TimeSignatureKind;
@@ -58,6 +59,10 @@ pub struct ChordEvent {
     pub slur_start: bool,
     /// Whether this chord is the end of a slur.
     pub slur_end: bool,
+    /// Whether this chord is the start of a hairpin (crescendo/decrescendo wedge).
+    pub hairpin_start: Option<HairpinType>,
+    /// Whether this chord is the end of a hairpin wedge.
+    pub hairpin_end: bool,
 }
 
 /// A musical event within a measure that occupies horizontal space.
@@ -109,6 +114,11 @@ pub struct NoteEvent {
     pub slur_start: bool,
     /// Whether this note is the end of a slur.
     pub slur_end: bool,
+    /// Whether this note is the start of a hairpin (crescendo/decrescendo wedge).
+    /// The hairpin is drawn by the system renderer after all measures are laid out.
+    pub hairpin_start: Option<HairpinType>,
+    /// Whether this note is the end of a hairpin wedge.
+    pub hairpin_end: bool,
 }
 
 /// A rest to be laid out within a measure.
@@ -346,6 +356,8 @@ mod tests {
         dynamic: None,
         slur_start: false,
         slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -373,6 +385,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -407,6 +421,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -441,6 +457,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -452,6 +470,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -478,6 +498,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -489,6 +511,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -515,6 +539,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -526,6 +552,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -537,6 +565,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -563,6 +593,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -588,6 +620,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -613,6 +647,8 @@ mod tests {
             dynamic: None,
             slur_start: false,
             slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
