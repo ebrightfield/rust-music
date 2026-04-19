@@ -431,6 +431,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -452,6 +453,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -472,6 +474,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -493,6 +496,7 @@ mod tests {
             dots: 1,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -514,6 +518,7 @@ mod tests {
             dots: 0,
             accidental: Some(Glyph::AccidentalSharp),
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -553,6 +558,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -579,6 +585,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -607,6 +614,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -628,6 +636,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
 
@@ -693,6 +702,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -700,6 +710,7 @@ mod tests {
                 dots: 0,
                 accidental: Some(Glyph::AccidentalNatural),
                 stem_direction: Some(StemDirection::Down),
+            tie_forward: false,
             }),
             MeasureElement::Rest(RestEvent {
                 duration_log2: 2,
@@ -731,6 +742,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
@@ -927,6 +939,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let chord = vec![MeasureElement::Chord(ChordEvent {
             staff_positions: vec![0, 4],
@@ -963,6 +976,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: Some(StemDirection::Up),
+        tie_forward: false,
         })];
         let elements_down = vec![MeasureElement::Note(NoteEvent {
             staff_position: 0,
@@ -970,6 +984,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: Some(StemDirection::Down),
+        tie_forward: false,
         })];
 
         let layout_up = layout_measure(&elements_up, &cfg);
@@ -1012,6 +1027,7 @@ mod tests {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
+                tie_forward: false,
                 },
                 NoteEvent {
                     staff_position: 2,
@@ -1019,6 +1035,7 @@ mod tests {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
+                tie_forward: false,
                 },
             ],
             stem_direction: None,
@@ -1042,10 +1059,10 @@ mod tests {
         let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
             ],
             stem_direction: None,
         })];
@@ -1072,6 +1089,7 @@ mod tests {
                     dots: 0,
                     accidental: Some(Glyph::AccidentalSharp),
                     stem_direction: None,
+                tie_forward: false,
                 },
                 NoteEvent {
                     staff_position: 4,
@@ -1079,6 +1097,7 @@ mod tests {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
+                tie_forward: false,
                 },
             ],
             stem_direction: None,
@@ -1101,8 +1120,8 @@ mod tests {
         // Notes below the staff requiring ledger lines
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
             ],
             stem_direction: None,
         })];
@@ -1148,6 +1167,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 2,
@@ -1155,13 +1175,14 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         // Same notes but beamed
         let beamed = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
             ],
             stem_direction: None,
         })];
@@ -1193,9 +1214,9 @@ mod tests {
         // Eighth + two sixteenths
         let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false },
             ],
             stem_direction: None,
         })];

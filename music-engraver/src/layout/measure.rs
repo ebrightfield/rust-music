@@ -71,6 +71,9 @@ pub struct NoteEvent {
     pub accidental: Option<smufl::Glyph>,
     /// Stem direction override. `None` uses auto-detection.
     pub stem_direction: Option<StemDirection>,
+    /// Whether this note is tied forward to the next note at the same staff position.
+    /// The tie curve is drawn by the system renderer after all measures are laid out.
+    pub tie_forward: bool,
 }
 
 /// A rest to be laid out within a measure.
@@ -288,6 +291,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -311,6 +315,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -341,6 +346,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -371,6 +377,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -378,6 +385,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -400,6 +408,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -407,6 +416,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -429,6 +439,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -436,6 +447,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -443,6 +455,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -465,6 +478,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -486,6 +500,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -507,6 +522,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
+            tie_forward: false,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];

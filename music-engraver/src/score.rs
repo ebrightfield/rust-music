@@ -210,7 +210,7 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
 enum ScoreEvent {
-    Note { pitch: Pitch, duration: Duration },
+    Note { pitch: Pitch, duration: Duration, tie_forward: bool },
     Rest { duration: Duration },
     Chord { pitches: Vec<Pitch>, duration: Duration },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
@@ -302,7 +302,20 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration });
+        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false });
+        self
+    }
+
+    /// Mark the most recently added note as tied forward to the next note at the
+    /// same pitch. The tie curve is drawn connecting this note to the next note
+    /// of the same staff position within the same system.
+    ///
+    /// Must be called immediately after `.note()`. Has no effect if the last event
+    /// is not a note.
+    pub fn tie(mut self) -> Self {
+        if let Some(ScoreEvent::Note { tie_forward, .. }) = self.current_events.last_mut() {
+            *tie_forward = true;
+        }
         self
     }
 
@@ -452,7 +465,7 @@ impl ScoreBuilder {
     #[cfg(test)]
     fn convert_event(&self, event: &ScoreEvent, clef: &Clef) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration } => {
+            ScoreEvent::Note { pitch, duration, tie_forward } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -464,6 +477,7 @@ impl ScoreBuilder {
                     dots,
                     accidental: acc,
                     stem_direction: None,
+                    tie_forward: *tie_forward,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -509,6 +523,7 @@ impl ScoreBuilder {
                             dots,
                             accidental: acc,
                             stem_direction: None,
+                            tie_forward: false,
                         }
                     })
                     .collect();
@@ -532,7 +547,7 @@ impl ScoreBuilder {
         seen: &mut AccidentalTracker,
     ) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration } => {
+            ScoreEvent::Note { pitch, duration, tie_forward } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -552,6 +567,7 @@ impl ScoreBuilder {
                     dots,
                     accidental: acc,
                     stem_direction: None,
+                    tie_forward: *tie_forward,
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -616,6 +632,7 @@ impl ScoreBuilder {
                             dots,
                             accidental: acc,
                             stem_direction: None,
+                            tie_forward: false,
                         }
                     })
                     .collect();
@@ -1014,6 +1031,7 @@ mod tests {
         let event = ScoreEvent::Note {
             pitch: pitch.clone(),
             duration: Duration::QTR,
+        tie_forward: false,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1247,10 +1265,12 @@ mod tests {
         let ev1 = ScoreEvent::Note {
             pitch: pitch.clone(),
             duration: Duration::QTR,
+        tie_forward: false,
         };
         let ev2 = ScoreEvent::Note {
             pitch: pitch.clone(),
             duration: Duration::QTR,
+        tie_forward: false,
         };
 
         let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
@@ -1279,10 +1299,12 @@ mod tests {
         let ev_sharp = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
+            tie_forward: false,
         };
         let ev_natural = ScoreEvent::Note {
             pitch: Pitch::new(Note::F, 4).unwrap(),
             duration: Duration::QTR,
+            tie_forward: false,
         };
 
         let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
@@ -1529,6 +1551,7 @@ mod tests {
         let ev1 = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
+            tie_forward: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1636,6 +1659,7 @@ mod tests {
         let ev1 = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
+            tie_forward: false,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1653,6 +1677,111 @@ mod tests {
                 assert!(bg.notes[1].accidental.is_none(), "A4 has no accidental");
             }
             _ => panic!("expected BeamGroup event"),
+        }
+    }
+
+    // --- tie support ---
+
+    #[test]
+    fn tie_produces_filled_path_in_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .tie()
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // Tie should produce a filled path with stroke="none"
+        let tie_count = svg.matches(r#"stroke="none""#).count();
+        assert!(tie_count >= 1, "expected at least 1 tie path, got {tie_count}");
+        // Should contain Bézier curves
+        assert!(svg.contains(" C"), "tie should have cubic Bézier curves");
+    }
+
+    #[test]
+    fn tie_across_barline_in_score() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .tie()
+            .barline()
+            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let tie_count = svg.matches(r#"stroke="none""#).count();
+        assert!(tie_count >= 1, "tie across barline should produce a tie path");
+    }
+
+    #[test]
+    fn no_tie_without_tie_call() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let tie_count = svg.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 0, "no tie without .tie() call");
+    }
+
+    #[test]
+    fn tie_on_rest_has_no_effect() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .tie() // Should have no effect since last event is a rest
+            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let tie_count = svg.matches(r#"stroke="none""#).count();
+        assert_eq!(tie_count, 0, "tie after rest should have no effect");
+    }
+
+    #[test]
+    fn tie_differs_from_untied() {
+        let svg_tied = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .tie()
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let svg_untied = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(svg_tied, svg_untied, "tied and untied should produce different SVGs");
+        // Tied version should be longer (has tie path)
+        assert!(
+            svg_tied.len() > svg_untied.len(),
+            "tied SVG should be larger"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_tie_forward() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::E, 4).unwrap(),
+            duration: Duration::QTR,
+            tie_forward: true,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert!(n.tie_forward, "tie_forward should be preserved");
+            }
+            _ => panic!("expected Note event"),
         }
     }
 }

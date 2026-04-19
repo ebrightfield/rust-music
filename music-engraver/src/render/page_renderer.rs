@@ -67,6 +67,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
+        tie_forward: false,
         })
     }
 
