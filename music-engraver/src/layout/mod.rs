@@ -14,6 +14,7 @@ pub mod clef;
 pub mod dot;
 pub mod dynamics;
 pub mod flag;
+pub mod hairpin;
 pub mod key_signature;
 pub mod measure;
 pub mod note_placement;
@@ -55,6 +56,7 @@ pub use tie::{
     TieLayout,
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
+pub use hairpin::{layout_hairpin, HairpinLayout, HairpinType, HAIRPIN_BELOW_STAFF_SS};
 pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use tuplet::{

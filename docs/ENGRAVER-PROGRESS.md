@@ -321,3 +321,9 @@
 - Verified: `cargo run --example cross_system_slurs` produces valid SVG. `cargo test -p music-engraver` — 684 unit + 3 integration + 2 doc-tests = 689 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings on engraver crate (warnings from `music` crate only). `cargo check --workspace` passes.
 - Next: Begin other post-v1 features: hairpins/crescendo wedges (layout + rendering), or PNG export stub, or rehearsal marks.
 - Open issues: None.
+
+## 2026-04-19 — Post-v1, hairpin (crescendo/decrescendo) layout + rendering + example
+- Did: Created `layout/hairpin.rs` with `HairpinType` enum (Crescendo/Decrescendo), `HairpinLayout` struct (x_start, x_end, y_center, half_opening, stroke_width), `layout_hairpin()` function positioning wedge below staff at 3.5 staff spaces. Constants: `HAIRPIN_BELOW_STAFF_SS` (3.5), `HAIRPIN_HALF_OPENING_SS` (0.5). Created `render/hairpin_renderer.rs` with `draw_hairpin()` — renders two converging/diverging lines. Crescendo: point left → opening right. Decrescendo: opening left → point right. Created `examples/hairpins.rs` rendering 8 notes with p → cresc → f → decresc → pp pattern (dynamics + hairpin wedges). Output: 12 paths, 17 lines (7335 bytes). Wired into layout/render mod.rs with public exports.
+- Verified: `cargo test -p music-engraver` — 703 unit + 3 integration + 2 doc-tests = 708 tests, all pass. 10 hairpin layout tests + 9 hairpin renderer tests. `cargo clippy -p music-engraver` — 0 warnings in hairpin code. `cargo run --example hairpins` produces valid SVG. `cargo check --workspace` passes.
+- Next: Integrate hairpins into ScoreBuilder pipeline (add `.hairpin_start()`/`.hairpin_end()` or `.cresc()`/`.decresc()` methods), or begin other post-v1 features (PNG export stub, rehearsal marks).
+- Open issues: Hairpins not yet integrated into measure/system/ScoreBuilder pipeline — currently usable via direct `layout_hairpin()` + `draw_hairpin()` calls only.
