@@ -18,6 +18,19 @@ pub struct BeamGroupEvent {
     pub stem_direction: Option<StemDirection>,
 }
 
+/// A tuplet group: a beam group (or sequence of notes) with a tuplet bracket and number.
+///
+/// The underlying notes are beamed together; the tuplet bracket and number
+/// are drawn above or below the group. Placement defaults to above for
+/// stems-up, below for stems-down.
+#[derive(Clone, Debug)]
+pub struct TupletGroupEvent {
+    /// The underlying beam group (notes are beamed and drawn normally).
+    pub beam_group: BeamGroupEvent,
+    /// The tuplet number to display (e.g. 3 for triplet, 5 for quintuplet).
+    pub tuplet_number: u32,
+}
+
 /// A chord (multiple simultaneous notes) to be laid out within a measure.
 #[derive(Clone, Debug)]
 pub struct ChordEvent {
@@ -62,6 +75,8 @@ pub enum MeasureElement {
     Chord(ChordEvent),
     /// A beam group: multiple notes connected by beam lines instead of flags.
     BeamGroup(BeamGroupEvent),
+    /// A tuplet group: a beam group with a tuplet bracket and number overlay.
+    TupletGroup(TupletGroupEvent),
     /// Barline at the end of the measure.
     Barline(BarlineStyle),
 }
@@ -186,6 +201,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             MeasureElement::Rest(r) => Some(r.duration_log2),
             MeasureElement::Chord(c) => Some(c.duration_log2),
             MeasureElement::BeamGroup(bg) => bg.notes.iter().map(|n| n.duration_log2).max(),
+            MeasureElement::TupletGroup(tg) => tg.beam_group.notes.iter().map(|n| n.duration_log2).max(),
             _ => None,
         })
         .max()
@@ -247,6 +263,21 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             MeasureElement::BeamGroup(bg) => {
                 // Total width is the sum of each note's proportional spacing
                 let total: f64 = bg
+                    .notes
+                    .iter()
+                    .map(|n| {
+                        let factor = duration_spacing_factor(
+                            n.duration_log2,
+                            shortest_log2,
+                            config.spacing_ratio,
+                        );
+                        config.min_note_spacing * factor
+                    })
+                    .sum();
+                total
+            }
+            MeasureElement::TupletGroup(tg) => {
+                let total: f64 = tg.beam_group
                     .notes
                     .iter()
                     .map(|n| {

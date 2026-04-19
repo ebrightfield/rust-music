@@ -38,7 +38,7 @@ use crate::layout::accidental::accidental_glyph;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{BeamGroupEvent, ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent};
+use crate::layout::measure::{BeamGroupEvent, ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent, TupletGroupEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
@@ -215,6 +215,7 @@ enum ScoreEvent {
     Rest { duration: Duration },
     Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic> },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
+    TupletGroup { notes: Vec<(Pitch, Duration)>, tuplet_number: u32 },
 }
 
 /// Builder for constructing a score from `music` crate types and rendering to SVG.
@@ -362,6 +363,24 @@ impl ScoreBuilder {
     /// ```
     pub fn beam_group(mut self, notes: Vec<(Pitch, Duration)>) -> Self {
         self.current_events.push(ScoreEvent::BeamGroup { notes });
+        self
+    }
+
+    /// Add a tuplet group to the current measure.
+    ///
+    /// Renders beamed notes with a tuplet bracket and number above or below.
+    /// `tuplet_number` is the number to display (e.g. 3 for triplet, 5 for quintuplet).
+    ///
+    /// # Example
+    /// ```ignore
+    /// builder.tuplet(3, vec![
+    ///     (pitch_e4, Duration::EIGHTH),
+    ///     (pitch_f4, Duration::EIGHTH),
+    ///     (pitch_g4, Duration::EIGHTH),
+    /// ])
+    /// ```
+    pub fn tuplet(mut self, tuplet_number: u32, notes: Vec<(Pitch, Duration)>) -> Self {
+        self.current_events.push(ScoreEvent::TupletGroup { notes, tuplet_number });
         self
     }
 
@@ -554,6 +573,33 @@ impl ScoreBuilder {
                     stem_direction: None,
                 })
             }
+            ScoreEvent::TupletGroup { notes, tuplet_number } => {
+                let note_events: Vec<NoteEvent> = notes
+                    .iter()
+                    .map(|(pitch, duration)| {
+                        let staff_pos = pitch_to_staff_position(pitch, clef);
+                        let log2 = duration_kind_to_log2(duration.kind());
+                        let dots = duration.num_dots();
+                        let acc = should_show_accidental(pitch, &self.key_sig);
+                        NoteEvent {
+                            staff_position: staff_pos,
+                            duration_log2: log2,
+                            dots,
+                            accidental: acc,
+                            stem_direction: None,
+                            tie_forward: false,
+                            dynamic: None,
+                        }
+                    })
+                    .collect();
+                MeasureEvent::TupletGroup(TupletGroupEvent {
+                    beam_group: BeamGroupEvent {
+                        notes: note_events,
+                        stem_direction: None,
+                    },
+                    tuplet_number: *tuplet_number,
+                })
+            }
         }
     }
 
@@ -665,6 +711,41 @@ impl ScoreBuilder {
                 MeasureEvent::BeamGroup(BeamGroupEvent {
                     notes: note_events,
                     stem_direction: None,
+                })
+            }
+            ScoreEvent::TupletGroup { notes, tuplet_number } => {
+                let note_events: Vec<NoteEvent> = notes
+                    .iter()
+                    .map(|(pitch, duration)| {
+                        let staff_pos = pitch_to_staff_position(pitch, clef);
+                        let log2 = duration_kind_to_log2(duration.kind());
+                        let dots = duration.num_dots();
+                        let acc = resolve_accidental(pitch, &self.key_sig, Some(seen));
+
+                        let key = note_key(pitch);
+                        if let Some(eff) = effective_accidental(pitch, &self.key_sig) {
+                            seen.insert(key, eff);
+                        } else {
+                            seen.remove(&key);
+                        }
+
+                        NoteEvent {
+                            staff_position: staff_pos,
+                            duration_log2: log2,
+                            dots,
+                            accidental: acc,
+                            stem_direction: None,
+                            tie_forward: false,
+                            dynamic: None,
+                        }
+                    })
+                    .collect();
+                MeasureEvent::TupletGroup(TupletGroupEvent {
+                    beam_group: BeamGroupEvent {
+                        notes: note_events,
+                        stem_direction: None,
+                    },
+                    tuplet_number: *tuplet_number,
                 })
             }
         }
@@ -2132,5 +2213,145 @@ mod tests {
             "expected 9 paths (clef + 2 time digits + 4 noteheads + 2 dynamics), got {}",
             path_count
         );
+    }
+
+    // --- tuplet support in ScoreBuilder ---
+
+    #[test]
+    fn tuplet_renders_svg_with_bracket() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .tuplet(3, vec![
+                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+            ])
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<svg"));
+        // 3 noteheads + clef + 2 time sig digits + 1 tuplet number = 7 paths
+        let path_count = svg.matches("<path ").count();
+        assert_eq!(path_count, 7, "expected 7 paths, got {path_count}");
+        // Should have beam polygon
+        let polygon_count = svg.matches("<polygon ").count();
+        assert!(polygon_count >= 1, "should have beam polygon(s)");
+        // Should have bracket lines (hooks + bracket segments)
+        let line_count = svg.matches("<line ").count();
+        // 5 staff + 3 stems + 4 bracket/hooks + barline(s) = should be > 10
+        assert!(line_count > 10, "expected > 10 lines (staff + stems + bracket), got {line_count}");
+    }
+
+    #[test]
+    fn tuplet_differs_from_beam_group() {
+        let notes = vec![
+            (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+        ];
+
+        let svg_beam = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .beam_group(notes.clone())
+            .end_barline()
+            .render_svg();
+
+        let svg_tuplet = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .tuplet(3, notes)
+            .end_barline()
+            .render_svg();
+
+        // Tuplet should have extra content (bracket + number)
+        assert!(
+            svg_tuplet.len() > svg_beam.len(),
+            "tuplet SVG ({}) should be larger than beam group SVG ({})",
+            svg_tuplet.len(),
+            svg_beam.len()
+        );
+
+        // Tuplet has 1 extra path (number glyph)
+        let paths_beam = svg_beam.matches("<path ").count();
+        let paths_tuplet = svg_tuplet.matches("<path ").count();
+        assert_eq!(paths_tuplet, paths_beam + 1, "tuplet adds 1 path for number glyph");
+    }
+
+    #[test]
+    fn tuplet_convert_event_produces_tuplet_group() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::TupletGroup {
+            notes: vec![
+                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::B, 4).unwrap(), Duration::EIGHTH),
+            ],
+            tuplet_number: 3,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::TupletGroup(tg) => {
+                assert_eq!(tg.tuplet_number, 3);
+                assert_eq!(tg.beam_group.notes.len(), 3);
+                assert_eq!(tg.beam_group.notes[0].staff_position, 0); // E4
+                assert_eq!(tg.beam_group.notes[1].staff_position, 2); // G4
+                assert_eq!(tg.beam_group.notes[2].staff_position, 4); // B4
+                assert_eq!(tg.beam_group.notes[0].duration_log2, 3);
+            }
+            _ => panic!("expected TupletGroup event"),
+        }
+    }
+
+    #[test]
+    fn tuplet_tracked_accidentals() {
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let mut seen: AccidentalTracker = HashMap::new();
+
+        // First F#4 note (standalone)
+        let ev1 = ScoreEvent::Note {
+            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+        };
+        let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+
+        // Then tuplet with F#4 again — should suppress repeated accidental
+        let ev2 = ScoreEvent::TupletGroup {
+            notes: vec![
+                (Pitch::new(Note::Fis, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
+            ],
+            tuplet_number: 3,
+        };
+        let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::TupletGroup(tg) => {
+                assert!(tg.beam_group.notes[0].accidental.is_none(), "F#4 accidental suppressed");
+                assert!(tg.beam_group.notes[1].accidental.is_none(), "A4 has no accidental");
+            }
+            _ => panic!("expected TupletGroup event"),
+        }
+    }
+
+    #[test]
+    fn tuplet_quintuplet_in_score() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .tuplet(5, vec![
+                (Pitch::new(Note::C, 4).unwrap(), Duration::SIXTEENTH),
+                (Pitch::new(Note::D, 4).unwrap(), Duration::SIXTEENTH),
+                (Pitch::new(Note::E, 4).unwrap(), Duration::SIXTEENTH),
+                (Pitch::new(Note::F, 4).unwrap(), Duration::SIXTEENTH),
+                (Pitch::new(Note::G, 4).unwrap(), Duration::SIXTEENTH),
+            ])
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<svg"));
+        // 5 noteheads + clef + 1 tuplet number = 7 paths
+        let path_count = svg.matches("<path ").count();
+        assert_eq!(path_count, 7, "expected 7 paths, got {path_count}");
     }
 }

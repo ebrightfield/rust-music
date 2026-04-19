@@ -5,14 +5,16 @@ use crate::layout::beam::{layout_beam_group, BeamedNote};
 use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::dot::dot_staff_position;
 use crate::layout::measure::{
-    BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, NoteEvent,
+    BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, NoteEvent, TupletGroupEvent,
 };
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{
     auto_stem_direction, auto_stem_direction_chord, stem_length_staff_spaces, StemDirection,
 };
+use crate::layout::tuplet::{layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem};
 use crate::render::beam_renderer::draw_beam_group;
 use crate::render::barline_renderer::draw_barline;
+use crate::render::tuplet_renderer::draw_tuplet_bracket;
 use crate::render::dot_renderer::draw_dots;
 use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::flag_renderer::draw_flag;
@@ -66,6 +68,17 @@ pub fn draw_measure(
                     elem_x,
                     positioned.width,
                     bg,
+                )?;
+            }
+            MeasureElement::TupletGroup(tg) => {
+                draw_tuplet_group_event(
+                    svg,
+                    staff,
+                    font,
+                    config,
+                    elem_x,
+                    positioned.width,
+                    tg,
                 )?;
             }
             MeasureElement::Rest(rest) => {
@@ -392,6 +405,61 @@ fn draw_beam_group_event(
     // Compute beam layout and render
     let beam_layout = layout_beam_group(&beamed_notes, direction, staff.staff_space);
     draw_beam_group(svg, staff, config, &beamed_notes, &beam_layout, advance);
+
+    Ok(())
+}
+
+/// Draw a tuplet group: the underlying beam group plus a tuplet bracket with number.
+///
+/// Delegates to `draw_beam_group_event` for note/beam rendering, then overlays
+/// the tuplet bracket positioned relative to the beam group's extreme notes.
+#[allow(clippy::too_many_arguments)]
+fn draw_tuplet_group_event(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    group_x: f64,
+    total_width: f64,
+    tg: &TupletGroupEvent,
+) -> Result<(), FontError> {
+    // Draw the underlying beam group (noteheads, stems, beams)
+    draw_beam_group_event(svg, staff, font, config, group_x, total_width, &tg.beam_group)?;
+
+    if tg.beam_group.notes.is_empty() {
+        return Ok(());
+    }
+
+    // Determine stem direction (same logic as beam group)
+    let positions: Vec<i8> = tg.beam_group.notes.iter().map(|n| n.staff_position).collect();
+    let direction = tg
+        .beam_group
+        .stem_direction
+        .unwrap_or_else(|| auto_stem_direction_chord(&positions));
+
+    let placement = tuplet_placement_from_stem(direction);
+
+    // Compute advance width of tuplet number glyph(s) for centering
+    let number_glyphs = tuplet_number_glyphs(tg.tuplet_number);
+    let number_width: f64 = number_glyphs
+        .iter()
+        .map(|g| font.glyph_advance(*g).unwrap_or(0) as f64)
+        .sum();
+
+    let bracket_thickness_ss = config.tuplet_bracket_thickness;
+
+    let bracket_layout = layout_tuplet_bracket(
+        group_x,
+        group_x + total_width,
+        &positions,
+        placement,
+        tg.tuplet_number,
+        staff.staff_space,
+        bracket_thickness_ss,
+        number_width,
+    );
+
+    draw_tuplet_bracket(svg, &bracket_layout, font, 0.0, 0.0);
 
     Ok(())
 }
@@ -1412,5 +1480,155 @@ mod tests {
         let svg_p = make(Dynamic::Piano);
         let svg_f = make(Dynamic::Forte);
         assert_ne!(svg_p, svg_f, "different dynamics should produce different SVGs");
+    }
+
+    // --- tuplet group rendering ---
+
+    use crate::layout::measure::TupletGroupEvent;
+
+    #[test]
+    fn tuplet_triplet_renders_beams_plus_bracket() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
+            beam_group: BeamGroupEvent {
+                notes: vec![
+                    NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                    NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                    NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                ],
+                stem_direction: None,
+            },
+            tuplet_number: 3,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 3 noteheads + 1 tuplet number glyph = 4 paths
+        assert_eq!(output.matches("<path ").count(), 4, "3 noteheads + tuplet number");
+        // 3 stems + 2 hooks + 2 bracket segments = 7 lines
+        assert_eq!(output.matches("<line ").count(), 7, "3 stems + 4 bracket/hook lines");
+        // 1 primary beam polygon
+        assert_eq!(output.matches("<polygon ").count(), 1, "one beam polygon");
+    }
+
+    #[test]
+    fn tuplet_differs_from_plain_beam_group() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let notes = vec![
+            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+            NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+        ];
+
+        let plain = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: notes.clone(),
+            stem_direction: None,
+        })];
+        let tuplet = vec![MeasureElement::TupletGroup(TupletGroupEvent {
+            beam_group: BeamGroupEvent {
+                notes: notes.clone(),
+                stem_direction: None,
+            },
+            tuplet_number: 3,
+        })];
+
+        let layout_p = layout_measure(&plain, &cfg);
+        let layout_t = layout_measure(&tuplet, &cfg);
+
+        let mut svg_p = make_svg();
+        draw_measure(&mut svg_p, &staff, &font, &config, &layout_p, 0.0, &Clef::Treble).unwrap();
+        let mut svg_t = make_svg();
+        draw_measure(&mut svg_t, &staff, &font, &config, &layout_t, 0.0, &Clef::Treble).unwrap();
+
+        let out_p = svg_p.to_svg();
+        let out_t = svg_t.to_svg();
+
+        // Tuplet has extra bracket lines and number glyph
+        let paths_p = out_p.matches("<path ").count();
+        let paths_t = out_t.matches("<path ").count();
+        assert_eq!(paths_t, paths_p + 1, "tuplet adds 1 extra path (number glyph)");
+
+        let lines_p = out_p.matches("<line ").count();
+        let lines_t = out_t.matches("<line ").count();
+        assert!(lines_t > lines_p, "tuplet has more lines (bracket + hooks)");
+    }
+
+    #[test]
+    fn tuplet_quintuplet_renders() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
+            beam_group: BeamGroupEvent {
+                notes: vec![
+                    NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                    NoteEvent { staff_position: 3, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                    NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                    NoteEvent { staff_position: 5, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                    NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+                ],
+                stem_direction: None,
+            },
+            tuplet_number: 5,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        // 5 noteheads + 1 tuplet "5" glyph = 6 paths
+        assert_eq!(output.matches("<path ").count(), 6, "5 noteheads + tuplet number");
+    }
+
+    #[test]
+    fn tuplet_empty_produces_nothing() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
+            beam_group: BeamGroupEvent {
+                notes: vec![],
+                stem_direction: None,
+            },
+            tuplet_number: 3,
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        let output = svg.to_svg();
+
+        assert_eq!(output.matches("<path ").count(), 0);
+        assert_eq!(output.matches("<line ").count(), 0);
+    }
+
+    #[test]
+    fn tuplet_different_numbers_produce_different_glyphs() {
+        let (font, config, staff) = setup();
+        let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+        let notes = vec![
+            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+            NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None },
+        ];
+
+        let make = |number: u32| {
+            let elems = vec![MeasureElement::TupletGroup(TupletGroupEvent {
+                beam_group: BeamGroupEvent {
+                    notes: notes.clone(),
+                    stem_direction: None,
+                },
+                tuplet_number: number,
+            })];
+            let layout = layout_measure(&elems, &cfg);
+            let mut svg = make_svg();
+            draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+            svg.to_svg()
+        };
+
+        let svg_3 = make(3);
+        let svg_5 = make(5);
+        assert_ne!(svg_3, svg_5, "triplet and quintuplet should differ");
     }
 }

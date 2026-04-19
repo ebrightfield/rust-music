@@ -5,7 +5,7 @@ use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
     layout_measure, BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout,
-    MeasureLayoutConfig, NoteEvent, RestEvent,
+    MeasureLayoutConfig, NoteEvent, RestEvent, TupletGroupEvent,
 };
 use crate::layout::time_signature::TimeSignatureKind;
 
@@ -26,6 +26,8 @@ pub enum MeasureEvent {
     Chord(ChordEvent),
     /// A group of notes connected by beams (eighth notes or shorter).
     BeamGroup(BeamGroupEvent),
+    /// A tuplet group: beamed notes with a tuplet bracket and number.
+    TupletGroup(TupletGroupEvent),
 }
 
 /// Describes the frontmatter (clef, key, time sig) that appears at the start of a system.
@@ -207,6 +209,7 @@ fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
         MeasureEvent::Rest(r) => MeasureElement::Rest(r.clone()),
         MeasureEvent::Chord(c) => MeasureElement::Chord(c.clone()),
         MeasureEvent::BeamGroup(bg) => MeasureElement::BeamGroup(bg.clone()),
+        MeasureEvent::TupletGroup(tg) => MeasureElement::TupletGroup(tg.clone()),
     }
 }
 
