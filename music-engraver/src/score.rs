@@ -533,7 +533,7 @@ impl ScoreBuilder {
     /// Flushes any pending events as a final measure (with `Final` barline)
     /// if no explicit end barline was provided.
     #[must_use = "the SVG string is returned but not used"]
-    pub fn try_render_svg(mut self) -> Result<String, crate::font::FontError> {
+    pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
         // Flush any pending events
         if !self.current_events.is_empty() {
             let events = std::mem::take(&mut self.current_events);

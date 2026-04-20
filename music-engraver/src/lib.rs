@@ -41,6 +41,7 @@
 //! - **[`score`]** — High-level builder API bridging `music` crate types to the
 //!   layout/render pipeline.
 
+pub mod error;
 pub mod font;
 pub mod layout;
 pub mod render;

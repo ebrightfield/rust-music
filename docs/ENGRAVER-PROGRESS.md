@@ -459,3 +459,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass. `cargo check --workspace` passes.
 - Next: Continue QA backlog: W12 (centralized error type), W13 (score.rs split), W14–W16, or info-tier items.
 - Open issues: Remaining QA items: W12, W13, W14, W15, W16, plus info-tier items I2–I7.
+
+## 2026-04-20 — QA: fixed W12 centralized error type (src/error.rs)
+- Did: Created `src/error.rs` with `EngraverError` top-level error enum wrapping `FontError` via `#[error(transparent)]` + `#[from]`. Exported as `pub mod error` from `lib.rs`. Updated public API `ScoreBuilder::try_render_svg()` to return `Result<String, EngraverError>` instead of `Result<String, FontError>`. Internal render functions keep `FontError` — the `?` operator auto-converts via `From<FontError>`. New variant families (layout validation, I/O) can be added without changing function signatures.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: Continue QA backlog: W13 (score.rs split), W14–W16, or info-tier items.
+- Open issues: Remaining QA items: W13, W14, W15, W16, plus info-tier items I2–I7.
