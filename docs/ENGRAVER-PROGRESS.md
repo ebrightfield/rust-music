@@ -447,3 +447,9 @@
 - Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
 - Next: Continue QA backlog: W7 (write! unwrap style in glyph_outline.rs), W12 (centralized error type), W13 (score.rs split), or info-tier items (I23 done, I8 doctest unwrap).
 - Open issues: Remaining QA items: W7, W12, W13, W14, W15, W16, plus info-tier items I2–I8.
+
+## 2026-04-20 — QA: fixed I8 doctest unwrap on Pitch::new in lib.rs and score.rs
+- Did: Replaced `.unwrap()` with `.expect("valid pitch")` on `Pitch::new()` calls in the doc examples in `src/lib.rs` (lines 22–25) and `src/score.rs` (lines 19–22). These are the user-facing first-impression examples; `.expect()` with a meaningful message is more idiomatic for fallible constructors with known-good inputs.
+- Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
+- Next: Continue QA backlog: W7 (write! unwrap style in glyph_outline.rs), W12 (centralized error type), W13 (score.rs split), W14–W16, or info-tier items.
+- Open issues: Remaining QA items: W7, W12, W13, W14, W15, W16, plus info-tier items I2–I7.
