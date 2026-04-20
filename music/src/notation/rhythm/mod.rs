@@ -8,6 +8,7 @@ use crate::SoundedNote;
 pub mod beat_grid;
 pub mod duration;
 pub mod meter;
+pub mod flatten;
 
 /// A pitch or voicing with a rhythmic duration.
 pub struct RhythmicNotatedEvent<'a> {
@@ -323,7 +324,7 @@ mod tests {
     use crate::note::note::Note;
 
     fn make_pitch_event(duration_kind: DurationKind) -> RhythmicNotatedEvent<'static> {
-        let pitch = Pitch::new(Note::C, 4).unwrap();
+        let pitch = Pitch::new(Note::C, 4);
         RhythmicNotatedEvent::pitch(pitch, Duration::new(duration_kind, 0))
     }
 

@@ -128,6 +128,30 @@ impl Deref for PcSet {
     }
 }
 
+impl IntoIterator for PcSet {
+    type Item = Pc;
+    type IntoIter = std::vec::IntoIter<Pc>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a PcSet {
+    type Item = &'a Pc;
+    type IntoIter = std::slice::Iter<'a, Pc>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl FromIterator<Pc> for PcSet {
+    fn from_iter<I: IntoIterator<Item = Pc>>(iter: I) -> Self {
+        PcSet::new(iter.into_iter().collect())
+    }
+}
+
 impl From<&[Pc]> for PcSet {
     fn from(pcs: &[Pc]) -> Self {
         Self(pcs.to_vec())
@@ -305,5 +329,29 @@ mod tests {
         // Edge cases: 0 and 11 are valid
         let edge = validated_pcs!(0, 11);
         assert_eq!(edge.len(), 2);
+    }
+
+    #[test]
+    fn into_iterator_by_ref_yields_pc_refs() {
+        let pcs = pcs!(0, 4, 7);
+        let collected: Vec<Pc> = (&pcs).into_iter().copied().collect();
+        assert_eq!(collected, vec![Pc0, Pc4, Pc7]);
+        // The original is still usable afterwards.
+        assert_eq!(pcs.len(), 3);
+    }
+
+    #[test]
+    fn into_iterator_by_value_consumes() {
+        let pcs = pcs!(0, 4, 7);
+        let collected: Vec<Pc> = pcs.into_iter().collect();
+        assert_eq!(collected, vec![Pc0, Pc4, Pc7]);
+    }
+
+    #[test]
+    fn from_iterator_collects_into_pc_set() {
+        // Collecting via FromIterator goes through PcSet::new, so the result
+        // is sorted, deduplicated, and zeroed.
+        let pcs: PcSet = [Pc7, Pc11, Pc2].into_iter().collect();
+        assert_eq!(pcs, pcs!(0, 5, 9));
     }
 }

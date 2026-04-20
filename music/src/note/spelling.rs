@@ -6,7 +6,7 @@ use crate::error::MusicSemanticsError;
 use crate::error::MusicSemanticsError::InvalidNoteLetter;
 
 /// Nothing more extreme than a double-accidental is represented here.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Accidental {
     Natural,
     Sharp,
@@ -71,7 +71,7 @@ impl Display for Accidental {
 }
 
 /// Chromatic musical letter, irrespective of octaves or attached accidentals.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Letter {
     A,
     B,
@@ -162,7 +162,7 @@ impl Display for Letter {
 }
 
 /// A combination of letter and accidental information.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Spelling {
     pub letter: Letter,
     pub acc: Accidental,
@@ -203,7 +203,7 @@ impl From<&Note> for Spelling {
     fn from(note: &Note) -> Self {
         match note {
             Note::C => Spelling::new(Letter::C, Accidental::Natural),
-            Note::Deses => Spelling::new(Letter::D, Accidental::DoubleSharp),
+            Note::Deses => Spelling::new(Letter::D, Accidental::DoubleFlat),
             Note::Cis => Spelling::new(Letter::C, Accidental::Sharp),
             Note::Des => Spelling::new(Letter::D, Accidental::Flat),
             Note::Cisis => Spelling::new(Letter::C, Accidental::DoubleSharp),
@@ -234,5 +234,44 @@ impl From<&Note> for Spelling {
             Note::Ces => Spelling::new(Letter::C, Accidental::Flat),
             Note::Bis => Spelling::new(Letter::B, Accidental::Sharp),
         }
+    }
+}
+
+#[cfg(test)]
+mod note_spelling_tests {
+    use super::*;
+    use crate::note::note::Note;
+
+    /// Every `Note` round-trips through `Spelling` — i.e.
+    /// `Note::try_from(Spelling::from(&n))` yields `n`.
+    #[test]
+    fn spelling_roundtrip_all_notes() {
+        let notes = [
+            Note::C, Note::Cis, Note::Cisis, Note::Ces,
+            Note::D, Note::Dis, Note::Disis, Note::Des, Note::Deses,
+            Note::E, Note::Eis, Note::Ees, Note::Eeses, Note::Fes,
+            Note::F, Note::Fis, Note::Fisis, Note::Ges, Note::Geses,
+            Note::G, Note::Gis, Note::Gisis, Note::Aes, Note::Aeses,
+            Note::A, Note::Ais, Note::Aisis, Note::Bes, Note::Beses,
+            Note::B, Note::Bis,
+        ];
+        for n in notes {
+            let spelling = Spelling::from(&n);
+            let roundtripped = Note::try_from(spelling).unwrap_or_else(|e| {
+                panic!("spelling roundtrip failed for {:?}: {:?}", n, e)
+            });
+            assert_eq!(
+                roundtripped, n,
+                "Spelling roundtrip: {:?} -> {:?} -> {:?}",
+                n, spelling, roundtripped
+            );
+        }
+    }
+
+    #[test]
+    fn deses_is_d_doubleflat() {
+        let s = Spelling::from(&Note::Deses);
+        assert_eq!(s.letter, Letter::D);
+        assert_eq!(s.acc, Accidental::DoubleFlat);
     }
 }

@@ -48,3 +48,40 @@ impl<'a> ToLilypondString for LilypondVoiceElement<'a> {
         }
     }
 }
+
+impl<'a> LilypondVoiceElement<'a> {
+    /// Returns a reference to the inner `RhythmicNotatedEvent` if this is a `Common` variant.
+    /// Returns `None` for `Other` variants (clef changes, articulations, etc.).
+    /// Used by `music::notation::rhythm::flatten::iter_events` (REQ-O16).
+    pub fn as_rhythmic_event(&self) -> Option<&RhythmicNotatedEvent<'_>> {
+        match self {
+            LilypondVoiceElement::Common(e) => Some(e),
+            LilypondVoiceElement::Other(_) => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::notation::rhythm::{RhythmicNotatedEvent, duration::Duration, duration::DurationKind};
+    use crate::note::pitch::Pitch;
+
+    #[test]
+    fn as_rhythmic_event_returns_some_for_common() {
+        let pitch = Pitch::from_midi(60).unwrap();
+        let event = RhythmicNotatedEvent::pitch(pitch, Duration::new(DurationKind::Qtr, 0));
+        let elem = LilypondVoiceElement::Common(event);
+        assert!(elem.as_rhythmic_event().is_some());
+    }
+
+    #[test]
+    fn as_rhythmic_event_returns_none_for_other() {
+        struct DummyLy;
+        impl ToLilypondString for DummyLy {
+            fn to_lilypond_string(&self) -> String { "dummy".to_string() }
+        }
+        let elem: LilypondVoiceElement = LilypondVoiceElement::Other(Box::new(DummyLy));
+        assert!(elem.as_rhythmic_event().is_none());
+    }
+}

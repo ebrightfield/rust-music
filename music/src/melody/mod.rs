@@ -83,8 +83,9 @@ pub struct PitchBounds {
 }
 
 impl PitchBounds {
-    /// Create new pitch bounds. Lowest must be strictly lower than highest.
-    pub fn new(lowest: Pitch, highest: Pitch) -> Result<Self, MusicSemanticsError> {
+    /// Create pitch bounds, returning an error if `lowest` is not strictly
+    /// lower than `highest`.
+    pub fn try_new(lowest: Pitch, highest: Pitch) -> Result<Self, MusicSemanticsError> {
         if lowest.midi_note >= highest.midi_note {
             return Err(MusicSemanticsError::InvalidPitchBounds);
         }
@@ -122,39 +123,39 @@ mod tests {
 
     #[test]
     fn test_pitch_bounds_valid() {
-        let low = Pitch::new(Note::C, 3).unwrap();
-        let high = Pitch::new(Note::C, 5).unwrap();
-        let bounds = PitchBounds::new(low, high).unwrap();
+        let low = Pitch::new(Note::C, 3);
+        let high = Pitch::new(Note::C, 5);
+        let bounds = PitchBounds::try_new(low, high).unwrap();
         assert_eq!(bounds.span(), 24); // 2 octaves
     }
 
     #[test]
     fn test_pitch_bounds_invalid() {
-        let high = Pitch::new(Note::C, 5).unwrap();
-        let low = Pitch::new(Note::C, 3).unwrap();
+        let high = Pitch::new(Note::C, 5);
+        let low = Pitch::new(Note::C, 3);
         // Reversed order should fail
-        let result = PitchBounds::new(high, low);
+        let result = PitchBounds::try_new(high, low);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_pitch_bounds_contains() {
-        let low = Pitch::new(Note::C, 3).unwrap();
-        let high = Pitch::new(Note::C, 5).unwrap();
-        let bounds = PitchBounds::new(low, high).unwrap();
+        let low = Pitch::new(Note::C, 3);
+        let high = Pitch::new(Note::C, 5);
+        let bounds = PitchBounds::try_new(low, high).unwrap();
 
-        let middle = Pitch::new(Note::C, 4).unwrap();
+        let middle = Pitch::new(Note::C, 4);
         assert!(bounds.contains(&middle));
 
-        let below = Pitch::new(Note::C, 2).unwrap();
+        let below = Pitch::new(Note::C, 2);
         assert!(!bounds.contains(&below));
 
-        let above = Pitch::new(Note::C, 6).unwrap();
+        let above = Pitch::new(Note::C, 6);
         assert!(!bounds.contains(&above));
 
         // Boundaries are inclusive
-        let at_low = Pitch::new(Note::C, 3).unwrap();
-        let at_high = Pitch::new(Note::C, 5).unwrap();
+        let at_low = Pitch::new(Note::C, 3);
+        let at_high = Pitch::new(Note::C, 5);
         assert!(bounds.contains(&at_low));
         assert!(bounds.contains(&at_high));
     }

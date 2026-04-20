@@ -36,7 +36,7 @@ impl HasSpelling for Pitch {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         for note in notes {
             if Pc::from(note) == Pc::from(&self.note) {
-                return Self::new(*note, self.octave);
+                return Self::try_new(*note, self.octave);
             }
         }
         Err(MusicSemanticsError::NotAMember(self.note, notes.clone()))
@@ -62,14 +62,13 @@ pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>, MusicSeman
     if Spelling::from(root).acc.is_double() {
         return Err(MusicSemanticsError::NoDoubleAccidentalRoot(root.clone()))
     }
+    // Both `default_spelling` and `spell_rules` only return `None` for double-accidental
+    // roots, which the guard above rejects. The unwraps below are infallible.
     Ok(pc_set
         .iter()
         .map(|pc| {
-            // Unwraps are safe here because we screened out double-accidentals
             let default_spelling = default_spelling(root, pc).unwrap();
             let rules = spell_rules(root).unwrap();
-            // Iterate over the rule set for the given root note, if any apply,
-            // then we enharmonically flip the note, and move on.
             for rule in rules {
                 if rule.applied(*pc, pc_set) {
                     return default_spelling.enharmonic_flip_bcef();

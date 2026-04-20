@@ -5,15 +5,10 @@ pub mod error;
 pub mod notation;
 pub mod melody;
 pub mod svg;
+pub mod ascii;
+pub mod prelude;
 
 pub use note::{Note, Pitch, Pc, Spelling};
 pub use note_collections::*;
+pub use note_collections::chord_name;
 pub use fretboard::*;
-
-pub mod common_chords {
-    //use super::*;
-
-    // pub fn major7(note: &Note) -> NoteSet {
-    //
-    // }
-}

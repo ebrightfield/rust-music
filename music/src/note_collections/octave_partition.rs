@@ -17,8 +17,9 @@ use crate::note_collections::interval_class::IntervalClass;
 pub struct OctavePartition(Vec<IntervalClass>);
 
 impl OctavePartition {
-    /// Sanitized to ensure that it's valid
-    pub fn new(intervals: Vec<IntervalClass>) -> Result<Self, MusicSemanticsError> {
+    /// Create an [`OctavePartition`], returning an error if the intervals do
+    /// not sum to 12 semitones.
+    pub fn try_new(intervals: Vec<IntervalClass>) -> Result<Self, MusicSemanticsError> {
         let sum: i32 = intervals.iter().map(|interval| i32::from(interval)).sum();
         if sum != 12 {
             return Err(MusicSemanticsError::InvalidOctavePartition(intervals));
@@ -32,6 +33,24 @@ impl Deref for OctavePartition {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl IntoIterator for OctavePartition {
+    type Item = IntervalClass;
+    type IntoIter = std::vec::IntoIter<IntervalClass>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a OctavePartition {
+    type Item = &'a IntervalClass;
+    type IntoIter = std::slice::Iter<'a, IntervalClass>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 
@@ -55,7 +74,7 @@ impl From<&PcSet> for OctavePartition {
             .iter()
             .map(|i| IntervalClass::from(i))
             .collect();
-        OctavePartition::new(diffs).unwrap()
+        OctavePartition::try_new(diffs).unwrap()
     }
 }
 
@@ -90,7 +109,7 @@ mod tests {
                 let pc_set = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
                 OctavePartition::from(pc_set)
             },
-            OctavePartition::new(vec![
+            OctavePartition::try_new(vec![
                 IntervalClass::Ic4,
                 IntervalClass::Ic3,
                 IntervalClass::Ic5,
@@ -106,7 +125,7 @@ mod tests {
             IntervalClass::Ic3,
             IntervalClass::Ic6,
         ];
-        let result = OctavePartition::new(intervals.clone());
+        let result = OctavePartition::try_new(intervals.clone());
         match result {
             Ok(_) => panic!("octave partition should have failed"),
             Err(_) => {}

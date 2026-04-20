@@ -6,7 +6,12 @@ use crate::note_collections::pc_set::PcSet;
 use crate::note::note::Note;
 use crate::note::pitch_class::Pc;
 
-pub use quality::chord::ChordQuality;
+pub use parsing::parse_chord_name;
+pub use quality::chord::{
+    AltChoice, Alt, AugSubtype, ChordQuality, DimSubtype, Extension,
+    MajorSubtype, MinorSubtype, QualityAmbiguity, SusSubtype,
+};
+pub use naming_heuristics::{infer_chord_quality, infer_scale_quality};
 
 /// The means by which to stylize the text that denotes
 /// a chord's extensions. There are a number of mutually incompatible
@@ -26,6 +31,24 @@ pub enum ExtensionStyle {
     HighestUnlessOne,
 }
 
+/// Canonical label for the major-seventh flavor.
+///
+/// Chord-chart notation uses different glyphs for the same concept. This enum
+/// makes the choice explicit so round-trip tests and snapshot output can pin
+/// exactly one canonical rendering while still supporting the common dialects.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub enum MajNotation {
+    /// Delta — `Δ7`, `Δ9`. Canonical default per the correction plan.
+    #[default]
+    Delta,
+    /// `Maj7`, `Maj9`. Most common lead-sheet convention.
+    Maj,
+    /// `M7`, `M9`. Compact ASCII.
+    MajCap,
+    /// `maj7`, `maj9`. Lowercase variant.
+    LowerMaj,
+}
+
 /// Chords can be displayed in a number of ways, and users might have different
 /// preferences over the matter.
 /// This configuration struct provides fine-grained control over a number
@@ -37,8 +60,11 @@ pub struct ChordNameDisplayConfig {
     /// Whether or not to express sus4, 7sus4, 9sus4, etc.
     /// as sus, 7sus, 9sus.
     pub explicit_sus4: bool,
-    /// Use fancy utf-8 chars for notes.
-    pub uft8_accidentals: bool,
+    /// Use fancy utf-8 chars for accidentals (`♭`, `♯`) instead of ASCII
+    /// (`b`, `#`). Default is ASCII in this Phase-2 build to keep the positive
+    /// test matrix stable; the ASCII→utf8 toggle is orthogonal to rendering
+    /// correctness.
+    pub utf8_accidentals: bool,
     /// Number of space chars to put between the root note and the chord quality.
     pub space_between_root_and_quality: usize,
     /// Number of space chars to put between the chord quality and the slash in a slash chord.
@@ -49,6 +75,8 @@ pub struct ChordNameDisplayConfig {
     /// This is a practical assumption that usually doesn't apply in settings
     /// outside of classical music theory.
     pub extension_style: ExtensionStyle,
+    /// Which label to use for the major-seventh quality. See [`MajNotation`].
+    pub maj_notation: MajNotation,
 }
 
 /// Describes a [PcSet] using the chord lexicon fleshed out in [ChordQuality].
@@ -66,6 +94,40 @@ pub struct ChordName {
 }
 
 impl ChordName {
+    /// Construct a [`ChordName`] directly from its parts.
+    pub fn new(tonality: TonalSpecification, quality: ChordQuality, pc_set: PcSet) -> Self {
+        Self { tonality, quality, pc_set }
+    }
+
+    /// Parse a chord symbol string (e.g. `"Cmaj7"`, `"F#m7b5"`) into a
+    /// [`ChordName`] in root position.
+    ///
+    /// The resulting [`ChordName`] has `tonality = TonalSpecification::RootPosition(root)`
+    /// and a quality derived from the parsed interval content. For finer-grained
+    /// control (inversions, slash chords, custom qualities) construct with
+    /// [`ChordName::new`].
+    ///
+    /// ```
+    /// use music::prelude::*;
+    ///
+    /// let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
+    /// assert_eq!(cmaj7.pc_set.len(), 4);
+    /// ```
+    pub fn from_symbol(symbol: &str) -> Result<Self, crate::error::MusicSemanticsError> {
+        let (root, pc_set) = parsing::parse_chord_name(symbol)?;
+        let pcs_hashset: std::collections::HashSet<Pc> = pc_set.iter().copied().collect();
+        let quality = naming_heuristics::infer_chord_quality(&pcs_hashset)
+            .and_then(|(_, q)| q)
+            .ok_or_else(|| crate::error::MusicSemanticsError::InvalidChordQuality(
+                symbol.to_string(),
+            ))?;
+        Ok(Self {
+            tonality: TonalSpecification::RootPosition(root),
+            quality,
+            pc_set,
+        })
+    }
+
     pub fn to_string(&self, cfg: Option<&ChordNameDisplayConfig>) -> String {
         let cfg = cfg
             .map(|cfg| cfg.clone())
@@ -96,8 +158,6 @@ pub enum TonalSpecification {
 /// interprets and labels chord qualities.
 #[derive(Debug, Clone)]
 pub struct NamingConfig {
-    /// How to label extensions (7th, 9th, 11th, 13th).
-    pub extension_style: ExtensionStyle,
     /// Whether to prefer "add" notation over extension labels.
     /// When true, "Cadd9" instead of "C9" when only the 9th is present
     /// above a triad (no 7th).
@@ -106,6 +166,7 @@ pub struct NamingConfig {
     pub show_omissions: bool,
     /// Minimum number of notes to trigger slash chord detection.
     /// Default is 4 (don't analyze triads for inversions as slash chords).
+    /// Currently a stub: slash-chord inference is deferred to a follow-up plan.
     pub slash_chord_threshold: usize,
     /// Whether to analyze for 6th chord vs 13th chord ambiguity.
     /// When true, chords with a 6th but no 7th are labeled as 6th chords,
@@ -118,7 +179,6 @@ pub struct NamingConfig {
 impl Default for NamingConfig {
     fn default() -> Self {
         Self {
-            extension_style: ExtensionStyle::Highest,
             prefer_add_notation: false,
             show_omissions: true,
             slash_chord_threshold: 4,
@@ -132,12 +192,6 @@ impl NamingConfig {
     /// Create a new NamingConfig with default values.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Builder method to set extension style.
-    pub fn extension_style(mut self, style: ExtensionStyle) -> Self {
-        self.extension_style = style;
-        self
     }
 
     /// Builder method to enable/disable "add" notation preference.
@@ -176,7 +230,6 @@ impl NamingConfig {
     /// - Reports ambiguities
     pub fn strict() -> Self {
         Self {
-            extension_style: ExtensionStyle::Strict,
             prefer_add_notation: true,
             show_omissions: true,
             slash_chord_threshold: 4,
@@ -191,7 +244,6 @@ impl NamingConfig {
     /// - Lower slash chord threshold for inversions
     pub fn jazz() -> Self {
         Self {
-            extension_style: ExtensionStyle::Highest,
             prefer_add_notation: false,
             show_omissions: false,
             slash_chord_threshold: 3,
@@ -206,7 +258,6 @@ impl NamingConfig {
     /// - Prefers "add" notation
     pub fn pop() -> Self {
         Self {
-            extension_style: ExtensionStyle::HighestUnlessOne,
             prefer_add_notation: true,
             show_omissions: false,
             slash_chord_threshold: 4,
@@ -219,6 +270,44 @@ impl NamingConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pcs;
+
+    #[test]
+    fn chord_name_from_symbol_major7() {
+        let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
+        assert_eq!(cmaj7.pc_set, pcs!(0, 4, 7, 11));
+        assert!(matches!(cmaj7.tonality, TonalSpecification::RootPosition(Note::C)));
+        // Quality inference should find a Major-family quality, not fall back to SingleNote.
+        assert!(matches!(cmaj7.quality, ChordQuality::Major(_)));
+    }
+
+    #[test]
+    fn chord_name_from_symbol_sharp_root() {
+        let fsm7b5 = ChordName::from_symbol("F#m7b5").unwrap();
+        // F#m7b5 = {F#, A, C, E} = {Pc6, Pc9, Pc0, Pc4}. After PcSet::new sorts and
+        // zeros from the lowest PC (Pc0), we get [Pc0, Pc4, Pc6, Pc9] — not the
+        // root-relative m7b5 pattern [0, 3, 6, 10]. The root is preserved in
+        // `tonality` and must be consulted for root-relative analysis.
+        assert_eq!(fsm7b5.pc_set, pcs!(0, 4, 6, 9));
+        assert!(matches!(fsm7b5.tonality, TonalSpecification::RootPosition(Note::Fis)));
+    }
+
+    #[test]
+    fn chord_name_from_symbol_rejects_garbage() {
+        assert!(ChordName::from_symbol("").is_err());
+        assert!(ChordName::from_symbol("XYZ").is_err());
+    }
+
+    #[test]
+    fn chord_name_new_preserves_parts() {
+        let quality = ChordQuality::SingleNote;
+        let tonality = TonalSpecification::RootPosition(Note::D);
+        let pc_set = pcs!(2);
+        let chord = ChordName::new(tonality.clone(), quality.clone(), pc_set.clone());
+        assert_eq!(chord.pc_set, pc_set);
+        assert_eq!(chord.quality, quality);
+        assert!(matches!(chord.tonality, TonalSpecification::RootPosition(Note::D)));
+    }
 
     #[test]
     fn test_naming_config_default() {
@@ -233,7 +322,6 @@ mod tests {
     #[test]
     fn test_naming_config_builder() {
         let config = NamingConfig::new()
-            .extension_style(ExtensionStyle::Strict)
             .prefer_add_notation(true)
             .show_omissions(false)
             .slash_chord_threshold(3)

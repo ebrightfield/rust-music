@@ -37,12 +37,12 @@ pub enum StringConvention {
 pub static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::E, 3).unwrap(),
-            Pitch::new(Note::A, 3).unwrap(),
-            Pitch::new(Note::D, 4).unwrap(),
-            Pitch::new(Note::G, 4).unwrap(),
-            Pitch::new(Note::B, 4).unwrap(),
-            Pitch::new(Note::E, 5).unwrap(),
+            Pitch::new(Note::E, 3),
+            Pitch::new(Note::A, 3),
+            Pitch::new(Note::D, 4),
+            Pitch::new(Note::G, 4),
+            Pitch::new(Note::B, 4),
+            Pitch::new(Note::E, 5),
         ],
     }
 });
@@ -51,12 +51,12 @@ pub static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
 pub static DROP_D: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::D, 3).unwrap(),
-            Pitch::new(Note::A, 3).unwrap(),
-            Pitch::new(Note::D, 4).unwrap(),
-            Pitch::new(Note::G, 4).unwrap(),
-            Pitch::new(Note::B, 4).unwrap(),
-            Pitch::new(Note::E, 5).unwrap(),
+            Pitch::new(Note::D, 3),
+            Pitch::new(Note::A, 3),
+            Pitch::new(Note::D, 4),
+            Pitch::new(Note::G, 4),
+            Pitch::new(Note::B, 4),
+            Pitch::new(Note::E, 5),
         ],
     }
 });
@@ -65,12 +65,12 @@ pub static DROP_D: Lazy<Fretboard> = Lazy::new(|| {
 pub static DADGAD: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::D, 3).unwrap(),
-            Pitch::new(Note::A, 3).unwrap(),
-            Pitch::new(Note::D, 4).unwrap(),
-            Pitch::new(Note::G, 4).unwrap(),
-            Pitch::new(Note::A, 4).unwrap(),
-            Pitch::new(Note::D, 5).unwrap(),
+            Pitch::new(Note::D, 3),
+            Pitch::new(Note::A, 3),
+            Pitch::new(Note::D, 4),
+            Pitch::new(Note::G, 4),
+            Pitch::new(Note::A, 4),
+            Pitch::new(Note::D, 5),
         ],
     }
 });
@@ -79,12 +79,12 @@ pub static DADGAD: Lazy<Fretboard> = Lazy::new(|| {
 pub static OPEN_G: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::D, 3).unwrap(),
-            Pitch::new(Note::G, 3).unwrap(),
-            Pitch::new(Note::D, 4).unwrap(),
-            Pitch::new(Note::G, 4).unwrap(),
-            Pitch::new(Note::B, 4).unwrap(),
-            Pitch::new(Note::D, 5).unwrap(),
+            Pitch::new(Note::D, 3),
+            Pitch::new(Note::G, 3),
+            Pitch::new(Note::D, 4),
+            Pitch::new(Note::G, 4),
+            Pitch::new(Note::B, 4),
+            Pitch::new(Note::D, 5),
         ],
     }
 });
@@ -93,13 +93,13 @@ pub static OPEN_G: Lazy<Fretboard> = Lazy::new(|| {
 pub static STANDARD_7: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::B, 2).unwrap(),
-            Pitch::new(Note::E, 3).unwrap(),
-            Pitch::new(Note::A, 3).unwrap(),
-            Pitch::new(Note::D, 4).unwrap(),
-            Pitch::new(Note::G, 4).unwrap(),
-            Pitch::new(Note::B, 4).unwrap(),
-            Pitch::new(Note::E, 5).unwrap(),
+            Pitch::new(Note::B, 2),
+            Pitch::new(Note::E, 3),
+            Pitch::new(Note::A, 3),
+            Pitch::new(Note::D, 4),
+            Pitch::new(Note::G, 4),
+            Pitch::new(Note::B, 4),
+            Pitch::new(Note::E, 5),
         ],
     }
 });
@@ -108,10 +108,10 @@ pub static STANDARD_7: Lazy<Fretboard> = Lazy::new(|| {
 pub static BASS_4: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::E, 2).unwrap(),
-            Pitch::new(Note::A, 2).unwrap(),
-            Pitch::new(Note::D, 3).unwrap(),
-            Pitch::new(Note::G, 3).unwrap(),
+            Pitch::new(Note::E, 2),
+            Pitch::new(Note::A, 2),
+            Pitch::new(Note::D, 3),
+            Pitch::new(Note::G, 3),
         ],
     }
 });
@@ -120,11 +120,11 @@ pub static BASS_4: Lazy<Fretboard> = Lazy::new(|| {
 pub static BASS_5: Lazy<Fretboard> = Lazy::new(|| {
     Fretboard {
         open_strings: vec![
-            Pitch::new(Note::B, 1).unwrap(),
-            Pitch::new(Note::E, 2).unwrap(),
-            Pitch::new(Note::A, 2).unwrap(),
-            Pitch::new(Note::D, 3).unwrap(),
-            Pitch::new(Note::G, 3).unwrap(),
+            Pitch::new(Note::B, 1),
+            Pitch::new(Note::E, 2),
+            Pitch::new(Note::A, 2),
+            Pitch::new(Note::D, 3),
+            Pitch::new(Note::G, 3),
         ],
     }
 });
@@ -214,5 +214,23 @@ impl Deref for Fretboard {
 
     fn deref(&self) -> &Self::Target {
         &self.open_strings
+    }
+}
+
+impl IntoIterator for Fretboard {
+    type Item = Pitch;
+    type IntoIter = std::vec::IntoIter<Pitch>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.open_strings.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Fretboard {
+    type Item = &'a Pitch;
+    type IntoIter = std::slice::Iter<'a, Pitch>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.open_strings.iter()
     }
 }

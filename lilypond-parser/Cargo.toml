@@ -1,0 +1,13 @@
+[package]
+name = "lilypond-parser"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+music = { path = "../music" }
+thiserror = "1.0.37"
+
+[dev-dependencies]
+music = { path = "../music", features = ["lilypond"] }

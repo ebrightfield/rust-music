@@ -28,7 +28,7 @@ pub trait CanonicalVoicings {
                     pitches.push(pitches
                         .last()
                         .map(|p| p.up_to_note(&notes[idx]).unwrap())
-                        .unwrap_or(Pitch::new(notes[inversion_num], 4).unwrap())
+                        .unwrap_or(Pitch::new(notes[inversion_num], 4))
                     );
                 }
                 voicing_family.push(

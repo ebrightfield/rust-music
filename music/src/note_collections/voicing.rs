@@ -92,7 +92,7 @@ impl Voicing {
         let pc_set = PcSet::from(&midi_notes);
         let spelling = spell_pc_set(&root.note, &pc_set)?;
         let mut pitches = midi_notes.iter()
-            .map(|m| Pitch::new_spelled_as_in(*m, &spelling).unwrap())
+            .map(|m| Pitch::from_midi_spelled_as(*m, &spelling).unwrap())
             .collect::<Vec<_>>();
         pitches.sort_by(|a,b| a.partial_cmp(b).unwrap());
         Ok(Self(pitches))
@@ -190,15 +190,34 @@ impl Deref for Voicing {
     }
 }
 
+impl IntoIterator for Voicing {
+    type Item = Pitch;
+    type IntoIter = std::vec::IntoIter<Pitch>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Voicing {
+    type Item = &'a Pitch;
+    type IntoIter = std::slice::Iter<'a, Pitch>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 impl From<&Voicing> for NoteSet {
     /// Extracts the [Note]s from a [Voicing], discarding octave information.
     /// The resulting [NoteSet] is sorted by pitch class and deduplicated,
     /// oriented from the first pitch's note.
     fn from(voicing: &Voicing) -> Self {
-        NoteSet::new(
-            voicing.iter().map(|p| p.note).collect(),
-            voicing.first().map(|p| &p.note)
-        )
+        let notes: Vec<Note> = voicing.iter().map(|p| p.note).collect();
+        match voicing.first() {
+            Some(p) => NoteSet::with_root(notes, &p.note),
+            None => NoteSet::new(notes),
+        }
     }
 }
 
@@ -236,6 +255,24 @@ impl Deref for StackedIntervals {
     }
 }
 
+impl IntoIterator for StackedIntervals {
+    type Item = u8;
+    type IntoIter = std::vec::IntoIter<u8>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a StackedIntervals {
+    type Item = &'a u8;
+    type IntoIter = std::slice::Iter<'a, u8>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 impl StackedIntervals {
     pub fn has_wide_intervals(&self) -> bool {
         self.iter().any(|interval| *interval >= 12)
@@ -260,9 +297,9 @@ mod tests {
     fn voicing_macro() {
         assert_eq!(
             Voicing::new(vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::E, 4).unwrap(),
-                Pitch::new(Note::G, 4).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
             ]),
             voicing!(
                 pitch!(c, 4),
@@ -275,36 +312,36 @@ mod tests {
     #[test]
     fn normalizing_to_treble() {
         let v0 = Voicing::new(vec![
-            Pitch::new(Note::C, 3).unwrap(),
-            Pitch::new(Note::Fis, 3).unwrap(),
+            Pitch::new(Note::C, 3),
+            Pitch::new(Note::Fis, 3),
         ]);
         let v1 = Voicing::new(vec![
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::Fis, 4).unwrap(),
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::Fis, 4),
         ]);
         assert_eq!(
             v0.normalize_register_to_clef(Clef::Treble).unwrap(),
             v1.normalize_register_to_clef(Clef::Treble).unwrap()
         );
         let v2 = Voicing::new(vec![
-            Pitch::new(Note::C, 5).unwrap(),
-            Pitch::new(Note::Fis, 5).unwrap(),
+            Pitch::new(Note::C, 5),
+            Pitch::new(Note::Fis, 5),
         ]);
         assert_eq!(
             v1.normalize_register_to_clef(Clef::Treble).unwrap(),
             v2.normalize_register_to_clef(Clef::Treble).unwrap()
         );
         let v3 = Voicing::new(vec![
-            Pitch::new(Note::C, 6).unwrap(),
-            Pitch::new(Note::Fis, 6).unwrap(),
+            Pitch::new(Note::C, 6),
+            Pitch::new(Note::Fis, 6),
         ]);
         assert_eq!(
             v2.normalize_register_to_clef(Clef::Treble).unwrap(),
             v3.normalize_register_to_clef(Clef::Treble).unwrap()
         );
         let v4 = Voicing::new(vec![
-            Pitch::new(Note::C, 7).unwrap(),
-            Pitch::new(Note::Fis, 7).unwrap(),
+            Pitch::new(Note::C, 7),
+            Pitch::new(Note::Fis, 7),
         ]);
         assert_eq!(
             v3.normalize_register_to_clef(Clef::Treble).unwrap(),
@@ -317,9 +354,9 @@ mod tests {
         // A voicing in the low register below the treble staff
         // Treble staff bounds: E4 (bottom) to F5 (top)
         let low = Voicing::new(vec![
-            Pitch::new(Note::C, 2).unwrap(),
-            Pitch::new(Note::E, 2).unwrap(),
-            Pitch::new(Note::G, 2).unwrap(),
+            Pitch::new(Note::C, 2),
+            Pitch::new(Note::E, 2),
+            Pitch::new(Note::G, 2),
         ]);
         let normalized = low.normalize_register_to_clef(Clef::Treble).unwrap();
         // The lowest note should be raised to be closer to the staff
@@ -333,8 +370,8 @@ mod tests {
         // Bass clef bounds: G2 (bottom) to A3 (top)
         // A high voicing should be moved down
         let high = Voicing::new(vec![
-            Pitch::new(Note::C, 5).unwrap(),
-            Pitch::new(Note::E, 5).unwrap(),
+            Pitch::new(Note::C, 5),
+            Pitch::new(Note::E, 5),
         ]);
         let normalized = high.normalize_register_to_clef(Clef::Bass).unwrap();
         let (min, _max) = normalized.span().unwrap();

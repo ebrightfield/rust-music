@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_note_set_to_pitch_circle_svg_trait() {
-        let c_major = NoteSet::new(
+        let c_major = NoteSet::with_root(
             vec![
                 Note::C,
                 Note::D,
@@ -232,7 +232,7 @@ mod tests {
                 Note::A,
                 Note::B,
             ],
-            Some(&Note::C),
+            &Note::C,
         );
 
         let svg = c_major
@@ -299,9 +299,9 @@ mod tests {
 
     #[test]
     fn test_note_set_to_interval_svg_trait() {
-        let c_major = NoteSet::new(
+        let c_major = NoteSet::with_root(
             vec![Note::C, Note::E, Note::G],
-            Some(&Note::C),
+            &Note::C,
         );
 
         let svg = c_major

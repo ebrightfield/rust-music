@@ -41,7 +41,21 @@ pub enum IntervalClass {
 
 impl Display for IntervalClass {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", Into::<IntervalClass>::into(*self))
+        let label = match self {
+            IntervalClass::Ic0 => "unison",
+            IntervalClass::Ic1 => "m2",
+            IntervalClass::Ic2 => "M2",
+            IntervalClass::Ic3 => "m3",
+            IntervalClass::Ic4 => "M3",
+            IntervalClass::Ic5 => "P4",
+            IntervalClass::Ic6 => "TT",
+            IntervalClass::Ic7 => "P5",
+            IntervalClass::Ic8 => "m6",
+            IntervalClass::Ic9 => "M6",
+            IntervalClass::Ic10 => "m7",
+            IntervalClass::Ic11 => "M7",
+        };
+        f.write_str(label)
     }
 }
 
@@ -141,5 +155,26 @@ impl Into<u8> for &IntervalClass {
             IntervalClass::Ic10 => 10,
             IntervalClass::Ic11 => 11,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_produces_proper_interval_labels() {
+        assert_eq!(IntervalClass::Ic0.to_string(), "unison");
+        assert_eq!(IntervalClass::Ic1.to_string(), "m2");
+        assert_eq!(IntervalClass::Ic2.to_string(), "M2");
+        assert_eq!(IntervalClass::Ic3.to_string(), "m3");
+        assert_eq!(IntervalClass::Ic4.to_string(), "M3");
+        assert_eq!(IntervalClass::Ic5.to_string(), "P4");
+        assert_eq!(IntervalClass::Ic6.to_string(), "TT");
+        assert_eq!(IntervalClass::Ic7.to_string(), "P5");
+        assert_eq!(IntervalClass::Ic8.to_string(), "m6");
+        assert_eq!(IntervalClass::Ic9.to_string(), "M6");
+        assert_eq!(IntervalClass::Ic10.to_string(), "m7");
+        assert_eq!(IntervalClass::Ic11.to_string(), "M7");
     }
 }

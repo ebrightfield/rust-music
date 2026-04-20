@@ -38,6 +38,11 @@ impl NamingHeuristic for DimNChords {
     fn optional(&self) -> Vec<HashSet<Pc>> {
         vec![
             HashSet::from([Pc1, Pc2]),
+            // Pc4 is FlatEleven over a dim triad (the ♭11 alt). The Dim
+            // `generate_alt` table already permits it (`vec![1,2,4,5,8]`);
+            // this entry lets validate() accept sets like {Pc0,Pc3,Pc4,Pc6}
+            // so they render as `dim (b11)` instead of `<no match>`.
+            HashSet::from([Pc4]),
             HashSet::from([Pc5]),
             HashSet::from([Pc8]),
             HashSet::from([Pc9, Pc10, Pc11]),

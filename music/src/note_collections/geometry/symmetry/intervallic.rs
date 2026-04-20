@@ -15,7 +15,7 @@ pub trait IntervallicSymmetry: Sized {
 
 impl IntervallicSymmetry for OctavePartition {
     fn invert_intervals(&self) -> Option<Self> {
-        let inverted = OctavePartition::new(
+        let inverted = OctavePartition::try_new(
             self.deref().iter().rev().map(|i| *i).collect()).unwrap();
         if *self == inverted {
             return None;

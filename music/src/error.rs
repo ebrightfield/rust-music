@@ -37,8 +37,6 @@ pub enum MusicSemanticsError {
     /// This variant should never be seen by a user.
     #[error("Not a proper Pc for an alteration: {0:?}")]
     PcNotAnAlteration(usize),
-    #[error("A bad thing occurred that the developer didn't anticipate.")]
-    Unreachable,
     #[error("Moving midi_note {0} down an octave would put it below midi_note zero.")]
     OutOfBoundsLower(u8),
     #[error("Moving midi_note {0} up an octave would put it above midi_note bounds.")]

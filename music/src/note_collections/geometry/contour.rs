@@ -226,11 +226,11 @@ mod tests {
     #[test]
     fn test_contour_from_pitches() {
         let pitches = vec![
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::E, 4).unwrap(),  // up
-            Pitch::new(Note::D, 4).unwrap(),  // down
-            Pitch::new(Note::D, 4).unwrap(),  // repeat
-            Pitch::new(Note::G, 4).unwrap(),  // up
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::E, 4),  // up
+            Pitch::new(Note::D, 4),  // down
+            Pitch::new(Note::D, 4),  // repeat
+            Pitch::new(Note::G, 4),  // up
         ];
 
         let contour = ContourSequence::from_pitches(&pitches);

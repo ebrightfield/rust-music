@@ -1,0 +1,25 @@
+// hello.ron — sample melody fixture for music-midi.
+//
+// This file documents the intended shape of a serializable melody description.
+// The score_to_mid example uses a hard-coded MelodicEvent vector instead of
+// this file because LilypondScore<'a> holds lifetime-bound borrows that cannot
+// be deserialized from RON at runtime.
+//
+// A future "owned score" type (e.g. OwnedScore { bpm: f32, notes: Vec<NoteSpec> })
+// could be deserialized from this format; see docs/midi-playback.md for details.
+//
+// Intended format (not yet parsed by score_to_mid):
+(
+    bpm: 120.0,
+    title: "Hello, MIDI",
+    notes: [
+        // (midi_note, duration_quarters)
+        (64, 1),  // E4 quarter
+        (62, 1),  // D4 quarter
+        (60, 1),  // C4 quarter
+        (62, 1),  // D4 quarter
+        (64, 1),  // E4 quarter
+        (64, 1),  // E4 quarter
+        (64, 2),  // E4 half
+    ],
+)

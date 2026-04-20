@@ -1,5 +1,4 @@
-use music::{Pc, Note, Pitch, PcSet, NoteSet, Voicing, pcs, pc, pitch, voicing, StackedIntervals};
-use music::geometry::symmetry::transpositional::{Modes, Transpose};
+use music::prelude::*;
 use music::notation::clef::Clef;
 
 fn main() {
@@ -43,11 +42,11 @@ fn main() {
         assert_eq!(vii_chord, vec![pc!(11), pc!(2), pc!(5), pc!(9)]);
     }
 
-    // A [NoteSet] contains collection of [Note] objects,
+    // A [NoteSet] contains a collection of [Note] objects,
     // sorted (where C = Pc0 = the "lowest" note), then deduplicated.
-    // The sorting can be overridden to treat a different note as Pc0.
+    // Use `with_root` to override the "lowest" note.
     {
-        let notes = NoteSet::new(vec![Note::Ees, Note::G, Note::Ees, Note::C], None);
+        let notes = NoteSet::new(vec![Note::Ees, Note::G, Note::Ees, Note::C]);
         assert_eq!(notes.to_vec(), vec![Note::C, Note::Ees, Note::G]);
 
         // It's easy to step through them.
@@ -62,6 +61,10 @@ fn main() {
         assert_eq!(note, Note::G);
         note = notes.down_n_steps(&note, 5).unwrap();
         assert_eq!(note, Note::C);
+
+        // Rooted from a specific note.
+        let rooted = NoteSet::with_root(vec![Note::C, Note::E, Note::G], &Note::E);
+        assert_eq!(rooted[0], Note::E);
     }
 
     // Voicings are collections of pitches.
@@ -126,16 +129,63 @@ fn main() {
         );
     }
 
-    // These collections all dereference to their inner collection,
-    // making iteration easy
+    // Collections implement IntoIterator for both owned and borrowed access,
+    // so you can iterate idiomatically without calling .iter() explicitly.
     {
         let major_triad = PcSet::new(vec![pc!(0), pc!(4), pc!(7)]);
-        major_triad.iter().for_each(|_| {});
+
+        // Borrowed iteration.
+        for pc in &major_triad {
+            let _ = pc;
+        }
+
+        // Owned iteration (consumes the collection).
+        let collected: Vec<Pc> = major_triad.into_iter().collect();
+        assert_eq!(collected.len(), 3);
+
+        // FromIterator on PcSet lets you collect directly.
+        let transposed: PcSet = [pc!(0), pc!(4), pc!(7)]
+            .into_iter()
+            .map(|p| p.transpose(2))
+            .collect();
+        assert_eq!(transposed.len(), 3);
+
         let v = Voicing::new(vec![
             pitch!(c, 4),
             pitch!(g, 4),
             pitch!(e, 5),
         ]);
-        v.iter().for_each(|_| {});
+        for p in &v {
+            let _ = p.midi_note;
+        }
+    }
+
+    // Chord names can be built from a symbol string.
+    {
+        let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
+        // Cmaj7 = C, E, G, B = Pc0, Pc4, Pc7, Pc11.
+        assert_eq!(cmaj7.pc_set, pcs!(0, 4, 7, 11));
+        match cmaj7.tonality {
+            TonalSpecification::RootPosition(root) => assert_eq!(root, Note::C),
+            _ => panic!("expected root position"),
+        }
+
+        // A sharp root and a minor-seven-flat-five.
+        let fsm7b5 = ChordName::from_symbol("F#m7b5").unwrap();
+        // F#m7b5 = {F#, A, C, E} = {Pc6, Pc9, Pc0, Pc4}. PcSet::new sorts and
+        // zeroes from the lowest PC (Pc0 here, because C is in the chord).
+        assert_eq!(fsm7b5.pc_set, pcs!(0, 4, 6, 9));
+        match fsm7b5.tonality {
+            TonalSpecification::RootPosition(root) => assert_eq!(root, Note::Fis),
+            _ => panic!("expected root position"),
+        }
+
+        // Or constructed directly when you have the parts.
+        let custom = ChordName::new(
+            TonalSpecification::RootPosition(Note::D),
+            ChordQuality::SingleNote,
+            pcs!(2),
+        );
+        assert_eq!(custom.pc_set, pcs!(2));
     }
 }

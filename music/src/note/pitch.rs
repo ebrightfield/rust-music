@@ -31,8 +31,10 @@ pub struct Pitch {
 }
 
 impl Pitch {
-    /// Sanitizes for octave height
-    pub fn new(note: Note, octave: u8) -> Result<Self, MusicSemanticsError> {
+    /// Create a pitch, returning an error if the octave is out of MIDI range.
+    ///
+    /// Prefer [`Pitch::new`] when `octave` is known at compile time.
+    pub fn try_new(note: Note, octave: u8) -> Result<Self, MusicSemanticsError> {
         if octave > 8 {
             return Err(MusicSemanticsError::OctaveTooHigh(octave));
         }
@@ -42,6 +44,14 @@ impl Pitch {
             octave,
             midi_note,
         })
+    }
+
+    /// Create a pitch, panicking if the octave is out of MIDI range.
+    ///
+    /// Use [`Pitch::try_new`] for fallible construction. This infallible form
+    /// is convenient for literals like `Pitch::new(Note::C, 4)`.
+    pub fn new(note: Note, octave: u8) -> Self {
+        Self::try_new(note, octave).expect("pitch octave out of range")
     }
 
     /// Produce a pitch from a MIDI note value. Middle C = 60.
@@ -75,8 +85,11 @@ impl Pitch {
         })
     }
 
-    /// Control for spelling by including a "palette" of possible note values.
-    pub fn new_spelled_as_in(midi_note_value: u8, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
+    /// Produce a pitch from a MIDI note value, choosing its spelling from a
+    /// "palette" of candidate note values (enharmonic alternatives).
+    ///
+    /// Returns the first note in `notes` whose pitch class matches the MIDI note.
+    pub fn from_midi_spelled_as(midi_note_value: u8, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         let octave = (midi_note_value / 12) - 1;
         if octave > 8 {
             return Err(MusicSemanticsError::OctaveTooHigh(octave));
@@ -139,7 +152,7 @@ impl Pitch {
 
     /// Shift a pitch by some number of octaves.
     pub fn raise_octaves(&self, n: isize) -> Result<Self, MusicSemanticsError> {
-        Self::new(self.note, u8::try_from(self.octave as isize + n)
+        Self::try_new(self.note, u8::try_from(self.octave as isize + n)
             .map_err(|_| MusicSemanticsError::MidiTooHigh(u8::MAX))?
         )
     }
@@ -168,37 +181,37 @@ impl Hash for Pitch {
 /// If that's not the behavior you want, use `Pitch::new` directly.
 #[macro_export]
 macro_rules! pitch {
-    (bis, $octave:expr) => { Pitch::new(Note::Bis, $octave).unwrap()};
-    (c, $octave:expr) => { Pitch::new(Note::C, $octave).unwrap()};
-    (deses, $octave:expr) => { Pitch::new(Note::Deses, $octave).unwrap()};
-    (cis, $octave:expr) => { Pitch::new(Note::Cis, $octave).unwrap()};
-    (des, $octave:expr) => { Pitch::new(Note::Des, $octave).unwrap()};
-    (d, $octave:expr) => { Pitch::new(Note::D, $octave).unwrap()};
-    (cisis, $octave:expr) => { Pitch::new(Note::Cisis, $octave).unwrap()};
-    (eeses, $octave:expr) => { Pitch::new(Note::Eeses, $octave).unwrap()};
-    (dis, $octave:expr) => { Pitch::new(Note::Dis, $octave).unwrap()};
-    (ees, $octave:expr) => { Pitch::new(Note::Ees, $octave).unwrap()};
-    (e, $octave:expr) => { Pitch::new(Note::E, $octave).unwrap()};
-    (disis, $octave:expr) => { Pitch::new(Note::Disis, $octave).unwrap()};
-    (fes, $octave:expr) => { Pitch::new(Note::Fes, $octave).unwrap()};
-    (f, $octave:expr) => { Pitch::new(Note::F, $octave).unwrap()};
-    (eis, $octave:expr) => { Pitch::new(Note::Eis, $octave).unwrap()};
-    (geses, $octave:expr) => { Pitch::new(Note::Geses, $octave).unwrap()};
-    (fis, $octave:expr) => { Pitch::new(Note::Fis, $octave).unwrap()};
-    (ges, $octave:expr) => { Pitch::new(Note::Ges, $octave).unwrap()};
-    (g, $octave:expr) => { Pitch::new(Note::G, $octave).unwrap()};
-    (fisis, $octave:expr) => { Pitch::new(Note::Fisis, $octave).unwrap()};
-    (aeses, $octave:expr) => { Pitch::new(Note::Aeses, $octave).unwrap()};
-    (gis, $octave:expr) => { Pitch::new(Note::Gis, $octave).unwrap()};
-    (aes, $octave:expr) => { Pitch::new(Note::Aes, $octave).unwrap()};
-    (a, $octave:expr) => { Pitch::new(Note::A, $octave).unwrap()};
-    (gisis, $octave:expr) => { Pitch::new(Note::Gisis, $octave).unwrap()};
-    (beses, $octave:expr) => { Pitch::new(Note::Beses, $octave).unwrap()};
-    (ais, $octave:expr) => { Pitch::new(Note::Ais, $octave).unwrap()};
-    (bes, $octave:expr) => { Pitch::new(Note::Bes, $octave).unwrap()};
-    (b, $octave:expr) => { Pitch::new(Note::B, $octave).unwrap()};
-    (ces, $octave:expr) => { Pitch::new(Note::Ces, $octave).unwrap()};
-    (aisis, $octave:expr) => { Pitch::new(Note::Aisis, $octave).unwrap()};
+    (bis, $octave:expr) => { Pitch::new(Note::Bis, $octave)};
+    (c, $octave:expr) => { Pitch::new(Note::C, $octave)};
+    (deses, $octave:expr) => { Pitch::new(Note::Deses, $octave)};
+    (cis, $octave:expr) => { Pitch::new(Note::Cis, $octave)};
+    (des, $octave:expr) => { Pitch::new(Note::Des, $octave)};
+    (d, $octave:expr) => { Pitch::new(Note::D, $octave)};
+    (cisis, $octave:expr) => { Pitch::new(Note::Cisis, $octave)};
+    (eeses, $octave:expr) => { Pitch::new(Note::Eeses, $octave)};
+    (dis, $octave:expr) => { Pitch::new(Note::Dis, $octave)};
+    (ees, $octave:expr) => { Pitch::new(Note::Ees, $octave)};
+    (e, $octave:expr) => { Pitch::new(Note::E, $octave)};
+    (disis, $octave:expr) => { Pitch::new(Note::Disis, $octave)};
+    (fes, $octave:expr) => { Pitch::new(Note::Fes, $octave)};
+    (f, $octave:expr) => { Pitch::new(Note::F, $octave)};
+    (eis, $octave:expr) => { Pitch::new(Note::Eis, $octave)};
+    (geses, $octave:expr) => { Pitch::new(Note::Geses, $octave)};
+    (fis, $octave:expr) => { Pitch::new(Note::Fis, $octave)};
+    (ges, $octave:expr) => { Pitch::new(Note::Ges, $octave)};
+    (g, $octave:expr) => { Pitch::new(Note::G, $octave)};
+    (fisis, $octave:expr) => { Pitch::new(Note::Fisis, $octave)};
+    (aeses, $octave:expr) => { Pitch::new(Note::Aeses, $octave)};
+    (gis, $octave:expr) => { Pitch::new(Note::Gis, $octave)};
+    (aes, $octave:expr) => { Pitch::new(Note::Aes, $octave)};
+    (a, $octave:expr) => { Pitch::new(Note::A, $octave)};
+    (gisis, $octave:expr) => { Pitch::new(Note::Gisis, $octave)};
+    (beses, $octave:expr) => { Pitch::new(Note::Beses, $octave)};
+    (ais, $octave:expr) => { Pitch::new(Note::Ais, $octave)};
+    (bes, $octave:expr) => { Pitch::new(Note::Bes, $octave)};
+    (b, $octave:expr) => { Pitch::new(Note::B, $octave)};
+    (ces, $octave:expr) => { Pitch::new(Note::Ces, $octave)};
+    (aisis, $octave:expr) => { Pitch::new(Note::Aisis, $octave)};
 }
 
 #[cfg(test)]
@@ -207,7 +220,7 @@ mod tests {
 
     #[test]
     fn pitch_macro() {
-        assert_eq!(Pitch::new(Note::C, 4).unwrap(), pitch!(c, 4));
+        assert_eq!(Pitch::new(Note::C, 4), pitch!(c, 4));
     }
 
     #[test]
@@ -238,17 +251,29 @@ mod tests {
 
     #[test]
     fn diatonic_distance_works() {
-        let p1 = Pitch::new(Note::C, 5).unwrap();
-        let p2 = Pitch::new(Note::B, 4).unwrap();
+        let p1 = Pitch::new(Note::C, 5);
+        let p2 = Pitch::new(Note::B, 4);
         assert_eq!(p1.diatonic_distance(&p2), -1);
-        let p2 = Pitch::new(Note::B, 5).unwrap();
+        let p2 = Pitch::new(Note::B, 5);
         assert_eq!(p1.diatonic_distance(&p2), 6);
-        let p2 = Pitch::new(Note::B, 6).unwrap();
+        let p2 = Pitch::new(Note::B, 6);
         assert_eq!(p1.diatonic_distance(&p2), 13);
-        let p1 = Pitch::new(Note::G, 3).unwrap();
-        let p2 = Pitch::new(Note::F, 3).unwrap();
+        let p1 = Pitch::new(Note::G, 3);
+        let p2 = Pitch::new(Note::F, 3);
         assert_eq!(p1.diatonic_distance(&p2), -1);
-        let p2 = Pitch::new(Note::F, 4).unwrap();
+        let p2 = Pitch::new(Note::F, 4);
         assert_eq!(p1.diatonic_distance(&p2), 6);
+    }
+
+    #[test]
+    fn try_new_rejects_high_octave() {
+        assert!(Pitch::try_new(Note::C, 9).is_err());
+        assert!(Pitch::try_new(Note::C, 8).is_ok());
+    }
+
+    #[test]
+    #[should_panic(expected = "pitch octave out of range")]
+    fn new_panics_on_high_octave() {
+        let _ = Pitch::new(Note::C, 9);
     }
 }

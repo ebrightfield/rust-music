@@ -95,11 +95,11 @@ pub struct MelodicSequencerConfig {
 ///     chord_progression: ChordProgression::static_chord(scale),
 ///     interval_pattern: pattern,
 ///     rhythm_pattern: vec![Duration::EIGHTH],
-///     bounds: PitchBounds::new(
-///         Pitch::new(Note::C, 3).unwrap(),
-///         Pitch::new(Note::C, 6).unwrap(),
+///     bounds: PitchBounds::try_new(
+///         Pitch::new(Note::C, 3),
+///         Pitch::new(Note::C, 6),
 ///     ).unwrap(),
-///     starting_pitch: Pitch::new(Note::C, 4).unwrap(),
+///     starting_pitch: Pitch::new(Note::C, 4),
 ///     direction: Direction::Up,
 ///     turnaround_mode: TurnaroundMode::Reflect,
 ///     max_length: 16,
@@ -314,7 +314,7 @@ impl MelodicSequencer {
         let overshoot = total_distance.saturating_sub(to_boundary);
 
         // Create pitch at boundary tone
-        let boundary_pitch = Pitch::new(boundary_tone.clone(), boundary.octave)?;
+        let boundary_pitch = Pitch::try_new(boundary_tone.clone(), boundary.octave)?;
 
         // Move from boundary by overshoot amount in new direction
         // Estimate steps based on average interval size (assume ~2 semitones per step)
@@ -376,10 +376,7 @@ mod tests {
     use crate::note::note::Note;
 
     fn c_major_scale() -> NoteSet {
-        NoteSet::new(
-            vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B],
-            None,
-        )
+        NoteSet::new(vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B])
     }
 
     fn simple_config() -> MelodicSequencerConfig {
@@ -387,11 +384,11 @@ mod tests {
             chord_progression: ChordProgression::static_chord(c_major_scale()),
             interval_pattern: IntervalPattern::simple(vec![1], 1),
             rhythm_pattern: vec![Duration::EIGHTH],
-            bounds: PitchBounds::new(
-                Pitch::new(Note::C, 3).unwrap(),
-                Pitch::new(Note::C, 6).unwrap(),
+            bounds: PitchBounds::try_new(
+                Pitch::new(Note::C, 3),
+                Pitch::new(Note::C, 6),
             ).unwrap(),
-            starting_pitch: Pitch::new(Note::C, 4).unwrap(),
+            starting_pitch: Pitch::new(Note::C, 4),
             direction: Direction::Up,
             turnaround_mode: TurnaroundMode::Reflect,
             max_length: 8,
@@ -467,9 +464,9 @@ mod tests {
     #[test]
     fn test_boundary_stop() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::new(
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::E, 4).unwrap(),
+        config.bounds = PitchBounds::try_new(
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::E, 4),
         ).unwrap();
         config.turnaround_mode = TurnaroundMode::Stop;
         config.max_length = 6;
@@ -489,9 +486,9 @@ mod tests {
     #[test]
     fn test_boundary_reflect() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::new(
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::E, 4).unwrap(),
+        config.bounds = PitchBounds::try_new(
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::E, 4),
         ).unwrap();
         config.turnaround_mode = TurnaroundMode::Reflect;
         config.max_length = 8;
@@ -511,9 +508,9 @@ mod tests {
     #[test]
     fn test_boundary_wrap() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::new(
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::E, 4).unwrap(),
+        config.bounds = PitchBounds::try_new(
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::E, 4),
         ).unwrap();
         config.turnaround_mode = TurnaroundMode::Wrap;
         config.max_length = 5;
@@ -533,9 +530,9 @@ mod tests {
     #[test]
     fn test_boundary_start_over() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::new(
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::E, 4).unwrap(),
+        config.bounds = PitchBounds::try_new(
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::E, 4),
         ).unwrap();
         config.turnaround_mode = TurnaroundMode::StartOver;
         config.max_length = 5;
@@ -606,17 +603,17 @@ mod tests {
     #[test]
     fn test_triad_stepping() {
         // Test with a triad instead of full scale
-        let triad = NoteSet::new(vec![Note::C, Note::E, Note::G], None);
+        let triad = NoteSet::new(vec![Note::C, Note::E, Note::G]);
 
         let config = MelodicSequencerConfig {
             chord_progression: ChordProgression::static_chord(triad),
             interval_pattern: IntervalPattern::simple(vec![1], 1),
             rhythm_pattern: vec![Duration::EIGHTH],
-            bounds: PitchBounds::new(
-                Pitch::new(Note::C, 3).unwrap(),
-                Pitch::new(Note::C, 6).unwrap(),
+            bounds: PitchBounds::try_new(
+                Pitch::new(Note::C, 3),
+                Pitch::new(Note::C, 6),
             ).unwrap(),
-            starting_pitch: Pitch::new(Note::C, 4).unwrap(),
+            starting_pitch: Pitch::new(Note::C, 4),
             direction: Direction::Up,
             turnaround_mode: TurnaroundMode::Reflect,
             max_length: 6,

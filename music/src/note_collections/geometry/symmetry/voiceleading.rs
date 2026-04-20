@@ -116,9 +116,9 @@ mod tests {
     #[test]
     fn find_voiceleadings() {
         let v1 = Voicing::new(vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::G, 4).unwrap(),
-                Pitch::new(Note::E, 5).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::G, 4),
+                Pitch::new(Note::E, 5),
             ]);
         let ch2 = vec![Note::F, Note::A, Note::C];
         let voiceleadings = Voiceleading::find_all(&v1, &ch2,

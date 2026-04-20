@@ -84,6 +84,12 @@ impl<'a> LilypondScore<'a> {
         self.staff_groups.push(staff_group);
         self
     }
+
+    /// Returns all staff groups in this score.
+    /// Used by `music::notation::rhythm::flatten::iter_events` (REQ-O16).
+    pub fn staff_groups(&self) -> &[LilypondStaffGroup<'_>] {
+        &self.staff_groups
+    }
 }
 
 impl<'a> ToLilypondString for LilypondScore<'a> {
@@ -139,6 +145,34 @@ impl<'a> LilypondStaffGroup<'a> {
     pub fn add_staff(mut self, staff: LilypondStaff<'a>) -> Self {
         self.staves.push(staff);
         self
+    }
+
+    /// Returns all staves in this staff group.
+    /// Used by `music::notation::rhythm::flatten::iter_events` (REQ-O16).
+    pub fn staves(&self) -> &[LilypondStaff<'_>] {
+        &self.staves
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::notation::lilypond::document::staff::LilypondStaff;
+
+    #[test]
+    fn staff_groups_returns_slice() {
+        let staff = LilypondStaff::new();
+        let group = LilypondStaffGroup::new(vec![staff]);
+        let score = LilypondScore::new().staff_group(group);
+        assert_eq!(score.staff_groups().len(), 1);
+    }
+
+    #[test]
+    fn staves_returns_slice() {
+        let staff_a = LilypondStaff::new();
+        let staff_b = LilypondStaff::new();
+        let group = LilypondStaffGroup::new(vec![staff_a, staff_b]);
+        assert_eq!(group.staves().len(), 2);
     }
 }
 

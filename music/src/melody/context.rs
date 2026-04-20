@@ -139,15 +139,15 @@ mod tests {
     use crate::notation::rhythm::duration::DurationKind;
 
     fn c_major() -> NoteSet {
-        NoteSet::new(vec![Note::C, Note::E, Note::G], None)
+        NoteSet::new(vec![Note::C, Note::E, Note::G])
     }
 
     fn g_major() -> NoteSet {
-        NoteSet::new(vec![Note::G, Note::B, Note::D], None)
+        NoteSet::new(vec![Note::G, Note::B, Note::D])
     }
 
     fn a_minor() -> NoteSet {
-        NoteSet::new(vec![Note::A, Note::C, Note::E], None)
+        NoteSet::new(vec![Note::A, Note::C, Note::E])
     }
 
     #[test]
