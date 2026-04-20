@@ -435,3 +435,9 @@
 - Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
 - Next: Continue QA W1 in other files (tuplet.rs, page.rs) or tackle W12/W13.
 - Open issues: W1 still present in layout/tuplet.rs, layout/page.rs.
+
+## 2026-04-20 — QA: fixed W1 unwrap-on-min/max in layout_tuplet_bracket (layout/tuplet.rs) + layout_page (layout/page.rs)
+- Did: Refactored `layout_tuplet_bracket()` to use `split_first()` + `fold` instead of `is_empty()` guard + `iter().max().unwrap()` / `iter().min().unwrap()`, proving non-empty invariant at the type level (2 unwraps eliminated). Refactored page height calculation in `layout_page()` to use `systems.last()` match instead of `is_empty()` + `last().unwrap()` (1 unwrap eliminated). Total: 3 production `.unwrap()` calls removed.
+- Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver.
+- Next: W1 is now fully resolved across all files. Continue QA backlog: W3 (rest_glyph bounds), W12 (centralized error type), or W13 (score.rs split).
+- Open issues: None for W1. Remaining QA items: W3, W4, W6, W7, W12, W13, W14, W15, W16, plus info-tier items.

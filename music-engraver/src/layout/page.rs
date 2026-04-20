@@ -134,12 +134,9 @@ pub fn layout_page(
     }
 
     // Page height: last system top + 4 staff spaces (for the staff itself) + some padding
-    let page_height = if systems.is_empty() {
-        page_config.top_margin
-    } else {
-        let last_y = systems.last().unwrap().y;
-        // Staff occupies 4 staff spaces below top line; add 2 more for bottom padding
-        last_y + 6.0 * page_config.staff_space
+    let page_height = match systems.last() {
+        None => page_config.top_margin,
+        Some(last) => last.y + 6.0 * page_config.staff_space,
     };
 
     PageLayout {

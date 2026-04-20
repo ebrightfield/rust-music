@@ -118,26 +118,29 @@ pub fn layout_tuplet_bracket(
     let offset = BRACKET_OFFSET_SS * staff_space;
     let hook_height = BRACKET_HOOK_SS * staff_space;
 
-    // Find the most extreme note position
-    let bracket_y = if extreme_positions.is_empty() {
-        // No notes: place bracket at middle of staff
-        match placement {
-            TupletPlacement::Above => 0.0 - offset,
-            TupletPlacement::Below => 4.0 * staff_space + offset,
-        }
-    } else {
-        match placement {
-            TupletPlacement::Above => {
-                // Highest note (largest staff position) → smallest y
-                let max_pos = *extreme_positions.iter().max().unwrap();
-                let extreme_y = (8 - max_pos) as f64 * half_space;
-                extreme_y - offset
+    // Find the most extreme note position, using split_first to prove non-emptiness
+    let bracket_y = match extreme_positions.split_first() {
+        None => {
+            // No notes: place bracket at middle of staff
+            match placement {
+                TupletPlacement::Above => 0.0 - offset,
+                TupletPlacement::Below => 4.0 * staff_space + offset,
             }
-            TupletPlacement::Below => {
-                // Lowest note (smallest staff position) → largest y
-                let min_pos = *extreme_positions.iter().min().unwrap();
-                let extreme_y = (8 - min_pos) as f64 * half_space;
-                extreme_y + offset
+        }
+        Some((&first, rest)) => {
+            match placement {
+                TupletPlacement::Above => {
+                    // Highest note (largest staff position) → smallest y
+                    let max_pos = rest.iter().fold(first, |acc, &p| acc.max(p));
+                    let extreme_y = (8 - max_pos) as f64 * half_space;
+                    extreme_y - offset
+                }
+                TupletPlacement::Below => {
+                    // Lowest note (smallest staff position) → largest y
+                    let min_pos = rest.iter().fold(first, |acc, &p| acc.min(p));
+                    let extreme_y = (8 - min_pos) as f64 * half_space;
+                    extreme_y + offset
+                }
             }
         }
     };
