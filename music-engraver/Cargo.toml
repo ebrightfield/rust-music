@@ -19,6 +19,10 @@ thiserror = "1"
 default = []
 png = ["dep:resvg", "dep:tiny-skia", "dep:fontdb"]
 
+[[example]]
+name = "png_export"
+required-features = ["png"]
+
 [dependencies.resvg]
 version = "0.44"
 optional = true

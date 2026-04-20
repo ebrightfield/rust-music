@@ -31,7 +31,7 @@ fn main() {
     let total_height = section_layout.staff_y_origins.last().unwrap() + ss * 4.0 + 100.0;
     let vb_x = -300.0;
     let vb_w = staff_width + 500.0;
-    let px_w = (vb_w / 10.0) as f64;
+    let px_w = vb_w / 10.0;
     let px_h = (total_height + 100.0) / 10.0;
 
     let mut svg = SvgWriter::new(px_w, px_h, vb_x, 0.0, vb_w, total_height + 100.0);

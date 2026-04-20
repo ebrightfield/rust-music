@@ -112,7 +112,6 @@ pub fn grace_note_x_reservation(staff: &StaffLayout) -> f64 {
 mod tests {
     use super::*;
     use crate::font::bravura_font;
-    use crate::font::EngravingConfig;
 
     fn test_staff() -> StaffLayout {
         let font = bravura_font();
