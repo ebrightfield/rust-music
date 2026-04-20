@@ -519,3 +519,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo test -p music-engraver` — 819 tests pass (814 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: QA backlog essentially complete — only I2 (cross-system DRY) remains, explicitly optional per QA report. Resume phased plan work or additional post-v1 features.
 - Open issues: I2 (optional, deferred — the three span kinds differ enough that a generic trait may not help).
+
+## 2026-04-20 — Post-v1, expression score example via ScoreBuilder API
+- Did: Created `examples/expression_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.expression()` method. Demonstrates: (1) "dolce" on opening E4 with piano dynamic, (2) "espressivo" on C5 half note, (3) "legato" on G4 with mp dynamic, (4) "cantabile" on final C4 half + "morendo" on E4 quarter. Exercises italic expression text positioning below staff, combined with dynamics, and verifies expression on rest is a no-op. Output: 20 paths, 29 lines, 5 texts (13702 bytes). Assertions validate all 5 expression texts appear, are italic, and structural element counts are reasonable.
+- Verified: `cargo run --example expression_score` produces valid SVG. `cargo test -p music-engraver --lib` — all 819 tests pass (814 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
+- Next: QA backlog complete (I2 deferred). Consider additional post-v1 features or polish.
+- Open issues: I2 (optional, deferred).
