@@ -12,14 +12,10 @@ use music::note::pitch::Pitch;
 use music::note::spelling::{Accidental, Spelling};
 
 use crate::layout::accidental::accidental_glyph;
-use crate::layout::dynamics::Dynamic;
-use crate::layout::hairpin::HairpinType;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{BeamGroupEvent, ChordEvent, NoteAnnotations, NoteEvent, RestEvent, TupletGroupEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
-use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::system::MeasureEvent;
-use crate::layout::tempo::TempoMark;
 
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
@@ -27,15 +23,7 @@ pub(crate) enum ScoreEvent {
     Note {
         pitch: Pitch,
         duration: Duration,
-        tie_forward: bool,
-        dynamic: Option<Dynamic>,
-        slur_start: bool,
-        slur_end: bool,
-        hairpin_start: Option<HairpinType>,
-        hairpin_end: bool,
-        rehearsal_mark: Option<(String, RehearsalStyle)>,
-        tempo_mark: Option<TempoMark>,
-        expression: Option<String>,
+        annotations: NoteAnnotations,
     },
     Rest {
         duration: Duration,
@@ -43,15 +31,7 @@ pub(crate) enum ScoreEvent {
     Chord {
         pitches: Vec<Pitch>,
         duration: Duration,
-        tie_forward: bool,
-        dynamic: Option<Dynamic>,
-        slur_start: bool,
-        slur_end: bool,
-        hairpin_start: Option<HairpinType>,
-        hairpin_end: bool,
-        rehearsal_mark: Option<(String, RehearsalStyle)>,
-        tempo_mark: Option<TempoMark>,
-        expression: Option<String>,
+        annotations: NoteAnnotations,
     },
     BeamGroup {
         notes: Vec<(Pitch, Duration)>,
@@ -280,7 +260,7 @@ pub(crate) fn convert_event(
     mut seen: Option<&mut AccidentalTracker>,
 ) -> MeasureEvent {
     match event {
-        ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
+        ScoreEvent::Note { pitch, duration, annotations } => {
             let staff_pos = pitch_to_staff_position(pitch, clef);
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
@@ -292,7 +272,7 @@ pub(crate) fn convert_event(
                 dots,
                 accidental: acc,
                 stem_direction: None,
-                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },
+                annotations: annotations.clone(),
             })
         }
         ScoreEvent::Rest { duration } => {
@@ -304,7 +284,7 @@ pub(crate) fn convert_event(
                 dots,
             })
         }
-        ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
+        ScoreEvent::Chord { pitches, duration, annotations } => {
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
             let staff_positions: Vec<i8> = pitches
@@ -322,7 +302,7 @@ pub(crate) fn convert_event(
                 dots,
                 accidentals,
                 stem_direction: None,
-                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },
+                annotations: annotations.clone(),
             })
         }
         ScoreEvent::BeamGroup { notes } => {

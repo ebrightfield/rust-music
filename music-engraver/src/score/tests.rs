@@ -376,7 +376,7 @@
         let event = ScoreEvent::Note {
             pitch,
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
@@ -610,12 +610,12 @@
         let ev1 = ScoreEvent::Note {
             pitch,
             duration: Duration::QTR,
-        tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         };
         let ev2 = ScoreEvent::Note {
             pitch,
             duration: Duration::QTR,
-        tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         };
 
         let r1 = convert_event(&ev1, &Clef::Treble, &builder.key_sig, Some(&mut seen));
@@ -644,12 +644,12 @@
         let ev_sharp = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let ev_natural = ScoreEvent::Note {
             pitch: Pitch::new(Note::F, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
 
         let _ = convert_event(&ev_sharp, &Clef::Treble, &builder.key_sig, Some(&mut seen));
@@ -871,7 +871,7 @@
                 Pitch::new(Note::G, 4).unwrap(),
             ],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
@@ -897,7 +897,7 @@
         let ev1 = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let _ = convert_event(&ev1, &Clef::Treble, &builder.key_sig, Some(&mut seen));
 
@@ -908,7 +908,7 @@
                 Pitch::new(Note::A, 4).unwrap(),
             ],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let result = convert_event(&ev2, &Clef::Treble, &builder.key_sig, Some(&mut seen));
         match result {
@@ -1006,7 +1006,7 @@
         let ev1 = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let _ = convert_event(&ev1, &Clef::Treble, &builder.key_sig, Some(&mut seen));
 
@@ -1121,7 +1121,7 @@
         let event = ScoreEvent::Note {
             pitch: Pitch::new(Note::E, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: true, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { tie_forward: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Note(n) => {
@@ -1142,7 +1142,7 @@
                 Pitch::new(Note::E, 4).unwrap(),
             ],
             duration: Duration::QTR,
-            tie_forward: true, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { tie_forward: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Chord(c) => {
@@ -1255,7 +1255,7 @@
                 Pitch::new(Note::G, 4).unwrap(),
             ],
             duration: Duration::QTR,
-            tie_forward: true, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { tie_forward: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, Some(&mut seen));
         match result {
             MeasureEvent::Chord(c) => {
@@ -1363,7 +1363,7 @@
         let event = ScoreEvent::Note {
             pitch: Pitch::new(Note::E, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: Some(Dynamic::Pp), slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { dynamic: Some(Dynamic::Pp), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Note(n) => {
@@ -1380,7 +1380,7 @@
         let event = ScoreEvent::Note {
             pitch: Pitch::new(Note::E, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: Some(Dynamic::Fff), slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { dynamic: Some(Dynamic::Fff), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, Some(&mut seen));
         match result {
             MeasureEvent::Note(n) => {
@@ -1399,7 +1399,7 @@
                 Pitch::new(Note::E, 4).unwrap(),
             ],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: Some(Dynamic::Sfz), slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { dynamic: Some(Dynamic::Sfz), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Chord(c) => {
@@ -1528,7 +1528,7 @@
         let ev1 = ScoreEvent::Note {
             pitch: Pitch::new(Note::Fis, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
         };
         let _ = convert_event(&ev1, &Clef::Treble, &builder.key_sig, Some(&mut seen));
 
@@ -1633,7 +1633,7 @@
         let event = ScoreEvent::Note {
             pitch: Pitch::new(Note::E, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: true, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { slur_start: true, ..NoteAnnotations::default() },};
         let clef = Clef::Treble;
         let result = convert_event(&event, &clef, &builder.key_sig, None);
         match result {
@@ -1652,7 +1652,7 @@
         let event = ScoreEvent::Note {
             pitch: Pitch::new(Note::G, 4).unwrap(),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: true, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { slur_end: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, Some(&mut seen));
         match result {
             MeasureEvent::Note(n) => {
@@ -1672,7 +1672,7 @@
                 Pitch::new(Note::E, 4).unwrap(),
             ],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: true, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { slur_start: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Chord(c) => {
@@ -1775,7 +1775,7 @@
         let event = ScoreEvent::Note {
             pitch: p("C", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: Some(HairpinType::Crescendo), hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Crescendo), ..NoteAnnotations::default() },};
         let clef = Clef::Treble;
         let result = convert_event(&event, &clef, &builder.key_sig, None);
         match result {
@@ -1793,7 +1793,7 @@
         let event = ScoreEvent::Note {
             pitch: p("C", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: true, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { hairpin_end: true, ..NoteAnnotations::default() },};
         let clef = Clef::Treble;
         let mut seen = HashMap::new();
         let result = convert_event(&event, &clef, &builder.key_sig, Some(&mut seen));
@@ -1812,7 +1812,7 @@
         let event = ScoreEvent::Chord {
             pitches: vec![p("C", 4), p("E", 4)],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: Some(HairpinType::Decrescendo), hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None,};
+            annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Decrescendo), ..NoteAnnotations::default() },};
         let clef = Clef::Treble;
         let result = convert_event(&event, &clef, &builder.key_sig, None);
         match result {
@@ -1909,7 +1909,7 @@
         let event = ScoreEvent::Note {
             pitch: p("C", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: Some(("A".to_string(), RehearsalStyle::Boxed)), tempo_mark: None, expression: None,
+            annotations: NoteAnnotations { rehearsal_mark: Some(("A".to_string(), RehearsalStyle::Boxed)), ..NoteAnnotations::default() },
         };
         let clef = Clef::Treble;
         let result = convert_event(&event, &clef, &builder.key_sig, None);
@@ -1927,7 +1927,7 @@
         let event = ScoreEvent::Note {
             pitch: p("C", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: Some(("B".to_string(), RehearsalStyle::Plain)), tempo_mark: None, expression: None,
+            annotations: NoteAnnotations { rehearsal_mark: Some(("B".to_string(), RehearsalStyle::Plain)), ..NoteAnnotations::default() },
         };
         let clef = Clef::Treble;
         let mut seen = HashMap::new();
@@ -1946,7 +1946,7 @@
         let event = ScoreEvent::Chord {
             pitches: vec![p("C", 4), p("E", 4)],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: Some(("12".to_string(), RehearsalStyle::Boxed)), tempo_mark: None, expression: None,
+            annotations: NoteAnnotations { rehearsal_mark: Some(("12".to_string(), RehearsalStyle::Boxed)), ..NoteAnnotations::default() },
         };
         let clef = Clef::Treble;
         let result = convert_event(&event, &clef, &builder.key_sig, None);
@@ -2032,7 +2032,7 @@
         let event = ScoreEvent::Note {
             pitch: p("C", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: Some(TempoMark::Text("Largo".into())), expression: None,};
+            annotations: NoteAnnotations { tempo_mark: Some(TempoMark::Text("Largo".into())), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Note(n) => {
@@ -2049,11 +2049,11 @@
         let event = ScoreEvent::Note {
             pitch: p("D", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: Some(TempoMark::Metronome {
+            annotations: NoteAnnotations { tempo_mark: Some(TempoMark::Metronome {
                 note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
                 dotted: false,
                 bpm: 60,
-            }), expression: None,};
+            }), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, Some(&mut seen));
         match result {
             MeasureEvent::Note(n) => {
@@ -2069,7 +2069,7 @@
         let event = ScoreEvent::Chord {
             pitches: vec![p("C", 4), p("E", 4)],
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: Some(TempoMark::Text("Adagio".into())), expression: None,};
+            annotations: NoteAnnotations { tempo_mark: Some(TempoMark::Text("Adagio".into())), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Chord(c) => {
@@ -2134,7 +2134,7 @@
         let event = ScoreEvent::Note {
             pitch: p("C", 4),
             duration: Duration::QTR,
-            tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: Some("cantabile".into()),};
+            annotations: NoteAnnotations { expression: Some("cantabile".into()), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
         match result {
             MeasureEvent::Note(n) => {

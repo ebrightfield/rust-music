@@ -45,7 +45,7 @@ use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
-use crate::layout::measure::MeasureLayoutConfig;
+use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
 use crate::layout::time_signature::TimeSignatureKind;
@@ -145,7 +145,7 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None });
+        self.current_events.push(ScoreEvent::Note { pitch, duration, annotations: NoteAnnotations::default() });
         self
     }
 
@@ -156,10 +156,8 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()`. Has no effect if the last event
     /// is not a note.
     pub fn tie(mut self) -> Self {
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { tie_forward, .. }) => *tie_forward = true,
-            Some(ScoreEvent::Chord { tie_forward, .. }) => *tie_forward = true,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.tie_forward = true;
         }
         self
     }
@@ -170,10 +168,8 @@ impl ScoreBuilder {
     /// `slur_end()` called on it, within the same system. The curve direction
     /// is determined by the stem direction of the start note.
     pub fn slur_start(mut self) -> Self {
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { slur_start, .. }) => *slur_start = true,
-            Some(ScoreEvent::Chord { slur_start, .. }) => *slur_start = true,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.slur_start = true;
         }
         self
     }
@@ -183,10 +179,8 @@ impl ScoreBuilder {
     /// Pairs with a preceding `slur_start()` call. The slur is drawn between
     /// the most recent `slur_start` note and this note.
     pub fn slur_end(mut self) -> Self {
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { slur_end, .. }) => *slur_end = true,
-            Some(ScoreEvent::Chord { slur_end, .. }) => *slur_end = true,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.slur_end = true;
         }
         self
     }
@@ -198,10 +192,8 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()` or `.chord()`. Has no effect
     /// if the last event is not a note or chord.
     pub fn dynamic(mut self, dyn_mark: Dynamic) -> Self {
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { dynamic, .. }) => *dynamic = Some(dyn_mark),
-            Some(ScoreEvent::Chord { dynamic, .. }) => *dynamic = Some(dyn_mark),
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.dynamic = Some(dyn_mark);
         }
         self
     }
@@ -210,20 +202,16 @@ impl ScoreBuilder {
     /// recently added note or chord. The wedge extends from this note to the
     /// next note/chord with `hairpin_end()`.
     pub fn hairpin_start(mut self, kind: HairpinType) -> Self {
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { hairpin_start, .. }) => *hairpin_start = Some(kind),
-            Some(ScoreEvent::Chord { hairpin_start, .. }) => *hairpin_start = Some(kind),
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.hairpin_start = Some(kind);
         }
         self
     }
 
     /// Mark the most recently added note or chord as the end of a hairpin wedge.
     pub fn hairpin_end(mut self) -> Self {
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { hairpin_end, .. }) => *hairpin_end = true,
-            Some(ScoreEvent::Chord { hairpin_end, .. }) => *hairpin_end = true,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.hairpin_end = true;
         }
         self
     }
@@ -249,10 +237,8 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn rehearsal_mark(mut self, text: impl Into<String>, style: RehearsalStyle) -> Self {
         let mark = Some((text.into(), style));
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { rehearsal_mark, .. }) => *rehearsal_mark = mark,
-            Some(ScoreEvent::Chord { rehearsal_mark, .. }) => *rehearsal_mark = mark,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.rehearsal_mark = mark;
         }
         self
     }
@@ -266,10 +252,8 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn tempo(mut self, mark: TempoMark) -> Self {
         let m = Some(mark);
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { tempo_mark, .. }) => *tempo_mark = m,
-            Some(ScoreEvent::Chord { tempo_mark, .. }) => *tempo_mark = m,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.tempo_mark = m;
         }
         self
     }
@@ -283,10 +267,8 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn expression(mut self, text: impl Into<String>) -> Self {
         let e = Some(text.into());
-        match self.current_events.last_mut() {
-            Some(ScoreEvent::Note { expression, .. }) => *expression = e,
-            Some(ScoreEvent::Chord { expression, .. }) => *expression = e,
-            _ => {}
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+            annotations.expression = e;
         }
         self
     }
@@ -296,7 +278,7 @@ impl ScoreBuilder {
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None });
+        self.current_events.push(ScoreEvent::Chord { pitches, duration, annotations: NoteAnnotations::default() });
         self
     }
 

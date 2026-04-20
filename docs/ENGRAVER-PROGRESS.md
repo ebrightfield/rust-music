@@ -525,3 +525,9 @@
 - Verified: `cargo run --example expression_score` produces valid SVG. `cargo test -p music-engraver --lib` — all 819 tests pass (814 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
 - Next: QA backlog complete (I2 deferred). Consider additional post-v1 features or polish.
 - Open issues: I2 (optional, deferred).
+
+## 2026-04-20 — QA: I4 collapsed ScoreEvent annotation fields into NoteAnnotations
+- Did: Replaced 9 duplicated annotation fields in `ScoreEvent::Note` and `ScoreEvent::Chord` variants with a single `annotations: NoteAnnotations` field, reusing the same struct already applied to `NoteEvent`/`ChordEvent` in the W16 fix. Updated `score/mod.rs` builder methods (9 modifier methods now use `if let` with or-patterns instead of duplicated `match` arms), `score/event.rs` `convert_event` (destructuring simplified to `annotations.clone()`), and ~25 test construction sites in `score/tests.rs` (now use `NoteAnnotations::default()` or struct-update syntax). Removed 4 unused imports from `event.rs`. Net reduction: ~18 lines of enum definition, ~9 match arms collapsed.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 824 tests pass (819 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: QA backlog complete (I2 deferred, I23 already covered by struct-level `#[must_use]`). Consider additional post-v1 features or polish.
+- Open issues: I2 (optional, deferred).
