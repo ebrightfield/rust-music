@@ -21,5 +21,5 @@ pub enum EngraverError {
     /// PNG rasterization failed (requires the `png` feature).
     #[cfg(feature = "png")]
     #[error(transparent)]
-    Png(#[from] crate::png::PngError),
+    Png(#[from] crate::render::png::PngError),
 }

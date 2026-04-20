@@ -20,6 +20,7 @@ pub mod grace;
 pub mod hairpin;
 pub mod key_signature;
 pub mod measure;
+pub mod multi_staff;
 pub mod note_placement;
 pub mod page;
 pub mod rehearsal;
@@ -59,6 +60,10 @@ pub use system::{
 pub use tie::{
     layout_half_tie_left, layout_half_tie_right, layout_tie, tie_direction_from_stem, TieDirection,
     TieLayout,
+};
+pub use multi_staff::{
+    layout_multi_staff, staff_layouts_from_multi, BraceLayout, BracketLayout, ConnectorKind,
+    MultiStaffLayout, StaffGroup,
 };
 pub use articulation::{
     layout_articulation, Articulation, ArticulationLayout, ArticulationPlacement,
