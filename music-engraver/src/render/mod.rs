@@ -6,6 +6,7 @@
 //! complete SVG documents.
 
 pub mod accidental_renderer;
+pub mod articulation_renderer;
 pub mod barline_renderer;
 pub mod beam_renderer;
 pub mod dot_renderer;
@@ -30,6 +31,7 @@ pub mod time_sig_renderer;
 pub mod tuplet_renderer;
 
 pub use accidental_renderer::draw_accidental;
+pub use articulation_renderer::draw_articulation;
 pub use barline_renderer::draw_barline;
 pub use beam_renderer::draw_beam_group;
 pub use dot_renderer::draw_dots;

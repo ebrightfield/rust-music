@@ -1,3 +1,4 @@
+use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::dynamics::Dynamic;
@@ -39,6 +40,9 @@ pub struct NoteAnnotations {
     pub tempo_mark: Option<TempoMark>,
     /// Optional expression text displayed below the staff in italic (e.g. "dolce").
     pub expression: Option<String>,
+    /// Optional articulation marking (staccato, tenuto, accent, marcato, etc.)
+    /// placed near the notehead on the opposite side from the stem.
+    pub articulation: Option<Articulation>,
 }
 
 /// A group of notes to be beamed together.

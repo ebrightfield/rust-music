@@ -2218,3 +2218,131 @@
         let via_convenience = builder().render_png(1.0);
         assert_eq!(via_try, via_convenience);
     }
+
+    // ---- Articulation tests ----
+
+    #[test]
+    fn articulation_staccato_adds_extra_path() {
+        use crate::layout::articulation::Articulation;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .end_barline()
+            .render_svg();
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert_eq!(
+            count_with,
+            count_without + 1,
+            "staccato should add exactly one extra path element"
+        );
+    }
+
+    #[test]
+    fn articulation_on_rest_is_noop() {
+        use crate::layout::articulation::Articulation;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .end_barline()
+            .render_svg();
+        assert_eq!(without, with, "articulation on rest should be no-op");
+    }
+
+    #[test]
+    fn different_articulations_produce_different_svgs() {
+        use crate::layout::articulation::Articulation;
+        let staccato = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .end_barline()
+            .render_svg();
+        let accent = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Accent)
+            .end_barline()
+            .render_svg();
+        assert_ne!(staccato, accent, "staccato and accent should produce different SVG");
+    }
+
+    #[test]
+    fn articulation_on_chord_adds_path() {
+        use crate::layout::articulation::Articulation;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .articulation(Articulation::Marcato)
+            .end_barline()
+            .render_svg();
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert_eq!(
+            count_with,
+            count_without + 1,
+            "marcato on chord should add one extra path"
+        );
+    }
+
+    #[test]
+    fn fermata_adds_path_to_score() {
+        use crate::layout::articulation::Articulation;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("G", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("G", 4), Duration::WHOLE)
+            .articulation(Articulation::Fermata)
+            .end_barline()
+            .render_svg();
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert_eq!(
+            count_with,
+            count_without + 1,
+            "fermata should add one extra path"
+        );
+    }
+
+    #[test]
+    fn articulation_convert_event_preserves_field() {
+        use crate::layout::articulation::Articulation;
+        let key_sig = KeySignature::Open;
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                articulation: Some(Articulation::Tenuto),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.articulation, Some(Articulation::Tenuto));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }

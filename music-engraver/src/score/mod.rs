@@ -39,6 +39,7 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
+use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
@@ -269,6 +270,21 @@ impl ScoreBuilder {
         let e = Some(text.into());
         if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
             annotations.expression = e;
+        }
+        self
+    }
+
+    /// Attach an articulation (staccato, tenuto, accent, marcato, staccatissimo,
+    /// fermata) to the most recently added note or chord.
+    ///
+    /// Placement (above/below) is determined automatically from stem direction.
+    /// Fermata is always placed above. No-op if the last event was a rest.
+    pub fn articulation(mut self, artic: Articulation) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.articulation = Some(artic);
         }
         self
     }

@@ -7,6 +7,7 @@
 //! into complete scored layouts.
 
 pub mod accidental;
+pub mod articulation;
 pub mod barline;
 pub mod beam;
 pub mod chord;
@@ -57,6 +58,9 @@ pub use system::{
 pub use tie::{
     layout_half_tie_left, layout_half_tie_right, layout_tie, tie_direction_from_stem, TieDirection,
     TieLayout,
+};
+pub use articulation::{
+    layout_articulation, Articulation, ArticulationLayout, ArticulationPlacement,
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use expression::{layout_expression, ExpressionLayout};

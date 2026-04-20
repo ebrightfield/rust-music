@@ -22,7 +22,9 @@ use crate::render::flag_renderer::draw_flag;
 use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::layout::expression::layout_expression;
 use crate::layout::rehearsal::layout_rehearsal_mark;
+use crate::layout::articulation::layout_articulation;
 use crate::layout::tempo::layout_tempo_mark;
+use crate::render::articulation_renderer::draw_articulation;
 use crate::render::key_sig_renderer::draw_key_signature;
 use crate::render::tempo_renderer::draw_tempo_mark;
 use crate::render::note_renderer::{draw_ledger_lines, draw_notehead, NoteheadKind};
@@ -176,6 +178,15 @@ fn draw_note_event(
         draw_dots(svg, staff, font, x, advance, dot_pos, note.dots)?;
     }
 
+    // Draw articulation near the notehead if present
+    if let Some(artic) = note.annotations.articulation {
+        let stem_dir = direction.unwrap_or(StemDirection::Up);
+        let note_center_x = x + advance / 2.0;
+        let artic_layout =
+            layout_articulation(artic, note_center_x, position, stem_dir, staff);
+        draw_articulation(svg, font, &artic_layout)?;
+    }
+
     // Draw dynamic marking below the staff if present
     if let Some(dyn_mark) = note.annotations.dynamic {
         let note_center_x = x + advance / 2.0;
@@ -327,6 +338,20 @@ fn draw_chord_event(
             let dot_pos = dot_staff_position(note_layout.staff_position);
             draw_dots(svg, staff, font, dot_base_x, advance, dot_pos, chord.dots)?;
         }
+    }
+
+    // Draw articulation near the chord if present (uses outer note position)
+    if let Some(artic) = chord.annotations.articulation {
+        let chord_center_x = x + advance / 2.0;
+        // Articulation attaches to the note on the opposite side from the stem:
+        // stem-up → articulation below → use lowest note; stem-down → above → use highest
+        let attach_pos = match direction {
+            StemDirection::Up => chord.staff_positions.iter().copied().min().unwrap_or(4),
+            StemDirection::Down => chord.staff_positions.iter().copied().max().unwrap_or(4),
+        };
+        let artic_layout =
+            layout_articulation(artic, chord_center_x, attach_pos, direction, staff);
+        draw_articulation(svg, font, &artic_layout)?;
     }
 
     // Draw dynamic marking below the staff if present
