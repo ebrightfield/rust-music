@@ -44,6 +44,7 @@ fn main() {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
+        rehearsal_mark: None,
         }),
         // Eighth note on staff position 5 (A4 in treble clef) with a natural
         MeasureElement::Note(NoteEvent {
@@ -58,6 +59,7 @@ fn main() {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
+        rehearsal_mark: None,
         }),
         // Quarter rest
         MeasureElement::Rest(RestEvent {

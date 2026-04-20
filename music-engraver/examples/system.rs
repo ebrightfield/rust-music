@@ -40,6 +40,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -53,6 +54,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -66,6 +68,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 6, // D5
@@ -79,6 +82,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
             ],
             barline: BarlineStyle::Single,
@@ -98,6 +102,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Rest(RestEvent {
                     duration_log2: 2,
@@ -121,6 +126,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -134,6 +140,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 2, // G4
@@ -147,6 +154,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -160,6 +168,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 4, // B4
@@ -173,6 +182,7 @@ fn main() {
                 slur_end: false,
                 hairpin_start: None,
                 hairpin_end: false,
+                rehearsal_mark: None,
                 }),
             ],
             barline: BarlineStyle::Final,

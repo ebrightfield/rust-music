@@ -129,6 +129,7 @@ fn quarter(pos: i8) -> MeasureEvent {
     slur_end: false,
     hairpin_start: None,
     hairpin_end: false,
+    rehearsal_mark: None,
     })
 }
 
@@ -145,6 +146,7 @@ fn half(pos: i8) -> MeasureEvent {
     slur_end: false,
     hairpin_start: None,
     hairpin_end: false,
+    rehearsal_mark: None,
     })
 }
 
@@ -161,6 +163,7 @@ fn whole(pos: i8) -> MeasureEvent {
     slur_end: false,
     hairpin_start: None,
     hairpin_end: false,
+    rehearsal_mark: None,
     })
 }
 
@@ -177,6 +180,7 @@ fn dotted_half(pos: i8) -> MeasureEvent {
     slur_end: false,
     hairpin_start: None,
     hairpin_end: false,
+    rehearsal_mark: None,
     })
 }
 
