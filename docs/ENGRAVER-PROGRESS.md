@@ -429,3 +429,9 @@
 - Verified: `cargo test -p music-engraver` — all 816 tests pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. Full test suite passes.
 - Next: Continue QA W1 in other files (beam.rs, tuplet.rs, page.rs) or tackle W12/W13.
 - Open issues: W1 still present in layout/beam.rs, layout/tuplet.rs, layout/page.rs.
+
+## 2026-04-20 — QA: fixed W1 unwrap-on-min/max in beam_group_stem_direction + layout_beam_group (layout/beam.rs)
+- Did: Refactored `beam_group_stem_direction()` to use `split_first()` + `fold` instead of `is_empty()` guard + `min().unwrap()` / `max().unwrap()`, proving non-empty invariant at the type level. Replaced `natural_tips.last().unwrap()` and `notes.last().unwrap()` in `layout_beam_group()` with indexed access (`[len-1]`) — these are after an `assert!(!notes.is_empty())` contract, so the assert proves correctness but unwrap was unnecessary indirection. Total: eliminated 4 production `.unwrap()` calls.
+- Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
+- Next: Continue QA W1 in other files (tuplet.rs, page.rs) or tackle W12/W13.
+- Open issues: W1 still present in layout/tuplet.rs, layout/page.rs.

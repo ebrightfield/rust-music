@@ -47,13 +47,15 @@ const EXTRA_STEM_PER_BEAM_LEVEL_SS: f64 = 0.5;
 /// group that is farthest from the middle line determines direction. When
 /// equidistant, stems go down.
 pub fn beam_group_stem_direction(notes: &[BeamedNote]) -> StemDirection {
-    if notes.is_empty() {
-        return StemDirection::Up;
-    }
+    let (first, rest) = match notes.split_first() {
+        Some(pair) => pair,
+        None => return StemDirection::Up,
+    };
 
-    let positions: Vec<StaffPosition> = notes.iter().map(|n| n.staff_position).collect();
-    let min = *positions.iter().min().unwrap();
-    let max = *positions.iter().max().unwrap();
+    let (min, max) = rest.iter().fold(
+        (first.staff_position, first.staff_position),
+        |(lo, hi), n| (lo.min(n.staff_position), hi.max(n.staff_position)),
+    );
 
     let dist_above = max - 4;
     let dist_below = 4 - min;
@@ -175,12 +177,15 @@ pub fn layout_beam_group(
         })
         .collect();
 
-    // Determine beam line from first and last notes' natural tips
+    // Determine beam line from first and last notes' natural tips.
+    // Safety: natural_tips is non-empty because notes is non-empty (asserted above).
     let first_tip = natural_tips[0];
-    let last_tip = *natural_tips.last().unwrap();
+    let last_tip = natural_tips[natural_tips.len() - 1];
 
     // Constrain slope
-    let x_span = notes.last().unwrap().x - notes[0].x;
+    let first_note = &notes[0];
+    let last_note = &notes[notes.len() - 1];
+    let x_span = last_note.x - first_note.x;
     let (beam_y_first, beam_y_last) = if x_span.abs() < f64::EPSILON {
         // All notes at same x (degenerate): flat beam
         let avg = natural_tips.iter().sum::<f64>() / natural_tips.len() as f64;
