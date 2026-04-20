@@ -526,6 +526,12 @@
 - Next: QA backlog complete (I2 deferred). Consider additional post-v1 features or polish.
 - Open issues: I2 (optional, deferred).
 
+## 2026-04-20 — Post-v1, ScoreBuilder PNG convenience methods + clippy fix in png.rs
+- Did: Added `try_render_png(scale)` and `render_png(scale)` convenience methods to `ScoreBuilder`, gated behind `#[cfg(feature = "png")]`. These combine SVG rendering + `PngRenderer` in one call with system fonts loaded. Also fixed a pre-existing clippy `field_reassign_with_default` warning in `render/png.rs` by using struct-update syntax for `usvg::Options`. Added 3 new tests: valid PNG output, 2x larger than 1x, convenience matches try variant.
+- Verified: `cargo clippy -p music-engraver --all-targets --features png` — 0 warnings from music-engraver. `cargo test -p music-engraver --features png` — 837 tests pass (830 unit + 3 integration + 4 doc-tests). Without png feature: 826 tests pass. `cargo check --workspace` passes.
+- Next: Consider additional post-v1 features or polish. Options: PNG rendering example, additional builder ergonomics, or further architectural cleanup.
+- Open issues: I2 (optional, deferred — cross-system span DRY).
+
 ## 2026-04-20 — QA: I4 collapsed ScoreEvent annotation fields into NoteAnnotations
 - Did: Replaced 9 duplicated annotation fields in `ScoreEvent::Note` and `ScoreEvent::Chord` variants with a single `annotations: NoteAnnotations` field, reusing the same struct already applied to `NoteEvent`/`ChordEvent` in the W16 fix. Updated `score/mod.rs` builder methods (9 modifier methods now use `if let` with or-patterns instead of duplicated `match` arms), `score/event.rs` `convert_event` (destructuring simplified to `annotations.clone()`), and ~25 test construction sites in `score/tests.rs` (now use `NoteAnnotations::default()` or struct-update syntax). Removed 4 unused imports from `event.rs`. Net reduction: ~18 lines of enum definition, ~9 match arms collapsed.
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 824 tests pass (819 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.

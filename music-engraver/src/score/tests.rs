@@ -2157,3 +2157,64 @@
         assert!(svg.contains(">sostenuto<"), "chord expression should appear");
         assert!(svg.contains("italic"), "chord expression should be italic");
     }
+
+    // -- PNG convenience methods (feature-gated) --
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn try_render_png_produces_valid_png() {
+        let png = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR)
+            .rest(Duration::QTR)
+            .end_barline()
+            .try_render_png(1.0)
+            .unwrap();
+
+        assert_eq!(&png[0..4], &[0x89, b'P', b'N', b'G'], "PNG magic bytes");
+        assert!(png.len() > 500, "score PNG should be non-trivial: {} bytes", png.len());
+    }
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn render_png_at_2x_is_larger_than_1x() {
+        let builder = || {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .note(p("D", 4), Duration::HALF)
+                .rest(Duration::HALF)
+                .end_barline()
+        };
+
+        let png_1x = builder().render_png(1.0);
+        let png_2x = builder().render_png(2.0);
+
+        assert_eq!(&png_1x[0..4], &[0x89, b'P', b'N', b'G']);
+        assert_eq!(&png_2x[0..4], &[0x89, b'P', b'N', b'G']);
+        assert!(
+            png_2x.len() > png_1x.len(),
+            "2x PNG ({}) should be larger than 1x ({})",
+            png_2x.len(),
+            png_1x.len()
+        );
+    }
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn render_png_matches_try_render_png() {
+        let builder = || {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .note(p("G", 4), Duration::WHOLE)
+                .end_barline()
+        };
+
+        let via_try = builder().try_render_png(1.0).unwrap();
+        let via_convenience = builder().render_png(1.0);
+        assert_eq!(via_try, via_convenience);
+    }

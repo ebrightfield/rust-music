@@ -458,6 +458,35 @@ impl ScoreBuilder {
             .expect("bundled Bravura font contains all required SMuFL glyphs")
     }
 
+    /// Render the score to PNG bytes at the given scale factor.
+    ///
+    /// Combines [`try_render_svg`](Self::try_render_svg) with
+    /// [`PngRenderer`](crate::render::png::PngRenderer) in one call.
+    /// System fonts are loaded so that text elements (rehearsal marks,
+    /// tempo markings, expression text) render with proper serif/sans-serif
+    /// fonts.
+    ///
+    /// Scale `1.0` produces the SVG's intrinsic pixel dimensions;
+    /// `2.0` is suitable for retina/HiDPI output.
+    #[cfg(feature = "png")]
+    pub fn try_render_png(self, scale: f32) -> Result<Vec<u8>, crate::error::EngraverError> {
+        let svg = self.try_render_svg()?;
+        let mut renderer = crate::render::png::PngRenderer::new(scale);
+        renderer.load_system_fonts();
+        Ok(renderer.render_png(&svg)?)
+    }
+
+    /// Render the score to PNG bytes at the given scale factor.
+    ///
+    /// Convenience wrapper around [`try_render_png`](Self::try_render_png)
+    /// that panics on error. See [`render_svg`](Self::render_svg) for panic
+    /// safety discussion.
+    #[cfg(feature = "png")]
+    #[must_use = "the PNG bytes are returned but not used"]
+    pub fn render_png(self, scale: f32) -> Vec<u8> {
+        self.try_render_png(scale)
+            .expect("bundled Bravura font and PNG pipeline should not fail for valid input")
+    }
 }
 
 impl Default for ScoreBuilder {

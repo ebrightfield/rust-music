@@ -78,8 +78,10 @@ impl PngRenderer {
     /// Returns the raw PNG file contents suitable for writing to disk
     /// or embedding in other formats.
     pub fn render_png(&self, svg: &str) -> Result<Vec<u8>, PngError> {
-        let mut options = usvg::Options::default();
-        options.fontdb = Arc::new(self.fontdb.clone());
+        let options = usvg::Options {
+            fontdb: Arc::new(self.fontdb.clone()),
+            ..usvg::Options::default()
+        };
 
         let tree = usvg::Tree::from_str(svg, &options)
             .map_err(|e| PngError::SvgParse(e.to_string()))?;
