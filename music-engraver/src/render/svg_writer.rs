@@ -1,5 +1,36 @@
 use std::fmt::Write;
 
+/// Fill, stroke, and stroke-width for an SVG `<rect>` element.
+///
+/// Groups the visual attributes that define a stroked rectangle,
+/// keeping `SvgWriter::add_rect` to four parameters (position + size + style).
+#[derive(Clone, Debug)]
+pub struct RectStyle<'a> {
+    pub fill: &'a str,
+    pub stroke: &'a str,
+    pub stroke_width: f64,
+}
+
+impl<'a> RectStyle<'a> {
+    /// Transparent fill with a black outline at the given stroke width.
+    pub fn outlined(stroke_width: f64) -> Self {
+        Self {
+            fill: "none",
+            stroke: "black",
+            stroke_width,
+        }
+    }
+
+    /// White fill with a black outline at the given stroke width.
+    pub fn boxed(stroke_width: f64) -> Self {
+        Self {
+            fill: "white",
+            stroke: "black",
+            stroke_width,
+        }
+    }
+}
+
 /// Font and styling properties for an SVG `<text>` element.
 ///
 /// Groups the typographic attributes that tend to travel together,
@@ -157,21 +188,14 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
-    /// Add a stroked rectangle (for boxed rehearsal marks, etc.).
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_stroked_rect(
-        &mut self,
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
-        fill: &str,
-        stroke: &str,
-        stroke_width: f64,
-    ) {
+    /// Add a styled rectangle with fill, stroke, and stroke-width.
+    pub fn add_styled_rect(&mut self, x: f64, y: f64, width: f64, height: f64, style: &RectStyle<'_>) {
         let _ = write!(
             self.elements,
-            r#"  <rect x="{x}" y="{y}" width="{width}" height="{height}" fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}"/>"#,
+            r#"  <rect x="{x}" y="{y}" width="{width}" height="{height}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"/>"#,
+            fill = style.fill,
+            stroke = style.stroke,
+            sw = style.stroke_width,
         );
         self.elements.push('\n');
     }
@@ -299,13 +323,41 @@ mod tests {
     #[test]
     fn svg_writer_stroked_rect_element() {
         let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
-        w.add_stroked_rect(10.0, 20.0, 300.0, 200.0, "none", "black", 5.0);
+        w.add_styled_rect(10.0, 20.0, 300.0, 200.0, &RectStyle::outlined(5.0));
         let svg = w.to_svg();
         assert!(svg.contains(r#"<rect "#));
         assert!(svg.contains(r#"fill="none""#));
         assert!(svg.contains(r#"stroke="black""#));
         assert!(svg.contains(r#"stroke-width="5""#));
         assert!(svg.contains(r#"width="300""#));
+    }
+
+    #[test]
+    fn svg_writer_styled_rect_boxed() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        w.add_styled_rect(5.0, 10.0, 200.0, 50.0, &RectStyle::boxed(2.0));
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"fill="white""#));
+        assert!(svg.contains(r#"stroke="black""#));
+        assert!(svg.contains(r#"stroke-width="2""#));
+        assert!(svg.contains(r#"x="5""#));
+        assert!(svg.contains(r#"height="50""#));
+    }
+
+    #[test]
+    fn rect_style_outlined_defaults() {
+        let s = RectStyle::outlined(3.0);
+        assert_eq!(s.fill, "none");
+        assert_eq!(s.stroke, "black");
+        assert!((s.stroke_width - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn rect_style_boxed_defaults() {
+        let s = RectStyle::boxed(1.5);
+        assert_eq!(s.fill, "white");
+        assert_eq!(s.stroke, "black");
+        assert!((s.stroke_width - 1.5).abs() < f64::EPSILON);
     }
 
     #[test]

@@ -45,7 +45,7 @@ pub use rehearsal_renderer::draw_rehearsal_mark;
 pub use rest_renderer::draw_rest;
 pub use staff_renderer::{draw_clef, draw_staff_lines};
 pub use stem_renderer::draw_stem;
-pub use svg_writer::{SvgWriter, TextStyle};
+pub use svg_writer::{RectStyle, SvgWriter, TextStyle};
 pub use system_renderer::draw_system;
 pub use slur_renderer::draw_slur;
 pub use tempo_renderer::draw_tempo_mark;

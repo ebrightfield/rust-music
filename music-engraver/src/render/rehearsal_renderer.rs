@@ -1,6 +1,6 @@
 /// Renders rehearsal marks (boxed or plain text above the staff).
 use crate::layout::rehearsal::RehearsalMarkLayout;
-use crate::render::svg_writer::{SvgWriter, TextStyle};
+use crate::render::svg_writer::{RectStyle, SvgWriter, TextStyle};
 
 /// Draw a rehearsal mark using the given layout.
 ///
@@ -9,15 +9,7 @@ use crate::render::svg_writer::{SvgWriter, TextStyle};
 pub fn draw_rehearsal_mark(svg: &mut SvgWriter, layout: &RehearsalMarkLayout) {
     // Draw box first (behind text)
     if let Some((bx, by, bw, bh)) = layout.box_rect {
-        svg.add_stroked_rect(
-            bx,
-            by,
-            bw,
-            bh,
-            "white",
-            "black",
-            layout.box_stroke_width,
-        );
+        svg.add_styled_rect(bx, by, bw, bh, &RectStyle::boxed(layout.box_stroke_width));
     }
 
     let style = TextStyle {

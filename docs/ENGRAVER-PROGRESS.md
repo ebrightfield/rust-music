@@ -513,3 +513,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: I7 partially addressed (text methods cleaned up; `add_stroked_rect` still has 7 params but is only called from 1 site). Remaining QA info-tier: I2 (cross-system DRY — optional, explicitly debatable per QA report). Consider resuming phased plan work or addressing remaining minor items.
 - Open issues: Remaining QA info-tier items: I2 (optional). I7 partially done — `add_stroked_rect` still has 7 params but low-impact (1 call site).
+
+## 2026-04-20 — QA: I7 completed — introduced RectStyle struct for add_stroked_rect
+- Did: Created `RectStyle` struct in `render/svg_writer.rs` grouping 3 styling attributes (`fill`, `stroke`, `stroke_width`). Added convenience constructors `outlined()` (transparent fill, black stroke) and `boxed()` (white fill, black stroke). Replaced 7-param `add_stroked_rect` with 5-param `add_styled_rect(x, y, width, height, &RectStyle)`. Removed `#[allow(clippy::too_many_arguments)]` annotation. Updated call site in `rehearsal_renderer.rs`. Exported `RectStyle` from `render/mod.rs`. Added 3 new tests (boxed SVG output, outlined defaults, boxed defaults).
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo test -p music-engraver` — 819 tests pass (814 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: QA backlog essentially complete — only I2 (cross-system DRY) remains, explicitly optional per QA report. Resume phased plan work or additional post-v1 features.
+- Open issues: I2 (optional, deferred — the three span kinds differ enough that a generic trait may not help).
