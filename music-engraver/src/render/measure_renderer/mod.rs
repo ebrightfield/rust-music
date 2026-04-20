@@ -241,6 +241,14 @@ fn draw_note_event(
         crate::render::chord_symbol_renderer::draw_chord_symbol(svg, &layout);
     }
 
+    // Draw ornament above the staff if present
+    if let Some(orn) = note.annotations.ornament {
+        let note_center_x = x + advance / 2.0;
+        let orn_layout =
+            crate::layout::ornament::layout_ornament(orn, note_center_x, position, staff);
+        crate::render::ornament_renderer::draw_ornament(svg, font, &orn_layout)?;
+    }
+
     Ok(())
 }
 
@@ -427,6 +435,16 @@ fn draw_chord_event(
         let layout =
             crate::layout::chord_symbol::layout_chord_symbol(symbol, chord_center_x, staff, config.staff_space);
         crate::render::chord_symbol_renderer::draw_chord_symbol(svg, &layout);
+    }
+
+    // Draw ornament above the staff if present
+    if let Some(orn) = chord.annotations.ornament {
+        let chord_center_x = x + advance / 2.0;
+        // Use topmost note for ornament positioning (ornaments always above)
+        let top_pos = chord.staff_positions.iter().copied().max().unwrap_or(4);
+        let orn_layout =
+            crate::layout::ornament::layout_ornament(orn, chord_center_x, top_pos, staff);
+        crate::render::ornament_renderer::draw_ornament(svg, font, &orn_layout)?;
     }
 
     Ok(())

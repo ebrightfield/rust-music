@@ -1650,3 +1650,117 @@ fn chord_symbol_changes_output() {
     let with = make(Some("Am7".to_string()));
     assert_ne!(without, with, "chord symbol should change the SVG output");
 }
+
+// --- Ornament tests ---
+
+#[test]
+fn note_with_ornament_trill_adds_path() {
+    use crate::layout::ornament::Ornament;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let make = |orn: Option<Ornament>| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                ornament: orn,
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let without = make(None);
+    let with = make(Some(Ornament::Trill));
+    let paths_without = without.matches("<path").count();
+    let paths_with = with.matches("<path").count();
+    assert!(
+        paths_with > paths_without,
+        "trill ornament should add a path element: {} vs {}",
+        paths_with,
+        paths_without
+    );
+}
+
+#[test]
+fn note_with_ornament_turn_adds_path() {
+    use crate::layout::ornament::Ornament;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 6,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Turn),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let out = svg.to_svg();
+    assert!(out.contains("<path"), "ornament turn should produce a path");
+    assert!(out.contains("translate("), "ornament should have a translate transform");
+}
+
+#[test]
+fn chord_with_ornament_adds_path() {
+    use crate::layout::ornament::Ornament;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let make = |orn: Option<Ornament>| {
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 8],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None, None],
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                ornament: orn,
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let without = make(None);
+    let with = make(Some(Ornament::Mordent));
+    assert_ne!(without, with, "ornament on chord should change SVG output");
+}
+
+#[test]
+fn different_ornaments_on_note_produce_different_output() {
+    use crate::layout::ornament::Ornament;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let make = |orn: Ornament| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                ornament: Some(orn),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let trill_svg = make(Ornament::Trill);
+    let mordent_svg = make(Ornament::Mordent);
+    assert_ne!(trill_svg, mordent_svg, "different ornaments should differ");
+}

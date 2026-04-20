@@ -24,6 +24,7 @@ pub mod key_signature;
 pub mod measure;
 pub mod multi_staff;
 pub mod note_placement;
+pub mod ornament;
 pub mod page;
 pub mod rehearsal;
 pub mod rest;
@@ -83,6 +84,7 @@ pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
 pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOVE_STAFF_SS};
+pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,

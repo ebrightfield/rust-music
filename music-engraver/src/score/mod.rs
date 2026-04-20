@@ -47,6 +47,7 @@ use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
+use crate::layout::ornament::Ornament;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
@@ -325,6 +326,22 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.articulation = Some(artic);
+        }
+        self
+    }
+
+    /// Attach an ornament (trill, mordent, turn, etc.) to the most recently
+    /// added note or chord.
+    ///
+    /// Ornaments are placed above the staff, centered on the note. Unlike
+    /// articulations, ornaments do not flip based on stem direction.
+    /// No-op if the last event was a rest.
+    pub fn ornament(mut self, orn: Ornament) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(orn);
         }
         self
     }

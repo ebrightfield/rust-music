@@ -2888,3 +2888,178 @@
             "should have at least 5 path elements, got {path_count}"
         );
     }
+
+    // ---- Ornament tests ----
+
+    #[test]
+    fn ornament_trill_adds_extra_path() {
+        use crate::layout::ornament::Ornament;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .ornament(Ornament::Trill)
+            .end_barline()
+            .render_svg();
+
+        let paths_without = without.matches("<path").count();
+        let paths_with = with.matches("<path").count();
+        assert!(
+            paths_with > paths_without,
+            "trill should add a path: {} vs {}",
+            paths_with,
+            paths_without
+        );
+    }
+
+    #[test]
+    fn ornament_on_rest_is_noop() {
+        use crate::layout::ornament::Ornament;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .ornament(Ornament::Trill)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(without, with, "ornament on rest should be a no-op");
+    }
+
+    #[test]
+    fn ornament_on_chord_adds_path() {
+        use crate::layout::ornament::Ornament;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .ornament(Ornament::Turn)
+            .end_barline()
+            .render_svg();
+
+        let paths_without = without.matches("<path").count();
+        let paths_with = with.matches("<path").count();
+        assert!(
+            paths_with > paths_without,
+            "ornament on chord should add a path: {} vs {}",
+            paths_with,
+            paths_without
+        );
+    }
+
+    #[test]
+    fn different_ornaments_produce_different_svg() {
+        use crate::layout::ornament::Ornament;
+
+        let trill = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("G", 4), Duration::QTR)
+            .ornament(Ornament::Trill)
+            .end_barline()
+            .render_svg();
+
+        let mordent = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("G", 4), Duration::QTR)
+            .ornament(Ornament::Mordent)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(trill, mordent, "trill and mordent should produce different SVG");
+    }
+
+    #[test]
+    fn ornament_convert_event_preserves_field() {
+        use crate::layout::ornament::Ornament;
+
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Turn),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let key_sig = KeySignature::Open;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.ornament, Some(Ornament::Turn));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn ornament_tracked_convert_preserves_field() {
+        use crate::layout::ornament::Ornament;
+
+        let event = ScoreEvent::Note {
+            pitch: p("F", 4),
+            duration: Duration::HALF,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Mordent),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let key_sig = KeySignature::Open;
+        let mut seen = AccidentalTracker::new();
+        let result = convert_event(&event, &clef, &key_sig, Some(&mut seen));
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.ornament, Some(Ornament::Mordent));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn ornament_chord_convert_preserves_field() {
+        use crate::layout::ornament::Ornament;
+
+        let event = ScoreEvent::Chord {
+            pitches: vec![p("C", 4), p("E", 4)],
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::InvertedTurn),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let key_sig = KeySignature::Open;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Chord(ce) => {
+                assert_eq!(ce.annotations.ornament, Some(Ornament::InvertedTurn));
+            }
+            _ => panic!("expected Chord event"),
+        }
+    }
