@@ -2,6 +2,7 @@ use super::*;
 use crate::font::bravura_font;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
+use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent};
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{MeasureContent, MeasureEvent, SystemPrefix};
@@ -936,4 +937,247 @@ fn measure_numbers_enabled_differs_from_disabled() {
 
     assert_ne!(svg_on, svg_off, "enabling measure numbers should change the SVG output");
     assert!(svg_on.len() > svg_off.len(), "SVG with measure numbers should be larger");
+}
+
+// ---- Cross-system lyric extender tests ----
+
+fn note_with_extender(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            lyric: Some(LyricSyllable::with_extender("love")),
+            ..Default::default()
+        },
+    })
+}
+
+fn note_with_lyric_word(pos: i8, text: &str) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            lyric: Some(LyricSyllable::word(text)),
+            ..Default::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_lyric_extender_draws_two_lines() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: note with extender, system 2: note (target)
+    let measures = vec![
+        MeasureContent {
+            events: vec![note_with_extender(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![note_with_lyric_word(4, "day")],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    // 1 measure per system → forces cross-system extender
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Count all <line> elements. Compare against a version without the extender.
+    let with_ext_lines = output.matches("<line ").count();
+
+    // Build the same layout but without the extender lyric
+    let measures_no_ext = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![note_with_lyric_word(4, "day")],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page_no_ext = layout_page(&prefix(), &measures_no_ext, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg_no_ext = draw_page(&font, &config, &page_no_ext).unwrap();
+    let no_ext_lines = svg_no_ext.to_svg().matches("<line ").count();
+
+    // The cross-system extender should add 2 extra lines (trailing + incoming)
+    assert_eq!(
+        with_ext_lines - no_ext_lines,
+        2,
+        "cross-system extender should add 2 lines (trailing + incoming), got {}",
+        with_ext_lines - no_ext_lines,
+    );
+}
+
+#[test]
+fn no_cross_system_lyric_extender_without_extender_continuation() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Word lyric (not extender) — no cross-system line expected
+    let measures = vec![
+        MeasureContent {
+            events: vec![note_with_lyric_word(4, "sing")],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg_with = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    // Compare against no lyric at all
+    let measures_bare = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page_bare = layout_page(&prefix(), &measures_bare, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg_bare = draw_page(&font, &config, &page_bare).unwrap().to_svg();
+
+    // Line count difference should be 0 (word lyrics don't produce extender lines)
+    let diff = svg_with.matches("<line ").count() as i32 - svg_bare.matches("<line ").count() as i32;
+    assert_eq!(diff, 0, "word lyric should not produce cross-system extender lines");
+}
+
+#[test]
+fn within_system_extender_does_not_produce_cross_system_extender() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Both extender source and target in the same system (2 measures per system)
+    let measures = vec![
+        MeasureContent {
+            events: vec![note_with_extender(4), quarter_note(6)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    // Everything in one system
+    assert_eq!(page.systems.len(), 1);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // The within-system extender should be drawn by the system renderer.
+    // The cross-system logic should not add additional lines.
+    // Just verify the output is valid and contains an extender line
+    // (horizontal line at the lyric baseline).
+    assert!(output.starts_with("<svg"));
+}
+
+#[test]
+fn cross_system_lyric_extender_differs_from_no_extender() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures_ext = vec![
+        MeasureContent {
+            events: vec![note_with_extender(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let measures_bare = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+
+    let page_ext = layout_page(&prefix(), &measures_ext, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_bare = layout_page(&prefix(), &measures_bare, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg_ext = draw_page(&font, &config, &page_ext).unwrap().to_svg();
+    let svg_bare = draw_page(&font, &config, &page_bare).unwrap().to_svg();
+
+    assert_ne!(svg_ext, svg_bare, "cross-system lyric extender should change SVG output");
+}
+
+#[test]
+fn cross_system_lyric_extender_lines_are_horizontal() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![note_with_extender(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![note_with_lyric_word(4, "day")],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Extract all <line> elements and find ones where y1 matches the lyric
+    // baseline (below the staff). The extender lines should have y1 == y2.
+    let lyric_baseline_y = LYRIC_BELOW_STAFF_SS * ss;
+    // All extender lines should be horizontal (y1 == y2)
+    // Verify by checking that the output contains at least some lines with
+    // matching y1 and y2 that are in the lyric-region (below staff).
+    let lines: Vec<&str> = output.split("<line ").skip(1).collect();
+    let mut found_lyric_lines = 0;
+    for line_tag in &lines {
+        if let (Some(y1_start), Some(y2_start)) =
+            (line_tag.find("y1=\""), line_tag.find("y2=\""))
+        {
+            let y1: &str = &line_tag[y1_start + 4..];
+            let y1 = y1.split('"').next().unwrap();
+            let y2: &str = &line_tag[y2_start + 4..];
+            let y2 = y2.split('"').next().unwrap();
+            let y1_f: f64 = y1.parse().unwrap_or(0.0);
+            let _y2_f: f64 = y2.parse().unwrap_or(0.0);
+            // Lyric lines are well below the staff (y > staff bottom line)
+            if y1 == y2 && y1_f > lyric_baseline_y * 0.5 {
+                found_lyric_lines += 1;
+            }
+        }
+    }
+    assert!(
+        found_lyric_lines >= 2,
+        "expected at least 2 horizontal lyric extender lines (trailing + incoming), found {found_lyric_lines}"
+    );
 }

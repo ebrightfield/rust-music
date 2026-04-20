@@ -363,15 +363,15 @@ fn draw_system_hairpins(
 }
 
 /// Positional info for a note/chord relevant to lyric extender drawing.
-struct LyricNoteInfo {
+pub(crate) struct LyricNoteInfo {
     /// X-offset of the note within the system (before system_x is added).
-    x: f64,
+    pub(crate) x: f64,
     /// The lyric syllable, if any.
-    lyric: Option<LyricSyllable>,
+    pub(crate) lyric: Option<LyricSyllable>,
 }
 
 /// Collect lyric-relevant note info from the system in sequential order.
-fn collect_lyric_note_info(system: &SystemLayout) -> Vec<LyricNoteInfo> {
+pub(crate) fn collect_lyric_note_info(system: &SystemLayout) -> Vec<LyricNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for elem in &measure.layout.elements {

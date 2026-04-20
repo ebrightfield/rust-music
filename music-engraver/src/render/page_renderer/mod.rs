@@ -1,5 +1,6 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::hairpin::layout_hairpin;
+use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS};
 use crate::layout::page::{PageLayout, PageSystem};
 use crate::layout::slur::{layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
@@ -9,8 +10,9 @@ use crate::layout::tie::{
 };
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::hairpin_renderer::draw_hairpin;
+use crate::render::lyric_renderer::draw_lyric_extender;
 use crate::render::slur_renderer::draw_slur;
-use crate::render::system_renderer::{collect_hairpin_note_info, collect_note_positions, collect_slur_note_info, draw_system};
+use crate::render::system_renderer::{collect_hairpin_note_info, collect_lyric_note_info, collect_note_positions, collect_slur_note_info, draw_system};
 use crate::render::tie_renderer::draw_tie;
 use crate::render::{SvgWriter, TextStyle};
 
@@ -94,6 +96,9 @@ pub fn draw_page(
 
     // Draw cross-system hairpins between adjacent systems
     draw_cross_system_hairpins(&mut svg, font, config, page)?;
+
+    // Draw cross-system lyric extender lines between adjacent systems
+    draw_cross_system_lyric_extenders(&mut svg, config, page);
 
     Ok(svg)
 }
@@ -646,6 +651,112 @@ fn draw_cross_system_hairpins(
     }
 
     Ok(())
+}
+
+/// Draw cross-system lyric extender lines between adjacent systems on a page.
+///
+/// When a lyric syllable with `Extender` continuation appears on the last note
+/// of a system and the held syllable continues into the next system, two
+/// half-extender lines are drawn: one trailing from the source syllable to the
+/// right edge of the system, and one leading from the left of the next system
+/// to the first note's position (the rhythmic event where the sustained
+/// syllable ends).
+fn draw_cross_system_lyric_extenders(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    page: &PageLayout,
+) {
+    let stroke_width = config.staff_line_thickness_fu();
+
+    for i in 0..page.systems.len().saturating_sub(1) {
+        let src_system = &page.systems[i];
+        let note_info = collect_lyric_note_info(&src_system.system);
+
+        // Find the last note with an extender that has no target within the
+        // same system (i.e., it's the last note or the remaining notes have
+        // no next target to resolve it).
+        let Some(last_extender) = find_last_unresolved_extender(&note_info) else {
+            continue;
+        };
+
+        let src_staff = StaffLayout::new(
+            src_system.x,
+            src_system.y,
+            src_system.system.staff_width,
+            config.staff_space,
+        );
+        let src_y_baseline =
+            src_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+
+        // Draw trailing half-extender from the source syllable to the right
+        // edge of the system.
+        let x_from = src_system.x + last_extender.x;
+        let x_to = src_system.x + src_system.system.staff_width;
+        draw_lyric_extender(svg, x_from, x_to, src_y_baseline, config.staff_space, stroke_width);
+
+        // Draw incoming half-extender at the start of the target system.
+        let tgt_system = &page.systems[i + 1];
+        let tgt_note_info = collect_lyric_note_info(&tgt_system.system);
+
+        if let Some(first_note) = tgt_note_info.first() {
+            let tgt_staff = StaffLayout::new(
+                tgt_system.x,
+                tgt_system.y,
+                tgt_system.system.staff_width,
+                config.staff_space,
+            );
+            let tgt_y_baseline =
+                tgt_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+
+            // Start from the left edge of the first measure's content area
+            let first_measure_x = tgt_system
+                .system
+                .measures
+                .first()
+                .map(|m| tgt_system.x + m.x_offset)
+                .unwrap_or(tgt_system.x);
+
+            let x_to_tgt = tgt_system.x + first_note.x;
+            draw_lyric_extender(
+                svg,
+                first_measure_x,
+                x_to_tgt,
+                tgt_y_baseline,
+                config.staff_space,
+                stroke_width,
+            );
+        }
+    }
+}
+
+/// Find the last note in a system that has an extender lyric with no target
+/// note following it within the same system.
+///
+/// An extender is "unresolved" if there is no subsequent note/chord in the
+/// note_info list to draw the extender line to — meaning the held syllable
+/// continues past the system boundary.
+fn find_last_unresolved_extender(note_info: &[crate::render::system_renderer::LyricNoteInfo]) -> Option<&crate::render::system_renderer::LyricNoteInfo> {
+    // Walk backwards: the last note with an extender that has no next note
+    // to resolve it is the one whose index == note_info.len() - 1, since the
+    // within-system renderer would have drawn the line if a target existed.
+    // More generally, the last extender with no subsequent note is unresolved.
+    for (i, info) in note_info.iter().enumerate().rev() {
+        let Some(ref lyric) = info.lyric else {
+            continue;
+        };
+        if lyric.continuation == LyricContinuation::Extender {
+            // Check if there's a next note to resolve it within the system
+            if i + 1 < note_info.len() {
+                // Resolved within the system — skip
+                return None;
+            }
+            return Some(info);
+        }
+        // If we hit a note without an extender, no unresolved extender exists
+        // (any earlier extender would have had a target note after it).
+        return None;
+    }
+    None
 }
 
 #[cfg(test)]
