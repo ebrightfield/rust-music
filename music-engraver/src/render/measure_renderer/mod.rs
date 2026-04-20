@@ -177,26 +177,26 @@ fn draw_note_event(
     }
 
     // Draw dynamic marking below the staff if present
-    if let Some(dyn_mark) = note.dynamic {
+    if let Some(dyn_mark) = note.annotations.dynamic {
         let note_center_x = x + advance / 2.0;
         draw_dynamic(svg, staff, font, dyn_mark, note_center_x)?;
     }
 
     // Draw rehearsal mark above the staff if present
-    if let Some((ref text, style)) = note.rehearsal_mark {
+    if let Some((ref text, style)) = note.annotations.rehearsal_mark {
         let note_center_x = x + advance / 2.0;
         let layout = layout_rehearsal_mark(text, note_center_x, staff, config.staff_space, style);
         draw_rehearsal_mark(svg, &layout);
     }
 
     // Draw tempo mark above the staff if present
-    if let Some(ref mark) = note.tempo_mark {
+    if let Some(ref mark) = note.annotations.tempo_mark {
         let layout = layout_tempo_mark(mark, x, staff, config.staff_space);
         draw_tempo_mark(svg, &layout, font);
     }
 
     // Draw expression text below the staff if present
-    if let Some(ref text) = note.expression {
+    if let Some(ref text) = note.annotations.expression {
         let note_center_x = x + advance / 2.0;
         let layout = layout_expression(text, note_center_x, staff, config.staff_space);
         draw_expression(svg, &layout);
@@ -330,26 +330,26 @@ fn draw_chord_event(
     }
 
     // Draw dynamic marking below the staff if present
-    if let Some(dyn_mark) = chord.dynamic {
+    if let Some(dyn_mark) = chord.annotations.dynamic {
         let chord_center_x = x + advance / 2.0;
         draw_dynamic(svg, staff, font, dyn_mark, chord_center_x)?;
     }
 
     // Draw rehearsal mark above the staff if present
-    if let Some((ref text, style)) = chord.rehearsal_mark {
+    if let Some((ref text, style)) = chord.annotations.rehearsal_mark {
         let chord_center_x = x + advance / 2.0;
         let layout = layout_rehearsal_mark(text, chord_center_x, staff, config.staff_space, style);
         draw_rehearsal_mark(svg, &layout);
     }
 
     // Draw tempo mark above the staff if present
-    if let Some(ref mark) = chord.tempo_mark {
+    if let Some(ref mark) = chord.annotations.tempo_mark {
         let layout = layout_tempo_mark(mark, x, staff, config.staff_space);
         draw_tempo_mark(svg, &layout, font);
     }
 
     // Draw expression text below the staff if present
-    if let Some(ref text) = chord.expression {
+    if let Some(ref text) = chord.annotations.expression {
         let chord_center_x = x + advance / 2.0;
         let layout = layout_expression(text, chord_center_x, staff, config.staff_space);
         draw_expression(svg, &layout);

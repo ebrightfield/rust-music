@@ -2,7 +2,7 @@ use music::notation::clef::Clef;
 use music_engraver::font::bravura_font;
 use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::key_signature::KeySignature;
-use music_engraver::layout::measure::{MeasureLayoutConfig, NoteEvent, RestEvent};
+use music_engraver::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
 use music_engraver::layout::system::{
     layout_system, MeasureContent, MeasureEvent, SystemPrefix,
 };
@@ -34,13 +34,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -48,13 +42,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -62,13 +50,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 6, // D5
@@ -76,13 +58,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
             ],
             barline: BarlineStyle::Single,
@@ -96,13 +72,7 @@ fn main() {
                     dots: 1,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Rest(RestEvent {
                     duration_log2: 2,
@@ -120,13 +90,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -134,13 +98,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 2, // G4
@@ -148,13 +106,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -162,13 +114,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 4, // B4
@@ -176,13 +122,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: None,
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
+                annotations: NoteAnnotations::default(),
                 }),
             ],
             barline: BarlineStyle::Final,

@@ -15,7 +15,7 @@ use crate::layout::accidental::accidental_glyph;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{BeamGroupEvent, ChordEvent, NoteEvent, RestEvent, TupletGroupEvent};
+use crate::layout::measure::{BeamGroupEvent, ChordEvent, NoteAnnotations, NoteEvent, RestEvent, TupletGroupEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::system::MeasureEvent;
@@ -246,14 +246,7 @@ pub(crate) fn convert_event(
                 dots,
                 accidental: acc,
                 stem_direction: None,
-                tie_forward: *tie_forward,
-                dynamic: *dynamic,
-                slur_start: *slur_start,
-                slur_end: *slur_end,
-                hairpin_start: *hairpin_start,
-                hairpin_end: *hairpin_end,
-                rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
-            })
+                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
         }
         ScoreEvent::Rest { duration } => {
             let log2 = duration_kind_to_log2(duration.kind());
@@ -282,14 +275,7 @@ pub(crate) fn convert_event(
                 dots,
                 accidentals,
                 stem_direction: None,
-                tie_forward: *tie_forward,
-                dynamic: *dynamic,
-                slur_start: *slur_start,
-                slur_end: *slur_end,
-                hairpin_start: *hairpin_start,
-                hairpin_end: *hairpin_end,
-                rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
-            })
+                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
         }
         ScoreEvent::BeamGroup { notes } => {
             let note_events: Vec<NoteEvent> = notes
@@ -305,13 +291,7 @@ pub(crate) fn convert_event(
                         dots,
                         accidental: acc,
                         stem_direction: None,
-                        tie_forward: false,
-                        dynamic: None,
-                        slur_start: false,
-                        slur_end: false,
-                        hairpin_start: None,
-                        hairpin_end: false,
-                        rehearsal_mark: None, tempo_mark: None, expression: None,
+                        annotations: NoteAnnotations::default(),
                     }
                 })
                 .collect();
@@ -334,13 +314,7 @@ pub(crate) fn convert_event(
                         dots,
                         accidental: acc,
                         stem_direction: None,
-                        tie_forward: false,
-                        dynamic: None,
-                        slur_start: false,
-                        slur_end: false,
-                        hairpin_start: None,
-                        hairpin_end: false,
-                        rehearsal_mark: None, tempo_mark: None, expression: None,
+                        annotations: NoteAnnotations::default(),
                     }
                 })
                 .collect();
@@ -387,14 +361,7 @@ pub(crate) fn convert_event_tracked(
                 dots,
                 accidental: acc,
                 stem_direction: None,
-                tie_forward: *tie_forward,
-                dynamic: *dynamic,
-                slur_start: *slur_start,
-                slur_end: *slur_end,
-                hairpin_start: *hairpin_start,
-                hairpin_end: *hairpin_end,
-                rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
-            })
+                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
         }
         ScoreEvent::Rest { duration } => {
             let log2 = duration_kind_to_log2(duration.kind());
@@ -433,14 +400,7 @@ pub(crate) fn convert_event_tracked(
                 dots,
                 accidentals,
                 stem_direction: None,
-                tie_forward: *tie_forward,
-                dynamic: *dynamic,
-                slur_start: *slur_start,
-                slur_end: *slur_end,
-                hairpin_start: *hairpin_start,
-                hairpin_end: *hairpin_end,
-                rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
-            })
+                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
         }
         ScoreEvent::BeamGroup { notes } => {
             let note_events: Vec<NoteEvent> = notes
@@ -465,13 +425,7 @@ pub(crate) fn convert_event_tracked(
                         dots,
                         accidental: acc,
                         stem_direction: None,
-                        tie_forward: false,
-                        dynamic: None,
-                        slur_start: false,
-                        slur_end: false,
-                        hairpin_start: None,
-                        hairpin_end: false,
-                        rehearsal_mark: None, tempo_mark: None, expression: None,
+                        annotations: NoteAnnotations::default(),
                     }
                 })
                 .collect();
@@ -502,13 +456,7 @@ pub(crate) fn convert_event_tracked(
                         dots,
                         accidental: acc,
                         stem_direction: None,
-                        tie_forward: false,
-                        dynamic: None,
-                        slur_start: false,
-                        slur_end: false,
-                        hairpin_start: None,
-                        hairpin_end: false,
-                        rehearsal_mark: None, tempo_mark: None, expression: None,
+                        annotations: NoteAnnotations::default(),
                     }
                 })
                 .collect();

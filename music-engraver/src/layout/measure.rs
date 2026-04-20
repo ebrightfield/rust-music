@@ -8,6 +8,39 @@ use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
 use crate::layout::time_signature::TimeSignatureKind;
 
+/// Articulation and expression annotations attached to a note or chord event.
+///
+/// These fields are shared between [`NoteEvent`] and [`ChordEvent`], covering
+/// ties, slurs, hairpins, dynamics, rehearsal marks, tempo marks, and expression text.
+/// All fields default to "no annotation" (`false` / `None`).
+#[derive(Clone, Debug, Default)]
+pub struct NoteAnnotations {
+    /// Whether this note/chord is tied forward to the next note at the same
+    /// staff position. The tie curve is drawn by the system renderer after
+    /// all measures are laid out.
+    pub tie_forward: bool,
+    /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
+    /// centered on this note/chord.
+    pub dynamic: Option<Dynamic>,
+    /// Whether this note/chord is the start of a slur (curved line to a following note).
+    /// The slur curve is drawn by the system renderer after all measures are laid out.
+    pub slur_start: bool,
+    /// Whether this note/chord is the end of a slur.
+    pub slur_end: bool,
+    /// Whether this note/chord is the start of a hairpin (crescendo/decrescendo wedge).
+    /// The hairpin is drawn by the system renderer after all measures are laid out.
+    pub hairpin_start: Option<HairpinType>,
+    /// Whether this note/chord is the end of a hairpin wedge.
+    pub hairpin_end: bool,
+    /// Optional rehearsal mark displayed above the staff at this note/chord's position.
+    /// Tuple of (text content, enclosure style).
+    pub rehearsal_mark: Option<(String, RehearsalStyle)>,
+    /// Optional tempo marking displayed above the staff at this note/chord's position.
+    pub tempo_mark: Option<TempoMark>,
+    /// Optional expression text displayed below the staff in italic (e.g. "dolce").
+    pub expression: Option<String>,
+}
+
 /// A group of notes to be beamed together.
 ///
 /// All notes in a beam group share a common beam line; individual notes
@@ -50,28 +83,8 @@ pub struct ChordEvent {
     pub accidentals: Vec<Option<smufl::Glyph>>,
     /// Stem direction override. `None` uses auto-detection based on chord extent.
     pub stem_direction: Option<StemDirection>,
-    /// Whether all notes in this chord are tied forward to the next chord or
-    /// notes at the same staff positions. Tie curves are drawn by the system
-    /// renderer after all measures are laid out.
-    pub tie_forward: bool,
-    /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
-    /// centered on this chord.
-    pub dynamic: Option<Dynamic>,
-    /// Whether this chord is the start of a slur.
-    pub slur_start: bool,
-    /// Whether this chord is the end of a slur.
-    pub slur_end: bool,
-    /// Whether this chord is the start of a hairpin (crescendo/decrescendo wedge).
-    pub hairpin_start: Option<HairpinType>,
-    /// Whether this chord is the end of a hairpin wedge.
-    pub hairpin_end: bool,
-    /// Optional rehearsal mark displayed above the staff at this chord's position.
-    /// Tuple of (text content, enclosure style).
-    pub rehearsal_mark: Option<(String, RehearsalStyle)>,
-    /// Optional tempo marking displayed above the staff at this chord's position.
-    pub tempo_mark: Option<TempoMark>,
-    /// Optional expression text displayed below the staff in italic (e.g. "dolce").
-    pub expression: Option<String>,
+    /// Articulation/expression annotations (ties, dynamics, slurs, hairpins, etc.).
+    pub annotations: NoteAnnotations,
 }
 
 /// A musical event within a measure that occupies horizontal space.
@@ -112,29 +125,8 @@ pub struct NoteEvent {
     pub accidental: Option<smufl::Glyph>,
     /// Stem direction override. `None` uses auto-detection.
     pub stem_direction: Option<StemDirection>,
-    /// Whether this note is tied forward to the next note at the same staff position.
-    /// The tie curve is drawn by the system renderer after all measures are laid out.
-    pub tie_forward: bool,
-    /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
-    /// centered on this note.
-    pub dynamic: Option<Dynamic>,
-    /// Whether this note is the start of a slur (curved line to a following note).
-    /// The slur curve is drawn by the system renderer after all measures are laid out.
-    pub slur_start: bool,
-    /// Whether this note is the end of a slur.
-    pub slur_end: bool,
-    /// Whether this note is the start of a hairpin (crescendo/decrescendo wedge).
-    /// The hairpin is drawn by the system renderer after all measures are laid out.
-    pub hairpin_start: Option<HairpinType>,
-    /// Whether this note is the end of a hairpin wedge.
-    pub hairpin_end: bool,
-    /// Optional rehearsal mark displayed above the staff at this note's position.
-    /// Tuple of (text content, enclosure style).
-    pub rehearsal_mark: Option<(String, RehearsalStyle)>,
-    /// Optional tempo marking displayed above the staff at this note's position.
-    pub tempo_mark: Option<TempoMark>,
-    /// Optional expression text displayed below the staff in italic (e.g. "dolce").
-    pub expression: Option<String>,
+    /// Articulation/expression annotations (ties, dynamics, slurs, hairpins, etc.).
+    pub annotations: NoteAnnotations,
 }
 
 /// A rest to be laid out within a measure.
@@ -368,13 +360,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -398,13 +384,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -435,13 +415,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -472,13 +446,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -486,13 +454,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -515,13 +477,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -529,13 +485,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -558,13 +508,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -572,13 +516,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -586,13 +524,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -615,13 +547,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -643,13 +569,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -671,13 +591,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];

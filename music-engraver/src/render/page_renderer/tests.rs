@@ -2,7 +2,7 @@ use super::*;
 use crate::font::bravura_font;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{MeasureLayoutConfig, NoteEvent};
+use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent};
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{MeasureContent, MeasureEvent, SystemPrefix};
 use crate::layout::time_signature::TimeSignatureKind;
@@ -21,13 +21,7 @@ fn quarter_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-    rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })
 }
 
@@ -150,14 +144,7 @@ fn tied_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: true,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })
+        annotations: NoteAnnotations { tie_forward: true, ..Default::default() },})
 }
 
 #[test]
@@ -326,14 +313,7 @@ fn slur_start_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: true,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })
+        annotations: NoteAnnotations { slur_start: true, ..Default::default() },})
 }
 
 fn slur_end_note(pos: i8) -> MeasureEvent {
@@ -343,14 +323,7 @@ fn slur_end_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: true,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })
+        annotations: NoteAnnotations { slur_end: true, ..Default::default() },})
 }
 
 #[test]
@@ -520,14 +493,7 @@ fn cresc_start_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: Some(HairpinType::Crescendo),
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })
+        annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Crescendo), ..Default::default() },})
 }
 
 fn hairpin_end_note(pos: i8) -> MeasureEvent {
@@ -537,14 +503,7 @@ fn hairpin_end_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: true,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })
+        annotations: NoteAnnotations { hairpin_end: true, ..Default::default() },})
 }
 
 #[test]
@@ -780,14 +739,7 @@ fn cross_system_decresc_differs_from_cresc() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-                tie_forward: false,
-                dynamic: None,
-                slur_start: false,
-                slur_end: false,
-                hairpin_start: Some(HairpinType::Decrescendo),
-                hairpin_end: false,
-                rehearsal_mark: None, tempo_mark: None, expression: None,
-            })],
+                annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Decrescendo), ..Default::default() },})],
             barline: BarlineStyle::Single,
         },
         MeasureContent {

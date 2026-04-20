@@ -8,7 +8,7 @@ use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::clef::ClefLayout;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::measure::{
-    layout_measure, MeasureElement, MeasureLayoutConfig, NoteEvent, RestEvent,
+    layout_measure, MeasureElement, MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent,
 };
 use music_engraver::layout::staff::StaffLayout;
 use music_engraver::layout::time_signature::TimeSignatureKind;
@@ -38,13 +38,7 @@ fn main() {
             dots: 1,
             accidental: None, // F# implied by key signature
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
         // Eighth note on staff position 5 (A4 in treble clef) with a natural
         MeasureElement::Note(NoteEvent {
@@ -53,13 +47,7 @@ fn main() {
             dots: 0,
             accidental: Some(Glyph::AccidentalNatural),
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
         // Quarter rest
         MeasureElement::Rest(RestEvent {

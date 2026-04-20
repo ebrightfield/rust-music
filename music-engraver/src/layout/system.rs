@@ -216,6 +216,7 @@ fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::measure::NoteAnnotations;
     fn test_config() -> MeasureLayoutConfig {
         MeasureLayoutConfig::from_staff_space(250.0)
     }
@@ -238,13 +239,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         })
     }
 

@@ -2,7 +2,7 @@ use music::notation::clef::Clef;
 use music_engraver::font::bravura_font;
 use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::key_signature::KeySignature;
-use music_engraver::layout::measure::{MeasureLayoutConfig, NoteEvent, RestEvent};
+use music_engraver::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
 use music_engraver::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use music_engraver::layout::system::{MeasureContent, MeasureEvent, SystemPrefix};
 use music_engraver::layout::time_signature::TimeSignatureKind;
@@ -123,13 +123,7 @@ fn quarter(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-    rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })
 }
 
@@ -140,13 +134,7 @@ fn half(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-    rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })
 }
 
@@ -157,13 +145,7 @@ fn whole(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-    rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })
 }
 
@@ -174,13 +156,7 @@ fn dotted_half(pos: i8) -> MeasureEvent {
         dots: 1,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-    rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })
 }
 

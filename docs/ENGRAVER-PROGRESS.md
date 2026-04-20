@@ -495,3 +495,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: Continue QA backlog: W16 (NoteEvent/ChordEvent modifier grab-bags), or info-tier items I2–I7.
 - Open issues: Remaining QA items: W16, plus info-tier items I2–I7. W15 is now complete (both page_renderer and system_renderer split).
+
+## 2026-04-20 — QA: W16 collapsed NoteEvent/ChordEvent annotation fields into NoteAnnotations struct
+- Did: Created `NoteAnnotations` struct in `layout/measure.rs` with 9 annotation fields (`tie_forward`, `dynamic`, `slur_start`, `slur_end`, `hairpin_start`, `hairpin_end`, `rehearsal_mark`, `tempo_mark`, `expression`) previously duplicated across `NoteEvent` and `ChordEvent`. Struct derives `Clone, Debug, Default` — `Default` gives all-false/all-None, eliminating 9 lines of boilerplate at ~60 construction sites. Updated `NoteEvent` and `ChordEvent` to use a single `annotations: NoteAnnotations` field. Updated all access sites (renderers: `.tie_forward` → `.annotations.tie_forward` etc.) and construction sites across 12 files. Adding future annotations now requires only a new field in `NoteAnnotations` + the sites that care about it.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests).
+- Next: All QA warning items (W1–W17) are now resolved. Continue with info-tier items I2–I7 or resume phased plan work.
+- Open issues: Remaining QA info-tier items: I2–I7.

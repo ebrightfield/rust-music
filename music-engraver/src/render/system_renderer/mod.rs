@@ -25,13 +25,13 @@ pub(crate) fn collect_note_positions(system: &SystemLayout) -> Vec<(f64, i8, u8,
             let elem_x = measure.x_offset + elem.x;
             match &elem.element {
                 MeasureElement::Note(n) => {
-                    notes.push((elem_x, n.staff_position, n.duration_log2, n.tie_forward, n.stem_direction));
+                    notes.push((elem_x, n.staff_position, n.duration_log2, n.annotations.tie_forward, n.stem_direction));
                 }
                 MeasureElement::Chord(c) => {
                     // Each note in the chord gets its own entry so ties can
                     // match by staff position independently.
                     for &pos in &c.staff_positions {
-                        notes.push((elem_x, pos, c.duration_log2, c.tie_forward, c.stem_direction));
+                        notes.push((elem_x, pos, c.duration_log2, c.annotations.tie_forward, c.stem_direction));
                     }
                 }
                 _ => {}
@@ -170,8 +170,8 @@ pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo>
                         staff_position: n.staff_position,
                         duration_log2: n.duration_log2,
                         stem_direction: n.stem_direction,
-                        slur_start: n.slur_start,
-                        slur_end: n.slur_end,
+                        slur_start: n.annotations.slur_start,
+                        slur_end: n.annotations.slur_end,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -189,8 +189,8 @@ pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo>
                         staff_position: attach_pos,
                         duration_log2: c.duration_log2,
                         stem_direction: c.stem_direction,
-                        slur_start: c.slur_start,
-                        slur_end: c.slur_end,
+                        slur_start: c.annotations.slur_start,
+                        slur_end: c.annotations.slur_end,
                     });
                 }
                 _ => {}
@@ -283,16 +283,16 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                     notes.push(HairpinNoteInfo {
                         x: elem_x,
                         duration_log2: n.duration_log2,
-                        hairpin_start: n.hairpin_start,
-                        hairpin_end: n.hairpin_end,
+                        hairpin_start: n.annotations.hairpin_start,
+                        hairpin_end: n.annotations.hairpin_end,
                     });
                 }
                 MeasureElement::Chord(c) => {
                     notes.push(HairpinNoteInfo {
                         x: elem_x,
                         duration_log2: c.duration_log2,
-                        hairpin_start: c.hairpin_start,
-                        hairpin_end: c.hairpin_end,
+                        hairpin_start: c.annotations.hairpin_start,
+                        hairpin_end: c.annotations.hairpin_end,
                     });
                 }
                 _ => {}

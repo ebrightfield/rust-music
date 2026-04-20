@@ -3,7 +3,7 @@ use crate::font::bravura_font;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{layout_measure, BeamGroupEvent, MeasureLayoutConfig, RestEvent};
+use crate::layout::measure::{layout_measure, BeamGroupEvent, MeasureLayoutConfig, NoteAnnotations, RestEvent};
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::render::staff_renderer::draw_staff_lines;
 use smufl::Glyph;
@@ -44,13 +44,7 @@ fn measure_with_single_quarter_note() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -72,13 +66,7 @@ fn measure_with_whole_note_has_no_stem() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -99,13 +87,7 @@ fn measure_with_eighth_note_has_flag() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -127,13 +109,7 @@ fn measure_with_dotted_quarter() {
         dots: 1,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -155,13 +131,7 @@ fn measure_with_accidental_note() {
         dots: 0,
         accidental: Some(Glyph::AccidentalSharp),
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -201,13 +171,7 @@ fn measure_with_barline() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Barline(BarlineStyle::Single),
     ];
@@ -234,13 +198,7 @@ fn measure_with_clef_and_key_signature() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
     ];
     let layout = layout_measure(&elements, &cfg);
@@ -269,13 +227,7 @@ fn measure_with_time_signature() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
     ];
     let layout = layout_measure(&elements, &cfg);
@@ -297,13 +249,7 @@ fn x_offset_shifts_elements() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
 
@@ -369,13 +315,7 @@ fn full_measure_with_all_element_types() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Note(NoteEvent {
             staff_position: 6,
@@ -383,13 +323,7 @@ fn full_measure_with_all_element_types() {
             dots: 0,
             accidental: Some(Glyph::AccidentalNatural),
             stem_direction: Some(StemDirection::Down),
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Rest(RestEvent {
             duration_log2: 2,
@@ -421,13 +355,7 @@ fn note_with_ledger_lines_below_staff() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -451,13 +379,7 @@ fn chord_two_notes_third_apart() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -480,13 +402,7 @@ fn chord_with_second_has_two_noteheads() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -511,13 +427,7 @@ fn chord_with_accidentals() {
         dots: 0,
         accidentals: vec![Some(Glyph::AccidentalSharp), None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -539,13 +449,7 @@ fn chord_whole_note_no_stem() {
         dots: 0,
         accidentals: vec![None, None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -567,13 +471,7 @@ fn chord_eighth_note_has_flag() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -596,13 +494,7 @@ fn chord_with_ledger_lines() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -624,13 +516,7 @@ fn chord_empty_produces_nothing() {
         dots: 0,
         accidentals: vec![],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -651,13 +537,7 @@ fn chord_dotted_quarter() {
         dots: 1,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -680,13 +560,7 @@ fn chord_differs_from_single_note() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let chord = vec![MeasureElement::Chord(ChordEvent {
         staff_positions: vec![0, 4],
@@ -694,13 +568,7 @@ fn chord_differs_from_single_note() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
 
     let layout_s = layout_measure(&single, &cfg);
@@ -730,13 +598,7 @@ fn stem_direction_override_is_respected() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Up),
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
     let elements_down = vec![MeasureElement::Note(NoteEvent {
         staff_position: 0,
@@ -744,13 +606,7 @@ fn stem_direction_override_is_respected() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Down),
-    tie_forward: false,
-    dynamic: None,
-    slur_start: false,
-    slur_end: false,
-    hairpin_start: None,
-    hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+    annotations: NoteAnnotations::default(),
     })];
 
     let layout_up = layout_measure(&elements_up, &cfg);
@@ -793,13 +649,7 @@ fn beam_group_two_eighths() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             },
             NoteEvent {
                 staff_position: 2,
@@ -807,13 +657,7 @@ fn beam_group_two_eighths() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             },
         ],
         stem_direction: None,
@@ -837,10 +681,10 @@ fn beam_group_four_sixteenths() {
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
     let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+            NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
         ],
         stem_direction: None,
     })];
@@ -867,13 +711,7 @@ fn beam_group_with_accidental() {
                 dots: 0,
                 accidental: Some(Glyph::AccidentalSharp),
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             },
             NoteEvent {
                 staff_position: 4,
@@ -881,13 +719,7 @@ fn beam_group_with_accidental() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+            annotations: NoteAnnotations::default(),
             },
         ],
         stem_direction: None,
@@ -910,8 +742,8 @@ fn beam_group_with_ledger_lines() {
     // Notes below the staff requiring ledger lines
     let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+            NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
         ],
         stem_direction: None,
     })];
@@ -957,13 +789,7 @@ fn beam_group_differs_from_flagged_notes() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Note(NoteEvent {
             staff_position: 2,
@@ -971,20 +797,14 @@ fn beam_group_differs_from_flagged_notes() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         }),
     ];
     // Same notes but beamed
     let beamed = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
         ],
         stem_direction: None,
     })];
@@ -1016,9 +836,9 @@ fn beam_group_mixed_durations() {
     // Eighth + two sixteenths
     let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-            NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
         ],
         stem_direction: None,
     })];
@@ -1050,14 +870,7 @@ fn note_with_dynamic_adds_extra_path() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: Some(Dynamic::Forte),
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })];
+        annotations: NoteAnnotations { dynamic: Some(Dynamic::Forte), ..Default::default() },})];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -1078,13 +891,7 @@ fn note_without_dynamic_no_extra_path() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -1105,14 +912,7 @@ fn chord_with_dynamic_adds_extra_path() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: Some(Dynamic::Pp),
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })];
+        annotations: NoteAnnotations { dynamic: Some(Dynamic::Pp), ..Default::default() },})];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -1133,14 +933,7 @@ fn dynamic_glyph_positioned_below_staff() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: Some(Dynamic::Mf),
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
-    })];
+        annotations: NoteAnnotations { dynamic: Some(Dynamic::Mf), ..Default::default() },})];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -1170,14 +963,7 @@ fn different_dynamics_on_notes_produce_different_svgs() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-            tie_forward: false,
-            dynamic: Some(dyn_mark),
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: None, tempo_mark: None, expression: None,
-        })];
+            annotations: NoteAnnotations { dynamic: Some(dyn_mark), ..Default::default() },})];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
         draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -1200,9 +986,9 @@ fn tuplet_triplet_renders_beams_plus_bracket() {
     let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
         beam_group: BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-                NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
             ],
             stem_direction: None,
         },
@@ -1226,9 +1012,9 @@ fn tuplet_differs_from_plain_beam_group() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
     let notes = vec![
-        NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-        NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-        NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+        NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+        NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+        NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
     ];
 
     let plain = vec![MeasureElement::BeamGroup(BeamGroupEvent {
@@ -1271,11 +1057,11 @@ fn tuplet_quintuplet_renders() {
     let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
         beam_group: BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-                NoteEvent { staff_position: 3, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-                NoteEvent { staff_position: 5, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent { staff_position: 3, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent { staff_position: 5, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
             ],
             stem_direction: None,
         },
@@ -1315,9 +1101,9 @@ fn tuplet_different_numbers_produce_different_glyphs() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
     let notes = vec![
-        NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-        NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
-        NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None },
+        NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+        NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+        NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
     ];
 
     let make = |number: u32| {
@@ -1351,14 +1137,7 @@ fn note_with_rehearsal_mark_produces_text_and_rect() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: Some(("A".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)),
-        tempo_mark: None, expression: None,
+        annotations: NoteAnnotations { rehearsal_mark: Some(("A".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)), ..Default::default() },
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -1379,13 +1158,7 @@ fn note_without_rehearsal_mark_has_no_text() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -1405,14 +1178,7 @@ fn chord_with_rehearsal_mark_produces_text() {
         dots: 0,
         accidentals: vec![None, None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: Some(("B".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)),
-        tempo_mark: None, expression: None,
+        annotations: NoteAnnotations { rehearsal_mark: Some(("B".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)), ..Default::default() },
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -1431,14 +1197,7 @@ fn plain_rehearsal_mark_has_no_rect() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: Some(("C".to_string(), crate::layout::rehearsal::RehearsalStyle::Plain)),
-        tempo_mark: None, expression: None,
+        annotations: NoteAnnotations { rehearsal_mark: Some(("C".to_string(), crate::layout::rehearsal::RehearsalStyle::Plain)), ..Default::default() },
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -1459,15 +1218,7 @@ fn rehearsal_mark_differs_from_no_mark() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-            tie_forward: false,
-            dynamic: None,
-            slur_start: false,
-            slur_end: false,
-            hairpin_start: None,
-            hairpin_end: false,
-            rehearsal_mark: mark,
-            tempo_mark: None, expression: None,
-        })];
+            annotations: NoteAnnotations { rehearsal_mark: mark, ..Default::default() },})];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
         draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -1490,13 +1241,7 @@ fn note_with_tempo_mark_produces_text() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
 
@@ -1512,15 +1257,7 @@ fn note_with_tempo_mark_produces_text() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Allegro".into())),
-        expression: None,
-    })];
+        annotations: NoteAnnotations { tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Allegro".into())), ..Default::default() },})];
     let layout_with = layout_measure(&elements_with, &cfg);
     let mut svg_with = make_svg();
     draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
@@ -1541,19 +1278,11 @@ fn note_with_metronome_tempo_produces_path_and_text() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: Some(crate::layout::tempo::TempoMark::Metronome {
+        annotations: NoteAnnotations { tempo_mark: Some(crate::layout::tempo::TempoMark::Metronome {
             note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
             dotted: false,
             bpm: 120,
-        }),
-        expression: None,
-    })];
+        }), ..Default::default() },})];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -1574,15 +1303,7 @@ fn chord_with_tempo_mark_produces_text() {
         dots: 0,
         accidentals: vec![None, None, None],
         stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Presto".into())),
-        expression: None,
-    })];
+        annotations: NoteAnnotations { tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Presto".into())), ..Default::default() },})];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();

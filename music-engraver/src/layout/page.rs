@@ -187,7 +187,7 @@ mod tests {
     use super::*;
     use crate::layout::barline::BarlineStyle;
     use crate::layout::key_signature::KeySignature;
-    use crate::layout::measure::NoteEvent;
+    use crate::layout::measure::{NoteAnnotations, NoteEvent};
     use crate::layout::system::{MeasureEvent, SystemPrefix};
     use crate::layout::time_signature::TimeSignatureKind;
     use music::notation::clef::Clef;
@@ -210,13 +210,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        tie_forward: false,
-        dynamic: None,
-        slur_start: false,
-        slur_end: false,
-        hairpin_start: None,
-        hairpin_end: false,
-        rehearsal_mark: None, tempo_mark: None, expression: None,
+        annotations: NoteAnnotations::default(),
         })
     }
 
