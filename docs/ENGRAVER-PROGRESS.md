@@ -477,3 +477,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: W13 is now complete (score module split into mod.rs 473 + event.rs 524 + tests.rs 2355). Continue QA: W14 (measure_renderer.rs split), W15, W16, or info-tier items.
 - Open issues: Remaining QA items: W14, W15, W16, plus info-tier items I2–I7.
+
+## 2026-04-20 — QA: W14 measure_renderer.rs split — extracted tests to measure_renderer/tests.rs
+- Did: Converted `src/render/measure_renderer.rs` (2,105 lines) into a directory module `src/render/measure_renderer/mod.rs` (514 lines) + `src/render/measure_renderer/tests.rs` (1,591 lines). Purely mechanical extraction: the `#[cfg(test)] mod tests { ... }` inline block was moved to a file-based module. No logic changes, no API changes. `render/mod.rs` references were unchanged since Rust resolves `mod measure_renderer` to a directory automatically.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: Continue QA backlog: W15 (page_renderer.rs / system_renderer.rs split), W16, or info-tier items.
+- Open issues: Remaining QA items: W15, W16, plus info-tier items I2–I7.
