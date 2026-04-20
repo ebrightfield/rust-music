@@ -227,6 +227,7 @@ enum ScoreEvent {
 /// The builder handles conversion of `Pitch` → staff position, `Duration` → log2 + dots,
 /// and accidental resolution against the key signature.
 #[derive(Clone, Debug)]
+#[must_use = "a ScoreBuilder does nothing until .render_svg() or .try_render_svg() is called"]
 pub struct ScoreBuilder {
     clef: ClefKind,
     key_sig: KeySignature,
@@ -531,6 +532,7 @@ impl ScoreBuilder {
     ///
     /// Flushes any pending events as a final measure (with `Final` barline)
     /// if no explicit end barline was provided.
+    #[must_use = "the SVG string is returned but not used"]
     pub fn try_render_svg(mut self) -> Result<String, crate::font::FontError> {
         // Flush any pending events
         if !self.current_events.is_empty() {
@@ -607,9 +609,18 @@ impl ScoreBuilder {
     ///
     /// Convenience wrapper around [`try_render_svg`](Self::try_render_svg) that
     /// panics on font errors. For error handling, use `try_render_svg` instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if font glyph lookup fails. This cannot happen with the bundled
+    /// Bravura font because all SMuFL glyph names used by the layout engine are
+    /// present in Bravura's metadata, and the font data is compiled in via
+    /// `include_bytes!`. The only realistic failure path would be a corrupted
+    /// binary or a future code change that requests a glyph not in the font.
+    #[must_use = "the SVG string is returned but not used"]
     pub fn render_svg(self) -> String {
         self.try_render_svg()
-            .expect("font rendering should not fail for valid input")
+            .expect("bundled Bravura font contains all required SMuFL glyphs")
     }
 
     /// Convert a `ScoreEvent` into a `MeasureEvent` for the layout engine.

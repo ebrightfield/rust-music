@@ -406,6 +406,12 @@
 - Next: Continue QA backlog (W5 document expect safety, I23 #[must_use] on builder methods) or begin new post-v1 features.
 - Open issues: None — music-engraver is now fully clippy-clean with `--all-targets`.
 
+## 2026-04-20 — QA: fixed I23 #[must_use] on ScoreBuilder + W5 document expect safety
+- Did: Added `#[must_use]` attribute to `ScoreBuilder` struct (covers `new()` and all fluent builder methods returning `Self` — dropping a partially-built builder is always a user error). Added `#[must_use]` to `render_svg()` and `try_render_svg()` return values. Documented `render_svg()`'s panic safety per W5: the bundled Bravura font contains all required SMuFL glyphs, so font lookup failure is unreachable in normal operation. Updated expect message to reflect this reasoning.
+- Verified: `cargo test -p music-engraver` — 811 unit + 3 integration + 2 doc-tests = 816 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
+- Next: Continue QA backlog (W3 rest_glyph bounds, W12 centralized error type, W13 score.rs split) or begin new post-v1 features.
+- Open issues: None.
+
 ## 2026-04-20 — QA: fixed W2 bounds check on number_to_digit_glyphs in time_signature.rs
 - Did: Extended `number_to_digit_glyphs()` to handle all u8 values (0–255) by adding a 3-digit decomposition branch for n ≥ 100. Previously, values ≥ 100 would produce `tens ≥ 10`, causing `digit_glyph(tens).unwrap()` to panic. Now decomposes into hundreds/tens/ones, all guaranteed to be 0–9. Added 3 new tests: `three_digit_numerator_produces_three_glyphs` (128/4), `max_u8_value_does_not_panic` (255/255), `zero_numerator_produces_single_zero_glyph` (0/4).
 - Verified: `cargo test -p music-engraver` — 811 unit + 3 integration + 2 doc-tests = 816 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
