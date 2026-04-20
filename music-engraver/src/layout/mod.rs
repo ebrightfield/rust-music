@@ -16,6 +16,7 @@ pub mod dot;
 pub mod dynamics;
 pub mod expression;
 pub mod flag;
+pub mod grace;
 pub mod hairpin;
 pub mod key_signature;
 pub mod measure;
@@ -64,6 +65,10 @@ pub use articulation::{
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use expression::{layout_expression, ExpressionLayout};
+pub use grace::{
+    grace_note_glyph, grace_note_x_reservation, layout_grace_note, GraceNoteKind, GraceNoteLayout,
+    GRACE_NOTE_SCALE, GRACE_NOTE_SPACING_SS,
+};
 pub use hairpin::{layout_hairpin, HairpinLayout, HairpinType, HAIRPIN_BELOW_STAFF_SS};
 pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};

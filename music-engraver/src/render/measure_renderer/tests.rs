@@ -1310,3 +1310,147 @@ fn chord_with_tempo_mark_produces_text() {
     let output = svg.to_svg();
     assert!(output.contains(">Presto<"), "chord tempo mark text should appear");
 }
+
+#[test]
+fn note_with_grace_note_adds_extra_path() {
+    use crate::layout::grace::GraceNoteKind;
+
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Without grace note
+    let elements_without = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout_without = layout_measure(&elements_without, &cfg);
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    let output_without = svg_without.to_svg();
+    let paths_without = output_without.matches("<path").count();
+
+    // With grace note
+    let elements_with = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            grace_note: Some((2, GraceNoteKind::Acciaccatura)),
+            ..Default::default()
+        },
+    })];
+    let layout_with = layout_measure(&elements_with, &cfg);
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let output_with = svg_with.to_svg();
+    let paths_with = output_with.matches("<path").count();
+
+    assert!(
+        paths_with > paths_without,
+        "grace note should add at least one extra path: {} vs {}",
+        paths_with,
+        paths_without
+    );
+}
+
+#[test]
+fn note_without_grace_note_no_scale_transform() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    // Normal notes should not have scale(0.6) transform
+    assert!(
+        !output.contains("scale(0.6"),
+        "normal note should not have grace scale transform"
+    );
+}
+
+#[test]
+fn chord_with_grace_note_adds_extra_path() {
+    use crate::layout::grace::GraceNoteKind;
+
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let elements_without = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout_without = layout_measure(&elements_without, &cfg);
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    let paths_without = svg_without.to_svg().matches("<path").count();
+
+    let elements_with = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            grace_note: Some((-2, GraceNoteKind::Appoggiatura)),
+            ..Default::default()
+        },
+    })];
+    let layout_with = layout_measure(&elements_with, &cfg);
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let paths_with = svg_with.to_svg().matches("<path").count();
+
+    assert!(
+        paths_with > paths_without,
+        "grace note on chord should add path: {} vs {}",
+        paths_with,
+        paths_without
+    );
+}
+
+#[test]
+fn grace_note_has_scale_transform() {
+    use crate::layout::grace::GraceNoteKind;
+
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            grace_note: Some((2, GraceNoteKind::Acciaccatura)),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert!(
+        output.contains("scale(0.6"),
+        "grace note should have scale(0.6) transform"
+    );
+}

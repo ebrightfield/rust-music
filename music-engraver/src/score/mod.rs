@@ -41,6 +41,7 @@ use music::note::spelling::Accidental;
 use crate::font::bravura_font;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
+use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
@@ -285,6 +286,26 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.articulation = Some(artic);
+        }
+        self
+    }
+
+    /// Attach a grace note to the most recently added note or chord.
+    ///
+    /// The grace note is rendered as a small composite glyph (notehead + stem +
+    /// optional slash) to the left of the principal note. `pitch` is the grace
+    /// note's pitch; `kind` selects acciaccatura (slashed) or appoggiatura.
+    ///
+    /// No-op if the last event is a rest (grace notes attach to pitched events).
+    pub fn grace_note(mut self, pitch: Pitch, kind: GraceNoteKind) -> Self {
+        use crate::layout::note_placement::pitch_to_staff_position;
+        let clef = self.clef.to_clef();
+        let staff_pos = pitch_to_staff_position(&pitch, &clef);
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.grace_note = Some((staff_pos, kind));
         }
         self
     }

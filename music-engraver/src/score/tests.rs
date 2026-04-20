@@ -2346,3 +2346,132 @@
             _ => panic!("expected Note event"),
         }
     }
+
+    #[test]
+    fn grace_note_acciaccatura_adds_extra_path() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert!(
+            count_with > count_without,
+            "grace note should add at least one path: {} vs {}",
+            count_with,
+            count_without
+        );
+    }
+
+    #[test]
+    fn grace_note_on_rest_is_noop() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .grace_note(p("C", 4), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(without, with, "grace note on rest should be no-op");
+    }
+
+    #[test]
+    fn acciaccatura_vs_appoggiatura_differ() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let acc = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        let app = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .grace_note(p("D", 4), GraceNoteKind::Appoggiatura)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(acc, app, "acciaccatura and appoggiatura should produce different SVGs");
+    }
+
+    #[test]
+    fn grace_note_on_chord_adds_path() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4)], Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4)], Duration::QTR)
+            .grace_note(p("B", 3), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert!(
+            count_with > count_without,
+            "grace note on chord should add a path: {} vs {}",
+            count_with,
+            count_without
+        );
+    }
+
+    #[test]
+    fn grace_note_convert_event_preserves_field() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let key_sig = KeySignature::Open;
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                grace_note: Some((2, GraceNoteKind::Acciaccatura)),
+                ..Default::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(
+                    ne.annotations.grace_note,
+                    Some((2, GraceNoteKind::Acciaccatura))
+                );
+            }
+            _ => panic!("expected Note event from grace_note_convert_event"),
+        }
+    }

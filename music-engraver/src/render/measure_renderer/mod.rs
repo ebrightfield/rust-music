@@ -24,7 +24,9 @@ use crate::layout::expression::layout_expression;
 use crate::layout::rehearsal::layout_rehearsal_mark;
 use crate::layout::articulation::layout_articulation;
 use crate::layout::tempo::layout_tempo_mark;
+use crate::layout::grace::layout_grace_note;
 use crate::render::articulation_renderer::draw_articulation;
+use crate::render::grace_renderer::draw_grace_note;
 use crate::render::key_sig_renderer::draw_key_signature;
 use crate::render::tempo_renderer::draw_tempo_mark;
 use crate::render::note_renderer::{draw_ledger_lines, draw_notehead, NoteheadKind};
@@ -129,6 +131,15 @@ fn draw_note_event(
 ) -> Result<(), FontError> {
     let kind = notehead_kind_from_log2(note.duration_log2);
     let position = note.staff_position;
+
+    // Draw grace note before principal (if present)
+    if let Some((grace_pos, grace_kind)) = note.annotations.grace_note {
+        let stem_dir = note
+            .stem_direction
+            .unwrap_or_else(|| auto_stem_direction(position));
+        let grace_layout = layout_grace_note(x, grace_pos, grace_kind, stem_dir, staff);
+        draw_grace_note(svg, font, &grace_layout)?;
+    }
 
     // Draw accidental (pre-resolved glyph) to the left of notehead
     if let Some(acc_glyph) = note.accidental {
@@ -237,6 +248,12 @@ fn draw_chord_event(
     let direction = chord.stem_direction.unwrap_or_else(|| {
         auto_stem_direction_chord(&chord.staff_positions)
     });
+
+    // Draw grace note before chord (if present)
+    if let Some((grace_pos, grace_kind)) = chord.annotations.grace_note {
+        let grace_layout = layout_grace_note(x, grace_pos, grace_kind, direction, staff);
+        draw_grace_note(svg, font, &grace_layout)?;
+    }
 
     // Build ChordNote list for layout
     let chord_notes: Vec<ChordNote> = chord

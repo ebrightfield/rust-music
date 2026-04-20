@@ -2,6 +2,7 @@ use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::dynamics::Dynamic;
+use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::rehearsal::RehearsalStyle;
@@ -43,6 +44,9 @@ pub struct NoteAnnotations {
     /// Optional articulation marking (staccato, tenuto, accent, marcato, etc.)
     /// placed near the notehead on the opposite side from the stem.
     pub articulation: Option<Articulation>,
+    /// Optional grace note preceding the principal note.
+    /// Tuple of (grace note staff position, grace note kind).
+    pub grace_note: Option<(i8, GraceNoteKind)>,
 }
 
 /// A group of notes to be beamed together.
