@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use ttf_parser::OutlineBuilder;
 
 /// SVG path data extracted from a font glyph outline.
@@ -36,37 +34,43 @@ impl SvgPathBuilder {
 
 impl OutlineBuilder for SvgPathBuilder {
     fn move_to(&mut self, x: f32, y: f32) {
-        write!(self.path, "M{} {}", format_coord(x), format_coord(-y)).unwrap();
+        self.path.push('M');
+        self.path.push_str(&format_coord(x));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y));
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
-        write!(self.path, "L{} {}", format_coord(x), format_coord(-y)).unwrap();
+        self.path.push('L');
+        self.path.push_str(&format_coord(x));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y));
     }
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        write!(
-            self.path,
-            "Q{} {} {} {}",
-            format_coord(x1),
-            format_coord(-y1),
-            format_coord(x),
-            format_coord(-y)
-        )
-        .unwrap();
+        self.path.push('Q');
+        self.path.push_str(&format_coord(x1));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y1));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(x));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y));
     }
 
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        write!(
-            self.path,
-            "C{} {} {} {} {} {}",
-            format_coord(x1),
-            format_coord(-y1),
-            format_coord(x2),
-            format_coord(-y2),
-            format_coord(x),
-            format_coord(-y)
-        )
-        .unwrap();
+        self.path.push('C');
+        self.path.push_str(&format_coord(x1));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y1));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(x2));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y2));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(x));
+        self.path.push(' ');
+        self.path.push_str(&format_coord(-y));
     }
 
     fn close(&mut self) {

@@ -453,3 +453,9 @@
 - Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
 - Next: Continue QA backlog: W7 (write! unwrap style in glyph_outline.rs), W12 (centralized error type), W13 (score.rs split), W14–W16, or info-tier items.
 - Open issues: Remaining QA items: W7, W12, W13, W14, W15, W16, plus info-tier items I2–I7.
+
+## 2026-04-20 — QA: fixed W7 write! unwrap style in glyph_outline.rs
+- Did: Replaced `write!(self.path, …).unwrap()` calls in `SvgPathBuilder`'s `OutlineBuilder` impl with direct `push`/`push_str` operations. Writing to a `String` via `fmt::Write` can only fail on OOM (unrecoverable), so the unwraps were safe but idiomatically noisy. The new code builds path data via `push('M')`, `push_str(&format_coord(x))`, `push(' ')` chains — clearer intent, no error handling needed. Removed the now-unused `use std::fmt::Write` import.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass. `cargo check --workspace` passes.
+- Next: Continue QA backlog: W12 (centralized error type), W13 (score.rs split), W14–W16, or info-tier items.
+- Open issues: Remaining QA items: W12, W13, W14, W15, W16, plus info-tier items I2–I7.
