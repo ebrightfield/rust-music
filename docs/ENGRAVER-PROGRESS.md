@@ -543,3 +543,9 @@
 - Verified: `cargo test -p music-engraver --doc` — 4 passed, 0 ignored. `cargo test -p music-engraver` — 826 total (819 unit + 3 integration + 4 doc-tests), all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver.
 - Next: QA backlog fully complete (I2 optional/deferred, I28 done). Consider additional post-v1 features or polish.
 - Open issues: I2 (optional, deferred — cross-system span DRY, explicitly debatable per QA report).
+
+## 2026-04-20 — Post-v1, PNG export example + dimension-verifying tests
+- Did: Created `examples/png_export.rs` — renders a 2-measure score in D major to both SVG and PNG (2× scale) via `PngRenderer`, writes to `examples/output/score.svg` and `examples/output/score.png`, prints pixel dimensions from IHDR. Added 4 new dimension-verifying tests to `render/png.rs`: `dimensions_match_svg_viewbox_at_1x` (120×80), `dimensions_double_at_2x_scale` (60→120, 40→80), `dimensions_at_3x_scale` (30→90, 20→60), `score_png_has_nonzero_dimensions` (asserts w>50, h>20). Added `png_dimensions()` helper that extracts width/height from IHDR chunk bytes 16–23. These tests assert on specific pixel values rather than just checking magic bytes.
+- Verified: `cargo test -p music-engraver --features png` — 841 tests pass (834 unit + 3 integration + 4 doc-tests). `cargo run --example png_export --features png` produces score.png (10368 bytes, 588×112 px). `cargo clippy -p music-engraver --all-targets --features png` — 0 warnings from music-engraver. `cargo check --workspace` passes.
+- Next: Consider additional post-v1 features: grace notes, articulations/ornaments, multi-staff/grand-staff brackets, line breaking, or golden-SVG visual regression corpus.
+- Open issues: I2 (optional, deferred).

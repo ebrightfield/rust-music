@@ -214,9 +214,71 @@ mod tests {
         assert_eq!(via_fn, via_struct);
     }
 
+    /// Extract pixel width and height from the IHDR chunk (bytes 16–23).
+    fn png_dimensions(data: &[u8]) -> (u32, u32) {
+        assert!(data.len() >= 24, "PNG too short for IHDR");
+        let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+        let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+        (w, h)
+    }
+
     #[test]
     fn is_available_returns_true() {
         assert!(is_available());
+    }
+
+    #[test]
+    fn dimensions_match_svg_viewbox_at_1x() {
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">
+  <rect x="0" y="0" width="120" height="80" fill="blue"/>
+</svg>"#;
+        let png = svg_to_png(svg_str, 1.0).unwrap();
+        let (w, h) = png_dimensions(&png);
+        assert_eq!(w, 120, "width at 1× should match SVG width");
+        assert_eq!(h, 80, "height at 1× should match SVG height");
+    }
+
+    #[test]
+    fn dimensions_double_at_2x_scale() {
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40" viewBox="0 0 60 40">
+  <rect x="0" y="0" width="60" height="40" fill="green"/>
+</svg>"#;
+        let png_2x = svg_to_png(svg_str, 2.0).unwrap();
+        let (w, h) = png_dimensions(&png_2x);
+        assert_eq!(w, 120, "width at 2× should be 2 * 60");
+        assert_eq!(h, 80, "height at 2× should be 2 * 40");
+    }
+
+    #[test]
+    fn dimensions_at_3x_scale() {
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20" viewBox="0 0 30 20">
+  <rect x="0" y="0" width="30" height="20" fill="red"/>
+</svg>"#;
+        let png_3x = svg_to_png(svg_str, 3.0).unwrap();
+        let (w, h) = png_dimensions(&png_3x);
+        assert_eq!(w, 90, "width at 3× should be 3 * 30");
+        assert_eq!(h, 60, "height at 3× should be 3 * 20");
+    }
+
+    #[test]
+    fn score_png_has_nonzero_dimensions() {
+        use crate::score::ScoreBuilder;
+        use music::notation::clef::Clef;
+        use music::notation::rhythm::duration::Duration;
+        use music::note::note::Note;
+        use music::note::pitch::Pitch;
+
+        let png = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_png(1.0);
+
+        let (w, h) = png_dimensions(&png);
+        assert!(w > 50, "score PNG width should be at least 50px, got {w}");
+        assert!(h > 20, "score PNG height should be at least 20px, got {h}");
     }
 
     #[test]
