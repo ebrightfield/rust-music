@@ -20,7 +20,9 @@ use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::grace::GraceNoteKind;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::rehearsal::RehearsalStyle;
+use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
+use music_engraver::score::multi_staff::MultiStaffScore;
 use music_engraver::score::ScoreBuilder;
 
 fn p(name: &str, octave: u8) -> Pitch {
@@ -367,6 +369,78 @@ fn build_auto_breaks() -> String {
         .render_svg()
 }
 
+/// Grand staff (piano): treble + bass clef with brace connector.
+fn build_grand_staff() -> String {
+    let treble = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Sharps(2))
+        .time_signature(4, 4)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F#", 5), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .barline()
+        .note(p("A", 5), Duration::HALF)
+        .note(p("D", 5), Duration::HALF)
+        .end_barline();
+
+    let bass = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .key_signature(KeySignature::Sharps(2))
+        .time_signature(4, 4)
+        .note(p("D", 3), Duration::WHOLE)
+        .barline()
+        .note(p("A", 2), Duration::HALF)
+        .note(p("D", 3), Duration::HALF)
+        .end_barline();
+
+    MultiStaffScore::grand_staff(treble, bass).render_svg()
+}
+
+/// Lyrics: syllables with hyphens and extenders under notes.
+fn build_lyrics() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .lyric(LyricSyllable::with_hyphen("Hap"))
+        .note(p("C", 4), Duration::QTR)
+        .lyric(LyricSyllable::word("py"))
+        .note(p("D", 4), Duration::QTR)
+        .lyric(LyricSyllable::with_hyphen("birth"))
+        .note(p("C", 4), Duration::QTR)
+        .lyric(LyricSyllable::word("day"))
+        .barline()
+        .note(p("F", 4), Duration::HALF)
+        .lyric(LyricSyllable::with_extender("to"))
+        .note(p("E", 4), Duration::HALF)
+        .lyric(LyricSyllable::word("you!"))
+        .end_barline()
+        .render_svg()
+}
+
+/// Chord symbols above notes.
+fn build_chord_symbols() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .chord_symbol("C")
+        .note(p("A", 3), Duration::QTR)
+        .chord_symbol("Am")
+        .note(p("F", 4), Duration::QTR)
+        .chord_symbol("F")
+        .note(p("G", 4), Duration::QTR)
+        .chord_symbol("G7")
+        .barline()
+        .note(p("C", 4), Duration::WHOLE)
+        .chord_symbol("Cmaj7")
+        .end_barline()
+        .render_svg()
+}
+
 // ---------------------------------------------------------------------------
 // Test runner
 // ---------------------------------------------------------------------------
@@ -436,6 +510,21 @@ fn golden_auto_breaks() {
     assert_golden("auto_breaks", &build_auto_breaks());
 }
 
+#[test]
+fn golden_grand_staff() {
+    assert_golden("grand_staff", &build_grand_staff());
+}
+
+#[test]
+fn golden_lyrics() {
+    assert_golden("lyrics", &build_lyrics());
+}
+
+#[test]
+fn golden_chord_symbols() {
+    assert_golden("chord_symbols", &build_chord_symbols());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -453,6 +542,9 @@ fn golden_baselines_are_valid_svgs() {
         "annotations",
         "bass_clef",
         "auto_breaks",
+        "grand_staff",
+        "lyrics",
+        "chord_symbols",
     ];
 
     for name in &names {
