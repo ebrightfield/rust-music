@@ -19,8 +19,16 @@ pub static BRAVURA_OTF: &[u8] = include_bytes!("../../fonts/Bravura.otf");
 pub static BRAVURA_METADATA: &[u8] = include_bytes!("../../fonts/bravura_metadata.json");
 
 /// Convenience: create a `MusicFont` backed by the bundled Bravura font.
+///
+/// # Panics
+///
+/// Panics if the bundled Bravura OTF or metadata JSON cannot be parsed.
+/// This is unreachable in normal operation: both assets are compiled in
+/// via `include_bytes!` from known-good files and validated by unit tests
+/// (`bravura_otf_is_valid_opentype`, `bravura_metadata_is_valid_json`).
 pub fn bravura_font() -> MusicFont<'static> {
-    MusicFont::new(BRAVURA_OTF, BRAVURA_METADATA).expect("bundled Bravura font should be valid")
+    MusicFont::new(BRAVURA_OTF, BRAVURA_METADATA)
+        .expect("bundled Bravura OTF + metadata are compile-time constants validated by tests")
 }
 
 #[cfg(test)]

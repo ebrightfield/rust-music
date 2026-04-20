@@ -441,3 +441,9 @@
 - Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver.
 - Next: W1 is now fully resolved across all files. Continue QA backlog: W3 (rest_glyph bounds), W12 (centralized error type), or W13 (score.rs split).
 - Open issues: None for W1. Remaining QA items: W3, W4, W6, W7, W12, W13, W14, W15, W16, plus info-tier items.
+
+## 2026-04-20 — QA: fixed W6 document expect safety in bravura_font() + triaged W3/W4
+- Did: Documented panic safety of `bravura_font()` in `font/mod.rs` with `# Panics` doc section explaining why the expect is unreachable (bundled assets are compile-time constants validated by unit tests). Updated expect message to be more precise. Also triaged W3 and W4: both unwraps are exclusively in `#[cfg(test)]` code, not production — W3's `rest_glyph(d).unwrap()` at rest.rs:146 is inside a test, and W4's `bl.dots.unwrap()` at barline.rs:282 is inside a test. Closing W3, W4, and W6.
+- Verified: `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
+- Next: Continue QA backlog: W7 (write! unwrap style in glyph_outline.rs), W12 (centralized error type), W13 (score.rs split), or info-tier items (I23 done, I8 doctest unwrap).
+- Open issues: Remaining QA items: W7, W12, W13, W14, W15, W16, plus info-tier items I2–I8.
