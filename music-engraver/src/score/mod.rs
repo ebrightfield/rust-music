@@ -45,6 +45,7 @@ use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
+use crate::layout::lyric::LyricSyllable;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
@@ -271,6 +272,26 @@ impl ScoreBuilder {
         let e = Some(text.into());
         if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
             annotations.expression = e;
+        }
+        self
+    }
+
+    /// Attach a lyric syllable to the most recently added note or chord.
+    ///
+    /// Lyrics are rendered in roman (upright) text below the staff, below
+    /// dynamics and expression text. Use [`LyricSyllable::word`] for
+    /// end-of-word syllables, [`LyricSyllable::with_hyphen`] for mid-word
+    /// syllables (displays trailing hyphen), and [`LyricSyllable::with_extender`]
+    /// for melismatic syllables (sustained across multiple notes).
+    ///
+    /// Must be called immediately after `.note()` or `.chord()`. Has no effect
+    /// if the last event is not a note or chord.
+    pub fn lyric(mut self, syllable: LyricSyllable) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.lyric = Some(syllable);
         }
         self
     }

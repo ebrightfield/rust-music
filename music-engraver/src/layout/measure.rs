@@ -4,6 +4,7 @@ use crate::layout::clef::ClefLayout;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
+use crate::layout::lyric::LyricSyllable;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
@@ -47,6 +48,8 @@ pub struct NoteAnnotations {
     /// Optional grace note preceding the principal note.
     /// Tuple of (grace note staff position, grace note kind).
     pub grace_note: Option<(i8, GraceNoteKind)>,
+    /// Optional lyric syllable displayed below the staff under this note/chord.
+    pub lyric: Option<LyricSyllable>,
 }
 
 /// A group of notes to be beamed together.

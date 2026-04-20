@@ -18,6 +18,7 @@ pub mod expression;
 pub mod flag;
 pub mod grace;
 pub mod hairpin;
+pub mod lyric;
 pub mod key_signature;
 pub mod measure;
 pub mod multi_staff;
@@ -75,6 +76,7 @@ pub use grace::{
     GRACE_NOTE_SCALE, GRACE_NOTE_SPACING_SS,
 };
 pub use hairpin::{layout_hairpin, HairpinLayout, HairpinType, HAIRPIN_BELOW_STAFF_SS};
+pub use lyric::{layout_lyric, LyricContinuation, LyricLayout, LyricSyllable, LYRIC_BELOW_STAFF_SS};
 pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};

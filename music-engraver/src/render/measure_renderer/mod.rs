@@ -19,6 +19,8 @@ use crate::render::dot_renderer::draw_dots;
 use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::expression_renderer::draw_expression;
 use crate::render::flag_renderer::draw_flag;
+use crate::render::lyric_renderer::draw_lyric;
+use crate::layout::lyric::layout_lyric;
 use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::layout::expression::layout_expression;
 use crate::layout::rehearsal::layout_rehearsal_mark;
@@ -224,6 +226,13 @@ fn draw_note_event(
         draw_expression(svg, &layout);
     }
 
+    // Draw lyric syllable below the staff if present
+    if let Some(ref syllable) = note.annotations.lyric {
+        let note_center_x = x + advance / 2.0;
+        let layout = layout_lyric(syllable, note_center_x, staff, config.staff_space);
+        draw_lyric(svg, &layout);
+    }
+
     Ok(())
 }
 
@@ -395,6 +404,13 @@ fn draw_chord_event(
         let chord_center_x = x + advance / 2.0;
         let layout = layout_expression(text, chord_center_x, staff, config.staff_space);
         draw_expression(svg, &layout);
+    }
+
+    // Draw lyric syllable below the staff if present
+    if let Some(ref syllable) = chord.annotations.lyric {
+        let chord_center_x = x + advance / 2.0;
+        let layout = layout_lyric(syllable, chord_center_x, staff, config.staff_space);
+        draw_lyric(svg, &layout);
     }
 
     Ok(())

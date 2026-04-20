@@ -1454,3 +1454,109 @@ fn grace_note_has_scale_transform() {
         "grace note should have scale(0.6) transform"
     );
 }
+
+#[test]
+fn note_with_lyric_adds_text_element() {
+    use crate::layout::lyric::LyricSyllable;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            lyric: Some(LyricSyllable::word("sun")),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert!(
+        output.contains(">sun<"),
+        "lyric text 'sun' should appear in SVG"
+    );
+    assert!(
+        output.contains("<text"),
+        "should contain a text element for the lyric"
+    );
+}
+
+#[test]
+fn note_without_lyric_has_no_lyric_text() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert_eq!(
+        output.matches("<text").count(),
+        0,
+        "note without lyric should have no text elements"
+    );
+}
+
+#[test]
+fn chord_with_lyric_adds_text_element() {
+    use crate::layout::lyric::LyricSyllable;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4, 8],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            lyric: Some(LyricSyllable::with_hyphen("hap")),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert!(
+        output.contains("hap -"),
+        "chord lyric should show 'hap -' with trailing hyphen"
+    );
+}
+
+#[test]
+fn lyric_differs_from_no_lyric() {
+    use crate::layout::lyric::LyricSyllable;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let make = |lyric: Option<LyricSyllable>| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                lyric,
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let without = make(None);
+    let with = make(Some(LyricSyllable::word("day")));
+    assert_ne!(without, with, "lyric should change the SVG output");
+}

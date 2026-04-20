@@ -2475,3 +2475,152 @@
             _ => panic!("expected Note event from grace_note_convert_event"),
         }
     }
+
+    // ---- Lyric tests ----
+
+    #[test]
+    fn lyric_on_note_adds_text_element() {
+        use crate::layout::lyric::LyricSyllable;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .lyric(LyricSyllable::word("day"))
+            .end_barline()
+            .render_svg();
+        let texts_without = without.matches("<text").count();
+        let texts_with = with.matches("<text").count();
+        assert_eq!(
+            texts_with,
+            texts_without + 1,
+            "lyric should add one text element"
+        );
+        assert!(with.contains(">day<"), "lyric text 'day' should appear in SVG");
+    }
+
+    #[test]
+    fn lyric_on_rest_is_noop() {
+        use crate::layout::lyric::LyricSyllable;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .lyric(LyricSyllable::word("oops"))
+            .end_barline()
+            .render_svg();
+        assert_eq!(without, with, "lyric on rest should be no-op");
+    }
+
+    #[test]
+    fn lyric_with_hyphen_shows_hyphen() {
+        use crate::layout::lyric::LyricSyllable;
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .lyric(LyricSyllable::with_hyphen("hap"))
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("hap -"),
+            "hyphen syllable should show 'hap -' in SVG"
+        );
+    }
+
+    #[test]
+    fn different_lyrics_produce_different_svgs() {
+        use crate::layout::lyric::LyricSyllable;
+        let svg_a = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .lyric(LyricSyllable::word("day"))
+            .end_barline()
+            .render_svg();
+        let svg_b = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .lyric(LyricSyllable::word("night"))
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_a, svg_b, "different lyric texts should produce different SVGs");
+    }
+
+    #[test]
+    fn lyric_on_chord_adds_text() {
+        use crate::layout::lyric::LyricSyllable;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(vec![p("C", 4), p("E", 4)], Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(vec![p("C", 4), p("E", 4)], Duration::QTR)
+            .lyric(LyricSyllable::word("love"))
+            .end_barline()
+            .render_svg();
+        let texts_without = without.matches("<text").count();
+        let texts_with = with.matches("<text").count();
+        assert_eq!(
+            texts_with,
+            texts_without + 1,
+            "lyric on chord should add one text element"
+        );
+    }
+
+    #[test]
+    fn lyric_convert_event_preserves_field() {
+        use crate::layout::lyric::LyricSyllable;
+        let key_sig = KeySignature::Open;
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                lyric: Some(LyricSyllable::with_hyphen("test")),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                let lyric = ne.annotations.lyric.as_ref().expect("should have lyric");
+                assert_eq!(lyric.text, "test");
+                assert_eq!(
+                    lyric.continuation,
+                    crate::layout::lyric::LyricContinuation::Hyphen
+                );
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn lyric_is_not_italic_in_svg() {
+        use crate::layout::lyric::LyricSyllable;
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .lyric(LyricSyllable::word("la"))
+            .end_barline()
+            .render_svg();
+        // Find the text element containing "la" and verify it's not italic
+        // The lyric text should be rendered in normal (roman) style
+        assert!(svg.contains(">la<"), "should contain lyric text 'la'");
+        // Expression text uses italic; lyrics should not
+        // Check that the text element for "la" does not have font-style="italic"
+        let la_pos = svg.find(">la<").expect("should find 'la'");
+        let text_start = svg[..la_pos].rfind("<text").expect("should find <text before 'la'");
+        let text_tag = &svg[text_start..la_pos];
+        assert!(
+            !text_tag.contains("italic"),
+            "lyric text should be roman (normal), not italic: {text_tag}"
+        );
+    }
