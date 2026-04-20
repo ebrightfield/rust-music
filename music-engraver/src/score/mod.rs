@@ -288,13 +288,21 @@ impl ScoreBuilder {
     /// Stem direction is auto-detected from the group's staff positions.
     ///
     /// # Example
-    /// ```ignore
-    /// builder.beam_group(vec![
-    ///     (pitch_e4, Duration::EIGHTH),
-    ///     (pitch_f4, Duration::EIGHTH),
-    ///     (pitch_g4, Duration::EIGHTH),
-    ///     (pitch_a4, Duration::EIGHTH),
-    /// ])
+    /// ```no_run
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::pitch::Pitch;
+    /// use music::note::note::Note;
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// let svg = ScoreBuilder::new()
+    ///     .beam_group(vec![
+    ///         (Pitch::new(Note::E, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::F, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::G, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::A, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///     ])
+    ///     .end_barline()
+    ///     .render_svg();
     /// ```
     pub fn beam_group(mut self, notes: Vec<(Pitch, Duration)>) -> Self {
         self.current_events.push(ScoreEvent::BeamGroup { notes });
@@ -307,12 +315,20 @@ impl ScoreBuilder {
     /// `tuplet_number` is the number to display (e.g. 3 for triplet, 5 for quintuplet).
     ///
     /// # Example
-    /// ```ignore
-    /// builder.tuplet(3, vec![
-    ///     (pitch_e4, Duration::EIGHTH),
-    ///     (pitch_f4, Duration::EIGHTH),
-    ///     (pitch_g4, Duration::EIGHTH),
-    /// ])
+    /// ```no_run
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::pitch::Pitch;
+    /// use music::note::note::Note;
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// let svg = ScoreBuilder::new()
+    ///     .tuplet(3, vec![
+    ///         (Pitch::new(Note::E, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::F, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::G, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///     ])
+    ///     .end_barline()
+    ///     .render_svg();
     /// ```
     pub fn tuplet(mut self, tuplet_number: u32, notes: Vec<(Pitch, Duration)>) -> Self {
         self.current_events.push(ScoreEvent::TupletGroup { notes, tuplet_number });

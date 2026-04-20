@@ -531,3 +531,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 824 tests pass (819 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: QA backlog complete (I2 deferred, I23 already covered by struct-level `#[must_use]`). Consider additional post-v1 features or polish.
 - Open issues: I2 (optional, deferred).
+
+## 2026-04-20 — QA: I28 fixed ignored doc-tests for beam_group and tuplet
+- Did: Converted 2 `ignore`d doc-tests on `ScoreBuilder::beam_group()` and `ScoreBuilder::tuplet()` to compilable `no_run` examples with proper imports, pitch construction, and full builder chain (including `.end_barline().render_svg()`). Previously these used undefined variables (`pitch_e4`, `builder`) and were marked `ignore`, giving 2 ignored doc-tests in every run. Now all 4 doc-tests compile successfully with 0 ignored.
+- Verified: `cargo test -p music-engraver --doc` — 4 passed, 0 ignored. `cargo test -p music-engraver` — 826 total (819 unit + 3 integration + 4 doc-tests), all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver.
+- Next: QA backlog fully complete (I2 optional/deferred, I28 done). Consider additional post-v1 features or polish.
+- Open issues: I2 (optional, deferred — cross-system span DRY, explicitly debatable per QA report).
