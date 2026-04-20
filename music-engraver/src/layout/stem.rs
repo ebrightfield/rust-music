@@ -31,12 +31,13 @@ pub fn auto_stem_direction(position: StaffPosition) -> StemDirection {
 /// above the middle, stem goes down; if below, stem goes up. When
 /// equidistant, stem goes down (convention).
 pub fn auto_stem_direction_chord(positions: &[StaffPosition]) -> StemDirection {
-    if positions.is_empty() {
+    let Some((&first, rest)) = positions.split_first() else {
         return StemDirection::Up;
-    }
+    };
 
-    let min = *positions.iter().min().unwrap();
-    let max = *positions.iter().max().unwrap();
+    let (min, max) = rest.iter().fold((first, first), |(lo, hi), &p| {
+        (lo.min(p), hi.max(p))
+    });
 
     // Distance from middle line (position 4)
     let dist_above = max - 4; // positive if above
