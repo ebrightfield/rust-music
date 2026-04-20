@@ -225,20 +225,66 @@ pub(crate) fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig
     }
 }
 
+/// Resolve an accidental and update the within-measure tracker if present.
+fn resolve_and_track(
+    pitch: &Pitch,
+    key_sig: &KeySignature,
+    seen: Option<&mut AccidentalTracker>,
+) -> Option<smufl::Glyph> {
+    let acc = resolve_accidental(pitch, key_sig, seen.as_deref());
+    if let Some(seen) = seen {
+        let key = note_key(pitch);
+        if let Some(eff) = effective_accidental(pitch, key_sig) {
+            seen.insert(key, eff);
+        } else {
+            seen.remove(&key);
+        }
+    }
+    acc
+}
+
+/// Convert a single pitch+duration into a `NoteEvent` for beam/tuplet groups.
+fn pitch_to_note_event(
+    pitch: &Pitch,
+    duration: &Duration,
+    clef: &Clef,
+    key_sig: &KeySignature,
+    seen: Option<&mut AccidentalTracker>,
+) -> NoteEvent {
+    let staff_pos = pitch_to_staff_position(pitch, clef);
+    let log2 = duration_kind_to_log2(duration.kind());
+    let dots = duration.num_dots();
+    let acc = resolve_and_track(pitch, key_sig, seen);
+    NoteEvent {
+        staff_position: staff_pos,
+        duration_log2: log2,
+        dots,
+        accidental: acc,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    }
+}
+
 /// Convert a `ScoreEvent` into a `MeasureEvent` for the layout engine.
-/// Does not track within-measure accidental state (each note resolved independently).
-#[cfg(test)]
+///
+/// When `seen` is `Some`, tracks accidentals within the measure: suppresses
+/// redundant accidentals and shows courtesy naturals. Caller provides a fresh
+/// map per measure; it resets at each measure boundary.
+///
+/// When `seen` is `None`, each note is resolved independently against the key
+/// signature without within-measure tracking.
 pub(crate) fn convert_event(
     event: &ScoreEvent,
     clef: &Clef,
     key_sig: &KeySignature,
+    mut seen: Option<&mut AccidentalTracker>,
 ) -> MeasureEvent {
     match event {
         ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
             let staff_pos = pitch_to_staff_position(pitch, clef);
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
-            let acc = should_show_accidental(pitch, key_sig);
+            let acc = resolve_and_track(pitch, key_sig, seen);
 
             MeasureEvent::Note(NoteEvent {
                 staff_position: staff_pos,
@@ -246,7 +292,8 @@ pub(crate) fn convert_event(
                 dots,
                 accidental: acc,
                 stem_direction: None,
-                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
+                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },
+            })
         }
         ScoreEvent::Rest { duration } => {
             let log2 = duration_kind_to_log2(duration.kind());
@@ -266,7 +313,7 @@ pub(crate) fn convert_event(
                 .collect();
             let accidentals: Vec<Option<smufl::Glyph>> = pitches
                 .iter()
-                .map(|p| should_show_accidental(p, key_sig))
+                .map(|p| resolve_and_track(p, key_sig, seen.as_deref_mut()))
                 .collect();
 
             MeasureEvent::Chord(ChordEvent {
@@ -275,24 +322,14 @@ pub(crate) fn convert_event(
                 dots,
                 accidentals,
                 stem_direction: None,
-                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
+                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },
+            })
         }
         ScoreEvent::BeamGroup { notes } => {
             let note_events: Vec<NoteEvent> = notes
                 .iter()
                 .map(|(pitch, duration)| {
-                    let staff_pos = pitch_to_staff_position(pitch, clef);
-                    let log2 = duration_kind_to_log2(duration.kind());
-                    let dots = duration.num_dots();
-                    let acc = should_show_accidental(pitch, key_sig);
-                    NoteEvent {
-                        staff_position: staff_pos,
-                        duration_log2: log2,
-                        dots,
-                        accidental: acc,
-                        stem_direction: None,
-                        annotations: NoteAnnotations::default(),
-                    }
+                    pitch_to_note_event(pitch, duration, clef, key_sig, seen.as_deref_mut())
                 })
                 .collect();
             MeasureEvent::BeamGroup(BeamGroupEvent {
@@ -304,160 +341,7 @@ pub(crate) fn convert_event(
             let note_events: Vec<NoteEvent> = notes
                 .iter()
                 .map(|(pitch, duration)| {
-                    let staff_pos = pitch_to_staff_position(pitch, clef);
-                    let log2 = duration_kind_to_log2(duration.kind());
-                    let dots = duration.num_dots();
-                    let acc = should_show_accidental(pitch, key_sig);
-                    NoteEvent {
-                        staff_position: staff_pos,
-                        duration_log2: log2,
-                        dots,
-                        accidental: acc,
-                        stem_direction: None,
-                        annotations: NoteAnnotations::default(),
-                    }
-                })
-                .collect();
-            MeasureEvent::TupletGroup(TupletGroupEvent {
-                beam_group: BeamGroupEvent {
-                    notes: note_events,
-                    stem_direction: None,
-                },
-                tuplet_number: *tuplet_number,
-            })
-        }
-    }
-}
-
-/// Convert a `ScoreEvent` into a `MeasureEvent`, tracking accidentals within the measure.
-///
-/// `seen` maps note identity (letter+octave) to the accidental last displayed for that
-/// note in this measure. Suppresses redundant accidentals and shows courtesy naturals.
-/// Resets at each measure boundary (caller provides a fresh map per measure).
-pub(crate) fn convert_event_tracked(
-    event: &ScoreEvent,
-    clef: &Clef,
-    key_sig: &KeySignature,
-    seen: &mut AccidentalTracker,
-) -> MeasureEvent {
-    match event {
-        ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
-            let staff_pos = pitch_to_staff_position(pitch, clef);
-            let log2 = duration_kind_to_log2(duration.kind());
-            let dots = duration.num_dots();
-            let acc = resolve_accidental(pitch, key_sig, Some(seen));
-
-            // Update tracking: record what accidental state this note establishes
-            let key = note_key(pitch);
-            if let Some(eff) = effective_accidental(pitch, key_sig) {
-                seen.insert(key, eff);
-            } else {
-                seen.remove(&key);
-            }
-
-            MeasureEvent::Note(NoteEvent {
-                staff_position: staff_pos,
-                duration_log2: log2,
-                dots,
-                accidental: acc,
-                stem_direction: None,
-                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
-        }
-        ScoreEvent::Rest { duration } => {
-            let log2 = duration_kind_to_log2(duration.kind());
-            let dots = duration.num_dots();
-
-            MeasureEvent::Rest(RestEvent {
-                duration_log2: log2,
-                dots,
-            })
-        }
-        ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
-            let log2 = duration_kind_to_log2(duration.kind());
-            let dots = duration.num_dots();
-            let staff_positions: Vec<i8> = pitches
-                .iter()
-                .map(|p| pitch_to_staff_position(p, clef))
-                .collect();
-            let accidentals: Vec<Option<smufl::Glyph>> = pitches
-                .iter()
-                .map(|p| {
-                    let acc = resolve_accidental(p, key_sig, Some(seen));
-                    // Update tracking for each note in the chord
-                    let key = note_key(p);
-                    if let Some(eff) = effective_accidental(p, key_sig) {
-                        seen.insert(key, eff);
-                    } else {
-                        seen.remove(&key);
-                    }
-                    acc
-                })
-                .collect();
-
-            MeasureEvent::Chord(ChordEvent {
-                staff_positions,
-                duration_log2: log2,
-                dots,
-                accidentals,
-                stem_direction: None,
-                annotations: NoteAnnotations { tie_forward: *tie_forward, dynamic: *dynamic, slur_start: *slur_start, slur_end: *slur_end, hairpin_start: *hairpin_start, hairpin_end: *hairpin_end, rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone() },})
-        }
-        ScoreEvent::BeamGroup { notes } => {
-            let note_events: Vec<NoteEvent> = notes
-                .iter()
-                .map(|(pitch, duration)| {
-                    let staff_pos = pitch_to_staff_position(pitch, clef);
-                    let log2 = duration_kind_to_log2(duration.kind());
-                    let dots = duration.num_dots();
-                    let acc = resolve_accidental(pitch, key_sig, Some(seen));
-
-                    // Update tracking
-                    let key = note_key(pitch);
-                    if let Some(eff) = effective_accidental(pitch, key_sig) {
-                        seen.insert(key, eff);
-                    } else {
-                        seen.remove(&key);
-                    }
-
-                    NoteEvent {
-                        staff_position: staff_pos,
-                        duration_log2: log2,
-                        dots,
-                        accidental: acc,
-                        stem_direction: None,
-                        annotations: NoteAnnotations::default(),
-                    }
-                })
-                .collect();
-            MeasureEvent::BeamGroup(BeamGroupEvent {
-                notes: note_events,
-                stem_direction: None,
-            })
-        }
-        ScoreEvent::TupletGroup { notes, tuplet_number } => {
-            let note_events: Vec<NoteEvent> = notes
-                .iter()
-                .map(|(pitch, duration)| {
-                    let staff_pos = pitch_to_staff_position(pitch, clef);
-                    let log2 = duration_kind_to_log2(duration.kind());
-                    let dots = duration.num_dots();
-                    let acc = resolve_accidental(pitch, key_sig, Some(seen));
-
-                    let key = note_key(pitch);
-                    if let Some(eff) = effective_accidental(pitch, key_sig) {
-                        seen.insert(key, eff);
-                    } else {
-                        seen.remove(&key);
-                    }
-
-                    NoteEvent {
-                        staff_position: staff_pos,
-                        duration_log2: log2,
-                        dots,
-                        accidental: acc,
-                        stem_direction: None,
-                        annotations: NoteAnnotations::default(),
-                    }
+                    pitch_to_note_event(pitch, duration, clef, key_sig, seen.as_deref_mut())
                 })
                 .collect();
             MeasureEvent::TupletGroup(TupletGroupEvent {

@@ -501,3 +501,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests).
 - Next: All QA warning items (W1–W17) are now resolved. Continue with info-tier items I2–I7 or resume phased plan work.
 - Open issues: Remaining QA info-tier items: I2–I7.
+
+## 2026-04-20 — QA: I3 deduplicated convert_event / convert_event_tracked
+- Did: Merged `convert_event` (test-only, 3 args) and `convert_event_tracked` (production, 4 args) into a single `convert_event` with `Option<&mut AccidentalTracker>`. When `None`, resolves independently; when `Some`, tracks within-measure state. Extracted two helpers: `resolve_and_track` (resolve accidental + update tracker in one call) and `pitch_to_note_event` (shared pitch→NoteEvent conversion for beam/tuplet groups). Eliminated ~100 lines of duplicated match arms. Updated 33 test call sites and 1 production call site. Renamed test functions from `convert_event_tracked_*` to `convert_event_with_tracking_*`.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: Continue QA info-tier: I2 (cross-system DRY — optional), I4 (resolved by W16), I5 (no action), I6 (resolved by W12), I7 (param structs). Or resume phased plan work.
+- Open issues: Remaining QA info-tier items: I2, I7. (I3–I6 resolved or not actionable.)

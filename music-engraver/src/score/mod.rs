@@ -51,10 +51,10 @@ use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::render::page_renderer::draw_page;
 
-use event::{AccidentalTracker, ScoreEvent, convert_event_tracked};
+use event::{AccidentalTracker, ScoreEvent, convert_event};
 #[cfg(test)]
 use event::{
-    convert_event, duration_kind_to_log2, effective_accidental,
+    duration_kind_to_log2, effective_accidental,
     note_altered_in_key, note_key, resolve_accidental, should_show_accidental,
 };
 
@@ -395,7 +395,7 @@ impl ScoreBuilder {
                 let mut seen: AccidentalTracker = HashMap::new();
                 let measure_events: Vec<MeasureEvent> = events
                     .iter()
-                    .map(|e| convert_event_tracked(e, &clef, &self.key_sig, &mut seen))
+                    .map(|e| convert_event(e, &clef, &self.key_sig, Some(&mut seen)))
                     .collect();
                 MeasureContent {
                     events: measure_events,
