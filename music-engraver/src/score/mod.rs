@@ -84,6 +84,8 @@ pub struct ScoreBuilder {
     pub(crate) measures_per_system: usize,
     /// System width in font design units. 0 = auto.
     pub(crate) system_width: f64,
+    /// Use automatic width-based line breaking instead of fixed measures per system.
+    pub(crate) auto_breaks: bool,
 }
 
 impl ScoreBuilder {
@@ -98,6 +100,7 @@ impl ScoreBuilder {
             measures: Vec::new(),
             measures_per_system: 4,
             system_width: 0.0,
+            auto_breaks: false,
         }
     }
 
@@ -137,6 +140,20 @@ impl ScoreBuilder {
     /// Set the number of measures per system for line breaking.
     pub fn measures_per_system(mut self, n: usize) -> Self {
         self.measures_per_system = n;
+        self.auto_breaks = false;
+        self
+    }
+
+    /// Enable automatic line breaking based on natural measure widths.
+    ///
+    /// When enabled, measures are greedily packed onto each system until
+    /// their combined natural width exceeds the system width. This produces
+    /// more balanced output than a fixed measures-per-system count, especially
+    /// when measures vary in density (e.g. whole notes vs. sixteenth-note runs).
+    ///
+    /// Overrides any previous `measures_per_system` setting.
+    pub fn auto_line_breaks(mut self) -> Self {
+        self.auto_breaks = true;
         self
     }
 
@@ -521,7 +538,11 @@ impl ScoreBuilder {
         let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
         let sys_width = self.effective_system_width(staff_space);
         let page_config = PageLayoutConfig::new(staff_space, sys_width);
-        let breaking = SystemBreaking::Fixed(self.effective_measures_per_system());
+        let breaking = if self.auto_breaks {
+            SystemBreaking::Auto
+        } else {
+            SystemBreaking::Fixed(self.effective_measures_per_system())
+        };
 
         let page_layout = layout_page(
             &prefix,

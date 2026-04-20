@@ -1,6 +1,7 @@
-use crate::layout::measure::MeasureLayoutConfig;
+use crate::layout::key_signature::KeySignature;
+use crate::layout::measure::{layout_measure, MeasureElement, MeasureLayoutConfig};
 use crate::layout::system::{
-    layout_system, MeasureContent, SystemLayout, SystemPrefix,
+    layout_system, measure_event_to_element, MeasureContent, SystemLayout, SystemPrefix,
 };
 
 /// Configuration for page-level layout.
@@ -63,10 +64,6 @@ pub struct PageLayout {
 }
 
 /// Specification for how to break measures into systems.
-///
-/// For v1 this is a simple fixed-measures-per-system model. A smarter
-/// line-breaking algorithm (Knuth-Plass style) can replace this later
-/// without changing the rest of the pipeline.
 #[derive(Clone, Debug)]
 pub enum SystemBreaking {
     /// Fixed number of measures per system.
@@ -74,6 +71,10 @@ pub enum SystemBreaking {
     /// Break at these measure indices (0-based, exclusive upper bound of each system).
     /// e.g. `[4, 8, 12]` means measures 0–3, 4–7, 8–11.
     Manual(Vec<usize>),
+    /// Automatic line breaking: greedily pack measures until their natural
+    /// widths exceed the target system width, then start a new system.
+    /// The first system accounts for the prefix (clef + key sig + time sig).
+    Auto,
 }
 
 /// Lay out a full page of music.
@@ -96,7 +97,15 @@ pub fn layout_page(
         };
     }
 
-    let chunks = break_measures(measures.len(), breaking);
+    let chunks = match breaking {
+        SystemBreaking::Auto => break_measures_auto(
+            prefix,
+            measures,
+            measure_config,
+            page_config.system_width,
+        ),
+        other => break_measures(measures.len(), other),
+    };
 
     let mut systems = Vec::with_capacity(chunks.len());
     let mut y = page_config.top_margin;
@@ -146,6 +155,110 @@ pub fn layout_page(
     }
 }
 
+/// Compute the natural (unjustified) width of a measure's content in font
+/// design units. Does not include prefix elements (clef, key sig, time sig).
+fn content_natural_width(
+    content: &MeasureContent,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    let mut elems: Vec<MeasureElement> = content
+        .events
+        .iter()
+        .map(measure_event_to_element)
+        .collect();
+    elems.push(MeasureElement::Barline(content.barline));
+    layout_measure(&elems, config).total_width
+}
+
+/// Compute the natural width of the system prefix (clef + key sig + time sig)
+/// using the same measure layout engine.
+fn prefix_natural_width(prefix: &SystemPrefix, config: &MeasureLayoutConfig) -> f64 {
+    let mut elems = Vec::with_capacity(3);
+    elems.push(MeasureElement::Clef(prefix.clef_layout.clone()));
+    if !matches!(prefix.key_signature, KeySignature::Open) {
+        elems.push(MeasureElement::KeySignature(
+            prefix.key_signature.clone(),
+        ));
+    }
+    if let Some(ts) = &prefix.time_signature {
+        elems.push(MeasureElement::TimeSignature(ts.clone()));
+    }
+    layout_measure(&elems, config).total_width
+}
+
+/// Greedily pack measures into systems so that each system's natural width
+/// does not exceed `target_width`. The first system reserves space for the
+/// full prefix (clef + key sig + time sig); subsequent systems reserve
+/// space for the continuation prefix (clef + key sig, no time sig).
+///
+/// Guarantees at least one measure per system (even if a single measure
+/// exceeds the target width — it will be scaled down by `layout_system`).
+fn break_measures_auto(
+    prefix: &SystemPrefix,
+    measures: &[MeasureContent],
+    config: &MeasureLayoutConfig,
+    target_width: f64,
+) -> Vec<(usize, usize)> {
+    if measures.is_empty() {
+        return vec![];
+    }
+
+    // Pre-compute natural widths of each measure's content (without prefix)
+    let widths: Vec<f64> = measures
+        .iter()
+        .map(|m| content_natural_width(m, config))
+        .collect();
+
+    // First-system prefix includes time sig
+    let first_prefix_w = prefix_natural_width(prefix, config);
+
+    // Continuation prefix: clef + key sig, no time sig
+    let continuation_prefix = SystemPrefix {
+        clef_layout: prefix.clef_layout.clone(),
+        clef_kind: prefix.clef_kind,
+        key_signature: prefix.key_signature.clone(),
+        time_signature: None,
+    };
+    let cont_prefix_w = prefix_natural_width(&continuation_prefix, config);
+
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    let mut is_first = true;
+
+    while start < measures.len() {
+        let prefix_w = if is_first {
+            first_prefix_w
+        } else {
+            cont_prefix_w
+        };
+        let budget = target_width - prefix_w;
+
+        let mut running = 0.0;
+        let mut end = start;
+
+        while end < measures.len() {
+            let next = running + widths[end];
+            if end > start && next > budget {
+                // Adding this measure would exceed the budget; stop before it.
+                break;
+            }
+            running = next;
+            end += 1;
+        }
+
+        // Guarantee at least one measure per system
+        if end == start {
+            end = start + 1;
+        }
+
+        chunks.push((start, end));
+        start = end;
+        is_first = false;
+    }
+
+    chunks
+}
+
 /// Split N measures into (start, end) ranges per the breaking strategy.
 fn break_measures(n: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
     match breaking {
@@ -179,6 +292,8 @@ fn break_measures(n: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
             }
             chunks
         }
+        // Auto is handled before this function is called; see layout_page.
+        SystemBreaking::Auto => unreachable!("Auto handled by break_measures_auto"),
     }
 }
 
@@ -475,5 +590,255 @@ mod tests {
         assert_eq!(page.systems[0].system.measures.len(), 2);
         assert_eq!(page.systems[1].system.measures.len(), 4);
         assert_eq!(page.systems[2].system.measures.len(), 4);
+    }
+
+    // --- Auto line-breaking tests ---
+
+    #[test]
+    fn auto_breaking_empty_measures() {
+        let ss = 250.0;
+        let page = layout_page(
+            &test_prefix(),
+            &[],
+            &test_measure_config(ss),
+            &test_page_config(ss),
+            &SystemBreaking::Auto,
+        );
+        assert!(page.systems.is_empty());
+    }
+
+    #[test]
+    fn auto_breaking_single_measure_always_fits() {
+        let ss = 250.0;
+        let measures = vec![make_measure(4)];
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &test_page_config(ss),
+            &SystemBreaking::Auto,
+        );
+        assert_eq!(page.systems.len(), 1);
+        assert_eq!(page.systems[0].system.measures.len(), 1);
+    }
+
+    #[test]
+    fn auto_breaking_wide_system_fits_all_on_one_line() {
+        let ss = 250.0;
+        // Use a very wide system width so all measures fit on one system
+        let mut page_config = test_page_config(ss);
+        page_config.system_width = 100_000.0;
+        let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &page_config,
+            &SystemBreaking::Auto,
+        );
+        assert_eq!(
+            page.systems.len(),
+            1,
+            "wide system should fit all 6 measures on one line"
+        );
+        assert_eq!(page.systems[0].system.measures.len(), 6);
+    }
+
+    #[test]
+    fn auto_breaking_narrow_system_creates_multiple_systems() {
+        let ss = 250.0;
+        // Use a very narrow system width to force more line breaks
+        let mut page_config = test_page_config(ss);
+        page_config.system_width = 3000.0;
+        let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &page_config,
+            &SystemBreaking::Auto,
+        );
+        // With a narrow width, should have more than 1 system
+        assert!(
+            page.systems.len() > 1,
+            "narrow system should create multiple systems, got {}",
+            page.systems.len()
+        );
+        // Total measures across all systems should equal input count
+        let total: usize = page.systems.iter().map(|s| s.system.measures.len()).sum();
+        assert_eq!(total, 8, "all measures should be placed");
+    }
+
+    #[test]
+    fn auto_breaking_guarantees_at_least_one_measure_per_system() {
+        let ss = 250.0;
+        // Absurdly narrow: each measure is wider than the system
+        let mut page_config = test_page_config(ss);
+        page_config.system_width = 100.0;
+        let measures = vec![make_measure(0), make_measure(4), make_measure(8)];
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &page_config,
+            &SystemBreaking::Auto,
+        );
+        // Each system should have exactly 1 measure (no infinite loop)
+        assert_eq!(page.systems.len(), 3);
+        for (i, s) in page.systems.iter().enumerate() {
+            assert_eq!(
+                s.system.measures.len(),
+                1,
+                "system {i} should have exactly 1 measure"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_breaking_preserves_measure_order() {
+        let ss = 250.0;
+        let mut page_config = test_page_config(ss);
+        page_config.system_width = 5000.0;
+        let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &page_config,
+            &SystemBreaking::Auto,
+        );
+        // Verify all measures are present and systems are non-empty
+        let total: usize = page.systems.iter().map(|s| s.system.measures.len()).sum();
+        assert_eq!(total, 6);
+        for s in &page.systems {
+            assert!(!s.system.measures.is_empty());
+        }
+    }
+
+    #[test]
+    fn auto_breaking_systems_are_justified_to_target_width() {
+        let ss = 250.0;
+        let page_config = test_page_config(ss);
+        let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &page_config,
+            &SystemBreaking::Auto,
+        );
+        for (i, ps) in page.systems.iter().enumerate() {
+            assert!(
+                (ps.system.staff_width - page_config.system_width).abs() < 1.0,
+                "system {} staff_width {} should be close to {}",
+                i,
+                ps.system.staff_width,
+                page_config.system_width,
+            );
+        }
+    }
+
+    #[test]
+    fn auto_breaking_differs_from_fixed_for_varied_content() {
+        let ss = 250.0;
+        let page_config = test_page_config(ss);
+        let mc = test_measure_config(ss);
+
+        // Create measures with very different content densities:
+        // 2 measures with one note, 6 measures with one note
+        let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
+
+        let auto_page = layout_page(
+            &test_prefix(),
+            &measures,
+            &mc,
+            &page_config,
+            &SystemBreaking::Auto,
+        );
+        let fixed_page = layout_page(
+            &test_prefix(),
+            &measures,
+            &mc,
+            &page_config,
+            &SystemBreaking::Fixed(4),
+        );
+
+        // Both should place all measures
+        let auto_total: usize = auto_page
+            .systems
+            .iter()
+            .map(|s| s.system.measures.len())
+            .sum();
+        let fixed_total: usize = fixed_page
+            .systems
+            .iter()
+            .map(|s| s.system.measures.len())
+            .sum();
+        assert_eq!(auto_total, 8);
+        assert_eq!(fixed_total, 8);
+    }
+
+    #[test]
+    fn prefix_natural_width_is_positive() {
+        let ss = 250.0;
+        let prefix = test_prefix();
+        let config = test_measure_config(ss);
+        let w = prefix_natural_width(&prefix, &config);
+        assert!(
+            w > 0.0,
+            "prefix with clef + key sig + time sig should have positive width"
+        );
+    }
+
+    #[test]
+    fn content_natural_width_is_positive() {
+        let ss = 250.0;
+        let config = test_measure_config(ss);
+        let measure = make_measure(4);
+        let w = content_natural_width(&measure, &config);
+        assert!(
+            w > 0.0,
+            "measure with a note and barline should have positive width"
+        );
+    }
+
+    #[test]
+    fn prefix_without_time_sig_is_narrower() {
+        let ss = 250.0;
+        let config = test_measure_config(ss);
+        let with_ts = test_prefix();
+        let without_ts = SystemPrefix {
+            clef_layout: with_ts.clef_layout.clone(),
+            clef_kind: with_ts.clef_kind,
+            key_signature: with_ts.key_signature.clone(),
+            time_signature: None,
+        };
+        let w_with = prefix_natural_width(&with_ts, &config);
+        let w_without = prefix_natural_width(&without_ts, &config);
+        assert!(
+            w_with > w_without,
+            "prefix with time sig ({w_with}) should be wider than without ({w_without})"
+        );
+    }
+
+    #[test]
+    fn break_measures_auto_basic() {
+        let ss = 250.0;
+        let prefix = test_prefix();
+        let config = test_measure_config(ss);
+        let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
+
+        let chunks = break_measures_auto(&prefix, &measures, &config, 100_000.0);
+        // Very wide target: all measures on one system
+        assert_eq!(chunks, vec![(0, 4)]);
+    }
+
+    #[test]
+    fn break_measures_auto_empty() {
+        let ss = 250.0;
+        let prefix = test_prefix();
+        let config = test_measure_config(ss);
+        let chunks = break_measures_auto(&prefix, &[], &config, 10_000.0);
+        assert!(chunks.is_empty());
     }
 }

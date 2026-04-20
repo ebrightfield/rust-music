@@ -354,6 +354,9 @@ fn break_measures(total: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)
             }
             chunks
         }
+        // Auto line breaking is not yet supported in MultiStaffScore;
+        // fall back to Fixed(4).
+        SystemBreaking::Auto => break_measures(total, &SystemBreaking::Fixed(4)),
     }
 }
 

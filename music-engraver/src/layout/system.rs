@@ -203,7 +203,7 @@ pub fn layout_system(
     }
 }
 
-fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
+pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
     match event {
         MeasureEvent::Note(n) => MeasureElement::Note(n.clone()),
         MeasureEvent::Rest(r) => MeasureElement::Rest(r.clone()),

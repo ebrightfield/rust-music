@@ -2744,3 +2744,147 @@
             _ => panic!("expected Note event"),
         }
     }
+
+    // ---- Auto line breaking tests ----
+
+    #[test]
+    fn auto_line_breaks_produces_valid_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .auto_line_breaks()
+            .note(p("C", 4), Duration::WHOLE)
+            .barline()
+            .note(p("D", 4), Duration::WHOLE)
+            .barline()
+            .note(p("E", 4), Duration::WHOLE)
+            .barline()
+            .note(p("F", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<svg"), "should produce valid SVG");
+        assert!(svg.contains("</svg>"), "should contain closing tag");
+    }
+
+    #[test]
+    fn auto_line_breaks_differs_from_fixed() {
+        // 8 measures of whole notes — auto vs fixed(4) may produce
+        // different system counts depending on available width.
+        let build = |auto: bool| {
+            let mut b = ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4);
+            if auto {
+                b = b.auto_line_breaks();
+            } else {
+                b = b.measures_per_system(2);
+            }
+            for i in 0..8u8 {
+                let note = match i % 4 {
+                    0 => "C",
+                    1 => "D",
+                    2 => "E",
+                    _ => "F",
+                };
+                b = b.note(p(note, 4), Duration::WHOLE).barline();
+            }
+            b = b.note(p("G", 4), Duration::WHOLE).end_barline();
+            b.render_svg()
+        };
+
+        let auto_svg = build(true);
+        let fixed_svg = build(false);
+
+        // Both should be valid
+        assert!(auto_svg.starts_with("<svg"));
+        assert!(fixed_svg.starts_with("<svg"));
+
+        // They should differ because fixed(2) forces exactly 2 per system
+        // while auto may pack more or fewer
+        assert_ne!(auto_svg, fixed_svg, "auto and fixed(2) should produce different output");
+    }
+
+    #[test]
+    fn auto_line_breaks_overrides_measures_per_system() {
+        // Setting auto_line_breaks after measures_per_system should use auto
+        let svg_auto = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .measures_per_system(2)
+            .auto_line_breaks()
+            .note(p("C", 4), Duration::WHOLE)
+            .barline()
+            .note(p("D", 4), Duration::WHOLE)
+            .barline()
+            .note(p("E", 4), Duration::WHOLE)
+            .barline()
+            .note(p("F", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        // Setting measures_per_system after auto_line_breaks should use fixed
+        let svg_fixed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .auto_line_breaks()
+            .measures_per_system(2)
+            .note(p("C", 4), Duration::WHOLE)
+            .barline()
+            .note(p("D", 4), Duration::WHOLE)
+            .barline()
+            .note(p("E", 4), Duration::WHOLE)
+            .barline()
+            .note(p("F", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        // auto should differ from fixed(2) — auto with 4 whole-note measures
+        // at default width will likely pack differently than 2 per system
+        assert_ne!(
+            svg_auto, svg_fixed,
+            "auto should differ from fixed(2) when the last call wins"
+        );
+    }
+
+    #[test]
+    fn auto_line_breaks_with_varied_density() {
+        // Mix of dense and sparse measures
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .auto_line_breaks()
+            // Measure 1: whole note (sparse)
+            .note(p("C", 4), Duration::WHOLE)
+            .barline()
+            // Measure 2: 4 quarters (denser)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("D", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("F", 4), Duration::QTR)
+            .barline()
+            // Measure 3: beam group (densest)
+            .beam_group(vec![
+                (p("G", 4), Duration::SIXTEENTH),
+                (p("A", 4), Duration::SIXTEENTH),
+                (p("B", 4), Duration::SIXTEENTH),
+                (p("C", 5), Duration::SIXTEENTH),
+                (p("B", 4), Duration::SIXTEENTH),
+                (p("A", 4), Duration::SIXTEENTH),
+                (p("G", 4), Duration::SIXTEENTH),
+                (p("F", 4), Duration::SIXTEENTH),
+            ])
+            .barline()
+            // Measure 4: whole note (sparse again)
+            .note(p("E", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<svg"), "varied-density auto-break should produce valid SVG");
+        // Should have at least some path elements (noteheads, clef, etc.)
+        let path_count = svg.matches("<path").count();
+        assert!(
+            path_count >= 5,
+            "should have at least 5 path elements, got {path_count}"
+        );
+    }

@@ -330,6 +330,43 @@ fn build_bass_clef() -> String {
         .render_svg()
 }
 
+/// Auto line breaking with mixed-density measures.
+fn build_auto_breaks() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Sharps(1))
+        .time_signature(4, 4)
+        .auto_line_breaks()
+        // Measure 1: whole note (sparse)
+        .note(p("G", 4), Duration::WHOLE)
+        .barline()
+        // Measure 2: 4 quarters
+        .note(p("A", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .barline()
+        // Measure 3: 8 eighths (dense)
+        .beam_group(vec![
+            (p("E", 5), Duration::EIGHTH),
+            (p("D", 5), Duration::EIGHTH),
+            (p("C", 5), Duration::EIGHTH),
+            (p("B", 4), Duration::EIGHTH),
+        ])
+        .beam_group(vec![
+            (p("A", 4), Duration::EIGHTH),
+            (p("G", 4), Duration::EIGHTH),
+            (p("F#", 4), Duration::EIGHTH),
+            (p("E", 4), Duration::EIGHTH),
+        ])
+        .barline()
+        // Measure 4: half + half
+        .note(p("D", 4), Duration::HALF)
+        .note(p("G", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
 // ---------------------------------------------------------------------------
 // Test runner
 // ---------------------------------------------------------------------------
@@ -394,6 +431,11 @@ fn golden_bass_clef() {
     assert_golden("bass_clef", &build_bass_clef());
 }
 
+#[test]
+fn golden_auto_breaks() {
+    assert_golden("auto_breaks", &build_auto_breaks());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -410,6 +452,7 @@ fn golden_baselines_are_valid_svgs() {
         "grace_notes",
         "annotations",
         "bass_clef",
+        "auto_breaks",
     ];
 
     for name in &names {
