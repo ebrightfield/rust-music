@@ -18,7 +18,9 @@ use music::note::pitch::Pitch;
 use music_engraver::layout::articulation::Articulation;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::grace::GraceNoteKind;
+use music_engraver::layout::hairpin::HairpinType;
 use music_engraver::layout::key_signature::KeySignature;
+use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
@@ -420,6 +422,79 @@ fn build_lyrics() -> String {
         .render_svg()
 }
 
+/// Ornaments above notes: trill, mordent, inverted mordent, turn.
+fn build_ornaments() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::QTR)
+        .ornament(Ornament::Trill)
+        .note(p("F", 4), Duration::QTR)
+        .ornament(Ornament::Mordent)
+        .note(p("G", 4), Duration::QTR)
+        .ornament(Ornament::InvertedMordent)
+        .note(p("A", 4), Duration::QTR)
+        .ornament(Ornament::Turn)
+        .end_barline()
+        .render_svg()
+}
+
+/// Hairpins (crescendo + decrescendo) spanning notes.
+fn build_hairpins() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .dynamic(Dynamic::Piano)
+        .hairpin_start(HairpinType::Crescendo)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .hairpin_end()
+        .dynamic(Dynamic::Forte)
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Cross-system ties: tie from end of system 1 to start of system 2.
+fn build_cross_system_ties() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::HALF)
+        .barline()
+        .note(p("G", 4), Duration::HALF)
+        .note(p("G", 4), Duration::HALF)
+        .tie()
+        .barline()
+        .note(p("G", 4), Duration::WHOLE)
+        .barline()
+        .note(p("C", 5), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+/// Expression text (italic) below the staff.
+fn build_expression_text() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::QTR)
+        .expression("dolce".to_string())
+        .note(p("F", 4), Duration::QTR)
+        .note(p("G", 4), Duration::HALF)
+        .expression("cantabile".to_string())
+        .end_barline()
+        .render_svg()
+}
+
 /// Chord symbols above notes.
 fn build_chord_symbols() -> String {
     ScoreBuilder::new()
@@ -525,6 +600,26 @@ fn golden_chord_symbols() {
     assert_golden("chord_symbols", &build_chord_symbols());
 }
 
+#[test]
+fn golden_ornaments() {
+    assert_golden("ornaments", &build_ornaments());
+}
+
+#[test]
+fn golden_hairpins() {
+    assert_golden("hairpins", &build_hairpins());
+}
+
+#[test]
+fn golden_cross_system_ties() {
+    assert_golden("cross_system_ties", &build_cross_system_ties());
+}
+
+#[test]
+fn golden_expression_text() {
+    assert_golden("expression_text", &build_expression_text());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -545,6 +640,10 @@ fn golden_baselines_are_valid_svgs() {
         "grand_staff",
         "lyrics",
         "chord_symbols",
+        "ornaments",
+        "hairpins",
+        "cross_system_ties",
+        "expression_text",
     ];
 
     for name in &names {
