@@ -134,11 +134,11 @@ pub fn chord_has_offsets(layouts: &[ChordNoteLayout]) -> bool {
 /// Get the lowest and highest staff positions in a chord (for stem computation).
 /// Returns `None` for empty input.
 pub fn chord_extent(notes: &[ChordNote]) -> Option<(StaffPosition, StaffPosition)> {
-    if notes.is_empty() {
-        return None;
-    }
-    let min = notes.iter().map(|n| n.staff_position).min().unwrap();
-    let max = notes.iter().map(|n| n.staff_position).max().unwrap();
+    let (first, rest) = notes.split_first()?;
+    let (min, max) = rest.iter().fold(
+        (first.staff_position, first.staff_position),
+        |(lo, hi), n| (lo.min(n.staff_position), hi.max(n.staff_position)),
+    );
     Some((min, max))
 }
 

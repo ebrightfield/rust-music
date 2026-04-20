@@ -417,3 +417,9 @@
 - Verified: `cargo test -p music-engraver` — 811 unit + 3 integration + 2 doc-tests = 816 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo check --workspace` passes.
 - Next: Continue QA backlog (W5 document expect safety, I23 #[must_use] on builder methods) or begin new post-v1 features.
 - Open issues: None.
+
+## 2026-04-20 — QA: fixed W1 unwrap-on-min/max in chord_extent (layout/chord.rs)
+- Did: Refactored `chord_extent()` to use `split_first()?` + `fold` instead of `is_empty()` guard + `min().unwrap()` / `max().unwrap()`. The non-empty invariant is now proved at the type level via `Option` returned by `split_first()`, eliminating 2 production `unwrap()` calls.
+- Verified: `cargo test -p music-engraver` — 811 unit + 3 integration + 2 doc-tests = 816 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
+- Next: Continue QA W1 in other files (beam.rs, stem.rs, tuplet.rs, page.rs) or tackle W12/W13.
+- Open issues: W1 still present in layout/beam.rs, layout/stem.rs, layout/tuplet.rs, layout/page.rs.
