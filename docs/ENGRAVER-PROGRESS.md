@@ -465,3 +465,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: Continue QA backlog: W13 (score.rs split), W14–W16, or info-tier items.
 - Open issues: Remaining QA items: W13, W14, W15, W16, plus info-tier items I2–I7.
+
+## 2026-04-20 — QA: W13 score.rs split — extracted tests to score/tests.rs
+- Did: Converted `src/score.rs` (3,284 lines) into a directory module `src/score/mod.rs` (929 lines) + `src/score/tests.rs` (2,355 lines). Purely mechanical extraction: the `#[cfg(test)] mod tests { ... }` inline block was moved to a file-based module. No logic changes, no API changes.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: W13 phase 2 — extract `ScoreEvent` + accidental-resolution helpers into `score/event.rs` to further slim `mod.rs`. Or continue with W14 (measure_renderer.rs split), W15, W16, info-tier items.
+- Open issues: Remaining QA items: W13 (partially done — mod.rs still 929 lines, further split possible), W14, W15, W16, plus info-tier items I2–I7.
