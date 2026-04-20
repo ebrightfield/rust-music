@@ -1,0 +1,840 @@
+use super::*;
+use crate::font::bravura_font;
+use crate::layout::barline::BarlineStyle;
+use crate::layout::key_signature::KeySignature;
+use crate::layout::measure::{MeasureLayoutConfig, NoteEvent};
+use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
+use crate::layout::system::{MeasureContent, MeasureEvent, SystemPrefix};
+use crate::layout::time_signature::TimeSignatureKind;
+use music::notation::clef::Clef;
+
+fn setup() -> (MusicFont<'static>, EngravingConfig) {
+    let font = bravura_font();
+    let config = font.engraving_config();
+    (font, config)
+}
+
+fn quarter_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+    tie_forward: false,
+    dynamic: None,
+    slur_start: false,
+    slur_end: false,
+    hairpin_start: None,
+    hairpin_end: false,
+    rehearsal_mark: None, tempo_mark: None, expression: None,
+    })
+}
+
+fn make_measure(pos: i8) -> MeasureContent {
+    MeasureContent {
+        events: vec![quarter_note(pos)],
+        barline: BarlineStyle::Single,
+    }
+}
+
+fn prefix() -> SystemPrefix {
+    SystemPrefix::new(
+        &Clef::Treble,
+        KeySignature::Open,
+        Some(TimeSignatureKind::Numeric {
+            numerator: 4,
+            denominator: 4,
+        }),
+    )
+}
+
+#[test]
+fn empty_page_renders_valid_svg() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let page = layout_page(&prefix(), &[], &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+    assert!(output.starts_with("<svg"));
+    assert!(output.ends_with("</svg>\n"));
+    assert_eq!(output.matches("<path ").count(), 0);
+}
+
+#[test]
+fn single_system_page() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..3).map(|i| make_measure(i as i8 * 2)).collect();
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Should have 5 staff lines
+    assert!(output.matches("<line ").count() >= 5);
+    // Should have a clef path
+    assert!(output.matches("<path ").count() >= 1);
+}
+
+#[test]
+fn two_system_page_has_two_sets_of_staff_lines() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..6).map(|i| make_measure((i % 8) as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(3));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // 2 systems × 5 staff lines = 10 staff lines minimum
+    let line_count = output.matches("<line ").count();
+    assert!(
+        line_count >= 10,
+        "expected >= 10 lines (2 staves), got {}",
+        line_count,
+    );
+}
+
+#[test]
+fn three_system_page_element_counts() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..9).map(|i| make_measure((i % 8) as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(3));
+
+    assert_eq!(page.systems.len(), 3);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // 3 systems × 5 staff lines = 15
+    let line_count = output.matches("<line ").count();
+    assert!(line_count >= 15, "expected >= 15 lines, got {}", line_count);
+
+    // 3 clefs + time sig digits in first system only
+    let path_count = output.matches("<path ").count();
+    assert!(path_count >= 3, "expected >= 3 paths (3 clefs), got {}", path_count);
+}
+
+#[test]
+fn page_svg_dimensions_are_positive() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Parse width and height from the SVG — they should be positive
+    assert!(output.contains("width=\""));
+    assert!(output.contains("height=\""));
+    // Check viewBox has positive dimensions
+    assert!(output.contains("viewBox=\""));
+}
+
+// --- cross-system tie tests ---
+
+fn tied_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        tie_forward: true,
+        dynamic: None,
+        slur_start: false,
+        slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
+    })
+}
+
+#[test]
+fn cross_system_tie_draws_two_half_ties() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: tied note at pos 4, system 2: note at pos 4
+    let measures = vec![
+        MeasureContent {
+            events: vec![tied_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    // 1 measure per system → forces cross-system tie
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Should have 2 filled tie paths (right half-tie + left half-tie)
+    let tie_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        tie_count, 2,
+        "expected 2 half-ties for cross-system tie, got {tie_count}"
+    );
+}
+
+#[test]
+fn no_cross_system_tie_without_tie_forward() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    let tie_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(tie_count, 0, "no ties without tie_forward");
+}
+
+#[test]
+fn cross_system_tie_with_no_matching_target_draws_right_half_only() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Tied note at pos 4 in system 1, but note at pos 6 in system 2 (different position)
+    let measures = vec![
+        MeasureContent {
+            events: vec![tied_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Only the right half-tie should be drawn (outgoing tie at end of system 1)
+    let tie_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        tie_count, 1,
+        "only right half-tie when no matching target, got {tie_count}"
+    );
+}
+
+#[test]
+fn within_system_tie_does_not_produce_cross_system_tie() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Both tied note and target in same system (2 measures per system)
+    let measures = vec![
+        MeasureContent {
+            events: vec![tied_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Only 1 within-system tie, no cross-system ties
+    let tie_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(tie_count, 1, "1 within-system tie, no cross-system tie");
+}
+
+#[test]
+fn cross_system_tie_differs_from_no_tie() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let tied_measures = vec![
+        MeasureContent {
+            events: vec![tied_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+
+    let untied_measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+
+    let tied_page = layout_page(&prefix(), &tied_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let untied_page = layout_page(&prefix(), &untied_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let tied_svg = draw_page(&font, &config, &tied_page).unwrap().to_svg();
+    let untied_svg = draw_page(&font, &config, &untied_page).unwrap().to_svg();
+
+    assert_ne!(tied_svg, untied_svg, "cross-system tied output should differ from untied");
+}
+
+// --- cross-system slur tests ---
+
+fn slur_start_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        tie_forward: false,
+        dynamic: None,
+        slur_start: true,
+        slur_end: false,
+        hairpin_start: None,
+        hairpin_end: false,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
+    })
+}
+
+fn slur_end_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        tie_forward: false,
+        dynamic: None,
+        slur_start: false,
+        slur_end: true,
+        hairpin_start: None,
+        hairpin_end: false,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
+    })
+}
+
+#[test]
+fn cross_system_slur_draws_two_half_slurs() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: slur_start note, system 2: slur_end note
+    let measures = vec![
+        MeasureContent {
+            events: vec![slur_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![slur_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    // 1 measure per system → forces cross-system slur
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Should have 2 filled slur paths (right half-slur + left half-slur)
+    let filled_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        filled_count, 2,
+        "expected 2 half-slurs for cross-system slur, got {filled_count}"
+    );
+}
+
+#[test]
+fn no_cross_system_slur_without_flags() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    let filled_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(filled_count, 0, "no slurs without slur flags");
+}
+
+#[test]
+fn cross_system_slur_right_half_only_when_no_end() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // slur_start in system 1, but no slur_end in system 2
+    let measures = vec![
+        MeasureContent {
+            events: vec![slur_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],  // no slur_end
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Only the right half-slur
+    let filled_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        filled_count, 1,
+        "only right half-slur when no slur_end target, got {filled_count}"
+    );
+}
+
+#[test]
+fn within_system_slur_not_duplicated_as_cross_system() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Both slur start and end in same system (2 measures per system)
+    let measures = vec![
+        MeasureContent {
+            events: vec![slur_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![slur_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Only 1 slur (within-system), no cross-system duplication
+    let filled_count = output.matches(r#"stroke="none""#).count();
+    assert_eq!(filled_count, 1, "1 within-system slur, no cross-system slur");
+}
+
+#[test]
+fn cross_system_slur_differs_from_no_slur() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_slur = vec![
+        MeasureContent {
+            events: vec![slur_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![slur_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let without_slur = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+
+    let slur_page = layout_page(&prefix(), &with_slur, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_slur_page = layout_page(&prefix(), &without_slur, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let slur_svg = draw_page(&font, &config, &slur_page).unwrap().to_svg();
+    let no_slur_svg = draw_page(&font, &config, &no_slur_page).unwrap().to_svg();
+
+    assert_ne!(slur_svg, no_slur_svg, "cross-system slurred output should differ from unslurred");
+}
+
+// --- cross-system hairpin tests ---
+
+use crate::layout::hairpin::HairpinType;
+
+fn cresc_start_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        tie_forward: false,
+        dynamic: None,
+        slur_start: false,
+        slur_end: false,
+        hairpin_start: Some(HairpinType::Crescendo),
+        hairpin_end: false,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
+    })
+}
+
+fn hairpin_end_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        tie_forward: false,
+        dynamic: None,
+        slur_start: false,
+        slur_end: false,
+        hairpin_start: None,
+        hairpin_end: true,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
+    })
+}
+
+#[test]
+fn cross_system_hairpin_draws_four_lines() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: cresc start, system 2: hairpin end
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    // 1 measure per system → forces cross-system hairpin
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Without hairpin for comparison
+    let no_hp_measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let no_hp_page = layout_page(&prefix(), &no_hp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
+
+    // Cross-system hairpin = 2 half-hairpins × 2 lines each = 4 extra lines
+    let hp_lines = output.matches("<line ").count();
+    let no_lines = no_hp_output.matches("<line ").count();
+    assert_eq!(
+        hp_lines,
+        no_lines + 4,
+        "cross-system hairpin should add 4 lines (2 half-hairpins × 2 wedge lines), got {} vs {}",
+        hp_lines,
+        no_lines,
+    );
+}
+
+#[test]
+fn no_cross_system_hairpin_without_flags() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Count lines: should be baseline (staff lines + stems + barlines) only
+    // No hairpin lines
+    let no_hp_line_count = output.matches("<line ").count();
+    // Verify no extra hairpin-positioned lines below staff
+    // (This is implicitly verified by the 4-line-addition test above)
+    assert!(no_hp_line_count > 0, "should have some lines");
+}
+
+#[test]
+fn cross_system_hairpin_right_half_only_when_no_end() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // cresc start in system 1, but no hairpin_end in system 2
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)], // no hairpin_end
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Compare with no hairpin
+    let no_hp = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
+
+    // Only the right half-hairpin (2 lines)
+    let hp_lines = output.matches("<line ").count();
+    let no_lines = no_hp_output.matches("<line ").count();
+    assert_eq!(
+        hp_lines,
+        no_lines + 2,
+        "only right half-hairpin (2 lines) when no hairpin_end target"
+    );
+}
+
+#[test]
+fn within_system_hairpin_not_duplicated_as_cross_system() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Both hairpin start and end in same system (2 measures per system)
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Compare with no hairpin
+    let no_hp = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
+
+    // Only 1 within-system hairpin (2 lines), no cross-system duplication
+    let hp_lines = output.matches("<line ").count();
+    let no_lines = no_hp_output.matches("<line ").count();
+    assert_eq!(hp_lines, no_lines + 2, "1 within-system hairpin (2 lines), no cross-system duplication");
+}
+
+#[test]
+fn cross_system_hairpin_differs_from_no_hairpin() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_hp = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let without_hp = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+
+    let hp_page = layout_page(&prefix(), &with_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_page = layout_page(&prefix(), &without_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let hp_svg = draw_page(&font, &config, &hp_page).unwrap().to_svg();
+    let no_svg = draw_page(&font, &config, &no_page).unwrap().to_svg();
+
+    assert_ne!(hp_svg, no_svg, "cross-system hairpin output should differ from no hairpin");
+}
+
+#[test]
+fn cross_system_decresc_differs_from_cresc() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let cresc = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let decresc = vec![
+        MeasureContent {
+            events: vec![MeasureEvent::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 2,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                tie_forward: false,
+                dynamic: None,
+                slur_start: false,
+                slur_end: false,
+                hairpin_start: Some(HairpinType::Decrescendo),
+                hairpin_end: false,
+                rehearsal_mark: None, tempo_mark: None, expression: None,
+            })],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+        },
+    ];
+
+    let cresc_page = layout_page(&prefix(), &cresc, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let decresc_page = layout_page(&prefix(), &decresc, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let cresc_svg = draw_page(&font, &config, &cresc_page).unwrap().to_svg();
+    let decresc_svg = draw_page(&font, &config, &decresc_page).unwrap().to_svg();
+
+    assert_ne!(cresc_svg, decresc_svg, "cross-system cresc and decresc should differ");
+}
+
+#[test]
+fn two_system_page_has_different_y_for_staff_lines() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..6).map(|i| make_measure((i % 8) as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(3));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Extract all y1 values from <line> elements — there should be at least
+    // 2 distinct groups (one per system)
+    let y1_values: Vec<&str> = output
+        .split("y1=\"")
+        .skip(1)
+        .filter_map(|s| s.split('"').next())
+        .collect();
+    assert!(y1_values.len() >= 10, "should have >= 10 line y1 values");
+
+    // Parse to floats and check at least 2 distinct y ranges
+    let y_floats: Vec<f64> = y1_values.iter().filter_map(|s| s.parse().ok()).collect();
+    let min_y = y_floats.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_y = y_floats.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    // Two systems means y-values span at least the system spacing
+    let expected_min_span = 5.0 * ss; // at least 5 staff spaces apart
+    assert!(
+        max_y - min_y > expected_min_span,
+        "y range {} should exceed {} (two systems should be separated)",
+        max_y - min_y,
+        expected_min_span,
+    );
+}

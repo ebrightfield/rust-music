@@ -483,3 +483,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: Continue QA backlog: W15 (page_renderer.rs / system_renderer.rs split), W16, or info-tier items.
 - Open issues: Remaining QA items: W15, W16, plus info-tier items I2–I7.
+
+## 2026-04-20 — QA: W15 page_renderer.rs split — extracted tests to page_renderer/tests.rs
+- Did: Converted `src/render/page_renderer.rs` (1,438 lines) into a directory module `src/render/page_renderer/mod.rs` (594 lines) + `src/render/page_renderer/tests.rs` (844 lines). Purely mechanical extraction: the `#[cfg(test)] mod tests { ... }` inline block was moved to a file-based module. No logic changes, no API changes.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver --lib` — all 811 unit tests pass. `cargo check --workspace` passes.
+- Next: W15 phase 2 — split system_renderer.rs (1,200 lines) tests into separate file. Then W16, or info-tier items.
+- Open issues: Remaining QA items: W15 (system_renderer.rs still unsplit), W16, plus info-tier items I2–I7.
