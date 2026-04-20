@@ -384,7 +384,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 // B4 in treble: G4=pos 2, A4=pos 3, B4=pos 4 (middle line)
@@ -401,7 +401,7 @@
         let builder = ScoreBuilder::new();
         let dur = Duration::new(DurationKind::Half, 1); // dotted half
         let event = ScoreEvent::Rest { duration: dur };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Rest(r) => {
                 assert_eq!(r.duration_log2, 1);
@@ -636,8 +636,8 @@
         rehearsal_mark: None, tempo_mark: None, expression: None,
         };
 
-        let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
-        let r2 = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        let r1 = convert_event_tracked(&ev1, &Clef::Treble, &builder.key_sig, &mut seen);
+        let r2 = convert_event_tracked(&ev2, &Clef::Treble, &builder.key_sig, &mut seen);
 
         match (&r1, &r2) {
             (MeasureEvent::Note(n1), MeasureEvent::Note(n2)) => {
@@ -682,8 +682,8 @@
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
 
-        let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
-        let r2 = builder.convert_event_tracked(&ev_natural, &Clef::Treble, &mut seen);
+        let _ = convert_event_tracked(&ev_sharp, &Clef::Treble, &builder.key_sig, &mut seen);
+        let r2 = convert_event_tracked(&ev_natural, &Clef::Treble, &builder.key_sig, &mut seen);
 
         match r2 {
             MeasureEvent::Note(n) => {
@@ -909,7 +909,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert_eq!(c.staff_positions.len(), 2);
@@ -941,7 +941,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+        let _ = convert_event_tracked(&ev1, &Clef::Treble, &builder.key_sig, &mut seen);
 
         // Then: chord with F#4 (should be suppressed) and A4
         let ev2 = ScoreEvent::Chord {
@@ -958,7 +958,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&ev2, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Chord(c) => {
                 // F#4's accidental should be suppressed (already shown)
@@ -1030,7 +1030,7 @@
                 (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
             ],
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::BeamGroup(bg) => {
                 assert_eq!(bg.notes.len(), 2);
@@ -1062,7 +1062,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+        let _ = convert_event_tracked(&ev1, &Clef::Treble, &builder.key_sig, &mut seen);
 
         // Then beam group with F#4 again — should suppress repeated accidental
         let ev2 = ScoreEvent::BeamGroup {
@@ -1071,7 +1071,7 @@
                 (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
             ],
         };
-        let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&ev2, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::BeamGroup(bg) => {
                 assert!(bg.notes[0].accidental.is_none(), "F#4 accidental suppressed");
@@ -1183,7 +1183,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert!(n.tie_forward, "tie_forward should be preserved");
@@ -1211,7 +1211,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert!(c.tie_forward, "chord tie_forward should be preserved");
@@ -1331,7 +1331,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&event, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Chord(c) => {
                 assert!(c.tie_forward, "tracked conversion should preserve tie_forward");
@@ -1446,7 +1446,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.dynamic, Some(Dynamic::Pp), "dynamic should be preserved");
@@ -1470,7 +1470,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&event, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.dynamic, Some(Dynamic::Fff), "tracked conversion preserves dynamic");
@@ -1496,7 +1496,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert_eq!(c.dynamic, Some(Dynamic::Sfz), "chord dynamic should be preserved");
@@ -1601,7 +1601,7 @@
             ],
             tuplet_number: 3,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::TupletGroup(tg) => {
                 assert_eq!(tg.tuplet_number, 3);
@@ -1632,7 +1632,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
+        let _ = convert_event_tracked(&ev1, &Clef::Treble, &builder.key_sig, &mut seen);
 
         // Then tuplet with F#4 again — should suppress repeated accidental
         let ev2 = ScoreEvent::TupletGroup {
@@ -1643,7 +1643,7 @@
             ],
             tuplet_number: 3,
         };
-        let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&ev2, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::TupletGroup(tg) => {
                 assert!(tg.beam_group.notes[0].accidental.is_none(), "F#4 accidental suppressed");
@@ -1744,7 +1744,7 @@
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
-        let result = builder.convert_event(&event, &clef);
+        let result = convert_event(&event, &clef, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert!(n.slur_start, "slur_start should be preserved");
@@ -1769,7 +1769,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&event, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Note(n) => {
                 assert!(!n.slur_start, "slur_start should be false");
@@ -1796,7 +1796,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert!(c.slur_start, "chord slur_start should be preserved");
@@ -1907,7 +1907,7 @@
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
-        let result = builder.convert_event(&event, &clef);
+        let result = convert_event(&event, &clef, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.hairpin_start, Some(HairpinType::Crescendo));
@@ -1933,7 +1933,7 @@
         };
         let clef = Clef::Treble;
         let mut seen = HashMap::new();
-        let result = builder.convert_event_tracked(&event, &clef, &mut seen);
+        let result = convert_event_tracked(&event, &clef, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Note(n) => {
                 assert!(n.hairpin_start.is_none());
@@ -1958,7 +1958,7 @@
             rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
-        let result = builder.convert_event(&event, &clef);
+        let result = convert_event(&event, &clef, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert_eq!(c.hairpin_start, Some(HairpinType::Decrescendo));
@@ -2063,7 +2063,7 @@
             tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
-        let result = builder.convert_event(&event, &clef);
+        let result = convert_event(&event, &clef, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.rehearsal_mark, Some(("A".to_string(), RehearsalStyle::Boxed)));
@@ -2089,7 +2089,7 @@
         };
         let clef = Clef::Treble;
         let mut seen = HashMap::new();
-        let result = builder.convert_event_tracked(&event, &clef, &mut seen);
+        let result = convert_event_tracked(&event, &clef, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.rehearsal_mark, Some(("B".to_string(), RehearsalStyle::Plain)));
@@ -2114,7 +2114,7 @@
             tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
-        let result = builder.convert_event(&event, &clef);
+        let result = convert_event(&event, &clef, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert_eq!(c.rehearsal_mark, Some(("12".to_string(), RehearsalStyle::Boxed)));
@@ -2206,7 +2206,7 @@
             rehearsal_mark: None, tempo_mark: Some(TempoMark::Text("Largo".into())),
             expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.tempo_mark, Some(TempoMark::Text("Largo".into())));
@@ -2235,7 +2235,7 @@
             }),
             expression: None,
         };
-        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        let result = convert_event_tracked(&event, &Clef::Treble, &builder.key_sig, &mut seen);
         match result {
             MeasureEvent::Note(n) => {
                 assert!(n.tempo_mark.is_some());
@@ -2259,7 +2259,7 @@
             rehearsal_mark: None, tempo_mark: Some(TempoMark::Text("Adagio".into())),
             expression: None,
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Chord(c) => {
                 assert_eq!(c.tempo_mark, Some(TempoMark::Text("Adagio".into())));
@@ -2331,7 +2331,7 @@
             hairpin_end: false,
             rehearsal_mark: None, tempo_mark: None, expression: Some("cantabile".into()),
         };
-        let result = builder.convert_event(&event, &Clef::Treble);
+        let result = convert_event(&event, &Clef::Treble, &builder.key_sig);
         match result {
             MeasureEvent::Note(n) => {
                 assert_eq!(n.expression, Some("cantabile".into()));

@@ -471,3 +471,9 @@
 - Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
 - Next: W13 phase 2 — extract `ScoreEvent` + accidental-resolution helpers into `score/event.rs` to further slim `mod.rs`. Or continue with W14 (measure_renderer.rs split), W15, W16, info-tier items.
 - Open issues: Remaining QA items: W13 (partially done — mod.rs still 929 lines, further split possible), W14, W15, W16, plus info-tier items I2–I7.
+
+## 2026-04-20 — QA: W13 score.rs split phase 2 — extracted ScoreEvent + conversion logic to score/event.rs
+- Did: Extracted `ScoreEvent` enum, `AccidentalTracker` type alias, accidental resolution functions (`resolve_accidental`, `should_show_accidental`, `effective_accidental`, `note_altered_in_key`, `note_key`), `duration_kind_to_log2`, and both `convert_event`/`convert_event_tracked` (converted from methods on `ScoreBuilder` to free functions taking `key_sig` parameter) into `src/score/event.rs` (524 lines). `mod.rs` slimmed from 929 → 473 lines. Updated all 18 test call sites from `builder.convert_event(...)` to `convert_event(..., &builder.key_sig)` pattern. Purely mechanical extraction — no logic changes, no API changes.
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — all 816 tests pass (811 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: W13 is now complete (score module split into mod.rs 473 + event.rs 524 + tests.rs 2355). Continue QA: W14 (measure_renderer.rs split), W15, W16, or info-tier items.
+- Open issues: Remaining QA items: W14, W15, W16, plus info-tier items I2–I7.
