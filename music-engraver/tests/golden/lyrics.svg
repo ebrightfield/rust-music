@@ -31,4 +31,5 @@
   <text x="8877.65873015873" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">you!</text>
   <line x1="9682.539682539682" y1="0" x2="9682.539682539682" y2="1000" stroke="black" stroke-width="40"/>
   <line x1="9865.039682539682" y1="0" x2="9865.039682539682" y2="1000" stroke="black" stroke-width="125"/>
+  <line x1="7877.777777777777" y1="2375" x2="8680.15873015873" y2="2375" stroke="black" stroke-width="32.5"/>
 </svg>

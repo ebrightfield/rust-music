@@ -1,5 +1,6 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
+use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS};
 use crate::layout::measure::MeasureElement;
 use crate::layout::slur::{layout_slur, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
@@ -9,6 +10,7 @@ use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::render::measure_renderer::draw_measure;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::hairpin_renderer::draw_hairpin;
+use crate::render::lyric_renderer::draw_lyric_extender;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
@@ -86,6 +88,10 @@ pub fn draw_system(
 
     // Draw hairpins between notes marked with hairpin_start and hairpin_end
     draw_system_hairpins(svg, font, config, system, &staff, x)?;
+
+    // Draw lyric extender lines (melisma) between syllables with Extender
+    // continuation and the next note that has a lyric
+    draw_system_lyric_extenders(svg, config, system, &staff, x);
 
     Ok(())
 }
@@ -354,6 +360,84 @@ fn draw_system_hairpins(
     }
 
     Ok(())
+}
+
+/// Positional info for a note/chord relevant to lyric extender drawing.
+struct LyricNoteInfo {
+    /// X-offset of the note within the system (before system_x is added).
+    x: f64,
+    /// The lyric syllable, if any.
+    lyric: Option<LyricSyllable>,
+}
+
+/// Collect lyric-relevant note info from the system in sequential order.
+fn collect_lyric_note_info(system: &SystemLayout) -> Vec<LyricNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for elem in &measure.layout.elements {
+            let elem_x = measure.x_offset + elem.x;
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push(LyricNoteInfo {
+                        x: elem_x,
+                        lyric: n.annotations.lyric.clone(),
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    notes.push(LyricNoteInfo {
+                        x: elem_x,
+                        lyric: c.annotations.lyric.clone(),
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+/// Draw lyric extender lines (melisma underscores) between syllables that
+/// have `Extender` continuation and the next note position.
+///
+/// The extender runs from just past the source syllable text to just before
+/// the target note's position. The target is the next note/chord in the
+/// system regardless of whether it has a lyric — the held syllable sustains
+/// until the next rhythmic event.
+fn draw_system_lyric_extenders(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) {
+    let note_info = collect_lyric_note_info(system);
+
+    let y_baseline = staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+    let stroke_width = config.staff_line_thickness_fu();
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(ref lyric) = info.lyric else {
+            continue;
+        };
+        if lyric.continuation != LyricContinuation::Extender {
+            continue;
+        }
+
+        // Find the next note/chord (any — the held syllable extends until
+        // the next rhythmic event regardless of whether it carries a lyric).
+        let Some(target) = note_info.get(i + 1) else {
+            continue;
+        };
+
+        draw_lyric_extender(
+            svg,
+            system_x + info.x,
+            system_x + target.x,
+            y_baseline,
+            config.staff_space,
+            stroke_width,
+        );
+    }
 }
 
 #[cfg(test)]

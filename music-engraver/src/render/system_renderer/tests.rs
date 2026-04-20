@@ -2,6 +2,7 @@ use super::*;
 use crate::font::bravura_font;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
+use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
 use crate::layout::system::{
     layout_system, MeasureContent, MeasureEvent, SystemPrefix,
@@ -775,4 +776,201 @@ fn hairpin_across_barline() {
     let hp_lines = output.matches("<line ").count();
     let no_lines = svg_no.to_svg().matches("<line ").count();
     assert_eq!(hp_lines, no_lines + 2, "cross-barline hairpin adds 2 lines");
+}
+
+// --- lyric extender rendering ---
+
+fn note_with_lyric(pos: i8, syl: LyricSyllable) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            lyric: Some(syl),
+            ..Default::default()
+        },
+    })
+}
+
+#[test]
+fn lyric_extender_within_measure_draws_line() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            note_with_lyric(4, LyricSyllable::with_extender("love")),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Without the extender, we'd have only staff lines + stem lines + barline.
+    // The extender adds exactly one more <line> element.
+    let without = {
+        let m = vec![MeasureContent {
+            events: vec![
+                note_with_lyric(4, LyricSyllable::word("love")),
+                quarter_note(6),
+            ],
+            barline: BarlineStyle::Single,
+        }];
+        let sys = layout_system(&treble_prefix(), &m, &mcfg, None);
+        let mut s = make_svg();
+        draw_system(&mut s, &font, &config, &sys, 0.0, 0.0).unwrap();
+        s.to_svg()
+    };
+
+    let with_count = output.matches("<line ").count();
+    let without_count = without.matches("<line ").count();
+    assert_eq!(
+        with_count,
+        without_count + 1,
+        "extender should add exactly 1 line element"
+    );
+}
+
+#[test]
+fn no_extender_for_word_continuation() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            note_with_lyric(4, LyricSyllable::word("day")),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg_word = make_svg();
+    draw_system(&mut svg_word, &font, &config, &system, 0.0, 0.0).unwrap();
+
+    // Same but with no lyric at all
+    let measures_none = vec![MeasureContent {
+        events: vec![quarter_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+    }];
+    let sys_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
+    let mut svg_none = make_svg();
+    draw_system(&mut svg_none, &font, &config, &sys_none, 0.0, 0.0).unwrap();
+
+    // Word continuation should not add an extra line (only the text differs)
+    let word_lines = svg_word.to_svg().matches("<line ").count();
+    let none_lines = svg_none.to_svg().matches("<line ").count();
+    assert_eq!(
+        word_lines, none_lines,
+        "word lyric should not add an extender line"
+    );
+}
+
+#[test]
+fn no_extender_for_hyphen_continuation() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            note_with_lyric(4, LyricSyllable::with_hyphen("hap")),
+            note_with_lyric(6, LyricSyllable::word("py")),
+        ],
+        barline: BarlineStyle::Single,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg_hyp = make_svg();
+    draw_system(&mut svg_hyp, &font, &config, &system, 0.0, 0.0).unwrap();
+
+    // Compare against same notes with no lyrics
+    let measures_none = vec![MeasureContent {
+        events: vec![quarter_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+    }];
+    let sys_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
+    let mut svg_none = make_svg();
+    draw_system(&mut svg_none, &font, &config, &sys_none, 0.0, 0.0).unwrap();
+
+    let hyp_lines = svg_hyp.to_svg().matches("<line ").count();
+    let none_lines = svg_none.to_svg().matches("<line ").count();
+    assert_eq!(
+        hyp_lines, none_lines,
+        "hyphen continuation should not produce an extender line"
+    );
+}
+
+#[test]
+fn lyric_extender_across_barline() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![
+        MeasureContent {
+            events: vec![note_with_lyric(4, LyricSyllable::with_extender("love"))],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![note_with_lyric(6, LyricSyllable::word("you"))],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+
+    // Compare against same content without extender
+    let measures_no = vec![
+        MeasureContent {
+            events: vec![note_with_lyric(4, LyricSyllable::word("love"))],
+            barline: BarlineStyle::Single,
+        },
+        MeasureContent {
+            events: vec![note_with_lyric(6, LyricSyllable::word("you"))],
+            barline: BarlineStyle::Final,
+        },
+    ];
+    let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
+
+    let with_lines = svg.to_svg().matches("<line ").count();
+    let without_lines = svg_no.to_svg().matches("<line ").count();
+    assert_eq!(
+        with_lines,
+        without_lines + 1,
+        "cross-barline extender should add 1 line"
+    );
+}
+
+#[test]
+fn lyric_extender_differs_from_no_extender() {
+    let (font, config, mcfg) = setup();
+    let with = vec![MeasureContent {
+        events: vec![
+            note_with_lyric(4, LyricSyllable::with_extender("ah")),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+    }];
+    let without = vec![MeasureContent {
+        events: vec![
+            note_with_lyric(4, LyricSyllable::word("ah")),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+    }];
+
+    let sys_w = layout_system(&treble_prefix(), &with, &mcfg, None);
+    let sys_n = layout_system(&treble_prefix(), &without, &mcfg, None);
+
+    let mut svg_w = make_svg();
+    draw_system(&mut svg_w, &font, &config, &sys_w, 0.0, 0.0).unwrap();
+    let mut svg_n = make_svg();
+    draw_system(&mut svg_n, &font, &config, &sys_n, 0.0, 0.0).unwrap();
+
+    assert_ne!(
+        svg_w.to_svg(),
+        svg_n.to_svg(),
+        "extender vs no-extender should differ"
+    );
 }
