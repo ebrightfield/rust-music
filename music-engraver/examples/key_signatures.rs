@@ -38,13 +38,13 @@ fn main() {
     // Render sharps (1 through 4) on treble, then flats (1 through 4) on treble
     // Render sharps (5 through 7) on bass, then flats (5 through 7) on bass
     let treble_keys: Vec<KeySignature> = (1..=4)
-        .map(|n| KeySignature::Sharps(n))
-        .chain((1..=4).map(|n| KeySignature::Flats(n)))
+        .map(KeySignature::Sharps)
+        .chain((1..=4).map(KeySignature::Flats))
         .collect();
 
     let bass_keys: Vec<KeySignature> = (5..=7)
-        .map(|n| KeySignature::Sharps(n))
-        .chain((5..=7).map(|n| KeySignature::Flats(n)))
+        .map(KeySignature::Sharps)
+        .chain((5..=7).map(KeySignature::Flats))
         .collect();
 
     let mut x = clef_advance;

@@ -399,3 +399,9 @@
 - Verified: `cargo test -p music-engraver` — 808 unit + 3 integration + 2 doc-tests = 813 tests, all pass. `cargo clippy -p music-engraver --all-targets` — music-engraver warnings dropped from 13 to 8. `cargo check --workspace` passes.
 - Next: Fix next QA clippy warning (W8 identity_op in tuplet.rs, W9 useless_format in dot_renderer.rs, W11 redundant closures in key_signatures.rs, or the 2 empty_line_after_doc_comments in expression modules).
 - Open issues: 8 remaining clippy warnings in music-engraver (--all-targets).
+
+## 2026-04-20 — QA: fixed remaining 8 clippy warnings (W8, W9, W11, empty_line_after_doc_comments)
+- Did: Fixed all 8 remaining clippy warnings in music-engraver (--all-targets): removed empty line after doc comment in `layout/expression.rs` and `render/expression_renderer.rs` (2), replaced redundant closures with tuple variant constructors in `examples/key_signatures.rs` (4, W11), removed identity_op `(8 - 0)` → `8.0` in `layout/tuplet.rs` test (1, W8), replaced `format!("translate(")` with `"translate(".to_string()` in `render/dot_renderer.rs` test (1, W9).
+- Verified: `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo test -p music-engraver` — 813 tests pass (808 unit + 3 integration + 2 doc-tests). `cargo check --workspace` passes.
+- Next: Continue QA backlog (W2 bounds check on digit_glyph, W5 document expect safety, I23 #[must_use] on builder methods) or begin new post-v1 features.
+- Open issues: None — music-engraver is now fully clippy-clean with `--all-targets`.

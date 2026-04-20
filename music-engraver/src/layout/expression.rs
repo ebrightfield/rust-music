@@ -3,7 +3,6 @@
 /// Standard engraving convention: expression text (e.g. "dolce", "espressivo",
 /// "legato", "cantabile") appears below the staff in italic, centered on the
 /// note it applies to, typically at the same vertical level as dynamics.
-
 use crate::layout::staff::StaffLayout;
 
 /// Result of laying out an expression text marking.

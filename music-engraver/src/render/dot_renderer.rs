@@ -108,7 +108,7 @@ mod tests {
         let output = svg.to_svg();
 
         let expected_y = staff.y_of(5);
-        let translate = format!("translate(");
+        let translate = "translate(".to_string();
         assert!(output.contains(&translate));
         // Verify the y component of the translate
         let y_str = format!(", {expected_y})");

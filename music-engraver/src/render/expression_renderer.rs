@@ -2,7 +2,6 @@
 ///
 /// Renders italic text below the staff using the geometry from
 /// [`crate::layout::expression`].
-
 use crate::layout::expression::ExpressionLayout;
 use crate::render::SvgWriter;
 

@@ -250,7 +250,7 @@ mod tests {
             3, SS, 0.16, 100.0,
         );
         // Bottom line (pos 0) → y=1000
-        let bottom_y = (8 - 0) as f64 * HS; // 1000.0
+        let bottom_y = 8.0 * HS;
         assert!(layout.bracket_y > bottom_y,
             "bracket_y {} should be below bottom note y {}", layout.bracket_y, bottom_y);
     }
