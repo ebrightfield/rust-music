@@ -27,6 +27,7 @@
 //! ```
 
 mod event;
+pub mod multi_staff;
 
 use std::collections::HashMap;
 
@@ -78,11 +79,11 @@ pub struct ScoreBuilder {
     /// Events accumulated for the current (in-progress) measure.
     current_events: Vec<ScoreEvent>,
     /// Completed measures.
-    measures: Vec<(Vec<ScoreEvent>, BarlineStyle)>,
+    pub(crate) measures: Vec<(Vec<ScoreEvent>, BarlineStyle)>,
     /// Measures per system (for line breaking). 0 = auto (4 per system).
-    measures_per_system: usize,
+    pub(crate) measures_per_system: usize,
     /// System width in font design units. 0 = auto.
-    system_width: f64,
+    pub(crate) system_width: f64,
 }
 
 impl ScoreBuilder {
@@ -421,31 +422,21 @@ impl ScoreBuilder {
         self
     }
 
-    /// Render the score to an SVG string, returning an error if font operations fail.
-    ///
-    /// Flushes any pending events as a final measure (with `Final` barline)
-    /// if no explicit end barline was provided.
-    #[must_use = "the SVG string is returned but not used"]
-    pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
-        // Flush any pending events
+    /// Flush any pending events as a final measure if not already flushed.
+    pub(crate) fn flush_pending(&mut self) {
         if !self.current_events.is_empty() {
             let events = std::mem::take(&mut self.current_events);
             self.measures.push((events, BarlineStyle::Final));
         }
+    }
 
-        if self.measures.is_empty() {
-            return Ok(String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
-        }
-
-        let font = bravura_font();
-        let config = font.engraving_config();
-        let staff_space = config.staff_space;
-
+    /// Convert accumulated `ScoreEvent`s into `MeasureContent`s suitable for layout.
+    ///
+    /// Each measure's accidentals are tracked independently (courtesy naturals,
+    /// suppression of redundant accidentals within a measure).
+    pub(crate) fn build_measure_contents(&self) -> Vec<MeasureContent> {
         let clef = self.clef.to_clef();
-
-        // Convert ScoreEvents to MeasureContent, tracking accidentals within each measure
-        let measure_contents: Vec<MeasureContent> = self
-            .measures
+        self.measures
             .iter()
             .map(|(events, barline)| {
                 let mut seen: AccidentalTracker = HashMap::new();
@@ -458,9 +449,12 @@ impl ScoreBuilder {
                     barline: *barline,
                 }
             })
-            .collect();
+            .collect()
+    }
 
-        // Build system prefix
+    /// Build the system prefix (clef, key sig, time sig) for this score's stave.
+    pub(crate) fn build_prefix(&self) -> SystemPrefix {
+        let clef = self.clef.to_clef();
         let time_sig_kind = match (&self.time_sig_kind, self.time_sig) {
             (Some(kind), _) => Some(kind.clone()),
             (None, Some((n, d))) => Some(TimeSignatureKind::Numeric {
@@ -469,23 +463,49 @@ impl ScoreBuilder {
             }),
             (None, None) => None,
         };
+        SystemPrefix::new(&clef, self.key_sig.clone(), time_sig_kind)
+    }
 
-        let prefix = SystemPrefix::new(&clef, self.key_sig.clone(), time_sig_kind);
-        let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
-
-        let sys_width = if self.system_width > 0.0 {
+    /// Effective system width in font design units (auto = 40 staff spaces).
+    pub(crate) fn effective_system_width(&self, staff_space: f64) -> f64 {
+        if self.system_width > 0.0 {
             self.system_width
         } else {
             40.0 * staff_space
-        };
-        let page_config = PageLayoutConfig::new(staff_space, sys_width);
+        }
+    }
 
-        let mps = if self.measures_per_system == 0 {
+    /// Effective measures per system (auto = 4).
+    pub(crate) fn effective_measures_per_system(&self) -> usize {
+        if self.measures_per_system == 0 {
             4
         } else {
             self.measures_per_system
-        };
-        let breaking = SystemBreaking::Fixed(mps);
+        }
+    }
+
+    /// Render the score to an SVG string, returning an error if font operations fail.
+    ///
+    /// Flushes any pending events as a final measure (with `Final` barline)
+    /// if no explicit end barline was provided.
+    #[must_use = "the SVG string is returned but not used"]
+    pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
+        self.flush_pending();
+
+        if self.measures.is_empty() {
+            return Ok(String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
+        }
+
+        let font = bravura_font();
+        let config = font.engraving_config();
+        let staff_space = config.staff_space;
+
+        let measure_contents = self.build_measure_contents();
+        let prefix = self.build_prefix();
+        let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
+        let sys_width = self.effective_system_width(staff_space);
+        let page_config = PageLayoutConfig::new(staff_space, sys_width);
+        let breaking = SystemBreaking::Fixed(self.effective_measures_per_system());
 
         let page_layout = layout_page(
             &prefix,
