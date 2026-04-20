@@ -17,4 +17,9 @@ pub enum EngraverError {
     /// A font operation failed (glyph lookup, outline extraction, parsing).
     #[error(transparent)]
     Font(#[from] FontError),
+
+    /// PNG rasterization failed (requires the `png` feature).
+    #[cfg(feature = "png")]
+    #[error(transparent)]
+    Png(#[from] crate::render::png::PngError),
 }

@@ -3,22 +3,18 @@
 /// Renders italic text below the staff using the geometry from
 /// [`crate::layout::expression`].
 use crate::layout::expression::ExpressionLayout;
+use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
 /// Draw an expression text marking onto the SVG.
 ///
 /// Renders italic serif text centered on the note's x-position, below the staff.
 pub fn draw_expression(svg: &mut SvgWriter, layout: &ExpressionLayout) {
-    svg.add_styled_text(
+    svg.add_text(
         layout.x_center,
         layout.y_baseline,
         &layout.text,
-        "serif",
-        layout.font_size,
-        "black",
-        "middle",
-        "normal",
-        "italic",
+        &TextStyle::italic(layout.font_size),
     );
 }
 

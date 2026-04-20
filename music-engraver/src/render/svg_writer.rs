@@ -1,5 +1,57 @@
 use std::fmt::Write;
 
+/// Font and styling properties for an SVG `<text>` element.
+///
+/// Groups the typographic attributes that tend to travel together,
+/// keeping `SvgWriter` method signatures small.
+#[derive(Clone, Debug)]
+pub struct TextStyle<'a> {
+    pub font_family: &'a str,
+    pub font_size: f64,
+    pub fill: &'a str,
+    pub anchor: &'a str,
+    pub font_weight: &'a str,
+    pub font_style: &'a str,
+}
+
+impl<'a> TextStyle<'a> {
+    /// Normal-weight, upright text in a serif font, black, centered.
+    pub fn normal(font_size: f64) -> Self {
+        Self {
+            font_family: "serif",
+            font_size,
+            fill: "black",
+            anchor: "middle",
+            font_weight: "normal",
+            font_style: "normal",
+        }
+    }
+
+    /// Bold, upright text in a serif font, black, left-aligned.
+    pub fn bold(font_size: f64) -> Self {
+        Self {
+            font_family: "serif",
+            font_size,
+            fill: "black",
+            anchor: "start",
+            font_weight: "bold",
+            font_style: "normal",
+        }
+    }
+
+    /// Normal-weight, italic text in a serif font, black, centered.
+    pub fn italic(font_size: f64) -> Self {
+        Self {
+            font_family: "serif",
+            font_size,
+            fill: "black",
+            anchor: "middle",
+            font_weight: "normal",
+            font_style: "italic",
+        }
+    }
+}
+
 /// Minimal SVG document builder.
 ///
 /// Accumulates SVG elements and produces a complete SVG document string.
@@ -88,45 +140,19 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
-    /// Add a `<text>` element at the given position.
+    /// Add a `<text>` element at the given position with the given style.
     ///
-    /// `font_size` is in the same coordinate system as the viewBox.
-    /// `anchor` is an SVG `text-anchor` value: "start", "middle", or "end".
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_text(
-        &mut self,
-        x: f64,
-        y: f64,
-        text: &str,
-        font_family: &str,
-        font_size: f64,
-        fill: &str,
-        anchor: &str,
-    ) {
+    /// Font size is in the same coordinate system as the viewBox.
+    pub fn add_text(&mut self, x: f64, y: f64, text: &str, style: &TextStyle<'_>) {
         let _ = write!(
             self.elements,
-            r#"  <text x="{x}" y="{y}" font-family="{font_family}" font-size="{font_size}" fill="{fill}" text-anchor="{anchor}">{text}</text>"#,
-        );
-        self.elements.push('\n');
-    }
-
-    /// Add a `<text>` element with additional styling (font-weight, font-style).
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_styled_text(
-        &mut self,
-        x: f64,
-        y: f64,
-        text: &str,
-        font_family: &str,
-        font_size: f64,
-        fill: &str,
-        anchor: &str,
-        font_weight: &str,
-        font_style: &str,
-    ) {
-        let _ = write!(
-            self.elements,
-            r#"  <text x="{x}" y="{y}" font-family="{font_family}" font-size="{font_size}" fill="{fill}" text-anchor="{anchor}" font-weight="{font_weight}" font-style="{font_style}">{text}</text>"#,
+            r#"  <text x="{x}" y="{y}" font-family="{ff}" font-size="{fs}" fill="{fill}" text-anchor="{anchor}" font-weight="{fw}" font-style="{fst}">{text}</text>"#,
+            ff = style.font_family,
+            fs = style.font_size,
+            fill = style.fill,
+            anchor = style.anchor,
+            fw = style.font_weight,
+            fst = style.font_style,
         );
         self.elements.push('\n');
     }
@@ -241,7 +267,7 @@ mod tests {
     #[test]
     fn svg_writer_text_element() {
         let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
-        w.add_text(250.0, 100.0, "A", "serif", 200.0, "black", "middle");
+        w.add_text(250.0, 100.0, "A", &TextStyle::normal(200.0));
         let svg = w.to_svg();
         assert!(svg.contains("<text "));
         assert!(svg.contains(r#"x="250""#));
@@ -255,9 +281,15 @@ mod tests {
     #[test]
     fn svg_writer_styled_text_element() {
         let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
-        w.add_styled_text(
-            50.0, 60.0, "cresc.", "Times", 150.0, "black", "start", "normal", "italic",
-        );
+        let style = TextStyle {
+            font_family: "Times",
+            font_size: 150.0,
+            fill: "black",
+            anchor: "start",
+            font_weight: "normal",
+            font_style: "italic",
+        };
+        w.add_text(50.0, 60.0, "cresc.", &style);
         let svg = w.to_svg();
         assert!(svg.contains(r#"font-weight="normal""#));
         assert!(svg.contains(r#"font-style="italic""#));
@@ -279,8 +311,74 @@ mod tests {
     #[test]
     fn svg_writer_text_with_special_chars() {
         let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
-        w.add_text(0.0, 0.0, "12", "sans-serif", 50.0, "black", "middle");
+        let style = TextStyle {
+            font_family: "sans-serif",
+            ..TextStyle::normal(50.0)
+        };
+        w.add_text(0.0, 0.0, "12", &style);
         let svg = w.to_svg();
         assert!(svg.contains(">12</text>"));
+    }
+
+    #[test]
+    fn text_style_normal_defaults() {
+        let s = TextStyle::normal(100.0);
+        assert_eq!(s.font_family, "serif");
+        assert_eq!(s.font_size, 100.0);
+        assert_eq!(s.fill, "black");
+        assert_eq!(s.anchor, "middle");
+        assert_eq!(s.font_weight, "normal");
+        assert_eq!(s.font_style, "normal");
+    }
+
+    #[test]
+    fn text_style_bold_defaults() {
+        let s = TextStyle::bold(200.0);
+        assert_eq!(s.font_weight, "bold");
+        assert_eq!(s.anchor, "start");
+        assert_eq!(s.font_size, 200.0);
+    }
+
+    #[test]
+    fn text_style_italic_defaults() {
+        let s = TextStyle::italic(150.0);
+        assert_eq!(s.font_style, "italic");
+        assert_eq!(s.font_weight, "normal");
+        assert_eq!(s.anchor, "middle");
+    }
+
+    #[test]
+    fn text_style_override_via_struct_update() {
+        let s = TextStyle {
+            fill: "red",
+            anchor: "end",
+            ..TextStyle::bold(120.0)
+        };
+        assert_eq!(s.fill, "red");
+        assert_eq!(s.anchor, "end");
+        assert_eq!(s.font_weight, "bold");
+        assert_eq!(s.font_size, 120.0);
+    }
+
+    #[test]
+    fn add_text_emits_all_style_attributes() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        let style = TextStyle {
+            font_family: "Helvetica",
+            font_size: 300.0,
+            fill: "blue",
+            anchor: "end",
+            font_weight: "bold",
+            font_style: "italic",
+        };
+        w.add_text(10.0, 20.0, "Test", &style);
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"font-family="Helvetica""#));
+        assert!(svg.contains(r#"font-size="300""#));
+        assert!(svg.contains(r#"fill="blue""#));
+        assert!(svg.contains(r#"text-anchor="end""#));
+        assert!(svg.contains(r#"font-weight="bold""#));
+        assert!(svg.contains(r#"font-style="italic""#));
+        assert!(svg.contains(">Test</text>"));
     }
 }

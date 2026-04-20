@@ -4,6 +4,7 @@
 /// above the staff using the geometry from [`crate::layout::tempo`].
 use crate::font::MusicFont;
 use crate::layout::tempo::TempoMarkLayout;
+use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
 /// Draw a tempo marking onto the SVG.
@@ -15,19 +16,11 @@ pub fn draw_tempo_mark(
     layout: &TempoMarkLayout,
     font: &MusicFont,
 ) {
+    let bold = TextStyle::bold(layout.font_size);
+
     // Draw text portion (if any)
     if !layout.text.is_empty() {
-        svg.add_styled_text(
-            layout.x_left,
-            layout.y_baseline,
-            &layout.text,
-            "serif",
-            layout.font_size,
-            "black",
-            "start",
-            "bold",
-            "normal",
-        );
+        svg.add_text(layout.x_left, layout.y_baseline, &layout.text, &bold);
     }
 
     // Draw metronome portion (if any)
@@ -39,17 +32,7 @@ pub fn draw_tempo_mark(
         }
 
         // Draw "= BPM" text
-        svg.add_styled_text(
-            metro.eq_text_x,
-            layout.y_baseline,
-            &metro.eq_text,
-            "serif",
-            layout.font_size,
-            "black",
-            "start",
-            "bold",
-            "normal",
-        );
+        svg.add_text(metro.eq_text_x, layout.y_baseline, &metro.eq_text, &bold);
     }
 }
 

@@ -1,6 +1,6 @@
 /// Renders rehearsal marks (boxed or plain text above the staff).
-use crate::layout::rehearsal::{RehearsalMarkLayout, RehearsalStyle};
-use crate::render::svg_writer::SvgWriter;
+use crate::layout::rehearsal::RehearsalMarkLayout;
+use crate::render::svg_writer::{SvgWriter, TextStyle};
 
 /// Draw a rehearsal mark using the given layout.
 ///
@@ -20,22 +20,15 @@ pub fn draw_rehearsal_mark(svg: &mut SvgWriter, layout: &RehearsalMarkLayout) {
         );
     }
 
-    // Draw text centered on x_center at y_baseline
-    let font_weight = match layout.style {
-        RehearsalStyle::Boxed => "bold",
-        RehearsalStyle::Plain => "bold",
+    let style = TextStyle {
+        anchor: "middle",
+        ..TextStyle::bold(layout.font_size)
     };
-
-    svg.add_styled_text(
+    svg.add_text(
         layout.x_center,
         layout.y_baseline,
         &layout.text,
-        "serif",
-        layout.font_size,
-        "black",
-        "middle",
-        font_weight,
-        "normal",
+        &style,
     );
 }
 
