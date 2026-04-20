@@ -585,3 +585,9 @@
 - Verified: `cargo test -p music-engraver` — 937 unit + 13 golden + 3 integration + 4 doc-tests = 957 tests, all pass. `cargo clippy -p music-engraver --all-targets` ��� 0 warnings from music-engraver. `cargo run --example lyrics_score` produces valid SVG. `cargo check --workspace` passes.
 - Next: Integrate multi-staff layout into ScoreBuilder pipeline, or add lyric extender line rendering, or begin line-breaking algorithm.
 - Open issues: Extender lines not rendered. Multi-staff not in ScoreBuilder pipeline. I2 still deferred.
+
+## 2026-04-20 — Post-v1, articulations + grace notes score examples
+- Did: Created `examples/articulations_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.articulation()` method. Demonstrates all 6 articulation types (staccato, tenuto, accent, marcato, staccatissimo, fermata) on notes with varying stem directions and staff positions. Output: 28 paths, 29 lines (12982 bytes). Created `examples/grace_notes_score.rs` rendering 4 measures across 2 systems using `.grace_note()` method. Demonstrates acciaccatura (slashed) and appoggiatura on single notes, high/low register notes, and chords; verifies rest no-op and 0.6 scale transform. Output: 24 paths, 28 lines (15727 bytes).
+- Verified: `cargo test -p music-engraver` — 957 tests pass (937 unit + 13 golden + 3 integration + 4 doc-tests). `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo run --example articulations_score` and `cargo run --example grace_notes_score` both produce valid SVGs. `cargo check --workspace` passes.
+- Next: Integrate multi-staff layout into ScoreBuilder pipeline, or add lyric extender line rendering, or begin line-breaking algorithm.
+- Open issues: Extender lines not rendered. Multi-staff not in ScoreBuilder pipeline. I2 still deferred.
