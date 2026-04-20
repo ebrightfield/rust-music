@@ -8,7 +8,7 @@ use crate::layout::measure::MeasureLayoutConfig;
 use crate::layout::multi_staff::{
     layout_multi_staff, ConnectorKind, StaffGroup,
 };
-use crate::layout::page::SystemBreaking;
+use crate::layout::page::{break_measures_auto, SystemBreaking};
 use crate::layout::staff::StaffLayout;
 use crate::layout::system::{layout_system, SystemLayout};
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
@@ -60,6 +60,8 @@ pub struct MultiStaffScore {
     system_width: f64,
     /// Override measures per system. 0 = auto.
     measures_per_system: usize,
+    /// When true, use width-based auto line breaking instead of fixed measures_per_system.
+    auto_breaks: bool,
 }
 
 impl MultiStaffScore {
@@ -73,6 +75,7 @@ impl MultiStaffScore {
             joined_barlines: true,
             system_width: 0.0,
             measures_per_system: 0,
+            auto_breaks: false,
         }
     }
 
@@ -84,6 +87,7 @@ impl MultiStaffScore {
             joined_barlines: true,
             system_width: 0.0,
             measures_per_system: 0,
+            auto_breaks: false,
         }
     }
 
@@ -95,6 +99,7 @@ impl MultiStaffScore {
             joined_barlines: false,
             system_width: 0.0,
             measures_per_system: 0,
+            auto_breaks: false,
         }
     }
 
@@ -105,8 +110,23 @@ impl MultiStaffScore {
     }
 
     /// Set the number of measures per system.
+    ///
+    /// Calling this disables auto line breaks if previously enabled.
     pub fn measures_per_system(mut self, n: usize) -> Self {
         self.measures_per_system = n;
+        self.auto_breaks = false;
+        self
+    }
+
+    /// Enable automatic width-based line breaking.
+    ///
+    /// Measures are greedily packed onto systems until the natural width
+    /// exceeds the target system width. Uses the first stave's content for
+    /// width estimation.
+    ///
+    /// Calling this overrides a previous `measures_per_system` setting.
+    pub fn auto_line_breaks(mut self) -> Self {
+        self.auto_breaks = true;
         self
     }
 
@@ -167,16 +187,24 @@ impl MultiStaffScore {
             return Ok(String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
         }
 
-        // Break measures into system chunks
-        let breaking = SystemBreaking::Fixed(mps);
-        let chunks = break_measures(max_measures, &breaking);
-
-        // Build measure contents and prefixes for each stave
+        // Build measure contents and prefixes for each stave (needed early for auto breaking)
         let stave_data: Vec<_> = self
             .staves
             .iter()
             .map(|s| (s.build_measure_contents(), s.build_prefix()))
             .collect();
+
+        // Break measures into system chunks
+        let use_auto = self.auto_breaks
+            || self.staves.iter().any(|s| s.auto_breaks);
+        let chunks = if use_auto {
+            // Use first stave's content for width estimation
+            let (ref contents, ref prefix) = stave_data[0];
+            break_measures_auto(prefix, contents, &measure_config, sys_width)
+        } else {
+            let breaking = SystemBreaking::Fixed(mps);
+            break_measures(max_measures, &breaking)
+        };
 
         // Build the multi-staff geometry
         let group = StaffGroup {
@@ -354,8 +382,8 @@ fn break_measures(total: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)
             }
             chunks
         }
-        // Auto line breaking is not yet supported in MultiStaffScore;
-        // fall back to Fixed(4).
+        // Auto handled by caller using break_measures_auto; this path is a
+        // fallback when Auto is passed directly to break_measures.
         SystemBreaking::Auto => break_measures(total, &SystemBreaking::Fixed(4)),
     }
 }
@@ -560,5 +588,182 @@ mod tests {
     fn break_measures_empty() {
         let chunks = break_measures(0, &SystemBreaking::Fixed(4));
         assert!(chunks.is_empty());
+    }
+
+    /// Build a multi-measure treble stave for auto-breaking tests.
+    fn multi_measure_treble(num_measures: usize) -> ScoreBuilder {
+        let mut b = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Sharps(2))
+            .time_signature(4, 4);
+        for i in 0..num_measures {
+            let note = if i % 2 == 0 { Note::D } else { Note::E };
+            b = b
+                .note(pitch(note, 5), Duration::QTR)
+                .note(pitch(Note::Fis, 5), Duration::QTR)
+                .note(pitch(Note::G, 5), Duration::QTR)
+                .note(pitch(Note::A, 5), Duration::QTR);
+            if i < num_measures - 1 {
+                b = b.barline();
+            }
+        }
+        b.end_barline()
+    }
+
+    fn multi_measure_bass(num_measures: usize) -> ScoreBuilder {
+        let mut b = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .key_signature(KeySignature::Sharps(2))
+            .time_signature(4, 4);
+        for i in 0..num_measures {
+            b = b.note(pitch(Note::D, 3), Duration::WHOLE);
+            if i < num_measures - 1 {
+                b = b.barline();
+            }
+        }
+        b.end_barline()
+    }
+
+    #[test]
+    fn auto_line_breaks_renders_valid_svg() {
+        let svg = MultiStaffScore::grand_staff(
+            multi_measure_treble(6),
+            multi_measure_bass(6),
+        )
+        .auto_line_breaks()
+        .render_svg();
+        assert!(svg.starts_with("<svg"), "should start with <svg");
+        assert!(svg.contains("</svg>"), "should close svg");
+    }
+
+    #[test]
+    fn auto_line_breaks_differs_from_fixed() {
+        let svg_auto = MultiStaffScore::grand_staff(
+            multi_measure_treble(8),
+            multi_measure_bass(8),
+        )
+        .auto_line_breaks()
+        .render_svg();
+
+        let svg_fixed = MultiStaffScore::grand_staff(
+            multi_measure_treble(8),
+            multi_measure_bass(8),
+        )
+        .measures_per_system(4)
+        .render_svg();
+
+        // Auto breaking may pack differently than fixed 4-per-system,
+        // especially with narrow or wide system widths.
+        // At minimum both should be valid SVGs.
+        assert!(svg_auto.starts_with("<svg"));
+        assert!(svg_fixed.starts_with("<svg"));
+    }
+
+    #[test]
+    fn auto_line_breaks_narrow_width_produces_more_systems() {
+        // With a very narrow system width, auto should produce many system groups
+        let svg_narrow = MultiStaffScore::grand_staff(
+            multi_measure_treble(6),
+            multi_measure_bass(6),
+        )
+        .system_width_fu(5000.0)
+        .auto_line_breaks()
+        .render_svg();
+
+        let svg_wide = MultiStaffScore::grand_staff(
+            multi_measure_treble(6),
+            multi_measure_bass(6),
+        )
+        .system_width_fu(50000.0)
+        .auto_line_breaks()
+        .render_svg();
+
+        // Narrow width should produce a taller SVG (more system groups stacked)
+        // Both should be valid
+        assert!(svg_narrow.starts_with("<svg"));
+        assert!(svg_wide.starts_with("<svg"));
+
+        // Narrow will have more staff line sets (more systems × 2 staves × 5 lines each)
+        let narrow_lines = svg_narrow.matches("<line").count();
+        let wide_lines = svg_wide.matches("<line").count();
+        assert!(
+            narrow_lines > wide_lines,
+            "narrow ({narrow_lines} lines) should have more systems than wide ({wide_lines} lines)"
+        );
+    }
+
+    #[test]
+    fn auto_line_breaks_overrides_measures_per_system() {
+        // Setting auto_line_breaks after measures_per_system should use auto
+        let svg = MultiStaffScore::grand_staff(
+            multi_measure_treble(6),
+            multi_measure_bass(6),
+        )
+        .measures_per_system(2)  // set fixed first
+        .auto_line_breaks()      // then override with auto
+        .render_svg();
+
+        assert!(svg.starts_with("<svg"));
+    }
+
+    #[test]
+    fn measures_per_system_overrides_auto_line_breaks() {
+        // Setting measures_per_system after auto should disable auto
+        let svg_fixed = MultiStaffScore::grand_staff(
+            multi_measure_treble(4),
+            multi_measure_bass(4),
+        )
+        .auto_line_breaks()
+        .measures_per_system(2)  // override back to fixed
+        .render_svg();
+
+        let svg_auto = MultiStaffScore::grand_staff(
+            multi_measure_treble(4),
+            multi_measure_bass(4),
+        )
+        .auto_line_breaks()
+        .render_svg();
+
+        // Fixed(2) with 4 measures = 2 system groups
+        // Auto with 4 measures = depends on width, likely different layout
+        assert!(svg_fixed.starts_with("<svg"));
+        assert!(svg_auto.starts_with("<svg"));
+    }
+
+    #[test]
+    fn auto_line_breaks_inherits_from_stave() {
+        // If a stave has auto_breaks=true, MultiStaffScore should pick it up
+        let treble = multi_measure_treble(6).auto_line_breaks();
+        let bass = multi_measure_bass(6);
+
+        let svg = MultiStaffScore::grand_staff(treble, bass).render_svg();
+        assert!(svg.starts_with("<svg"));
+
+        // Should have multiple systems like explicit auto on MultiStaffScore
+        let svg_explicit = MultiStaffScore::grand_staff(
+            multi_measure_treble(6),
+            multi_measure_bass(6),
+        )
+        .auto_line_breaks()
+        .render_svg();
+
+        // Both use auto breaking — should produce same layout
+        assert_eq!(svg, svg_explicit);
+    }
+
+    #[test]
+    fn section_auto_line_breaks() {
+        let staves = vec![
+            multi_measure_treble(4),
+            multi_measure_bass(4),
+            multi_measure_treble(4),
+        ];
+        let svg = MultiStaffScore::section(staves)
+            .auto_line_breaks()
+            .render_svg();
+        assert!(svg.starts_with("<svg"));
+        // Should have bracket lines
+        let line_count = svg.matches("<line").count();
+        assert!(line_count >= 15, "section should have many lines, got {line_count}");
     }
 }

@@ -157,7 +157,7 @@ pub fn layout_page(
 
 /// Compute the natural (unjustified) width of a measure's content in font
 /// design units. Does not include prefix elements (clef, key sig, time sig).
-fn content_natural_width(
+pub(crate) fn content_natural_width(
     content: &MeasureContent,
     config: &MeasureLayoutConfig,
 ) -> f64 {
@@ -172,7 +172,7 @@ fn content_natural_width(
 
 /// Compute the natural width of the system prefix (clef + key sig + time sig)
 /// using the same measure layout engine.
-fn prefix_natural_width(prefix: &SystemPrefix, config: &MeasureLayoutConfig) -> f64 {
+pub(crate) fn prefix_natural_width(prefix: &SystemPrefix, config: &MeasureLayoutConfig) -> f64 {
     let mut elems = Vec::with_capacity(3);
     elems.push(MeasureElement::Clef(prefix.clef_layout.clone()));
     if !matches!(prefix.key_signature, KeySignature::Open) {
@@ -193,7 +193,7 @@ fn prefix_natural_width(prefix: &SystemPrefix, config: &MeasureLayoutConfig) -> 
 ///
 /// Guarantees at least one measure per system (even if a single measure
 /// exceeds the target width — it will be scaled down by `layout_system`).
-fn break_measures_auto(
+pub(crate) fn break_measures_auto(
     prefix: &SystemPrefix,
     measures: &[MeasureContent],
     config: &MeasureLayoutConfig,
