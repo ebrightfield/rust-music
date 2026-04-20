@@ -42,14 +42,28 @@ pub fn digit_glyph(d: u8) -> Option<Glyph> {
     }
 }
 
-/// Convert a number (1–99) to a sequence of SMuFL time-sig digit glyphs.
+/// Convert a number (1–255) to a sequence of SMuFL time-sig digit glyphs.
+///
+/// Decomposes into individual decimal digits. Zero returns `TimeSig0`.
 fn number_to_digit_glyphs(n: u8) -> Vec<Glyph> {
-    if n >= 10 {
+    if n >= 100 {
+        let hundreds = n / 100;
+        let tens = (n / 10) % 10;
+        let ones = n % 10;
+        vec![
+            digit_glyph(hundreds).expect("digit 0-9"),
+            digit_glyph(tens).expect("digit 0-9"),
+            digit_glyph(ones).expect("digit 0-9"),
+        ]
+    } else if n >= 10 {
         let tens = n / 10;
         let ones = n % 10;
-        vec![digit_glyph(tens).unwrap(), digit_glyph(ones).unwrap()]
+        vec![
+            digit_glyph(tens).expect("digit 0-9"),
+            digit_glyph(ones).expect("digit 0-9"),
+        ]
     } else {
-        vec![digit_glyph(n).unwrap()]
+        vec![digit_glyph(n).expect("digit 0-9")]
     }
 }
 
@@ -247,6 +261,58 @@ mod tests {
         // Denominator glyphs at position 2
         assert_eq!(layout.glyphs[1].1, 2); // "1"
         assert_eq!(layout.glyphs[2].1, 2); // "6"
+    }
+
+    #[test]
+    fn three_digit_numerator_produces_three_glyphs() {
+        // 128/4 is musically absurd but should not panic (W2 fix)
+        let kind = TimeSignatureKind::Numeric {
+            numerator: 128,
+            denominator: 4,
+        };
+        let layout = time_signature_layout(&kind, fixed_advance);
+        // 3 numerator digits + 1 denominator digit = 4 glyphs
+        assert_eq!(layout.glyphs.len(), 4);
+        assert_eq!(layout.glyphs[0].0, Glyph::TimeSig1);
+        assert_eq!(layout.glyphs[1].0, Glyph::TimeSig2);
+        assert_eq!(layout.glyphs[2].0, Glyph::TimeSig8);
+        // All numerator glyphs on staff position 6
+        assert_eq!(layout.glyphs[0].1, 6);
+        assert_eq!(layout.glyphs[1].1, 6);
+        assert_eq!(layout.glyphs[2].1, 6);
+        // Denominator on position 2
+        assert_eq!(layout.glyphs[3].1, 2);
+        assert_eq!(layout.glyphs[3].0, Glyph::TimeSig4);
+        // Width = max(3*250, 1*250) = 750
+        assert!((layout.width - 750.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn max_u8_value_does_not_panic() {
+        // 255/255 — extreme edge case
+        let kind = TimeSignatureKind::Numeric {
+            numerator: 255,
+            denominator: 255,
+        };
+        let layout = time_signature_layout(&kind, fixed_advance);
+        // 3 digits each = 6 glyphs total
+        assert_eq!(layout.glyphs.len(), 6);
+        // "2", "5", "5" for numerator
+        assert_eq!(layout.glyphs[0].0, Glyph::TimeSig2);
+        assert_eq!(layout.glyphs[1].0, Glyph::TimeSig5);
+        assert_eq!(layout.glyphs[2].0, Glyph::TimeSig5);
+    }
+
+    #[test]
+    fn zero_numerator_produces_single_zero_glyph() {
+        let kind = TimeSignatureKind::Numeric {
+            numerator: 0,
+            denominator: 4,
+        };
+        let layout = time_signature_layout(&kind, fixed_advance);
+        // 1 numerator glyph (TimeSig0) + 1 denominator = 2
+        assert_eq!(layout.glyphs.len(), 2);
+        assert_eq!(layout.glyphs[0].0, Glyph::TimeSig0);
     }
 
     #[test]
