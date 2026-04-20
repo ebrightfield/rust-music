@@ -3063,3 +3063,74 @@
             _ => panic!("expected Chord event"),
         }
     }
+
+    // --- measure numbers via ScoreBuilder ---
+
+    #[test]
+    fn show_measure_numbers_adds_text_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .show_measure_numbers()
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains(">1</text>"), "should show measure number 1");
+    }
+
+    #[test]
+    fn show_measure_numbers_multi_system_shows_correct_numbers() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .measures_per_system(2)
+            .show_measure_numbers()
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::F, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        // 2 measures per system × 4 measures = 2 systems
+        assert!(svg.contains(">1</text>"), "first system should show 1");
+        assert!(svg.contains(">3</text>"), "second system should show 3");
+    }
+
+    #[test]
+    fn show_measure_numbers_disabled_by_default() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        // Default is no measure numbers
+        assert!(!svg.contains(">1</text>"), "should not show measure numbers by default");
+    }
+
+    #[test]
+    fn show_measure_numbers_on_vs_off_differs() {
+        let builder = || {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+                .barline()
+                .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+                .end_barline()
+        };
+
+        let svg_on = builder().show_measure_numbers().render_svg();
+        let svg_off = builder().render_svg();
+
+        assert_ne!(svg_on, svg_off, "enabling measure numbers should change output");
+        assert!(svg_on.len() > svg_off.len(), "SVG with measure numbers should be larger");
+    }

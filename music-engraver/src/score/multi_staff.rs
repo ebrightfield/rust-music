@@ -14,7 +14,7 @@ use crate::layout::system::{layout_system, SystemLayout};
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::system_renderer::draw_system;
-use crate::render::SvgWriter;
+use crate::render::{SvgWriter, TextStyle};
 
 use super::ScoreBuilder;
 
@@ -62,6 +62,8 @@ pub struct MultiStaffScore {
     measures_per_system: usize,
     /// When true, use width-based auto line breaking instead of fixed measures_per_system.
     auto_breaks: bool,
+    /// Display measure numbers above the start of each system.
+    show_measure_numbers: bool,
 }
 
 impl MultiStaffScore {
@@ -76,6 +78,7 @@ impl MultiStaffScore {
             system_width: 0.0,
             measures_per_system: 0,
             auto_breaks: false,
+            show_measure_numbers: false,
         }
     }
 
@@ -88,6 +91,7 @@ impl MultiStaffScore {
             system_width: 0.0,
             measures_per_system: 0,
             auto_breaks: false,
+            show_measure_numbers: false,
         }
     }
 
@@ -100,6 +104,7 @@ impl MultiStaffScore {
             system_width: 0.0,
             measures_per_system: 0,
             auto_breaks: false,
+            show_measure_numbers: false,
         }
     }
 
@@ -127,6 +132,15 @@ impl MultiStaffScore {
     /// Calling this overrides a previous `measures_per_system` setting.
     pub fn auto_line_breaks(mut self) -> Self {
         self.auto_breaks = true;
+        self
+    }
+
+    /// Show measure numbers above the start of each system.
+    ///
+    /// Each system displays the 1-based measure number of its first bar
+    /// above the top staff. Only the topmost stave displays numbers.
+    pub fn show_measure_numbers(mut self) -> Self {
+        self.show_measure_numbers = true;
         self
     }
 
@@ -300,6 +314,28 @@ impl MultiStaffScore {
                 draw_system(&mut svg, &font, &config, &system, left_margin, stave_y)?;
 
                 stave_systems.push(system);
+            }
+
+            // Draw measure number above the top stave of each system
+            if self.show_measure_numbers {
+                if let Some(first_system) = stave_systems.first() {
+                    if !first_system.measures.is_empty() {
+                        let first_measure = &first_system.measures[0];
+                        let num_x = left_margin + first_measure.x_offset;
+                        let num_y = ms_layout.staff_y_origins[0]
+                            - crate::render::page_renderer::MEASURE_NUMBER_ABOVE_STAFF_SS * staff_space;
+                        let font_size = crate::render::page_renderer::MEASURE_NUMBER_FONT_SIZE_SS * staff_space;
+                        let measure_number = start + 1; // 1-based
+                        svg.add_text(num_x, num_y, &measure_number.to_string(), &TextStyle {
+                            font_family: "serif",
+                            font_size,
+                            fill: "black",
+                            anchor: "start",
+                            font_weight: "normal",
+                            font_style: "normal",
+                        });
+                    }
+                }
             }
 
             // Draw joined barlines through all staves (at barline positions of first stave)

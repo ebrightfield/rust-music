@@ -19,6 +19,9 @@ pub struct PageLayoutConfig {
     pub top_margin: f64,
     /// Staff space in font design units (from the font).
     pub staff_space: f64,
+    /// Whether to render measure numbers above the start of each system.
+    /// The first system shows "1" (or whatever the first measure number is).
+    pub show_measure_numbers: bool,
 }
 
 impl PageLayoutConfig {
@@ -32,6 +35,7 @@ impl PageLayoutConfig {
             left_margin: 0.0,
             top_margin: 0.0,
             staff_space,
+            show_measure_numbers: false,
         }
     }
 
@@ -50,6 +54,9 @@ pub struct PageSystem {
     pub y: f64,
     /// The laid-out system.
     pub system: SystemLayout,
+    /// 1-based measure number of the first measure in this system.
+    /// Used for rendering measure numbers above each system.
+    pub first_measure_number: usize,
 }
 
 /// A complete page of music: multiple systems stacked vertically.
@@ -61,6 +68,8 @@ pub struct PageLayout {
     pub page_width: f64,
     /// Total page height in font design units (from top margin to bottom of last system + some padding).
     pub page_height: f64,
+    /// Whether to render measure numbers above the start of each system.
+    pub show_measure_numbers: bool,
 }
 
 /// Specification for how to break measures into systems.
@@ -94,6 +103,7 @@ pub fn layout_page(
             systems: vec![],
             page_width: page_config.system_width + page_config.left_margin,
             page_height: page_config.top_margin,
+            show_measure_numbers: page_config.show_measure_numbers,
         };
     }
 
@@ -137,6 +147,7 @@ pub fn layout_page(
             x: page_config.left_margin,
             y,
             system,
+            first_measure_number: start + 1, // 1-based
         });
 
         y += page_config.system_spacing_fu();
@@ -152,6 +163,7 @@ pub fn layout_page(
         systems,
         page_width: page_config.system_width + page_config.left_margin,
         page_height,
+        show_measure_numbers: page_config.show_measure_numbers,
     }
 }
 

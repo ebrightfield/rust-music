@@ -12,7 +12,7 @@ use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::system_renderer::{collect_hairpin_note_info, collect_note_positions, collect_slur_note_info, draw_system};
 use crate::render::tie_renderer::draw_tie;
-use crate::render::SvgWriter;
+use crate::render::{SvgWriter, TextStyle};
 
 /// A note at the end of a system that has an unresolved `tie_forward`.
 struct UnresolvedTie {
@@ -81,6 +81,11 @@ pub fn draw_page(
         )?;
     }
 
+    // Draw measure numbers above the start of each system
+    if page.show_measure_numbers {
+        draw_measure_numbers(&mut svg, config, page);
+    }
+
     // Draw cross-system ties between adjacent systems
     draw_cross_system_ties(&mut svg, font, config, page)?;
 
@@ -91,6 +96,56 @@ pub fn draw_page(
     draw_cross_system_hairpins(&mut svg, font, config, page)?;
 
     Ok(svg)
+}
+
+/// Measure number offset above the top staff line, in staff spaces.
+/// Placed slightly above rehearsal/tempo mark territory (which is at ~2.5–2.8ss).
+pub(crate) const MEASURE_NUMBER_ABOVE_STAFF_SS: f64 = 1.8;
+
+/// Font size for measure numbers, in staff spaces.
+pub(crate) const MEASURE_NUMBER_FONT_SIZE_SS: f64 = 1.2;
+
+/// Draw measure numbers above the first measure of each system.
+///
+/// Typically shows "1" above the first system, then the measure number of
+/// the first bar in each subsequent system. The number is placed above the
+/// top staff line, left-aligned with the start of the first measure's
+/// note content (after the prefix: clef, key sig, time sig).
+fn draw_measure_numbers(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    page: &PageLayout,
+) {
+    let ss = config.staff_space;
+    let font_size = MEASURE_NUMBER_FONT_SIZE_SS * ss;
+    let y_offset = MEASURE_NUMBER_ABOVE_STAFF_SS * ss;
+
+    let style = TextStyle {
+        font_family: "serif",
+        font_size,
+        fill: "black",
+        anchor: "start",
+        font_weight: "normal",
+        font_style: "normal",
+    };
+
+    for page_system in &page.systems {
+        let system = &page_system.system;
+        if system.measures.is_empty() {
+            continue;
+        }
+
+        // x: position at the start of the first measure's content area
+        // (which is after the system prefix: clef + key sig + time sig).
+        let first_measure = &system.measures[0];
+        let x = page_system.x + first_measure.x_offset;
+
+        // y: above the top staff line (top line is at page_system.y)
+        let y = page_system.y - y_offset;
+
+        let number = page_system.first_measure_number;
+        svg.add_text(x, y, &number.to_string(), &style);
+    }
 }
 
 /// Find tied notes at the end of a system that have no matching target

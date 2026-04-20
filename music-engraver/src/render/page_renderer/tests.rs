@@ -790,3 +790,150 @@ fn two_system_page_has_different_y_for_staff_lines() {
         expected_min_span,
     );
 }
+
+// ---- Measure number tests ----
+
+#[test]
+fn measure_numbers_enabled_adds_text_elements() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    page_cfg.show_measure_numbers = true;
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(3));
+    let svg = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    // Two systems ⇒ two measure number text elements ("1" and "4")
+    assert_eq!(page.systems.len(), 2);
+    assert!(svg.contains(">1</text>"), "first system should show measure number 1");
+    assert!(svg.contains(">4</text>"), "second system should show measure number 4");
+}
+
+#[test]
+fn measure_numbers_disabled_no_text_elements() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0); // default: show_measure_numbers = false
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(3));
+    let svg = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    // No measure number text should be present (other text may exist from key/time sig)
+    assert!(!svg.contains(">1</text>"), "should not show measure numbers when disabled");
+    assert!(!svg.contains(">4</text>"), "should not show measure numbers when disabled");
+}
+
+#[test]
+fn measure_numbers_show_correct_values_across_three_systems() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    page_cfg.show_measure_numbers = true;
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..9).map(|i| make_measure((i % 8) as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(3));
+
+    assert_eq!(page.systems.len(), 3);
+    assert_eq!(page.systems[0].first_measure_number, 1);
+    assert_eq!(page.systems[1].first_measure_number, 4);
+    assert_eq!(page.systems[2].first_measure_number, 7);
+
+    let svg = draw_page(&font, &config, &page).unwrap().to_svg();
+    assert!(svg.contains(">1</text>"));
+    assert!(svg.contains(">4</text>"));
+    assert!(svg.contains(">7</text>"));
+}
+
+#[test]
+fn measure_numbers_positioned_above_staff() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    page_cfg.show_measure_numbers = true;
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures = vec![make_measure(4)];
+    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(4));
+
+    let svg = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    // The text element should have a y coordinate that is above the top staff line (y=0).
+    // Since top_margin is 0, the staff top is at y=0, and the measure number
+    // should be at a negative y (above).
+    assert!(svg.contains(">1</text>"), "should show measure number 1");
+    // Extract y attribute from the text element containing "1"
+    let text_pos = svg.find(">1</text>").unwrap();
+    let text_start = svg[..text_pos].rfind("<text ").unwrap();
+    let text_tag = &svg[text_start..text_pos];
+    let y_start = text_tag.find("y=\"").unwrap() + 3;
+    let y_end = text_tag[y_start..].find('"').unwrap() + y_start;
+    let y_val: f64 = text_tag[y_start..y_end].parse().unwrap();
+    // y should be negative (above the staff line at y=0)
+    assert!(y_val < 0.0, "measure number y={y_val} should be above the staff (negative)");
+}
+
+#[test]
+fn measure_numbers_font_size_scales_with_staff_space() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    page_cfg.show_measure_numbers = true;
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures = vec![make_measure(4)];
+    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(4));
+
+    let svg = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    // Font size should be MEASURE_NUMBER_FONT_SIZE_SS * staff_space
+    let expected_size = MEASURE_NUMBER_FONT_SIZE_SS * ss;
+    let font_size_str = format!("font-size=\"{}\"", expected_size as u32);
+    assert!(
+        svg.contains(&font_size_str),
+        "SVG should contain font-size matching {expected_size}: {font_size_str}"
+    );
+}
+
+#[test]
+fn first_measure_number_set_correctly_for_auto_breaks() {
+    let ss = 250.0;
+    let mut page_cfg = PageLayoutConfig::new(ss, 3000.0); // narrow to force breaks
+    page_cfg.show_measure_numbers = true;
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
+    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Auto);
+
+    // With auto breaks and narrow width, should have multiple systems
+    assert!(page.systems.len() > 1);
+    // First system always starts at measure 1
+    assert_eq!(page.systems[0].first_measure_number, 1);
+    // Each system's first_measure_number should be monotonically increasing
+    for i in 1..page.systems.len() {
+        assert!(
+            page.systems[i].first_measure_number > page.systems[i - 1].first_measure_number,
+            "system {} measure number {} should be > system {} measure number {}",
+            i, page.systems[i].first_measure_number,
+            i - 1, page.systems[i - 1].first_measure_number,
+        );
+    }
+}
+
+#[test]
+fn measure_numbers_enabled_differs_from_disabled() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let mc = MeasureLayoutConfig::from_staff_space(ss);
+    let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
+
+    let mut page_cfg_on = PageLayoutConfig::new(ss, 8000.0);
+    page_cfg_on.show_measure_numbers = true;
+    let page_on = layout_page(&prefix(), &measures, &mc, &page_cfg_on, &SystemBreaking::Fixed(4));
+    let svg_on = draw_page(&font, &config, &page_on).unwrap().to_svg();
+
+    let page_cfg_off = PageLayoutConfig::new(ss, 8000.0);
+    let page_off = layout_page(&prefix(), &measures, &mc, &page_cfg_off, &SystemBreaking::Fixed(4));
+    let svg_off = draw_page(&font, &config, &page_off).unwrap().to_svg();
+
+    assert_ne!(svg_on, svg_off, "enabling measure numbers should change the SVG output");
+    assert!(svg_on.len() > svg_off.len(), "SVG with measure numbers should be larger");
+}

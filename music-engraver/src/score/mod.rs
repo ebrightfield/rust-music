@@ -87,6 +87,8 @@ pub struct ScoreBuilder {
     pub(crate) system_width: f64,
     /// Use automatic width-based line breaking instead of fixed measures per system.
     pub(crate) auto_breaks: bool,
+    /// Display measure numbers above the start of each system.
+    pub(crate) show_measure_numbers: bool,
 }
 
 impl ScoreBuilder {
@@ -102,6 +104,7 @@ impl ScoreBuilder {
             measures_per_system: 4,
             system_width: 0.0,
             auto_breaks: false,
+            show_measure_numbers: false,
         }
     }
 
@@ -162,6 +165,16 @@ impl ScoreBuilder {
     /// If not set (or 0), a default of 40 staff spaces is used.
     pub fn system_width_fu(mut self, width: f64) -> Self {
         self.system_width = width;
+        self
+    }
+
+    /// Show measure numbers above the start of each system.
+    ///
+    /// When enabled, each system displays the 1-based measure number of its
+    /// first bar above the staff, left-aligned with the start of the note
+    /// content (after the prefix: clef, key/time signature).
+    pub fn show_measure_numbers(mut self) -> Self {
+        self.show_measure_numbers = true;
         self
     }
 
@@ -554,7 +567,8 @@ impl ScoreBuilder {
         let prefix = self.build_prefix();
         let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
         let sys_width = self.effective_system_width(staff_space);
-        let page_config = PageLayoutConfig::new(staff_space, sys_width);
+        let mut page_config = PageLayoutConfig::new(staff_space, sys_width);
+        page_config.show_measure_numbers = self.show_measure_numbers;
         let breaking = if self.auto_breaks {
             SystemBreaking::Auto
         } else {
