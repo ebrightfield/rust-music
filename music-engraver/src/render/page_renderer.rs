@@ -624,7 +624,7 @@ mod tests {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
-        rehearsal_mark: None,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 
@@ -753,7 +753,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 
@@ -929,7 +929,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 
@@ -946,7 +946,7 @@ mod tests {
             slur_end: true,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 
@@ -1123,7 +1123,7 @@ mod tests {
             slur_end: false,
             hairpin_start: Some(HairpinType::Crescendo),
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 
@@ -1140,7 +1140,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: true,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 
@@ -1383,7 +1383,7 @@ mod tests {
                     slur_end: false,
                     hairpin_start: Some(HairpinType::Decrescendo),
                     hairpin_end: false,
-                    rehearsal_mark: None,
+                    rehearsal_mark: None, tempo_mark: None, expression: None,
                 })],
                 barline: BarlineStyle::Single,
             },

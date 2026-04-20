@@ -13,6 +13,7 @@ pub mod chord;
 pub mod clef;
 pub mod dot;
 pub mod dynamics;
+pub mod expression;
 pub mod flag;
 pub mod hairpin;
 pub mod key_signature;
@@ -25,6 +26,7 @@ pub mod slur;
 pub mod staff;
 pub mod stem;
 pub mod system;
+pub mod tempo;
 pub mod tie;
 pub mod time_signature;
 pub mod tuplet;
@@ -57,10 +59,12 @@ pub use tie::{
     TieLayout,
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
+pub use expression::{layout_expression, ExpressionLayout};
 pub use hairpin::{layout_hairpin, HairpinLayout, HairpinType, HAIRPIN_BELOW_STAFF_SS};
 pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
+pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,

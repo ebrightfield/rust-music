@@ -363,3 +363,39 @@
 - Verified: `cargo test -p music-engraver` — 757 unit + 3 integration + 2 doc-tests = 762 tests, all pass. 5 new measure_renderer tests (note with/without rehearsal mark, chord with mark, plain style no rect, mark differs from no mark). 8 new score tests (note with mark adds text+rect, chord with mark, plain no rect, rest no-op, differs from without, convert_event preserves, tracked preserves, chord convert preserves). `cargo clippy -p music-engraver` — 0 new warnings. `cargo check --workspace` passes.
 - Next: Create `examples/rehearsal_score.rs` showing rehearsal marks via ScoreBuilder API, or begin other post-v1 features (tempo markings, expression text, PNG export stub).
 - Open issues: None. Rehearsal marks now fully integrated for notes and chords via `.rehearsal_mark(text, style)` on ScoreBuilder.
+
+## 2026-04-20 — Post-v1, rehearsal score example via ScoreBuilder API
+- Did: Created `examples/rehearsal_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.rehearsal_mark()` method. Demonstrates: (1) boxed "A" on first note of system 1, (2) boxed "B" on first note of system 2, (3) plain "1" on a chord (no box), (4) boxed "Fine" on a note before the final rest. Exercises boxed and plain styles, marks on single notes and chords. Output: 21 paths, 31 lines, 4 texts, 3 rects (12221 bytes).
+- Verified: `cargo run --example rehearsal_score` produces valid SVG. `cargo test -p music-engraver` — 757 unit + 3 integration + 2 doc-tests = 762 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings on engraver crate. `cargo check --workspace` passes.
+- Next: Begin other post-v1 features: tempo markings (text above staff, e.g. "Allegro" or quarter=120), expression text (italic text below staff), or PNG export stub.
+- Open issues: None.
+
+## 2026-04-20 — Post-v1, tempo marking layout + rendering + example
+- Did: Created `layout/tempo.rs` with `TempoMark` enum (Text/Metronome/TextWithMetronome), `MetronomeNoteKind` enum (Whole–Sixteenth), `TempoMarkLayout` and `MetronomeInfo` structs, `layout_tempo_mark()` function. Tempo text is bold, placed above staff at 2.8 staff spaces. Metronome marks use SMuFL `MetNote*` glyphs for the note symbol + "= BPM" text. Combined marks position text then note symbol then "= BPM". Created `render/tempo_renderer.rs` with `draw_tempo_mark()` — renders bold text via `add_styled_text()` and SMuFL note glyph via `add_path()` with translate transform. Created `examples/tempo_marks.rs` rendering 4 notes on treble staff with: (1) text-only "Allegro", (2) ♩=120, (3) "Andante" dotted ♩=72, (4) ♪=160. Output: 8 paths, 9 lines, 5 texts (4432 bytes).
+- Verified: `cargo test -p music-engraver` — 779 unit + 3 integration + 2 doc-tests = 784 tests, all pass. 14 tempo layout tests + 9 tempo renderer tests. `cargo clippy -p music-engraver` — 0 warnings. `cargo run --example tempo_marks` produces valid SVG. `cargo check --workspace` passes.
+- Next: Integrate tempo marks into ScoreBuilder pipeline (add `.tempo()` method), or begin expression text layout, or other post-v1 features.
+- Open issues: Tempo marks not yet integrated into measure/system/ScoreBuilder pipeline — currently usable via direct `layout_tempo_mark()` + `draw_tempo_mark()` calls only.
+
+## 2026-04-20 — Post-v1, tempo mark integration through ScoreBuilder pipeline
+- Did: Integrated tempo marks into the full pipeline from ScoreBuilder to SVG. Added `tempo_mark: Option<TempoMark>` field to `NoteEvent` and `ChordEvent` in `layout/measure.rs`. Added same field to `ScoreEvent::Note` and `ScoreEvent::Chord`. Added `ScoreBuilder::tempo(mark)` method (modifier pattern, like `.dynamic()` and `.rehearsal_mark()`). Updated `draw_note_event()` and `draw_chord_event()` in `render/measure_renderer.rs` to call `layout_tempo_mark()` + `draw_tempo_mark()` when a tempo mark is present. Updated `convert_event()` and `convert_event_tracked()` to propagate tempo mark. Updated all NoteEvent/ChordEvent construction sites across 10+ files with `tempo_mark: None`.
+- Verified: `cargo test -p music-engraver` — 789 unit + 3 integration + 2 doc-tests = 794 tests, all pass. 3 new measure_renderer tests (note with/without tempo, metronome tempo, chord with tempo). 7 new score tests (text tempo, metronome tempo, rest no-op, differs from no tempo, convert_event preserves, tracked preserves, chord preserves). `cargo clippy -p music-engraver` — 0 warnings. `cargo check --workspace` passes.
+- Next: Create `examples/tempo_score.rs` showing tempo marks via ScoreBuilder API, or begin other post-v1 features (expression text, PNG export stub).
+- Open issues: None. Tempo marks now fully integrated for notes and chords via `.tempo(mark)` on ScoreBuilder.
+
+## 2026-04-20 — Post-v1, tempo score example via ScoreBuilder API
+- Did: Created `examples/tempo_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.tempo()` method. Demonstrates: (1) combined "Allegro ♩=132" on first note, (2) text-only "Andante" tempo change on system 2, (3) metronome-only dotted ♩=72 in final measure. Exercises all 3 TempoMark variants. Output: 21 paths, 30 lines, 4 texts (10777 bytes).
+- Verified: `cargo run --example tempo_score` produces valid SVG. `cargo test -p music-engraver` — 789 unit + 3 integration + 2 doc-tests = 794 tests, all pass. `cargo clippy -p music-engraver` — 0 warnings.
+- Next: Begin other post-v1 features: expression text (italic text below staff, e.g. "dolce", "espressivo"), or PNG export stub, or additional polish.
+- Open issues: None.
+
+## 2026-04-20 — Post-v1, expression text layout + rendering + full pipeline integration
+- Did: Created `layout/expression.rs` with `ExpressionLayout` struct and `layout_expression()` — positions italic text below the staff at 4.0 staff spaces (below dynamics to avoid collision). Created `render/expression_renderer.rs` with `draw_expression()` rendering italic serif text centered via `add_styled_text()`. Integrated into full pipeline: added `expression: Option<String>` to `NoteEvent` and `ChordEvent`, `ScoreEvent::Note` and `ScoreEvent::Chord`, `ScoreBuilder::expression(text)` method. Updated `draw_note_event()` and `draw_chord_event()` to render expression text. Updated `convert_event()`/`convert_event_tracked()` propagation. Updated all construction sites with `expression: None`.
+- Verified: `cargo test -p music-engraver` — 808 unit + 3 integration + 2 doc-tests = 813 tests, all pass. 7 layout tests + 7 renderer tests + 5 score integration tests = 19 new tests. `cargo clippy -p music-engraver` — 0 new warnings (2 pre-existing `too_many_arguments` with `#[allow]`). `cargo check --workspace` passes.
+- Next: Create `examples/expression_score.rs` showing expression text via ScoreBuilder API, or begin other post-v1 features (PNG export stub, additional polish).
+- Open issues: None. Expression text now fully integrated for notes and chords via `.expression(text)` on ScoreBuilder.
+
+## 2026-04-20 — QA: fixed W10 clone_on_copy in score.rs
+- Did: Removed 5 `.clone()` calls on `Pitch` values (which implements `Copy`) in test code at lines 1294, 1534, 1545, 1923, 1924 of `score.rs`. Replaced with direct value use since `Pitch` is `Copy`.
+- Verified: `cargo test -p music-engraver` — 808 unit + 3 integration + 2 doc-tests = 813 tests, all pass. `cargo clippy -p music-engraver --all-targets` — music-engraver warnings dropped from 13 to 8. `cargo check --workspace` passes.
+- Next: Fix next QA clippy warning (W8 identity_op in tuplet.rs, W9 useless_format in dot_renderer.rs, W11 redundant closures in key_signatures.rs, or the 2 empty_line_after_doc_comments in expression modules).
+- Open issues: 8 remaining clippy warnings in music-engraver (--all-targets).

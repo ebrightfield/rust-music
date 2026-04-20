@@ -219,7 +219,7 @@ mod tests {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
-        rehearsal_mark: None,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
         })
     }
 

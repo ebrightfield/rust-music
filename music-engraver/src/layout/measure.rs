@@ -5,6 +5,7 @@ use crate::layout::hairpin::HairpinType;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
+use crate::layout::tempo::TempoMark;
 use crate::layout::time_signature::TimeSignatureKind;
 
 /// A group of notes to be beamed together.
@@ -67,6 +68,10 @@ pub struct ChordEvent {
     /// Optional rehearsal mark displayed above the staff at this chord's position.
     /// Tuple of (text content, enclosure style).
     pub rehearsal_mark: Option<(String, RehearsalStyle)>,
+    /// Optional tempo marking displayed above the staff at this chord's position.
+    pub tempo_mark: Option<TempoMark>,
+    /// Optional expression text displayed below the staff in italic (e.g. "dolce").
+    pub expression: Option<String>,
 }
 
 /// A musical event within a measure that occupies horizontal space.
@@ -126,6 +131,10 @@ pub struct NoteEvent {
     /// Optional rehearsal mark displayed above the staff at this note's position.
     /// Tuple of (text content, enclosure style).
     pub rehearsal_mark: Option<(String, RehearsalStyle)>,
+    /// Optional tempo marking displayed above the staff at this note's position.
+    pub tempo_mark: Option<TempoMark>,
+    /// Optional expression text displayed below the staff in italic (e.g. "dolce").
+    pub expression: Option<String>,
 }
 
 /// A rest to be laid out within a measure.
@@ -365,7 +374,7 @@ mod tests {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
-        rehearsal_mark: None,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -395,7 +404,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -432,7 +441,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -469,7 +478,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -483,7 +492,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -512,7 +521,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -526,7 +535,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -555,7 +564,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -569,7 +578,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -583,7 +592,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -612,7 +621,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -640,7 +649,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -668,7 +677,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];

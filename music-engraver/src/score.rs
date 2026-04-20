@@ -40,6 +40,7 @@ use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::rehearsal::RehearsalStyle;
+use crate::layout::tempo::TempoMark;
 use crate::layout::measure::{BeamGroupEvent, ChordEvent, MeasureLayoutConfig, NoteEvent, RestEvent, TupletGroupEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
@@ -213,9 +214,9 @@ fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySigna
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
 enum ScoreEvent {
-    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool, hairpin_start: Option<HairpinType>, hairpin_end: bool, rehearsal_mark: Option<(String, RehearsalStyle)> },
+    Note { pitch: Pitch, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool, hairpin_start: Option<HairpinType>, hairpin_end: bool, rehearsal_mark: Option<(String, RehearsalStyle)>, tempo_mark: Option<TempoMark>, expression: Option<String> },
     Rest { duration: Duration },
-    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool, hairpin_start: Option<HairpinType>, hairpin_end: bool, rehearsal_mark: Option<(String, RehearsalStyle)> },
+    Chord { pitches: Vec<Pitch>, duration: Duration, tie_forward: bool, dynamic: Option<Dynamic>, slur_start: bool, slur_end: bool, hairpin_start: Option<HairpinType>, hairpin_end: bool, rehearsal_mark: Option<(String, RehearsalStyle)>, tempo_mark: Option<TempoMark>, expression: Option<String> },
     BeamGroup { notes: Vec<(Pitch, Duration)> },
     TupletGroup { notes: Vec<(Pitch, Duration)>, tuplet_number: u32 },
 }
@@ -306,7 +307,7 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None });
+        self.current_events.push(ScoreEvent::Note { pitch, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None });
         self
     }
 
@@ -418,12 +419,46 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a tempo marking to the most recently added note or chord.
+    ///
+    /// Tempo marks are rendered above the staff at the note's position.
+    /// Accepts any [`TempoMark`] variant (text, metronome, or combined).
+    ///
+    /// Must be called immediately after `.note()` or `.chord()`. Has no effect
+    /// if the last event is not a note or chord.
+    pub fn tempo(mut self, mark: TempoMark) -> Self {
+        let m = Some(mark);
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { tempo_mark, .. }) => *tempo_mark = m,
+            Some(ScoreEvent::Chord { tempo_mark, .. }) => *tempo_mark = m,
+            _ => {}
+        }
+        self
+    }
+
+    /// Attach an expression text marking to the most recently added note or chord.
+    ///
+    /// Expression text is rendered in italic below the staff (e.g. "dolce",
+    /// "espressivo", "legato", "cantabile").
+    ///
+    /// Must be called immediately after `.note()` or `.chord()`. Has no effect
+    /// if the last event is not a note or chord.
+    pub fn expression(mut self, text: impl Into<String>) -> Self {
+        let e = Some(text.into());
+        match self.current_events.last_mut() {
+            Some(ScoreEvent::Note { expression, .. }) => *expression = e,
+            Some(ScoreEvent::Chord { expression, .. }) => *expression = e,
+            _ => {}
+        }
+        self
+    }
+
     /// Add a chord (multiple simultaneous pitches) to the current measure.
     ///
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None });
+        self.current_events.push(ScoreEvent::Chord { pitches, duration, tie_forward: false, dynamic: None, slur_start: false, slur_end: false, hairpin_start: None, hairpin_end: false, rehearsal_mark: None, tempo_mark: None, expression: None });
         self
     }
 
@@ -582,7 +617,7 @@ impl ScoreBuilder {
     #[cfg(test)]
     fn convert_event(&self, event: &ScoreEvent, clef: &Clef) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -600,7 +635,7 @@ impl ScoreBuilder {
                     slur_end: *slur_end,
                     hairpin_start: *hairpin_start,
                     hairpin_end: *hairpin_end,
-                    rehearsal_mark: rehearsal_mark.clone(),
+                    rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -612,7 +647,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -636,7 +671,7 @@ impl ScoreBuilder {
                     slur_end: *slur_end,
                     hairpin_start: *hairpin_start,
                     hairpin_end: *hairpin_end,
-                    rehearsal_mark: rehearsal_mark.clone(),
+                    rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -659,7 +694,7 @@ impl ScoreBuilder {
                             slur_end: false,
                             hairpin_start: None,
                             hairpin_end: false,
-                            rehearsal_mark: None,
+                            rehearsal_mark: None, tempo_mark: None, expression: None,
                         }
                     })
                     .collect();
@@ -688,7 +723,7 @@ impl ScoreBuilder {
                             slur_end: false,
                             hairpin_start: None,
                             hairpin_end: false,
-                            rehearsal_mark: None,
+                            rehearsal_mark: None, tempo_mark: None, expression: None,
                         }
                     })
                     .collect();
@@ -715,7 +750,7 @@ impl ScoreBuilder {
         seen: &mut AccidentalTracker,
     ) -> MeasureEvent {
         match event {
-            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark } => {
+            ScoreEvent::Note { pitch, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
                 let staff_pos = pitch_to_staff_position(pitch, clef);
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
@@ -741,7 +776,7 @@ impl ScoreBuilder {
                     slur_end: *slur_end,
                     hairpin_start: *hairpin_start,
                     hairpin_end: *hairpin_end,
-                    rehearsal_mark: rehearsal_mark.clone(),
+                    rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
                 })
             }
             ScoreEvent::Rest { duration } => {
@@ -753,7 +788,7 @@ impl ScoreBuilder {
                     dots,
                 })
             }
-            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark } => {
+            ScoreEvent::Chord { pitches, duration, tie_forward, dynamic, slur_start, slur_end, hairpin_start, hairpin_end, rehearsal_mark, tempo_mark, expression } => {
                 let log2 = duration_kind_to_log2(duration.kind());
                 let dots = duration.num_dots();
                 let staff_positions: Vec<i8> = pitches
@@ -787,7 +822,7 @@ impl ScoreBuilder {
                     slur_end: *slur_end,
                     hairpin_start: *hairpin_start,
                     hairpin_end: *hairpin_end,
-                    rehearsal_mark: rehearsal_mark.clone(),
+                    rehearsal_mark: rehearsal_mark.clone(), tempo_mark: tempo_mark.clone(), expression: expression.clone(),
                 })
             }
             ScoreEvent::BeamGroup { notes } => {
@@ -819,7 +854,7 @@ impl ScoreBuilder {
                             slur_end: false,
                             hairpin_start: None,
                             hairpin_end: false,
-                            rehearsal_mark: None,
+                            rehearsal_mark: None, tempo_mark: None, expression: None,
                         }
                     })
                     .collect();
@@ -856,7 +891,7 @@ impl ScoreBuilder {
                             slur_end: false,
                             hairpin_start: None,
                             hairpin_end: false,
-                            rehearsal_mark: None,
+                            rehearsal_mark: None, tempo_mark: None, expression: None,
                         }
                     })
                     .collect();
@@ -1256,7 +1291,7 @@ mod tests {
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let pitch = Pitch::new(Note::B, 4).unwrap();
         let event = ScoreEvent::Note {
-            pitch: pitch.clone(),
+            pitch,
             duration: Duration::QTR,
             tie_forward: false,
             dynamic: None,
@@ -1264,7 +1299,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1496,7 +1531,7 @@ mod tests {
         let pitch = Pitch::new(Note::Fis, 4).unwrap();
 
         let ev1 = ScoreEvent::Note {
-            pitch: pitch.clone(),
+            pitch,
             duration: Duration::QTR,
         tie_forward: false,
         dynamic: None,
@@ -1504,10 +1539,10 @@ mod tests {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
-        rehearsal_mark: None,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let ev2 = ScoreEvent::Note {
-            pitch: pitch.clone(),
+            pitch,
             duration: Duration::QTR,
         tie_forward: false,
         dynamic: None,
@@ -1515,7 +1550,7 @@ mod tests {
         slur_end: false,
         hairpin_start: None,
         hairpin_end: false,
-        rehearsal_mark: None,
+        rehearsal_mark: None, tempo_mark: None, expression: None,
         };
 
         let r1 = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
@@ -1550,7 +1585,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let ev_natural = ScoreEvent::Note {
             pitch: Pitch::new(Note::F, 4).unwrap(),
@@ -1561,7 +1596,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
 
         let _ = builder.convert_event_tracked(&ev_sharp, &Clef::Treble, &mut seen);
@@ -1789,7 +1824,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -1821,7 +1856,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -1838,7 +1873,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event_tracked(&ev2, &Clef::Treble, &mut seen);
         match result {
@@ -1885,8 +1920,8 @@ mod tests {
         let svg_beamed = ScoreBuilder::new()
             .clef(Clef::Treble)
             .beam_group(vec![
-                (e4.clone(), Duration::EIGHTH),
-                (f4.clone(), Duration::EIGHTH),
+                (e4, Duration::EIGHTH),
+                (f4, Duration::EIGHTH),
             ])
             .end_barline()
             .render_svg();
@@ -1942,7 +1977,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -2063,7 +2098,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2091,7 +2126,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2211,7 +2246,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2326,7 +2361,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2350,7 +2385,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2376,7 +2411,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2512,7 +2547,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let _ = builder.convert_event_tracked(&ev1, &Clef::Treble, &mut seen);
 
@@ -2623,7 +2658,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let result = builder.convert_event(&event, &clef);
@@ -2649,7 +2684,7 @@ mod tests {
             slur_end: true,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
         match result {
@@ -2676,7 +2711,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let result = builder.convert_event(&event, &Clef::Treble);
         match result {
@@ -2786,7 +2821,7 @@ mod tests {
             slur_end: false,
             hairpin_start: Some(HairpinType::Crescendo),
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let result = builder.convert_event(&event, &clef);
@@ -2811,7 +2846,7 @@ mod tests {
             slur_end: false,
             hairpin_start: None,
             hairpin_end: true,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let mut seen = HashMap::new();
@@ -2837,7 +2872,7 @@ mod tests {
             slur_end: false,
             hairpin_start: Some(HairpinType::Decrescendo),
             hairpin_end: false,
-            rehearsal_mark: None,
+            rehearsal_mark: None, tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let result = builder.convert_event(&event, &clef);
@@ -2942,6 +2977,7 @@ mod tests {
             hairpin_start: None,
             hairpin_end: false,
             rehearsal_mark: Some(("A".to_string(), RehearsalStyle::Boxed)),
+            tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let result = builder.convert_event(&event, &clef);
@@ -2966,6 +3002,7 @@ mod tests {
             hairpin_start: None,
             hairpin_end: false,
             rehearsal_mark: Some(("B".to_string(), RehearsalStyle::Plain)),
+            tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let mut seen = HashMap::new();
@@ -2991,6 +3028,7 @@ mod tests {
             hairpin_start: None,
             hairpin_end: false,
             rehearsal_mark: Some(("12".to_string(), RehearsalStyle::Boxed)),
+            tempo_mark: None, expression: None,
         };
         let clef = Clef::Treble;
         let result = builder.convert_event(&event, &clef);
@@ -3000,5 +3038,236 @@ mod tests {
             }
             _ => panic!("expected Chord"),
         }
+    }
+
+    // --- Tempo mark integration tests ---
+
+    #[test]
+    fn tempo_mark_adds_text_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .tempo(TempoMark::Text("Allegro".into()))
+            .rest(Duration::new(DurationKind::Half, 1))
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains(">Allegro<"), "tempo text should appear in SVG");
+        assert!(svg.contains("bold"), "tempo text should be bold");
+    }
+
+    #[test]
+    fn tempo_metronome_adds_bpm_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .tempo(TempoMark::Metronome {
+                note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
+                dotted: false,
+                bpm: 120,
+            })
+            .rest(Duration::new(DurationKind::Half, 1))
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains("= 120"), "BPM should appear in SVG");
+    }
+
+    #[test]
+    fn tempo_on_rest_is_noop() {
+        let svg_with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::WHOLE)
+            .tempo(TempoMark::Text("Andante".into()))
+            .end_barline()
+            .render_svg();
+
+        // tempo() on rest should be ignored — "Andante" should NOT appear
+        assert!(!svg_with.contains(">Andante<"), "tempo mark on rest should be ignored");
+    }
+
+    #[test]
+    fn tempo_differs_from_no_tempo() {
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .tempo(TempoMark::Text("Vivace".into()))
+            .end_barline()
+            .render_svg();
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(with, without, "tempo mark should change SVG output");
+    }
+
+    #[test]
+    fn convert_event_preserves_tempo_mark() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: p("C", 4),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
+            rehearsal_mark: None, tempo_mark: Some(TempoMark::Text("Largo".into())),
+            expression: None,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.tempo_mark, Some(TempoMark::Text("Largo".into())));
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn tracked_convert_preserves_tempo_mark() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let mut seen = HashMap::new();
+        let event = ScoreEvent::Note {
+            pitch: p("D", 4),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
+            rehearsal_mark: None, tempo_mark: Some(TempoMark::Metronome {
+                note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
+                dotted: false,
+                bpm: 60,
+            }),
+            expression: None,
+        };
+        let result = builder.convert_event_tracked(&event, &Clef::Treble, &mut seen);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert!(n.tempo_mark.is_some());
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn chord_convert_preserves_tempo_mark() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Chord {
+            pitches: vec![p("C", 4), p("E", 4)],
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
+            rehearsal_mark: None, tempo_mark: Some(TempoMark::Text("Adagio".into())),
+            expression: None,
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.tempo_mark, Some(TempoMark::Text("Adagio".into())));
+            }
+            _ => panic!("expected Chord"),
+        }
+    }
+
+    // --- Expression text integration tests ---
+
+    #[test]
+    fn expression_adds_italic_text_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .expression("dolce")
+            .rest(Duration::new(DurationKind::Half, 1))
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains(">dolce<"), "expression text should appear in SVG");
+        assert!(svg.contains("italic"), "expression text should be italic");
+    }
+
+    #[test]
+    fn expression_on_rest_is_noop() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::WHOLE)
+            .expression("legato")
+            .end_barline()
+            .render_svg();
+
+        assert!(!svg.contains(">legato<"), "expression on rest should be ignored");
+    }
+
+    #[test]
+    fn expression_differs_from_no_expression() {
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .expression("espressivo")
+            .end_barline()
+            .render_svg();
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(with, without, "expression should change SVG output");
+    }
+
+    #[test]
+    fn convert_event_preserves_expression() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: p("C", 4),
+            duration: Duration::QTR,
+            tie_forward: false,
+            dynamic: None,
+            slur_start: false,
+            slur_end: false,
+            hairpin_start: None,
+            hairpin_end: false,
+            rehearsal_mark: None, tempo_mark: None, expression: Some("cantabile".into()),
+        };
+        let result = builder.convert_event(&event, &Clef::Treble);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.expression, Some("cantabile".into()));
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn chord_expression_produces_text() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .expression("sostenuto")
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains(">sostenuto<"), "chord expression should appear");
+        assert!(svg.contains("italic"), "chord expression should be italic");
     }
 }
