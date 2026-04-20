@@ -1560,3 +1560,93 @@ fn lyric_differs_from_no_lyric() {
     let with = make(Some(LyricSyllable::word("day")));
     assert_ne!(without, with, "lyric should change the SVG output");
 }
+
+#[test]
+fn note_with_chord_symbol_adds_text() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            chord_symbol: Some("Cmaj7".to_string()),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains(">Cmaj7<"), "should contain chord symbol text");
+    assert!(output.contains("bold"), "chord symbol should be bold");
+}
+
+#[test]
+fn note_without_chord_symbol_has_no_extra_text() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert_eq!(output.matches("<text").count(), 0, "no text elements without chord symbol");
+}
+
+#[test]
+fn chord_event_with_chord_symbol_adds_text() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4, 7],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            chord_symbol: Some("C".to_string()),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains(">C<"), "should contain chord symbol 'C'");
+}
+
+#[test]
+fn chord_symbol_changes_output() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let make = |sym: Option<String>| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                chord_symbol: sym,
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let without = make(None);
+    let with = make(Some("Am7".to_string()));
+    assert_ne!(without, with, "chord symbol should change the SVG output");
+}

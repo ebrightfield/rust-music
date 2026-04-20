@@ -50,6 +50,8 @@ pub struct NoteAnnotations {
     pub grace_note: Option<(i8, GraceNoteKind)>,
     /// Optional lyric syllable displayed below the staff under this note/chord.
     pub lyric: Option<LyricSyllable>,
+    /// Optional chord symbol displayed above the staff (e.g. "Cmaj7", "Am").
+    pub chord_symbol: Option<String>,
 }
 
 /// A group of notes to be beamed together.

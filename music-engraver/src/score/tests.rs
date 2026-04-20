@@ -2624,3 +2624,123 @@
             "lyric text should be roman (normal), not italic: {text_tag}"
         );
     }
+
+    // ---- Chord symbol tests ----
+
+    #[test]
+    fn chord_symbol_adds_text_element() {
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .chord_symbol("Cmaj7")
+            .end_barline()
+            .render_svg();
+
+        let texts_without = without.matches("<text").count();
+        let texts_with = with.matches("<text").count();
+        assert!(
+            texts_with > texts_without,
+            "chord symbol should add a text element: {} vs {}",
+            texts_with,
+            texts_without
+        );
+        assert!(with.contains(">Cmaj7<"), "should contain 'Cmaj7'");
+    }
+
+    #[test]
+    fn chord_symbol_on_rest_is_noop() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .chord_symbol("Am")
+            .end_barline()
+            .render_svg();
+
+        assert!(
+            !svg.contains(">Am<"),
+            "chord symbol on rest should be ignored"
+        );
+    }
+
+    #[test]
+    fn different_chord_symbols_differ() {
+        let svg_c = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .chord_symbol("C")
+            .end_barline()
+            .render_svg();
+
+        let svg_am = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .chord_symbol("Am7")
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(svg_c, svg_am);
+    }
+
+    #[test]
+    fn chord_symbol_on_chord_event() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .chord_symbol("C")
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains(">C<"), "should contain chord symbol 'C'");
+    }
+
+    #[test]
+    fn chord_symbol_is_bold() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("G", 4), Duration::QTR)
+            .chord_symbol("G7")
+            .end_barline()
+            .render_svg();
+
+        let g7_pos = svg.find(">G7<").expect("should find 'G7'");
+        let text_start = svg[..g7_pos].rfind("<text").expect("should find <text before 'G7'");
+        let text_tag = &svg[text_start..g7_pos];
+        assert!(
+            text_tag.contains("bold"),
+            "chord symbol should be bold: {text_tag}"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_chord_symbol() {
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                chord_symbol: Some("Em".to_string()),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let key_sig = KeySignature::Open;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.chord_symbol.as_deref(), Some("Em"));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }

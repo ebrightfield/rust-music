@@ -233,6 +233,14 @@ fn draw_note_event(
         draw_lyric(svg, &layout);
     }
 
+    // Draw chord symbol above the staff if present
+    if let Some(ref symbol) = note.annotations.chord_symbol {
+        let note_center_x = x + advance / 2.0;
+        let layout =
+            crate::layout::chord_symbol::layout_chord_symbol(symbol, note_center_x, staff, config.staff_space);
+        crate::render::chord_symbol_renderer::draw_chord_symbol(svg, &layout);
+    }
+
     Ok(())
 }
 
@@ -411,6 +419,14 @@ fn draw_chord_event(
         let chord_center_x = x + advance / 2.0;
         let layout = layout_lyric(syllable, chord_center_x, staff, config.staff_space);
         draw_lyric(svg, &layout);
+    }
+
+    // Draw chord symbol above the staff if present
+    if let Some(ref symbol) = chord.annotations.chord_symbol {
+        let chord_center_x = x + advance / 2.0;
+        let layout =
+            crate::layout::chord_symbol::layout_chord_symbol(symbol, chord_center_x, staff, config.staff_space);
+        crate::render::chord_symbol_renderer::draw_chord_symbol(svg, &layout);
     }
 
     Ok(())

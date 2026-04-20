@@ -11,6 +11,7 @@ pub mod articulation;
 pub mod barline;
 pub mod beam;
 pub mod chord;
+pub mod chord_symbol;
 pub mod clef;
 pub mod dot;
 pub mod dynamics;
@@ -81,6 +82,7 @@ pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout}
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
+pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOVE_STAFF_SS};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,

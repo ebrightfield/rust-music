@@ -332,6 +332,22 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a chord symbol above the staff at the most recently added note
+    /// or chord (e.g. "Cmaj7", "Am", "G7", "F#dim").
+    ///
+    /// Chord symbols are rendered in bold above the staff, centered on the
+    /// note/chord they apply to. No-op if the last event was a rest.
+    pub fn chord_symbol(mut self, symbol: impl Into<String>) -> Self {
+        let s = Some(symbol.into());
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.chord_symbol = s;
+        }
+        self
+    }
+
     /// Add a chord (multiple simultaneous pitches) to the current measure.
     ///
     /// All notes in the chord share the same duration. Noteheads that are a
