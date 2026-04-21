@@ -757,6 +757,42 @@ fn golden_tab_score() {
     assert_golden("tab_score", &build_tab_score());
 }
 
+fn build_tab_slides() -> String {
+    TabScoreBuilder::guitar()
+        .measures_per_system(2)
+        .system_width_fu(12000.0)
+        // Measure 1: ascending slide on string 1
+        .fret(1, 5).slide().next()
+        .fret(1, 7).next()
+        .fret(1, 3).next()
+        .fret(1, 0)
+        .barline()
+        // Measure 2: descending slide on string 2
+        .fret(2, 12).slide().next()
+        .fret(2, 9).next()
+        .fret(2, 7).next()
+        .fret(1, 5)
+        .barline()
+        // Measure 3: chord slide (power chord shift)
+        .fret(6, 3).fret(5, 5).fret(4, 5).slide().next()
+        .fret(6, 5).fret(5, 7).fret(4, 7).next()
+        .rest().next()
+        .fret(6, 0)
+        .barline()
+        // Measure 4: consecutive slides (chain)
+        .fret(1, 5).slide().next()
+        .fret(1, 7).slide().next()
+        .fret(1, 9).slide().next()
+        .fret(1, 12)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_slides() {
+    assert_golden("tab_slides", &build_tab_slides());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -784,6 +820,7 @@ fn golden_baselines_are_valid_svgs() {
         "expression_text",
         "multi_staff_cross_system",
         "tab_score",
+        "tab_slides",
     ];
 
     for name in &names {

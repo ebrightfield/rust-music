@@ -704,3 +704,9 @@
 - Verified: `cargo test -p music-engraver` — 1222 unit + 24 golden + 3 integration + 6 doc-tests = 1255 tests, all pass. 10 tab_slide layout tests + 5 tab_slide renderer tests + 8 TabScoreBuilder slide tests = 23 new tests. `cargo clippy -p music-engraver --lib` — 0 warnings from music-engraver. `cargo check --workspace` passes.
 - Next: Create `examples/tab_slides.rs` showing slides via TabScoreBuilder API, or add golden-SVG test for tab slides, or add tab-specific notation (bends, hammer-on/pull-off).
 - Open issues: Tab staves not yet usable in MultiStaffScore context. I2 still deferred.
+
+## 2026-04-21 — Post-v1, tab slides example + golden-SVG test + clippy fix
+- Did: Created `examples/tab_slides.rs` rendering 4 measures across 2 systems showing: (1) single-string ascending slide 5→7, (2) single-string descending slide 12→9, (3) multi-string chord slide (3-string power chord shift), (4) consecutive chain slides 5→7→9→12. Output: 25 lines, 2 paths, 19 texts, 19 rects (8068 bytes). Added `golden_tab_slides` golden-SVG regression test (24th baseline). Fixed 2 clippy `empty_line_after_doc_comments` warnings in `examples/tab_slides.rs` and `examples/tab_beams.rs`.
+- Verified: `cargo test -p music-engraver` — 1222 unit + 25 golden + 3 integration + 6 doc-tests = 1256 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo run --example tab_slides` produces valid SVG. `cargo check --workspace` passes.
+- Next: Add tab-specific notation (bends, hammer-on/pull-off), or integrate tab staves into MultiStaffScore context, or begin other post-v1 features.
+- Open issues: Tab staves not yet usable in MultiStaffScore context. I2 still deferred.

@@ -5,7 +5,6 @@
 /// 2. Two beamed sixteenths + individual quarter
 /// 3. Beamed eighth chord (E minor arpeggio on strings 1-3)
 /// 4. Mixed: quarter + beamed sixteenth run
-
 use music_engraver::score::tab::TabScoreBuilder;
 use std::fs;
 
