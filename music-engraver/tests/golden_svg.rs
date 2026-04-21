@@ -20,6 +20,7 @@ use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::grace::GraceNoteKind;
 use music_engraver::layout::hairpin::HairpinType;
 use music_engraver::layout::key_signature::KeySignature;
+use music_engraver::layout::navigation::NavigationSign;
 use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::layout::lyric::LyricSyllable;
@@ -1030,6 +1031,29 @@ fn golden_guitar_tab() {
     assert_golden("guitar_tab", &svg);
 }
 
+/// Navigation signs (segno, coda, coda square) above staff.
+fn build_navigation_signs() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        // Segno on first note, coda on last
+        .note(p("C", 4), Duration::QTR)
+        .navigation_sign(NavigationSign::Segno)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .navigation_sign(NavigationSign::Coda)
+        .note(p("F", 4), Duration::QTR)
+        .navigation_sign(NavigationSign::CodaSquare)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_navigation_signs() {
+    assert_golden("navigation_signs", &build_navigation_signs());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1063,6 +1087,7 @@ fn golden_baselines_are_valid_svgs() {
         "volta_brackets",
         "cross_system_volta",
         "guitar_tab",
+        "navigation_signs",
     ];
 
     for name in &names {

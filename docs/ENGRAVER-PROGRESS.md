@@ -771,3 +771,9 @@
 - Verified: `cargo test -p music-engraver --lib -- navigation` — 26 tests pass (11 layout + 7 renderer + 3 measure_renderer + 6 score). `cargo test -p music-engraver --test golden_svg` — 30 golden tests pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
 - Next: Create `examples/navigation_signs_score.rs` showing segno/coda via ScoreBuilder API, or add a golden-SVG test for navigation signs, or begin other post-v1 features (pre-bends, 8va/8vb lines).
 - Open issues: I2 still deferred. Cross-system tab features not in multi-staff context.
+
+## 2026-04-21 — Post-v1, navigation signs score example + golden-SVG test
+- Did: Created `examples/navigation_signs_score.rs` rendering 4 measures across 2 systems in C major 4/4 using ScoreBuilder API with `.navigation_sign()` method. Demonstrates: (1) segno on first beat with repeat barline at end, (2) coda on system 2 first beat, (3) square coda on final note. Exercises all 3 NavigationSign variants. Output: 22 paths, 36 lines (14539 bytes). Added `golden_navigation_signs` golden-SVG regression test (31st baseline → 31 golden tests total). Updated `golden_baselines_are_valid_svgs` name list.
+- Verified: `cargo test -p music-engraver` — 1351 unit + 31 golden + 3 integration + 7 doc-tests = 1392 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo run --example navigation_signs_score` produces valid SVG. `cargo check --workspace` passes.
+- Next: Begin other post-v1 features: 8va/8vb ottava bracket lines, or tab stave cross-system features, or additional golden tests for missing coverage.
+- Open issues: I2 still deferred. Cross-system tab features not in multi-staff context.
