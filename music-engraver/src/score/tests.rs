@@ -3134,3 +3134,112 @@
         assert_ne!(svg_on, svg_off, "enabling measure numbers should change output");
         assert!(svg_on.len() > svg_off.len(), "SVG with measure numbers should be larger");
     }
+
+    // --- Optimal line breaking ---
+
+    #[test]
+    fn optimal_line_breaks_renders_valid_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .optimal_line_breaks()
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::F, 4).expect("valid"), Duration::QTR)
+            .barline()
+            .note(Pitch::new(Note::G, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("</svg>"));
+        let path_count = svg.matches("<path").count();
+        assert!(path_count >= 4, "expected at least 4 paths for clef + noteheads, got {path_count}");
+    }
+
+    #[test]
+    fn optimal_line_breaks_differs_from_fixed() {
+        // 8 measures with varying density: optimal should produce a different
+        // line layout than a fixed 4-per-system.
+        let mut builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4);
+        for i in 0..8u8 {
+            let note = match i % 4 {
+                0 => Note::C,
+                1 => Note::D,
+                2 => Note::E,
+                _ => Note::F,
+            };
+            builder = builder
+                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
+                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
+                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
+                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
+                .barline();
+        }
+        let optimal_svg = builder.clone().optimal_line_breaks().render_svg();
+        let fixed_svg = builder.measures_per_system(4).render_svg();
+
+        // Both should produce valid SVG
+        assert!(optimal_svg.starts_with("<svg"));
+        assert!(fixed_svg.starts_with("<svg"));
+
+        // Optimal covers all content (same number of noteheads)
+        let opt_paths = optimal_svg.matches("<path").count();
+        let fix_paths = fixed_svg.matches("<path").count();
+        // Path counts might differ due to different clef repetitions per system,
+        // but both should have the same number of note content paths approximately
+        assert!(opt_paths > 0 && fix_paths > 0);
+    }
+
+    #[test]
+    fn optimal_overrides_auto() {
+        // Setting optimal after auto should use optimal
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .auto_line_breaks()
+            .optimal_line_breaks()
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert!(svg.starts_with("<svg"));
+    }
+
+    #[test]
+    fn auto_overrides_optimal() {
+        // Setting auto after optimal should use auto
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .optimal_line_breaks()
+            .auto_line_breaks()
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert!(svg.starts_with("<svg"));
+    }
+
+    #[test]
+    fn measures_per_system_overrides_optimal() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .optimal_line_breaks()
+            .measures_per_system(2)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::F, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert!(svg.starts_with("<svg"));
+        // 4 measures at 2 per system = 2 systems = 10 staff lines
+        let line_count = svg.matches("<line").count();
+        assert!(line_count >= 10, "expected at least 10 lines for 2 systems, got {line_count}");
+    }

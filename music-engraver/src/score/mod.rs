@@ -87,6 +87,8 @@ pub struct ScoreBuilder {
     pub(crate) system_width: f64,
     /// Use automatic width-based line breaking instead of fixed measures per system.
     pub(crate) auto_breaks: bool,
+    /// Use optimal (Knuth-Plass style DP) line breaking instead of greedy.
+    pub(crate) optimal_breaks: bool,
     /// Display measure numbers above the start of each system.
     pub(crate) show_measure_numbers: bool,
 }
@@ -104,6 +106,7 @@ impl ScoreBuilder {
             measures_per_system: 4,
             system_width: 0.0,
             auto_breaks: false,
+            optimal_breaks: false,
             show_measure_numbers: false,
         }
     }
@@ -158,6 +161,22 @@ impl ScoreBuilder {
     /// Overrides any previous `measures_per_system` setting.
     pub fn auto_line_breaks(mut self) -> Self {
         self.auto_breaks = true;
+        self.optimal_breaks = false;
+        self
+    }
+
+    /// Enable optimal (Knuth-Plass style) line breaking.
+    ///
+    /// Uses dynamic programming to minimize total whitespace deviation across
+    /// all systems, producing more evenly filled lines than the greedy
+    /// `auto_line_breaks`. Especially useful for scores with varying measure
+    /// densities where greedy packing leaves some systems sparse while
+    /// cramming others.
+    ///
+    /// Overrides any previous `measures_per_system` or `auto_line_breaks` setting.
+    pub fn optimal_line_breaks(mut self) -> Self {
+        self.optimal_breaks = true;
+        self.auto_breaks = false;
         self
     }
 
@@ -569,7 +588,9 @@ impl ScoreBuilder {
         let sys_width = self.effective_system_width(staff_space);
         let mut page_config = PageLayoutConfig::new(staff_space, sys_width);
         page_config.show_measure_numbers = self.show_measure_numbers;
-        let breaking = if self.auto_breaks {
+        let breaking = if self.optimal_breaks {
+            SystemBreaking::Optimal
+        } else if self.auto_breaks {
             SystemBreaking::Auto
         } else {
             SystemBreaking::Fixed(self.effective_measures_per_system())

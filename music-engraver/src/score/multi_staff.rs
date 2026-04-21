@@ -8,7 +8,7 @@ use crate::layout::measure::MeasureLayoutConfig;
 use crate::layout::multi_staff::{
     layout_multi_staff, ConnectorKind, StaffGroup,
 };
-use crate::layout::page::{break_measures_auto, PageSystem, SystemBreaking};
+use crate::layout::page::{break_measures_auto, break_measures_optimal, PageSystem, SystemBreaking};
 use crate::layout::staff::StaffLayout;
 use crate::layout::system::{layout_system, SystemLayout};
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
@@ -66,6 +66,8 @@ pub struct MultiStaffScore {
     measures_per_system: usize,
     /// When true, use width-based auto line breaking instead of fixed measures_per_system.
     auto_breaks: bool,
+    /// When true, use optimal (Knuth-Plass DP) line breaking.
+    optimal_breaks: bool,
     /// Display measure numbers above the start of each system.
     show_measure_numbers: bool,
 }
@@ -82,6 +84,7 @@ impl MultiStaffScore {
             system_width: 0.0,
             measures_per_system: 0,
             auto_breaks: false,
+            optimal_breaks: false,
             show_measure_numbers: false,
         }
     }
@@ -95,6 +98,7 @@ impl MultiStaffScore {
             system_width: 0.0,
             measures_per_system: 0,
             auto_breaks: false,
+            optimal_breaks: false,
             show_measure_numbers: false,
         }
     }
@@ -108,6 +112,7 @@ impl MultiStaffScore {
             system_width: 0.0,
             measures_per_system: 0,
             auto_breaks: false,
+            optimal_breaks: false,
             show_measure_numbers: false,
         }
     }
@@ -124,6 +129,7 @@ impl MultiStaffScore {
     pub fn measures_per_system(mut self, n: usize) -> Self {
         self.measures_per_system = n;
         self.auto_breaks = false;
+        self.optimal_breaks = false;
         self
     }
 
@@ -136,6 +142,19 @@ impl MultiStaffScore {
     /// Calling this overrides a previous `measures_per_system` setting.
     pub fn auto_line_breaks(mut self) -> Self {
         self.auto_breaks = true;
+        self.optimal_breaks = false;
+        self
+    }
+
+    /// Enable optimal (Knuth-Plass style) line breaking.
+    ///
+    /// Uses dynamic programming to minimize total whitespace deviation across
+    /// all systems. Produces more evenly filled lines than `auto_line_breaks`.
+    ///
+    /// Overrides any previous `measures_per_system` or `auto_line_breaks` setting.
+    pub fn optimal_line_breaks(mut self) -> Self {
+        self.optimal_breaks = true;
+        self.auto_breaks = false;
         self
     }
 
@@ -213,9 +232,14 @@ impl MultiStaffScore {
             .collect();
 
         // Break measures into system chunks
+        let use_optimal = self.optimal_breaks
+            || self.staves.iter().any(|s| s.optimal_breaks);
         let use_auto = self.auto_breaks
             || self.staves.iter().any(|s| s.auto_breaks);
-        let chunks = if use_auto {
+        let chunks = if use_optimal {
+            let (ref contents, ref prefix) = stave_data[0];
+            break_measures_optimal(prefix, contents, &measure_config, sys_width)
+        } else if use_auto {
             // Use first stave's content for width estimation
             let (ref contents, ref prefix) = stave_data[0];
             break_measures_auto(prefix, contents, &measure_config, sys_width)
@@ -447,9 +471,10 @@ fn break_measures(total: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)
             }
             chunks
         }
-        // Auto handled by caller using break_measures_auto; this path is a
-        // fallback when Auto is passed directly to break_measures.
-        SystemBreaking::Auto => break_measures(total, &SystemBreaking::Fixed(4)),
+        // Auto and Optimal are handled by caller; this path is a fallback.
+        SystemBreaking::Auto | SystemBreaking::Optimal => {
+            break_measures(total, &SystemBreaking::Fixed(4))
+        }
     }
 }
 

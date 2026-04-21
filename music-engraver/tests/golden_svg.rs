@@ -371,6 +371,43 @@ fn build_auto_breaks() -> String {
         .render_svg()
 }
 
+/// Optimal line breaking: same content as auto_breaks but uses DP-optimal.
+fn build_optimal_breaks() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Sharps(1))
+        .time_signature(4, 4)
+        .optimal_line_breaks()
+        // Measure 1: whole note (sparse)
+        .note(p("G", 4), Duration::WHOLE)
+        .barline()
+        // Measure 2: 4 quarters
+        .note(p("A", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .barline()
+        // Measure 3: 8 eighths (dense)
+        .beam_group(vec![
+            (p("E", 5), Duration::EIGHTH),
+            (p("D", 5), Duration::EIGHTH),
+            (p("C", 5), Duration::EIGHTH),
+            (p("B", 4), Duration::EIGHTH),
+        ])
+        .beam_group(vec![
+            (p("A", 4), Duration::EIGHTH),
+            (p("G", 4), Duration::EIGHTH),
+            (p("F#", 4), Duration::EIGHTH),
+            (p("E", 4), Duration::EIGHTH),
+        ])
+        .barline()
+        // Measure 4: half + half
+        .note(p("D", 4), Duration::HALF)
+        .note(p("G", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
 /// Grand staff (piano): treble + bass clef with brace connector.
 fn build_grand_staff() -> String {
     let treble = ScoreBuilder::new()
@@ -634,6 +671,11 @@ fn golden_auto_breaks() {
 }
 
 #[test]
+fn golden_optimal_breaks() {
+    assert_golden("optimal_breaks", &build_optimal_breaks());
+}
+
+#[test]
 fn golden_grand_staff() {
     assert_golden("grand_staff", &build_grand_staff());
 }
@@ -693,6 +735,7 @@ fn golden_baselines_are_valid_svgs() {
         "annotations",
         "bass_clef",
         "auto_breaks",
+        "optimal_breaks",
         "grand_staff",
         "lyrics",
         "chord_symbols",

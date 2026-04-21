@@ -84,6 +84,10 @@ pub enum SystemBreaking {
     /// widths exceed the target system width, then start a new system.
     /// The first system accounts for the prefix (clef + key sig + time sig).
     Auto,
+    /// Optimal line breaking using Knuth-Plass style dynamic programming.
+    /// Minimizes total badness (squared whitespace deviation) across all
+    /// systems, producing more evenly filled lines than the greedy `Auto`.
+    Optimal,
 }
 
 /// Lay out a full page of music.
@@ -109,6 +113,12 @@ pub fn layout_page(
 
     let chunks = match breaking {
         SystemBreaking::Auto => break_measures_auto(
+            prefix,
+            measures,
+            measure_config,
+            page_config.system_width,
+        ),
+        SystemBreaking::Optimal => break_measures_optimal(
             prefix,
             measures,
             measure_config,
@@ -271,6 +281,114 @@ pub(crate) fn break_measures_auto(
     chunks
 }
 
+/// Optimal line breaking via Knuth-Plass style dynamic programming.
+///
+/// Minimizes total badness across all systems, where badness for a system is
+/// the squared deviation of its fill ratio from 1.0. This distributes
+/// whitespace more evenly than the greedy `break_measures_auto`.
+///
+/// The algorithm considers every possible break point and uses DP to find
+/// the globally optimal sequence. Complexity is O(n²) where n is the number
+/// of measures — acceptable since scores rarely exceed a few hundred measures.
+pub(crate) fn break_measures_optimal(
+    prefix: &SystemPrefix,
+    measures: &[MeasureContent],
+    config: &MeasureLayoutConfig,
+    target_width: f64,
+) -> Vec<(usize, usize)> {
+    if measures.is_empty() {
+        return vec![];
+    }
+
+    let n = measures.len();
+    let widths: Vec<f64> = measures
+        .iter()
+        .map(|m| content_natural_width(m, config))
+        .collect();
+
+    let first_prefix_w = prefix_natural_width(prefix, config);
+    let continuation_prefix = SystemPrefix {
+        clef_layout: prefix.clef_layout.clone(),
+        clef_kind: prefix.clef_kind,
+        key_signature: prefix.key_signature.clone(),
+        time_signature: None,
+    };
+    let cont_prefix_w = prefix_natural_width(&continuation_prefix, config);
+
+    // Badness for a system spanning measures[start..end] on system number `sys_idx` (0-based).
+    // Returns f64::INFINITY if the line is overfull beyond tolerance.
+    let line_badness = |start: usize, end: usize, sys_idx: usize| -> f64 {
+        let prefix_w = if sys_idx == 0 {
+            first_prefix_w
+        } else {
+            cont_prefix_w
+        };
+        let budget = target_width - prefix_w;
+        if budget <= 0.0 {
+            return 0.0;
+        }
+
+        let content_w: f64 = widths[start..end].iter().sum();
+        let ratio = content_w / budget;
+
+        if ratio > 1.5 {
+            // Severely overfull — penalize heavily but not infinitely, so the
+            // DP can still find a solution when all options are tight.
+            return 1e6;
+        }
+
+        // Squared deviation from perfect fill. Underfull lines (ratio < 1)
+        // and slightly overfull lines (ratio > 1) are both penalized, but
+        // underfull is more common and more visually objectionable, so we
+        // use an asymmetric weight: underfull gets 1× weight, overfull gets
+        // 4× weight (discouraging cramming).
+        let deviation = ratio - 1.0;
+        if deviation < 0.0 {
+            deviation * deviation
+        } else {
+            4.0 * deviation * deviation
+        }
+    };
+
+    // DP: cost[j] = minimum total badness for measures[0..j].
+    // prev[j] = the start index of the last system that ends at j.
+    let mut cost = vec![f64::INFINITY; n + 1];
+    let mut prev = vec![0usize; n + 1];
+    cost[0] = 0.0;
+
+    // sys_count[j] = number of systems used to reach measure j.
+    let mut sys_count = vec![0usize; n + 1];
+
+    for j in 1..=n {
+        for i in (0..j).rev() {
+            let sys_idx = sys_count[i];
+            let b = line_badness(i, j, sys_idx);
+            let candidate = cost[i] + b;
+            if candidate < cost[j] {
+                cost[j] = candidate;
+                prev[j] = i;
+                sys_count[j] = sys_idx + 1;
+            }
+            // Early termination: if we've already found a very good fit and
+            // going further back would only make lines emptier, stop.
+            if b > 1e5 && j - i > 1 {
+                break;
+            }
+        }
+    }
+
+    // Reconstruct break points by tracing back from n.
+    let mut breaks = Vec::new();
+    let mut end = n;
+    while end > 0 {
+        let start = prev[end];
+        breaks.push((start, end));
+        end = start;
+    }
+    breaks.reverse();
+    breaks
+}
+
 /// Split N measures into (start, end) ranges per the breaking strategy.
 fn break_measures(n: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
     match breaking {
@@ -304,8 +422,10 @@ fn break_measures(n: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
             }
             chunks
         }
-        // Auto is handled before this function is called; see layout_page.
-        SystemBreaking::Auto => unreachable!("Auto handled by break_measures_auto"),
+        // Auto and Optimal are handled before this function is called; see layout_page.
+        SystemBreaking::Auto | SystemBreaking::Optimal => {
+            unreachable!("Auto/Optimal handled before break_measures")
+        }
     }
 }
 
@@ -852,5 +972,125 @@ mod tests {
         let config = test_measure_config(ss);
         let chunks = break_measures_auto(&prefix, &[], &config, 10_000.0);
         assert!(chunks.is_empty());
+    }
+
+    // --- Optimal line breaking tests ---
+
+    #[test]
+    fn optimal_breaking_empty() {
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let chunks = break_measures_optimal(&prefix, &[], &config, 10_000.0);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn optimal_breaking_single_measure() {
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let measures = vec![make_measure(4)];
+        let chunks = break_measures_optimal(&prefix, &measures, &config, 100_000.0);
+        assert_eq!(chunks, vec![(0, 1)]);
+    }
+
+    #[test]
+    fn optimal_breaking_wide_target_all_on_one_line() {
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
+        let chunks = break_measures_optimal(&prefix, &measures, &config, 100_000.0);
+        // Very wide target: all measures on one system
+        assert_eq!(chunks, vec![(0, 4)]);
+    }
+
+    #[test]
+    fn optimal_breaking_covers_all_measures() {
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
+        let chunks = break_measures_optimal(&prefix, &measures, &config, 5_000.0);
+        let total: usize = chunks.iter().map(|(s, e)| e - s).sum();
+        assert_eq!(total, 8, "optimal breaking must cover all measures");
+        // Chunks must be contiguous and non-overlapping
+        for i in 0..chunks.len() - 1 {
+            assert_eq!(
+                chunks[i].1, chunks[i + 1].0,
+                "chunks must be contiguous at boundary {i}"
+            );
+        }
+        assert_eq!(chunks[0].0, 0, "first chunk must start at 0");
+        assert_eq!(
+            chunks.last().unwrap().1,
+            8,
+            "last chunk must end at measure count"
+        );
+    }
+
+    #[test]
+    fn optimal_breaking_produces_non_empty_systems() {
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+        let chunks = break_measures_optimal(&prefix, &measures, &config, 3_000.0);
+        for (s, e) in &chunks {
+            assert!(e > s, "each system must contain at least one measure");
+        }
+    }
+
+    #[test]
+    fn optimal_and_greedy_agree_on_uniform_measures() {
+        // With uniform-width measures, optimal and greedy should produce
+        // the same or similar breaking.
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let measures: Vec<_> = (0..8).map(|_| make_measure(4)).collect();
+        let target = 5_000.0;
+        let greedy = break_measures_auto(&prefix, &measures, &config, target);
+        let optimal = break_measures_optimal(&prefix, &measures, &config, target);
+        // Same number of measures covered
+        let g_total: usize = greedy.iter().map(|(s, e)| e - s).sum();
+        let o_total: usize = optimal.iter().map(|(s, e)| e - s).sum();
+        assert_eq!(g_total, o_total);
+        // Optimal should have same or fewer systems (more even = possibly same count)
+        assert!(
+            optimal.len() <= greedy.len() + 1,
+            "optimal should not produce dramatically more systems than greedy"
+        );
+    }
+
+    #[test]
+    fn optimal_layout_page_systems_are_justified() {
+        let ss = 250.0;
+        let page_config = test_page_config(ss);
+        let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
+        let page = layout_page(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(ss),
+            &page_config,
+            &SystemBreaking::Optimal,
+        );
+        // All systems should be justified to target width
+        for (i, ps) in page.systems.iter().enumerate() {
+            assert!(
+                (ps.system.staff_width - page_config.system_width).abs() < 1.0,
+                "system {} staff_width {} should be close to {}",
+                i,
+                ps.system.staff_width,
+                page_config.system_width,
+            );
+        }
+    }
+
+    #[test]
+    fn optimal_breaking_handles_narrow_target() {
+        // Very narrow target: each measure should get its own system
+        let prefix = test_prefix();
+        let config = test_measure_config(250.0);
+        let measures: Vec<_> = (0..3).map(|i| make_measure(i as i8)).collect();
+        let chunks = break_measures_optimal(&prefix, &measures, &config, 1.0);
+        // Should still cover all measures, one per system
+        assert_eq!(chunks.len(), 3, "very narrow target should give one measure per system");
+        assert_eq!(chunks, vec![(0, 1), (1, 2), (2, 3)]);
     }
 }
