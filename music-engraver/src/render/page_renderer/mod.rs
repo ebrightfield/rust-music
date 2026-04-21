@@ -89,16 +89,16 @@ pub fn draw_page(
     }
 
     // Draw cross-system ties between adjacent systems
-    draw_cross_system_ties(&mut svg, font, config, page)?;
+    draw_cross_system_ties(&mut svg, font, config, &page.systems)?;
 
     // Draw cross-system slurs between adjacent systems
-    draw_cross_system_slurs(&mut svg, font, config, page)?;
+    draw_cross_system_slurs(&mut svg, font, config, &page.systems)?;
 
     // Draw cross-system hairpins between adjacent systems
-    draw_cross_system_hairpins(&mut svg, font, config, page)?;
+    draw_cross_system_hairpins(&mut svg, font, config, &page.systems)?;
 
     // Draw cross-system lyric extender lines between adjacent systems
-    draw_cross_system_lyric_extenders(&mut svg, config, page);
+    draw_cross_system_lyric_extenders(&mut svg, config, &page.systems);
 
     Ok(svg)
 }
@@ -257,24 +257,24 @@ fn find_incoming_tie_targets(
     targets
 }
 
-/// Draw cross-system ties between adjacent systems on a page.
+/// Draw cross-system ties between adjacent systems.
 ///
 /// For each unresolved tie at the end of system N, finds the matching note
 /// at the start of system N+1 and draws two half-ties: one trailing to the
 /// right edge of system N, one leading from the left of system N+1.
-fn draw_cross_system_ties(
+pub(crate) fn draw_cross_system_ties(
     svg: &mut SvgWriter,
     font: &MusicFont,
     config: &EngravingConfig,
-    page: &PageLayout,
+    systems: &[PageSystem],
 ) -> Result<(), FontError> {
-    for i in 0..page.systems.len().saturating_sub(1) {
-        let unresolved = find_unresolved_ties(font, config, &page.systems[i])?;
+    for i in 0..systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_ties(font, config, &systems[i])?;
         if unresolved.is_empty() {
             continue;
         }
 
-        let targets = find_incoming_tie_targets(config, &page.systems[i + 1]);
+        let targets = find_incoming_tie_targets(config, &systems[i + 1]);
 
         for tie_src in &unresolved {
             // Find matching target in the next system
@@ -435,25 +435,25 @@ fn find_incoming_slur_targets(
     targets
 }
 
-/// Draw cross-system slurs between adjacent systems on a page.
+/// Draw cross-system slurs between adjacent systems.
 ///
 /// For each unresolved `slur_start` at the end of system N, finds the first
 /// `slur_end` note at the start of system N+1 and draws two half-slurs:
 /// one trailing to the right edge of system N, one leading from the left
 /// of system N+1.
-fn draw_cross_system_slurs(
+pub(crate) fn draw_cross_system_slurs(
     svg: &mut SvgWriter,
     font: &MusicFont,
     config: &EngravingConfig,
-    page: &PageLayout,
+    systems: &[PageSystem],
 ) -> Result<(), FontError> {
-    for i in 0..page.systems.len().saturating_sub(1) {
-        let unresolved = find_unresolved_slurs(font, config, &page.systems[i])?;
+    for i in 0..systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_slurs(font, config, &systems[i])?;
         if unresolved.is_empty() {
             continue;
         }
 
-        let targets = find_incoming_slur_targets(config, &page.systems[i + 1]);
+        let targets = find_incoming_slur_targets(config, &systems[i + 1]);
 
         for slur_src in &unresolved {
             // Draw trailing half-slur at the end of the source system
@@ -601,27 +601,27 @@ fn find_incoming_hairpin_targets(
     targets
 }
 
-/// Draw cross-system hairpins between adjacent systems on a page.
+/// Draw cross-system hairpins between adjacent systems.
 ///
 /// For each unresolved `hairpin_start` at the end of system N, finds the first
 /// `hairpin_end` note at the start of system N+1 and draws two half-hairpins:
 /// one trailing to the right edge of system N, one leading from the left
 /// of system N+1.
-fn draw_cross_system_hairpins(
+pub(crate) fn draw_cross_system_hairpins(
     svg: &mut SvgWriter,
     font: &MusicFont,
     config: &EngravingConfig,
-    page: &PageLayout,
+    systems: &[PageSystem],
 ) -> Result<(), FontError> {
     let stroke_width = config.staff_line_thickness_fu();
 
-    for i in 0..page.systems.len().saturating_sub(1) {
-        let unresolved = find_unresolved_hairpins(font, config, &page.systems[i])?;
+    for i in 0..systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_hairpins(font, config, &systems[i])?;
         if unresolved.is_empty() {
             continue;
         }
 
-        let targets = find_incoming_hairpin_targets(config, &page.systems[i + 1]);
+        let targets = find_incoming_hairpin_targets(config, &systems[i + 1]);
 
         for hp_src in &unresolved {
             // Draw trailing half-hairpin at the end of the source system
@@ -661,15 +661,15 @@ fn draw_cross_system_hairpins(
 /// right edge of the system, and one leading from the left of the next system
 /// to the first note's position (the rhythmic event where the sustained
 /// syllable ends).
-fn draw_cross_system_lyric_extenders(
+pub(crate) fn draw_cross_system_lyric_extenders(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
-    page: &PageLayout,
+    systems: &[PageSystem],
 ) {
     let stroke_width = config.staff_line_thickness_fu();
 
-    for i in 0..page.systems.len().saturating_sub(1) {
-        let src_system = &page.systems[i];
+    for i in 0..systems.len().saturating_sub(1) {
+        let src_system = &systems[i];
         let note_info = collect_lyric_note_info(&src_system.system);
 
         // Find the last note with an extender that has no target within the
@@ -695,7 +695,7 @@ fn draw_cross_system_lyric_extenders(
         draw_lyric_extender(svg, x_from, x_to, src_y_baseline, config.staff_space, stroke_width);
 
         // Draw incoming half-extender at the start of the target system.
-        let tgt_system = &page.systems[i + 1];
+        let tgt_system = &systems[i + 1];
         let tgt_note_info = collect_lyric_note_info(&tgt_system.system);
 
         if let Some(first_note) = tgt_note_info.first() {

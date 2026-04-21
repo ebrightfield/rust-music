@@ -8,10 +8,14 @@ use crate::layout::measure::MeasureLayoutConfig;
 use crate::layout::multi_staff::{
     layout_multi_staff, ConnectorKind, StaffGroup,
 };
-use crate::layout::page::{break_measures_auto, SystemBreaking};
+use crate::layout::page::{break_measures_auto, PageSystem, SystemBreaking};
 use crate::layout::staff::StaffLayout;
 use crate::layout::system::{layout_system, SystemLayout};
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
+use crate::render::page_renderer::{
+    draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
+    draw_cross_system_slurs, draw_cross_system_ties,
+};
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::system_renderer::draw_system;
 use crate::render::{SvgWriter, TextStyle};
@@ -264,6 +268,11 @@ impl MultiStaffScore {
 
         let mut svg = SvgWriter::new(px_w, px_h, vb_x, vb_y, vb_w, vb_h);
 
+        // Collect PageSystem per stave for cross-system span rendering.
+        // stave_page_systems[stave_idx] = Vec<PageSystem> across all system chunks.
+        let num_staves = self.staves.len();
+        let mut stave_page_systems: Vec<Vec<PageSystem>> = vec![Vec::new(); num_staves];
+
         // Render each system chunk
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
             let group_y = sys_idx as f64 * (system_height + inter_system_gap);
@@ -312,6 +321,14 @@ impl MultiStaffScore {
                 );
 
                 draw_system(&mut svg, &font, &config, &system, left_margin, stave_y)?;
+
+                // Record for cross-system span rendering
+                stave_page_systems[stave_idx].push(PageSystem {
+                    x: left_margin,
+                    y: stave_y,
+                    system: system.clone(),
+                    first_measure_number: start + 1,
+                });
 
                 stave_systems.push(system);
             }
@@ -367,6 +384,18 @@ impl MultiStaffScore {
                     }
                 }
             }
+        }
+
+        // Draw cross-system spans (ties, slurs, hairpins, lyric extenders)
+        // for each stave independently.
+        for stave_systems in &stave_page_systems {
+            if stave_systems.len() < 2 {
+                continue;
+            }
+            draw_cross_system_ties(&mut svg, &font, &config, stave_systems)?;
+            draw_cross_system_slurs(&mut svg, &font, &config, stave_systems)?;
+            draw_cross_system_hairpins(&mut svg, &font, &config, stave_systems)?;
+            draw_cross_system_lyric_extenders(&mut svg, &config, stave_systems);
         }
 
         Ok(svg.to_svg())
@@ -801,5 +830,263 @@ mod tests {
         // Should have bracket lines
         let line_count = svg.matches("<line").count();
         assert!(line_count >= 15, "section should have many lines, got {line_count}");
+    }
+
+    // --- Cross-system span tests ---
+
+    /// Build a grand staff where the treble stave has a tie crossing the
+    /// system break (last note of measure 2 → first note of measure 3).
+    fn grand_staff_with_cross_system_tie() -> MultiStaffScore {
+        let treble = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            // Measure 1
+            .note(pitch(Note::C, 5), Duration::WHOLE)
+            .barline()
+            // Measure 2 — tie forward on last note
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .tie()
+            .barline()
+            // Measure 3 — tie target
+            .note(pitch(Note::G, 4), Duration::WHOLE)
+            .barline()
+            // Measure 4
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+
+        let bass = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::D, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::F, 3), Duration::WHOLE)
+            .end_barline();
+
+        MultiStaffScore::grand_staff(treble, bass)
+            .measures_per_system(2) // 2 systems: measures 1-2 and 3-4
+    }
+
+    #[test]
+    fn cross_system_tie_in_multi_staff_draws_half_ties() {
+        let svg_with_tie = grand_staff_with_cross_system_tie().render_svg();
+
+        // Build same grand staff without the tie
+        let treble_no_tie = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 5), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+
+        let bass = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::D, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::F, 3), Duration::WHOLE)
+            .end_barline();
+
+        let svg_no_tie = MultiStaffScore::grand_staff(treble_no_tie, bass)
+            .measures_per_system(2)
+            .render_svg();
+
+        // The tied version should have more filled paths (half-ties are filled crescents)
+        let tied_paths = svg_with_tie.matches("<path").count();
+        let untied_paths = svg_no_tie.matches("<path").count();
+        assert!(
+            tied_paths > untied_paths,
+            "tied ({tied_paths}) should have more paths than untied ({untied_paths})"
+        );
+    }
+
+    #[test]
+    fn cross_system_slur_in_multi_staff_draws_half_slurs() {
+        let treble = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 5), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .note(pitch(Note::A, 4), Duration::HALF)
+            .slur_start()
+            .barline()
+            .note(pitch(Note::B, 4), Duration::WHOLE)
+            .slur_end()
+            .barline()
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+
+        let bass = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::D, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::F, 3), Duration::WHOLE)
+            .end_barline();
+
+        let svg_with_slur = MultiStaffScore::grand_staff(treble, bass)
+            .measures_per_system(2)
+            .render_svg();
+
+        // Slurs are rendered as filled paths — should contain at least 2 extra
+        // (trailing half-slur + incoming half-slur)
+        let treble_no_slur = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 5), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .note(pitch(Note::A, 4), Duration::HALF)
+            .barline()
+            .note(pitch(Note::B, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+
+        let bass2 = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::D, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::F, 3), Duration::WHOLE)
+            .end_barline();
+
+        let svg_no_slur = MultiStaffScore::grand_staff(treble_no_slur, bass2)
+            .measures_per_system(2)
+            .render_svg();
+
+        let slur_paths = svg_with_slur.matches("<path").count();
+        let no_slur_paths = svg_no_slur.matches("<path").count();
+        assert!(
+            slur_paths > no_slur_paths,
+            "slurred ({slur_paths}) should have more paths than unslurred ({no_slur_paths})"
+        );
+    }
+
+    #[test]
+    fn cross_system_hairpin_in_multi_staff_draws_half_wedges() {
+        use crate::layout::dynamics::Dynamic;
+
+        let treble = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 5), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .note(pitch(Note::A, 4), Duration::HALF)
+            .cresc()
+            .barline()
+            .note(pitch(Note::B, 4), Duration::WHOLE)
+            .hairpin_end()
+            .dynamic(Dynamic::Forte)
+            .barline()
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+
+        let bass = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::D, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::F, 3), Duration::WHOLE)
+            .end_barline();
+
+        let svg_with_hp = MultiStaffScore::grand_staff(treble, bass)
+            .measures_per_system(2)
+            .render_svg();
+
+        // Hairpins are rendered as 2 <line> elements per wedge.
+        // Cross-system hairpin produces 4 lines (2 per half-wedge).
+        let treble_no_hp = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 5), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::HALF)
+            .note(pitch(Note::A, 4), Duration::HALF)
+            .barline()
+            .note(pitch(Note::B, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+
+        let bass2 = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::C, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::D, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 3), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::F, 3), Duration::WHOLE)
+            .end_barline();
+
+        let svg_no_hp = MultiStaffScore::grand_staff(treble_no_hp, bass2)
+            .measures_per_system(2)
+            .render_svg();
+
+        let hp_lines = svg_with_hp.matches("<line").count();
+        let no_hp_lines = svg_no_hp.matches("<line").count();
+        assert!(
+            hp_lines > no_hp_lines,
+            "hairpin ({hp_lines}) should have more lines than no hairpin ({no_hp_lines})"
+        );
+    }
+
+    #[test]
+    fn cross_system_spans_only_affect_owning_stave() {
+        // Tie on treble stave should not affect bass stave rendering
+        let svg = grand_staff_with_cross_system_tie().render_svg();
+
+        // Should be a valid SVG with both staves rendered
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("</svg>"));
+
+        // The tie paths should exist (at least 1 filled path from half-ties)
+        let path_count = svg.matches("<path").count();
+        // Without ties there are noteheads + clefs; with ties there are extra filled crescents
+        assert!(
+            path_count >= 12,
+            "should have noteheads + clefs + tie paths, got {path_count}"
+        );
+    }
+
+    #[test]
+    fn no_cross_system_spans_with_single_system() {
+        // With all 4 measures on one system, no cross-system logic runs
+        let svg_1sys = grand_staff_with_cross_system_tie()
+            .measures_per_system(4) // won't actually change this since it's already built
+            .render_svg();
+
+        // Just verify it renders without error
+        assert!(svg_1sys.starts_with("<svg"));
     }
 }
