@@ -23,6 +23,7 @@ pub mod lyric;
 pub mod key_signature;
 pub mod measure;
 pub mod multi_staff;
+pub mod navigation;
 pub mod note_placement;
 pub mod ornament;
 pub mod page;
@@ -91,6 +92,7 @@ pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
 pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOVE_STAFF_SS};
+pub use navigation::{layout_navigation_sign, NavigationSign, NavigationSignLayout};
 pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
 pub use tab_beam::{
     compute_tab_beam_counts, layout_tab_beam_group, TabBeamGroupLayout, TabBeamedNote,

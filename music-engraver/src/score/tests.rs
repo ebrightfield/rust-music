@@ -3355,3 +3355,140 @@
         let diff = with.matches("<line").count() - without.matches("<line").count();
         assert_eq!(diff, 3, "single-measure volta adds 3 lines (top + 2 hooks), got {diff}");
     }
+
+    // Navigation sign (segno, coda) tests
+
+    #[test]
+    fn navigation_sign_segno_adds_path() {
+        use crate::layout::navigation::NavigationSign;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .navigation_sign(NavigationSign::Segno)
+            .end_barline()
+            .render_svg();
+        assert!(
+            with.matches("<path").count() > without.matches("<path").count(),
+            "segno should add a path element"
+        );
+    }
+
+    #[test]
+    fn navigation_sign_coda_adds_path() {
+        use crate::layout::navigation::NavigationSign;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .navigation_sign(NavigationSign::Coda)
+            .end_barline()
+            .render_svg();
+        assert!(
+            with.matches("<path").count() > without.matches("<path").count(),
+            "coda should add a path element"
+        );
+    }
+
+    #[test]
+    fn navigation_sign_rest_noop() {
+        use crate::layout::navigation::NavigationSign;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::WHOLE)
+            .navigation_sign(NavigationSign::Segno)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            without, with,
+            "navigation sign on rest should be a no-op"
+        );
+    }
+
+    #[test]
+    fn navigation_sign_segno_differs_from_coda() {
+        use crate::layout::navigation::NavigationSign;
+        let segno = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .navigation_sign(NavigationSign::Segno)
+            .end_barline()
+            .render_svg();
+        let coda = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .navigation_sign(NavigationSign::Coda)
+            .end_barline()
+            .render_svg();
+        assert_ne!(segno, coda, "segno and coda should produce different SVGs");
+    }
+
+    #[test]
+    fn navigation_sign_on_chord() {
+        use crate::layout::navigation::NavigationSign;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid"),
+                    Pitch::new(Note::E, 4).expect("valid"),
+                ],
+                Duration::WHOLE,
+            )
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid"),
+                    Pitch::new(Note::E, 4).expect("valid"),
+                ],
+                Duration::WHOLE,
+            )
+            .navigation_sign(NavigationSign::Coda)
+            .end_barline()
+            .render_svg();
+        assert!(
+            with.matches("<path").count() > without.matches("<path").count(),
+            "coda on chord should add a path"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_navigation_sign() {
+        use crate::layout::navigation::NavigationSign;
+        let builder = ScoreBuilder::new().clef(Clef::Treble);
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::C, 4).expect("valid"),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                navigation_sign: Some(NavigationSign::Segno),
+                ..Default::default()
+            },
+        };
+        let element = convert_event(&event, &builder.clef.to_clef(), &builder.key_sig, None);
+        match element {
+            MeasureEvent::Note(n) => {
+                assert_eq!(
+                    n.annotations.navigation_sign,
+                    Some(NavigationSign::Segno),
+                    "navigation_sign should be preserved through convert_event"
+                );
+            }
+            _ => panic!("expected MeasureEvent::Note"),
+        }
+    }

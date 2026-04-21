@@ -48,6 +48,7 @@ use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
+use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
@@ -385,6 +386,20 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.ornament = Some(orn);
+        }
+        self
+    }
+
+    /// Attach a navigation sign (segno, coda) to the most recently added note
+    /// or chord. The sign glyph is placed above the staff, centered on the note.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn navigation_sign(mut self, sign: NavigationSign) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.navigation_sign = Some(sign);
         }
         self
     }

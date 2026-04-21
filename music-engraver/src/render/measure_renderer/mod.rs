@@ -249,6 +249,14 @@ fn draw_note_event(
         crate::render::ornament_renderer::draw_ornament(svg, font, &orn_layout)?;
     }
 
+    // Draw navigation sign (segno, coda) above the staff if present
+    if let Some(sign) = note.annotations.navigation_sign {
+        let note_center_x = x + advance / 2.0;
+        let nav_layout =
+            crate::layout::navigation::layout_navigation_sign(sign, note_center_x, staff);
+        crate::render::navigation_renderer::draw_navigation_sign(svg, font, &nav_layout)?;
+    }
+
     Ok(())
 }
 
@@ -445,6 +453,14 @@ fn draw_chord_event(
         let orn_layout =
             crate::layout::ornament::layout_ornament(orn, chord_center_x, top_pos, staff);
         crate::render::ornament_renderer::draw_ornament(svg, font, &orn_layout)?;
+    }
+
+    // Draw navigation sign (segno, coda) above the staff if present
+    if let Some(sign) = chord.annotations.navigation_sign {
+        let chord_center_x = x + advance / 2.0;
+        let nav_layout =
+            crate::layout::navigation::layout_navigation_sign(sign, chord_center_x, staff);
+        crate::render::navigation_renderer::draw_navigation_sign(svg, font, &nav_layout)?;
     }
 
     Ok(())

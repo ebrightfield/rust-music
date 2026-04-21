@@ -6,6 +6,7 @@ use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::key_signature::KeySignature;
+use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
@@ -55,6 +56,8 @@ pub struct NoteAnnotations {
     pub chord_symbol: Option<String>,
     /// Optional ornament marking (trill, mordent, turn, etc.) placed above the staff.
     pub ornament: Option<Ornament>,
+    /// Optional navigation sign (segno, coda) placed above the staff.
+    pub navigation_sign: Option<NavigationSign>,
 }
 
 /// A group of notes to be beamed together.

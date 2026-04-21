@@ -1764,3 +1764,126 @@ fn different_ornaments_on_note_produce_different_output() {
     let mordent_svg = make(Ornament::Mordent);
     assert_ne!(trill_svg, mordent_svg, "different ornaments should differ");
 }
+
+// Navigation sign (segno, coda) tests
+
+#[test]
+fn note_with_navigation_sign_adds_path() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let without = {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let with_segno = {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                navigation_sign: Some(crate::layout::navigation::NavigationSign::Segno),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+
+    let without_paths = without.matches("<path ").count();
+    let with_paths = with_segno.matches("<path ").count();
+    assert!(
+        with_paths > without_paths,
+        "navigation sign should add a path: {} > {}",
+        with_paths,
+        without_paths
+    );
+}
+
+#[test]
+fn chord_with_navigation_sign_adds_path() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let without = {
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 7],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None, None],
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let with_coda = {
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 7],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None, None],
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                navigation_sign: Some(crate::layout::navigation::NavigationSign::Coda),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+
+    let without_paths = without.matches("<path ").count();
+    let with_paths = with_coda.matches("<path ").count();
+    assert!(
+        with_paths > without_paths,
+        "coda sign on chord should add a path: {} > {}",
+        with_paths,
+        without_paths
+    );
+}
+
+#[test]
+fn different_navigation_signs_produce_different_output() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |sign: crate::layout::navigation::NavigationSign| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                navigation_sign: Some(sign),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let segno_svg = make(crate::layout::navigation::NavigationSign::Segno);
+    let coda_svg = make(crate::layout::navigation::NavigationSign::Coda);
+    assert_ne!(segno_svg, coda_svg, "segno and coda should produce different output");
+}
