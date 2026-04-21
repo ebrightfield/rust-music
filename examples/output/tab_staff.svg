@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="300" viewBox="-250 0 8500 3250">
+  <line x1="0" y1="750" x2="7500" y2="750" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1000" x2="7500" y2="1000" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1250" x2="7500" y2="1250" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1500" x2="7500" y2="1500" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1750" x2="7500" y2="1750" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="2000" x2="7500" y2="2000" stroke="black" stroke-width="32.5"/>
+  <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 1375)"/>
+  <rect x="1377.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1500" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="1377.5" y="842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1500" y="1000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <rect x="1377.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1500" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <rect x="1377.5" y="1342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1500" y="1500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">1</text>
+  <rect x="1377.5" y="1592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1500" y="1750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="1377.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1500" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="2377.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="2500" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="3002.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3125" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">1</text>
+  <rect x="3627.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3750" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">3</text>
+  <rect x="4252.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="4375" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <rect x="4877.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5000" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <rect x="5502.5" y="1842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5625" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">9</text>
+  <rect x="6005" y="1842.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="6250" y="2000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">12</text>
+  <rect x="6877.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="7000" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <rect x="6877.5" y="842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="7000" y="1000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <rect x="6877.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="7000" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+</svg>

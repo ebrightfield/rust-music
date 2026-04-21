@@ -31,6 +31,7 @@ pub mod rest;
 pub mod slur;
 pub mod staff;
 pub mod stem;
+pub mod tab;
 pub mod system;
 pub mod tempo;
 pub mod tie;
@@ -85,6 +86,10 @@ pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
 pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOVE_STAFF_SS};
 pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
+pub use tab::{
+    layout_fret_number, tab_clef_glyph, FretNumberLayout, TabStaffLayout, FRET_NUMBER_FONT_SIZE_RATIO,
+    TAB_4_STRING_LINE_COUNT, TAB_LINE_COUNT,
+};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,
