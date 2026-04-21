@@ -968,6 +968,68 @@ fn golden_cross_system_volta() {
     assert_golden("cross_system_volta", &svg);
 }
 
+fn build_guitar_tab() -> String {
+    let notation = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .barline()
+        .note(p("E", 5), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("G", 4), Duration::HALF)
+        .end_barline();
+
+    let tab = TabScoreBuilder::guitar()
+        .quarter().fret(1, 0).next()
+        .quarter().fret(3, 0).next()
+        .quarter().fret(2, 0).next()
+        .quarter().fret(1, 5)
+        .barline()
+        .quarter().fret(1, 5).next()
+        .quarter().fret(2, 0).next()
+        .half().fret(3, 0)
+        .end_barline();
+
+    MultiStaffScore::guitar_tab(notation, tab)
+        .system_width_fu(10000.0)
+        .render_svg()
+}
+
+#[test]
+fn golden_guitar_tab() {
+    let svg = build_guitar_tab();
+
+    // Notation staff has 5 lines; tab staff has 6 lines
+    let line_count = svg.matches("<line").count();
+    assert!(
+        line_count >= 11,
+        "should have at least 11 staff lines (5+6), got {line_count}"
+    );
+
+    // Tab should show fret numbers
+    assert!(svg.contains(">0</text>"), "should show fret 0");
+    assert!(svg.contains(">5</text>"), "should show fret 5");
+
+    // Should have both notation and tab content
+    let path_count = svg.matches("<path").count();
+    assert!(
+        path_count >= 2,
+        "should have treble clef + TAB clef paths, got {path_count}"
+    );
+
+    // Fret numbers have dominant-baseline="central" (tab fret centering)
+    assert!(
+        svg.contains("dominant-baseline=\"central\""),
+        "tab fret numbers should use central baseline"
+    );
+
+    assert_golden("guitar_tab", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1000,6 +1062,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_bends",
         "volta_brackets",
         "cross_system_volta",
+        "guitar_tab",
     ];
 
     for name in &names {

@@ -37,7 +37,7 @@ use crate::render::{SvgWriter, TextStyle};
 
 /// A single event in a tab measure.
 #[derive(Clone, Debug)]
-enum TabEvent {
+pub(crate) enum TabEvent {
     /// One or more fret numbers played simultaneously.
     /// Each entry is (string_number, fret_number) where string is 1-based.
     /// `duration_log2`: optional rhythm (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
@@ -65,9 +65,9 @@ enum TabEvent {
 
 /// A completed tab measure: events + ending barline style.
 #[derive(Clone, Debug)]
-struct TabMeasure {
-    events: Vec<TabEvent>,
-    barline: BarlineStyle,
+pub(crate) struct TabMeasure {
+    pub(crate) events: Vec<TabEvent>,
+    pub(crate) barline: BarlineStyle,
 }
 
 /// Builder for constructing tablature scores and rendering to SVG.
@@ -78,7 +78,7 @@ struct TabMeasure {
 #[derive(Clone, Debug)]
 #[must_use = "a TabScoreBuilder does nothing until .render_svg() is called"]
 pub struct TabScoreBuilder {
-    line_count: u8,
+    pub(crate) line_count: u8,
     /// Accumulated fret entries for the current in-progress multi-string event.
     /// `.fret()` pushes here; `.fret()` on a different beat or `.rest()` flushes.
     current_frets: Vec<(u8, u8)>,
@@ -87,7 +87,7 @@ pub struct TabScoreBuilder {
     /// Events accumulated for the current in-progress measure.
     current_events: Vec<TabEvent>,
     /// Completed measures.
-    measures: Vec<TabMeasure>,
+    pub(crate) measures: Vec<TabMeasure>,
     /// Measures per system. 0 = use default (4).
     measures_per_system: usize,
     /// System width in font design units. 0 = auto.
@@ -366,7 +366,7 @@ impl TabScoreBuilder {
     }
 
     /// Flush any pending events as a final measure.
-    fn flush_pending(&mut self) {
+    pub(crate) fn flush_pending(&mut self) {
         self.flush_frets();
         if !self.current_events.is_empty() {
             let events = std::mem::take(&mut self.current_events);
@@ -539,7 +539,7 @@ fn break_tab_measures(total: usize, mps: usize) -> Vec<(usize, usize)> {
 }
 
 /// Draw a single tab measure: fret numbers at evenly spaced positions + barline.
-fn draw_tab_measure(
+pub(crate) fn draw_tab_measure(
     svg: &mut SvgWriter,
     font: &MusicFont,
     config: &EngravingConfig,
@@ -764,7 +764,7 @@ fn draw_tab_beam_group_event(
 /// Draws thin/thick vertical lines directly rather than going through
 /// `StaffLayout`-based barline functions, since tab staves have variable
 /// line counts and don't use `StaffLayout`.
-fn draw_measure_barline(
+pub(crate) fn draw_measure_barline(
     svg: &mut SvgWriter,
     _font: &MusicFont,
     config: &EngravingConfig,

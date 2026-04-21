@@ -11,6 +11,7 @@ use crate::layout::multi_staff::{
 use crate::layout::page::{break_measures_auto, break_measures_optimal, PageSystem, SystemBreaking};
 use crate::layout::staff::StaffLayout;
 use crate::layout::system::{layout_system, SystemLayout};
+use crate::layout::tab::TabStaffLayout;
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
 use crate::render::page_renderer::{
     draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
@@ -18,8 +19,10 @@ use crate::render::page_renderer::{
 };
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::system_renderer::draw_system;
+use crate::render::tab_renderer::{draw_tab_clef, draw_tab_staff_lines};
 use crate::render::{SvgWriter, TextStyle};
 
+use super::tab::{draw_tab_measure, TabScoreBuilder};
 use super::ScoreBuilder;
 
 /// A multi-staff score combining multiple [`ScoreBuilder`] staves with a
@@ -70,6 +73,8 @@ pub struct MultiStaffScore {
     optimal_breaks: bool,
     /// Display measure numbers above the start of each system.
     show_measure_numbers: bool,
+    /// Optional tablature stave rendered below the standard notation staves.
+    tab_stave: Option<TabScoreBuilder>,
 }
 
 impl MultiStaffScore {
@@ -86,6 +91,7 @@ impl MultiStaffScore {
             auto_breaks: false,
             optimal_breaks: false,
             show_measure_numbers: false,
+            tab_stave: None,
         }
     }
 
@@ -100,6 +106,7 @@ impl MultiStaffScore {
             auto_breaks: false,
             optimal_breaks: false,
             show_measure_numbers: false,
+            tab_stave: None,
         }
     }
 
@@ -114,6 +121,49 @@ impl MultiStaffScore {
             auto_breaks: false,
             optimal_breaks: false,
             show_measure_numbers: false,
+            tab_stave: None,
+        }
+    }
+
+    /// Create a guitar+tab combined score: bracket connector, joined barlines,
+    /// standard notation stave above a tablature stave.
+    ///
+    /// This is the standard guitar notation layout where a 5-line treble staff
+    /// appears above a 6-string (or custom) TAB staff, connected by a bracket.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use music::notation::clef::Clef;
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::pitch::Pitch;
+    /// use music::note::note::Note;
+    /// use music_engraver::score::ScoreBuilder;
+    /// use music_engraver::score::tab::TabScoreBuilder;
+    /// use music_engraver::score::multi_staff::MultiStaffScore;
+    ///
+    /// let notation = ScoreBuilder::new()
+    ///     .clef(Clef::Treble)
+    ///     .time_signature(4, 4)
+    ///     .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+    ///     .end_barline();
+    ///
+    /// let tab = TabScoreBuilder::guitar()
+    ///     .quarter().fret(1, 0)
+    ///     .end_barline();
+    ///
+    /// let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+    /// ```
+    pub fn guitar_tab(notation: ScoreBuilder, tab: TabScoreBuilder) -> Self {
+        Self {
+            staves: vec![notation],
+            connector: ConnectorKind::Bracket,
+            joined_barlines: true,
+            system_width: 0.0,
+            measures_per_system: 0,
+            auto_breaks: false,
+            optimal_breaks: false,
+            show_measure_numbers: false,
+            tab_stave: Some(tab),
         }
     }
 
@@ -182,13 +232,16 @@ impl MultiStaffScore {
     /// Render the multi-staff score to an SVG string, returning an error on failure.
     #[must_use = "the SVG string is returned but not used"]
     pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
-        if self.staves.is_empty() {
+        if self.staves.is_empty() && self.tab_stave.is_none() {
             return Ok(String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
         }
 
         // Flush pending events on all staves
         for stave in &mut self.staves {
             stave.flush_pending();
+        }
+        if let Some(ref mut tab) = self.tab_stave {
+            tab.flush_pending();
         }
 
         let font = bravura_font();
@@ -218,8 +271,10 @@ impl MultiStaffScore {
 
         let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
 
-        // Determine total number of measures (max across all staves)
-        let max_measures = self.staves.iter().map(|s| s.measures.len()).max().unwrap_or(0);
+        // Determine total number of measures (max across all staves + tab)
+        let notation_max = self.staves.iter().map(|s| s.measures.len()).max().unwrap_or(0);
+        let tab_max = self.tab_stave.as_ref().map(|t| t.measures.len()).unwrap_or(0);
+        let max_measures = notation_max.max(tab_max);
         if max_measures == 0 {
             return Ok(String::from("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
         }
@@ -236,11 +291,10 @@ impl MultiStaffScore {
             || self.staves.iter().any(|s| s.optimal_breaks);
         let use_auto = self.auto_breaks
             || self.staves.iter().any(|s| s.auto_breaks);
-        let chunks = if use_optimal {
+        let chunks = if use_optimal && !stave_data.is_empty() {
             let (ref contents, ref prefix) = stave_data[0];
             break_measures_optimal(prefix, contents, &measure_config, sys_width)
-        } else if use_auto {
-            // Use first stave's content for width estimation
+        } else if use_auto && !stave_data.is_empty() {
             let (ref contents, ref prefix) = stave_data[0];
             break_measures_auto(prefix, contents, &measure_config, sys_width)
         } else {
@@ -248,29 +302,39 @@ impl MultiStaffScore {
             break_measures(max_measures, &breaking)
         };
 
-        // Build the multi-staff geometry
+        // Build the multi-staff geometry for standard notation staves only.
+        // Tab stave is positioned below with a separate gap.
+        let notation_staff_count = self.staves.len();
         let group = StaffGroup {
-            staff_count: self.staves.len(),
+            staff_count: notation_staff_count,
             connector: self.connector,
             joined_barlines: self.joined_barlines,
         };
 
-        // Compute the height of one multi-staff system
         let multi_layout = layout_multi_staff(&group, 0.0, staff_space, sys_width);
-        let system_height = multi_layout.total_height();
+        let notation_height = multi_layout.total_height();
 
-        // Vertical spacing between multi-staff system groups
-        // Use 10 staff spaces clearance between bottom of one group and top of next
+        // Tab stave geometry (height varies by line count)
+        let tab_line_count = self.tab_stave.as_ref().map(|t| t.line_count).unwrap_or(6);
+        let tab_staff_height = staff_space * (tab_line_count.saturating_sub(1)) as f64;
+        // Gap between bottom of last notation staff and top of tab staff
+        let tab_gap = crate::layout::multi_staff::INTER_STAFF_GAP_SS * staff_space;
+
+        // Total system height includes notation + optional tab stave
+        let system_height = if self.tab_stave.is_some() {
+            notation_height + tab_gap + tab_staff_height
+        } else {
+            notation_height
+        };
+
         let inter_system_gap = 10.0 * staff_space;
 
-        // Left margin to accommodate brace/bracket
         let left_margin = match self.connector {
             ConnectorKind::Brace => 2.0 * staff_space,
             ConnectorKind::Bracket => 2.0 * staff_space,
             ConnectorKind::None => 0.0,
         };
 
-        // Page dimensions
         let total_systems = chunks.len();
         let page_width = sys_width + left_margin;
         let page_height = if total_systems > 0 {
@@ -280,7 +344,6 @@ impl MultiStaffScore {
             0.0
         };
 
-        // Prepare SVG
         let vb_margin = staff_space;
         let vb_x = -vb_margin - left_margin;
         let vb_y = -vb_margin;
@@ -292,40 +355,37 @@ impl MultiStaffScore {
 
         let mut svg = SvgWriter::new(px_w, px_h, vb_x, vb_y, vb_w, vb_h);
 
-        // Collect PageSystem per stave for cross-system span rendering.
-        // stave_page_systems[stave_idx] = Vec<PageSystem> across all system chunks.
         let num_staves = self.staves.len();
         let mut stave_page_systems: Vec<Vec<PageSystem>> = vec![Vec::new(); num_staves];
 
-        // Render each system chunk
+        // TAB clef occupies ~2.5 staff spaces + 0.5 padding
+        let tab_clef_width = 3.0 * staff_space;
+
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
             let group_y = sys_idx as f64 * (system_height + inter_system_gap);
 
-            // Compute multi-staff layout at this y position
+            // --- Standard notation staves ---
             let ms_layout = layout_multi_staff(&group, group_y, staff_space, sys_width);
 
-            // Draw connector (brace/bracket)
-            draw_multi_staff_connectors(&mut svg, &font, &ms_layout)?;
+            if !self.staves.is_empty() {
+                draw_multi_staff_connectors(&mut svg, &font, &ms_layout)?;
+            }
 
-            // Layout and draw each stave
             let mut stave_systems: Vec<SystemLayout> = Vec::new();
 
             for (stave_idx, (contents, prefix)) in stave_data.iter().enumerate() {
                 let stave_y = ms_layout.staff_y_origins[stave_idx];
 
-                // Slice measures for this system chunk (pad with empty if stave is shorter)
                 let stave_start = (*start).min(contents.len());
                 let stave_end = (*end).min(contents.len());
                 let slice = &contents[stave_start..stave_end];
 
                 if slice.is_empty() {
-                    // Still draw staff lines for empty staves
                     let staff = StaffLayout::new(left_margin, stave_y, sys_width, staff_space);
                     draw_staff_lines(&mut svg, &staff, &config);
                     continue;
                 }
 
-                // First system of each stave gets full prefix; subsequent get no time sig
                 let sys_prefix = if sys_idx == 0 {
                     prefix.clone()
                 } else {
@@ -346,7 +406,6 @@ impl MultiStaffScore {
 
                 draw_system(&mut svg, &font, &config, &system, left_margin, stave_y)?;
 
-                // Record for cross-system span rendering
                 stave_page_systems[stave_idx].push(PageSystem {
                     x: left_margin,
                     y: stave_y,
@@ -357,7 +416,57 @@ impl MultiStaffScore {
                 stave_systems.push(system);
             }
 
-            // Draw measure number above the top stave of each system
+            // --- Tab stave (below standard notation staves) ---
+            if let Some(ref tab) = self.tab_stave {
+                let tab_y = if self.staves.is_empty() {
+                    group_y
+                } else {
+                    // Position below the last notation staff
+                    let last_notation_y = ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1];
+                    let notation_bottom = last_notation_y + staff_space * 4.0;
+                    notation_bottom + tab_gap
+                };
+
+                let tab_staff = TabStaffLayout::new(
+                    left_margin,
+                    tab_y,
+                    sys_width,
+                    staff_space,
+                    tab.line_count,
+                );
+
+                draw_tab_staff_lines(&mut svg, &tab_staff, &config);
+                draw_tab_clef(&mut svg, &tab_staff, &font)?;
+
+                // Draw tab measures for this system chunk
+                let tab_start = (*start).min(tab.measures.len());
+                let tab_end = (*end).min(tab.measures.len());
+                let tab_measures = &tab.measures[tab_start..tab_end];
+
+                // Content area starts after the TAB clef
+                let content_x = left_margin + tab_clef_width;
+                let content_width = sys_width - tab_clef_width;
+                let measure_width = if tab_measures.is_empty() {
+                    content_width
+                } else {
+                    content_width / tab_measures.len() as f64
+                };
+
+                for (m_idx, measure) in tab_measures.iter().enumerate() {
+                    let measure_x = content_x + m_idx as f64 * measure_width;
+                    draw_tab_measure(
+                        &mut svg,
+                        &font,
+                        &config,
+                        &tab_staff,
+                        measure,
+                        measure_x,
+                        measure_width,
+                    )?;
+                }
+            }
+
+            // --- Measure numbers ---
             if self.show_measure_numbers {
                 if let Some(first_system) = stave_systems.first() {
                     if !first_system.measures.is_empty() {
@@ -366,7 +475,7 @@ impl MultiStaffScore {
                         let num_y = ms_layout.staff_y_origins[0]
                             - crate::render::page_renderer::MEASURE_NUMBER_ABOVE_STAFF_SS * staff_space;
                         let font_size = crate::render::page_renderer::MEASURE_NUMBER_FONT_SIZE_SS * staff_space;
-                        let measure_number = start + 1; // 1-based
+                        let measure_number = start + 1;
                         svg.add_text(num_x, num_y, &measure_number.to_string(), &TextStyle {
                             font_family: "serif",
                             font_size,
@@ -380,13 +489,23 @@ impl MultiStaffScore {
                 }
             }
 
-            // Draw joined barlines through all staves (at barline positions of first stave)
-            if self.joined_barlines && ms_layout.staff_y_origins.len() >= 2 {
+            // --- Joined barlines spanning all staves (notation + tab) ---
+            let total_stave_count = self.staves.len() + if self.tab_stave.is_some() { 1 } else { 0 };
+            if self.joined_barlines && total_stave_count >= 2 {
                 let y_top = ms_layout.staff_y_origins[0];
-                let y_bottom = ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1]
-                    + staff_space * 4.0; // bottom of last staff
+                let y_bottom = if let Some(ref _tab) = self.tab_stave {
+                    let tab_y = if self.staves.is_empty() {
+                        group_y
+                    } else {
+                        let last_y = ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1];
+                        last_y + staff_space * 4.0 + tab_gap
+                    };
+                    tab_y + tab_staff_height
+                } else {
+                    ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1]
+                        + staff_space * 4.0
+                };
 
-                // Draw initial joined barline at the left edge (system start)
                 draw_joined_barline(
                     &mut svg,
                     left_margin,
@@ -395,7 +514,6 @@ impl MultiStaffScore {
                     config.thin_barline_thickness_fu(),
                 );
 
-                // Draw joined barlines at each measure boundary from the first stave's layout
                 if let Some(first_system) = stave_systems.first() {
                     for measure in &first_system.measures {
                         let barline_x = left_margin + measure.x_offset + measure.layout.total_width;
@@ -409,10 +527,34 @@ impl MultiStaffScore {
                     }
                 }
             }
+
+            // --- Bracket extending to cover tab stave ---
+            if self.tab_stave.is_some() && !self.staves.is_empty() {
+                // Re-draw bracket to extend to tab stave bottom
+                // The initial bracket from draw_multi_staff_connectors only covers
+                // notation staves. We draw an extended bracket manually.
+                if self.connector == ConnectorKind::Bracket && !ms_layout.staff_y_origins.is_empty() {
+                    let tab_y = {
+                        let last_y = ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1];
+                        last_y + staff_space * 4.0 + tab_gap
+                    };
+                    let y_top = ms_layout.staff_y_origins[0];
+                    let y_bottom = tab_y + tab_staff_height;
+                    let bracket_x = left_margin - crate::layout::multi_staff::BRACKET_THICKNESS_SS * staff_space;
+                    let thickness = crate::layout::multi_staff::BRACKET_THICKNESS_SS * staff_space;
+                    let serif_len = crate::layout::multi_staff::BRACKET_SERIF_LENGTH_SS * staff_space;
+                    let serif_thick = thickness * 0.4;
+                    // Vertical line
+                    svg.add_line(bracket_x, y_top, bracket_x, y_bottom, "black", thickness);
+                    // Top serif
+                    svg.add_line(bracket_x, y_top, bracket_x + serif_len, y_top, "black", serif_thick);
+                    // Bottom serif
+                    svg.add_line(bracket_x, y_bottom, bracket_x + serif_len, y_bottom, "black", serif_thick);
+                }
+            }
         }
 
-        // Draw cross-system spans (ties, slurs, hairpins, lyric extenders)
-        // for each stave independently.
+        // Draw cross-system spans for notation staves
         for stave_systems in &stave_page_systems {
             if stave_systems.len() < 2 {
                 continue;
@@ -1114,5 +1256,216 @@ mod tests {
 
         // Just verify it renders without error
         assert!(svg_1sys.starts_with("<svg"));
+    }
+
+    // --- guitar_tab tests ---
+
+    fn simple_tab() -> TabScoreBuilder {
+        TabScoreBuilder::guitar()
+            .quarter().fret(1, 0)
+            .next()
+            .quarter().fret(1, 2)
+            .next()
+            .quarter().fret(2, 3)
+            .next()
+            .quarter().fret(3, 0)
+            .end_barline()
+    }
+
+    #[test]
+    fn guitar_tab_renders_valid_svg() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        assert!(svg.starts_with("<svg"), "should start with <svg");
+        assert!(svg.contains("</svg>"), "should close svg");
+    }
+
+    #[test]
+    fn guitar_tab_has_notation_and_tab_staff_lines() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        let line_count = svg.matches("<line ").count();
+        // 5 notation staff lines + 6 tab staff lines + barlines/stems/brackets = many
+        assert!(
+            line_count >= 11,
+            "should have at least 11 lines (5 notation + 6 tab), got {line_count}"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_has_fret_numbers() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        // Tab should show fret numbers
+        assert!(svg.contains(">0</text>"), "should show fret number 0");
+        assert!(svg.contains(">2</text>"), "should show fret number 2");
+        assert!(svg.contains(">3</text>"), "should show fret number 3");
+    }
+
+    #[test]
+    fn guitar_tab_has_tab_clef() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        // TAB clef is an SMuFL path element
+        let path_count = svg.matches("<path ").count();
+        // At minimum: treble clef + TAB clef + noteheads = several paths
+        assert!(
+            path_count >= 2,
+            "should have at least 2 paths (treble + TAB clef), got {path_count}"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_has_bracket_connector() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        // Bracket has 3 lines: vertical + 2 serifs — but we draw an extended bracket
+        // so there should be extra bracket lines
+        let line_count = svg.matches("<line ").count();
+        // Notation (5) + tab (6) + bracket (3) + joined barlines + stems ≥ 17
+        assert!(
+            line_count >= 17,
+            "guitar_tab should have bracket lines (>=17 total), got {line_count}"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_has_joined_barlines() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        // Joined barlines span from top of notation to bottom of tab staff
+        // They should produce additional vertical lines beyond staff lines
+        let svg_no_tab = simple_treble().render_svg();
+        let single_lines = svg_no_tab.matches("<line ").count();
+        let combined_lines = svg.matches("<line ").count();
+        assert!(
+            combined_lines > single_lines,
+            "combined ({combined_lines}) should have more lines than single ({single_lines})"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_differs_from_grand_staff() {
+        let notation = simple_treble();
+        let tab = simple_tab();
+        let guitar_tab_svg = MultiStaffScore::guitar_tab(notation.clone(), tab).render_svg();
+        let grand_svg = MultiStaffScore::grand_staff(notation, simple_bass()).render_svg();
+        // Guitar+tab should show fret numbers, grand staff should not
+        assert!(guitar_tab_svg.contains(">0</text>"), "guitar_tab should have fret numbers");
+        assert!(!grand_svg.contains(">0</text>") || !grand_svg.contains("dominant-baseline=\"central\""),
+            "grand staff should not have fret numbers with central baseline");
+    }
+
+    #[test]
+    fn guitar_tab_four_string_bass() {
+        let notation = ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .time_signature(4, 4)
+            .note(pitch(Note::E, 2), Duration::WHOLE)
+            .end_barline();
+        let tab = TabScoreBuilder::four_string()
+            .whole().fret(4, 0)
+            .end_barline();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        assert!(svg.starts_with("<svg"));
+        // 4-string tab: notation (5 lines) + tab (4 lines) = 9 minimum
+        let line_count = svg.matches("<line ").count();
+        assert!(
+            line_count >= 9,
+            "bass+4-string tab should have at least 9 lines, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_multi_system() {
+        let notation = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::E, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::B, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::E, 5), Duration::WHOLE)
+            .end_barline();
+        let tab = TabScoreBuilder::guitar()
+            .whole().fret(1, 0).barline()
+            .whole().fret(3, 0).barline()
+            .whole().fret(2, 0).barline()
+            .whole().fret(1, 5)
+            .end_barline();
+        let svg = MultiStaffScore::guitar_tab(notation, tab)
+            .measures_per_system(2)
+            .render_svg();
+        assert!(svg.starts_with("<svg"));
+        // 2 systems × (5 notation + 6 tab) = 22 staff lines minimum
+        let line_count = svg.matches("<line ").count();
+        assert!(
+            line_count >= 22,
+            "multi-system guitar_tab should have >=22 staff lines, got {line_count}"
+        );
+        // Fret numbers from both systems should appear
+        assert!(svg.contains(">0</text>"), "should show fret 0");
+        assert!(svg.contains(">5</text>"), "should show fret 5");
+    }
+
+    #[test]
+    fn guitar_tab_with_tab_rhythm_stems() {
+        let notation = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::E, 4), Duration::QTR)
+            .note(pitch(Note::G, 4), Duration::QTR)
+            .note(pitch(Note::B, 4), Duration::HALF)
+            .end_barline();
+        let tab = TabScoreBuilder::guitar()
+            .quarter().fret(1, 0)
+            .next()
+            .quarter().fret(3, 0)
+            .next()
+            .half().fret(2, 0)
+            .end_barline();
+        let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+        assert!(svg.starts_with("<svg"));
+        // Rhythm stems on tab add extra lines (stem lines above tab staff)
+        let line_count = svg.matches("<line ").count();
+        // At minimum: 5 (notation) + 6 (tab) + notation stems + tab stems + bracket + barlines
+        assert!(
+            line_count >= 17,
+            "should have tab rhythm stems (>=17 lines), got {line_count}"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_with_measures_per_system_override() {
+        let notation = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::E, 4), Duration::WHOLE)
+            .barline()
+            .note(pitch(Note::G, 4), Duration::WHOLE)
+            .end_barline();
+        let tab = TabScoreBuilder::guitar()
+            .whole().fret(1, 0).barline()
+            .whole().fret(3, 0)
+            .end_barline();
+        // 1 measure per system → 2 systems
+        let svg = MultiStaffScore::guitar_tab(notation, tab)
+            .measures_per_system(1)
+            .render_svg();
+        assert!(svg.starts_with("<svg"));
+        // 2 systems × (5+6) = 22 staff lines minimum
+        let line_count = svg.matches("<line ").count();
+        assert!(
+            line_count >= 22,
+            "1 mps should produce 2 systems (>=22 staff lines), got {line_count}"
+        );
     }
 }
