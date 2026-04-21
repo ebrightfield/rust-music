@@ -257,6 +257,12 @@ fn draw_note_event(
         crate::render::navigation_renderer::draw_navigation_sign(svg, font, &nav_layout)?;
     }
 
+    // Draw pedal marking (Ped. or *) below the staff if present
+    if let Some(pedal_mark) = note.annotations.pedal {
+        let note_center_x = x + advance / 2.0;
+        crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, note_center_x)?;
+    }
+
     Ok(())
 }
 
@@ -461,6 +467,12 @@ fn draw_chord_event(
         let nav_layout =
             crate::layout::navigation::layout_navigation_sign(sign, chord_center_x, staff);
         crate::render::navigation_renderer::draw_navigation_sign(svg, font, &nav_layout)?;
+    }
+
+    // Draw pedal marking (Ped. or *) below the staff if present
+    if let Some(pedal_mark) = chord.annotations.pedal {
+        let chord_center_x = x + advance / 2.0;
+        crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, chord_center_x)?;
     }
 
     Ok(())

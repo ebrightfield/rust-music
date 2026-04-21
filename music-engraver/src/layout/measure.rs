@@ -9,6 +9,7 @@ use crate::layout::key_signature::KeySignature;
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
+use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
@@ -64,6 +65,8 @@ pub struct NoteAnnotations {
     pub ottava_start: Option<OttavaKind>,
     /// Whether this note/chord ends an ottava bracket.
     pub ottava_end: bool,
+    /// Optional pedal marking (Ped. down or * up) placed below the staff.
+    pub pedal: Option<PedalMark>,
 }
 
 /// A group of notes to be beamed together.

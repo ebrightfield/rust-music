@@ -3658,3 +3658,128 @@
 
         assert_ne!(without, with, "cross-system ottava should change SVG output");
     }
+
+    // Pedal marking tests
+
+    #[test]
+    fn pedal_down_adds_path_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .pedal_down()
+            .end_barline()
+            .render_svg();
+        // Pedal "Ped." glyph adds one extra path vs a note without pedal
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.matches("<path ").count() > baseline.matches("<path ").count(),
+            "pedal_down should add at least one path"
+        );
+    }
+
+    #[test]
+    fn pedal_up_adds_path_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .pedal_up()
+            .end_barline()
+            .render_svg();
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.matches("<path ").count() > baseline.matches("<path ").count(),
+            "pedal_up should add at least one path"
+        );
+    }
+
+    #[test]
+    fn pedal_down_and_up_produce_different_svg() {
+        let down = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .pedal_down()
+            .end_barline()
+            .render_svg();
+        let up = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .pedal_up()
+            .end_barline()
+            .render_svg();
+        assert_ne!(down, up, "Ped. and * should produce different SVG");
+    }
+
+    #[test]
+    fn pedal_on_rest_is_noop() {
+        let with_pedal = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .pedal_down()
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(with_pedal, without, "pedal on rest should be no-op");
+    }
+
+    #[test]
+    fn pedal_on_chord_adds_path() {
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with_pedal = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .pedal_down()
+            .end_barline()
+            .render_svg();
+        assert!(
+            with_pedal.matches("<path ").count() > baseline.matches("<path ").count(),
+            "pedal on chord should add path"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_pedal() {
+        use crate::layout::pedal::PedalMark;
+        let pitch = p("C", 4);
+        let event = ScoreEvent::Note {
+            pitch,
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                pedal: Some(PedalMark::Down),
+                ..Default::default()
+            },
+        };
+        let key_sig = KeySignature::Open;
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        if let MeasureEvent::Note(note) = result {
+            assert_eq!(note.annotations.pedal, Some(PedalMark::Down));
+        } else {
+            panic!("expected Note event");
+        }
+    }

@@ -1887,3 +1887,132 @@ fn different_navigation_signs_produce_different_output() {
     let coda_svg = make(crate::layout::navigation::NavigationSign::Coda);
     assert_ne!(segno_svg, coda_svg, "segno and coda should produce different output");
 }
+
+// Pedal marking tests
+
+#[test]
+fn note_with_pedal_down_adds_path() {
+    use crate::layout::pedal::PedalMark;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let without = {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let with_pedal = {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                pedal: Some(PedalMark::Down),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let paths_without = without.matches("<path ").count();
+    let paths_with = with_pedal.matches("<path ").count();
+    assert!(
+        paths_with > paths_without,
+        "pedal down should add a path: {paths_with} vs {paths_without}"
+    );
+}
+
+#[test]
+fn note_without_pedal_has_fewer_paths() {
+    use crate::layout::pedal::PedalMark;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |pedal: Option<PedalMark>| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                pedal,
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg().matches("<path ").count()
+    };
+    assert!(make(None) < make(Some(PedalMark::Down)));
+    assert!(make(None) < make(Some(PedalMark::Up)));
+}
+
+#[test]
+fn chord_with_pedal_down_adds_path() {
+    use crate::layout::pedal::PedalMark;
+    use crate::layout::measure::ChordEvent;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |pedal: Option<PedalMark>| {
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 7],
+            duration_log2: 2,
+            dots: 0,
+            accidentals: vec![None, None, None],
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                pedal,
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg().matches("<path ").count()
+    };
+    assert!(make(Some(PedalMark::Down)) > make(None), "chord with pedal should have more paths");
+}
+
+#[test]
+fn pedal_down_and_up_produce_different_output() {
+    use crate::layout::pedal::PedalMark;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |mark: PedalMark| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                pedal: Some(mark),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+    let down_svg = make(PedalMark::Down);
+    let up_svg = make(PedalMark::Up);
+    assert_ne!(down_svg, up_svg, "pedal down and up should differ");
+}

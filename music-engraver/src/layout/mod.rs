@@ -28,6 +28,7 @@ pub mod note_placement;
 pub mod ottava;
 pub mod ornament;
 pub mod page;
+pub mod pedal;
 pub mod rehearsal;
 pub mod rest;
 pub mod slur;
@@ -96,6 +97,7 @@ pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOV
 pub use navigation::{layout_navigation_sign, NavigationSign, NavigationSignLayout};
 pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
 pub use ottava::{layout_ottava_bracket, OttavaBracketLayout, OttavaKind, OTTAVA_ABOVE_STAFF_SS};
+pub use pedal::{layout_pedal, PedalLayout, PedalMark, PEDAL_BELOW_STAFF_SS};
 pub use tab_beam::{
     compute_tab_beam_counts, layout_tab_beam_group, TabBeamGroupLayout, TabBeamedNote,
 };

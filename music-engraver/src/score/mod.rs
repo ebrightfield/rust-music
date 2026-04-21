@@ -51,6 +51,7 @@ use crate::layout::lyric::LyricSyllable;
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
+use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
@@ -428,6 +429,34 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.ottava_end = true;
+        }
+        self
+    }
+
+    /// Attach a pedal-down ("Ped.") marking to the most recently added note or chord.
+    ///
+    /// The SMuFL "keyboardPedalPed" glyph is placed below the staff, well below
+    /// dynamics, expression text, and lyrics. No-op if the last event was a rest.
+    pub fn pedal_down(mut self) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.pedal = Some(PedalMark::Down);
+        }
+        self
+    }
+
+    /// Attach a pedal-up ("*") marking to the most recently added note or chord.
+    ///
+    /// The SMuFL "keyboardPedalUp" glyph is placed below the staff at the same
+    /// vertical position as pedal-down markings. No-op if the last event was a rest.
+    pub fn pedal_up(mut self) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.pedal = Some(PedalMark::Up);
         }
         self
     }
