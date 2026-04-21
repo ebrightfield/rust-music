@@ -8,6 +8,7 @@ use crate::layout::measure::{
     MeasureLayoutConfig, NoteEvent, RestEvent, TupletGroupEvent,
 };
 use crate::layout::time_signature::TimeSignatureKind;
+use crate::layout::volta::VoltaAnnotation;
 
 /// Input description of a single measure's musical content (no layout yet).
 #[derive(Clone, Debug)]
@@ -16,6 +17,8 @@ pub struct MeasureContent {
     pub events: Vec<MeasureEvent>,
     /// Barline at the end of this measure.
     pub barline: BarlineStyle,
+    /// Optional volta bracket annotation for this measure.
+    pub volta: Option<VoltaAnnotation>,
 }
 
 /// A rhythmic event within a measure — a note, rest, chord, or beam group.
@@ -106,6 +109,8 @@ pub struct SystemMeasure {
     pub x_offset: f64,
     /// The laid-out measure.
     pub layout: MeasureLayout,
+    /// Optional volta bracket annotation for this measure.
+    pub volta: Option<VoltaAnnotation>,
 }
 
 /// Lay out a system of measures.
@@ -184,10 +189,11 @@ pub fn layout_system(
     // Assign x-offsets
     let mut system_measures = Vec::with_capacity(layouts.len());
     let mut x = 0.0;
-    for layout in layouts {
+    for (i, layout) in layouts.iter().enumerate() {
         system_measures.push(SystemMeasure {
             x_offset: x,
             layout: layout.clone(),
+            volta: measures[i].volta.clone(),
         });
         x += layout.total_width;
     }
@@ -271,6 +277,7 @@ mod tests {
         let measures = vec![MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&prefix, &measures, &cfg, None);
 
@@ -294,10 +301,12 @@ mod tests {
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(6)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -318,14 +327,17 @@ mod tests {
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(6)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(8)],
                 barline: BarlineStyle::Final,
+                volta: None,
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -352,10 +364,12 @@ mod tests {
             MeasureContent {
                 events: vec![quarter_note(4), quarter_note(6)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(2)],
                 barline: BarlineStyle::Final,
+                volta: None,
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -376,10 +390,12 @@ mod tests {
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(6)],
                 barline: BarlineStyle::Final,
+                volta: None,
             },
         ];
 
@@ -408,6 +424,7 @@ mod tests {
         let measures = vec![MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
         assert!((layout.measures[0].x_offset).abs() < f64::EPSILON);
@@ -420,6 +437,7 @@ mod tests {
         let measures = vec![MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&prefix, &measures, &cfg, None);
         let elems = &layout.measures[0].layout.elements;
@@ -438,6 +456,7 @@ mod tests {
         let measures = vec![MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&prefix, &measures, &cfg, None);
         assert_eq!(layout.clef_kind, ClefKind::Bass);
@@ -454,6 +473,7 @@ mod tests {
                 quarter_note(8),
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
 
@@ -469,14 +489,17 @@ mod tests {
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Single,
+                volta: None,
             },
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Final,
+                volta: None,
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -491,6 +514,7 @@ mod tests {
         let measures = vec![MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, Some(8000.0));
         assert!((layout.staff_width - 8000.0).abs() < f64::EPSILON);
@@ -502,6 +526,7 @@ mod tests {
         let measures = vec![MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
         assert!((layout.staff_width - layout.total_width).abs() < f64::EPSILON);

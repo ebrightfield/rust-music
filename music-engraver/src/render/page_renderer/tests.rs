@@ -30,6 +30,7 @@ fn make_measure(pos: i8) -> MeasureContent {
     MeasureContent {
         events: vec![quarter_note(pos)],
         barline: BarlineStyle::Single,
+        volta: None,
     }
 }
 
@@ -160,10 +161,12 @@ fn cross_system_tie_draws_two_half_ties() {
         MeasureContent {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     // 1 measure per system → forces cross-system tie
@@ -192,10 +195,12 @@ fn no_cross_system_tie_without_tie_forward() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -219,10 +224,12 @@ fn cross_system_tie_with_no_matching_target_draws_right_half_only() {
         MeasureContent {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -250,10 +257,12 @@ fn within_system_tie_does_not_produce_cross_system_tie() {
         MeasureContent {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -278,10 +287,12 @@ fn cross_system_tie_differs_from_no_tie() {
         MeasureContent {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
@@ -289,10 +300,12 @@ fn cross_system_tie_differs_from_no_tie() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
@@ -339,10 +352,12 @@ fn cross_system_slur_draws_two_half_slurs() {
         MeasureContent {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     // 1 measure per system → forces cross-system slur
@@ -371,10 +386,12 @@ fn no_cross_system_slur_without_flags() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -398,10 +415,12 @@ fn cross_system_slur_right_half_only_when_no_end() {
         MeasureContent {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],  // no slur_end
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -429,10 +448,12 @@ fn within_system_slur_not_duplicated_as_cross_system() {
         MeasureContent {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -457,20 +478,24 @@ fn cross_system_slur_differs_from_no_slur() {
         MeasureContent {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let without_slur = vec![
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
@@ -519,10 +544,12 @@ fn cross_system_hairpin_draws_four_lines() {
         MeasureContent {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     // 1 measure per system → forces cross-system hairpin
@@ -537,10 +564,12 @@ fn cross_system_hairpin_draws_four_lines() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let no_hp_page = layout_page(&prefix(), &no_hp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -569,10 +598,12 @@ fn no_cross_system_hairpin_without_flags() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -599,10 +630,12 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
         MeasureContent {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)], // no hairpin_end
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -615,10 +648,12 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -646,10 +681,12 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
         MeasureContent {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -663,10 +700,12 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -689,20 +728,24 @@ fn cross_system_hairpin_differs_from_no_hairpin() {
         MeasureContent {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let without_hp = vec![
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
@@ -726,10 +769,12 @@ fn cross_system_decresc_differs_from_cresc() {
         MeasureContent {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let decresc = vec![
@@ -742,10 +787,12 @@ fn cross_system_decresc_differs_from_cresc() {
                 stem_direction: None,
                 annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Decrescendo), ..Default::default() },})],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
@@ -981,10 +1028,12 @@ fn cross_system_lyric_extender_draws_two_lines() {
         MeasureContent {
             events: vec![note_with_extender(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     // 1 measure per system → forces cross-system extender
@@ -1002,10 +1051,12 @@ fn cross_system_lyric_extender_draws_two_lines() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page_no_ext = layout_page(&prefix(), &measures_no_ext, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1033,10 +1084,12 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
         MeasureContent {
             events: vec![note_with_lyric_word(4, "sing")],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1048,10 +1101,12 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page_bare = layout_page(&prefix(), &measures_bare, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1074,10 +1129,12 @@ fn within_system_extender_does_not_produce_cross_system_extender() {
         MeasureContent {
             events: vec![note_with_extender(4), quarter_note(6)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
@@ -1105,20 +1162,24 @@ fn cross_system_lyric_extender_differs_from_no_extender() {
         MeasureContent {
             events: vec![note_with_extender(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let measures_bare = vec![
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
@@ -1142,10 +1203,12 @@ fn cross_system_lyric_extender_lines_are_horizontal() {
         MeasureContent {
             events: vec![note_with_extender(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));

@@ -3243,3 +3243,115 @@
         let line_count = svg.matches("<line").count();
         assert!(line_count >= 10, "expected at least 10 lines for 2 systems, got {line_count}");
     }
+
+    // --- volta brackets ---
+
+    #[test]
+    fn volta_single_measure_adds_bracket_lines_and_text() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .volta_start("1.")
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .volta_end()
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains(">1.</text>"), "should contain volta text '1.'");
+        // Single-measure volta: 3 bracket lines (top + left hook + right hook)
+        // plus 5 staff lines + other lines
+        let without_volta = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert!(!without_volta.contains(">1.</text>"));
+        // The volta version should have more <line elements
+        let volta_lines = svg.matches("<line").count();
+        let no_volta_lines = without_volta.matches("<line").count();
+        assert!(volta_lines > no_volta_lines, "volta should add bracket lines: {volta_lines} vs {no_volta_lines}");
+    }
+
+    #[test]
+    fn volta_multi_measure_has_continuation() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            // First ending: 2 measures
+            .volta_start("1.")
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .barline()
+            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .volta_end()
+            .barline()
+            // Second ending: 1 measure
+            .volta_start("2.")
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::WHOLE)
+            .volta_end()
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains(">1.</text>"), "should contain volta text '1.'");
+        assert!(svg.contains(">2.</text>"), "should contain volta text '2.'");
+    }
+
+    #[test]
+    fn volta_differs_from_no_volta() {
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .volta_start("1.")
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .volta_end()
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert_ne!(with, without);
+    }
+
+    #[test]
+    fn volta_text_is_bold() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .volta_start("1.")
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .volta_end()
+            .end_barline()
+            .render_svg();
+        // Find the text element containing "1." and verify it's bold
+        assert!(svg.contains("font-weight=\"bold\""), "volta text should be bold");
+    }
+
+    #[test]
+    fn volta_no_bracket_without_volta_calls() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        // No volta-related text should appear
+        assert!(!svg.contains(">1.</text>"));
+        assert!(!svg.contains(">2.</text>"));
+    }
+
+    #[test]
+    fn volta_single_measure_three_extra_lines() {
+        // A single-measure volta bracket adds exactly 3 lines:
+        // 1 horizontal top line + 1 left hook + 1 right hook
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .volta_start("1.")
+            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .volta_end()
+            .end_barline()
+            .render_svg();
+        let diff = with.matches("<line").count() - without.matches("<line").count();
+        assert_eq!(diff, 3, "single-measure volta adds 3 lines (top + 2 hooks), got {diff}");
+    }

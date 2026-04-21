@@ -55,6 +55,7 @@ use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
 use crate::layout::time_signature::TimeSignatureKind;
+use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use crate::render::page_renderer::draw_page;
 
 use event::{AccidentalTracker, ScoreEvent, convert_event};
@@ -80,8 +81,8 @@ pub struct ScoreBuilder {
     time_sig_kind: Option<TimeSignatureKind>,
     /// Events accumulated for the current (in-progress) measure.
     current_events: Vec<ScoreEvent>,
-    /// Completed measures.
-    pub(crate) measures: Vec<(Vec<ScoreEvent>, BarlineStyle)>,
+    /// Completed measures: (events, barline style, optional volta annotation).
+    pub(crate) measures: Vec<(Vec<ScoreEvent>, BarlineStyle, Option<VoltaAnnotation>)>,
     /// Measures per system (for line breaking). 0 = auto (4 per system).
     pub(crate) measures_per_system: usize,
     /// System width in font design units. 0 = auto.
@@ -92,6 +93,12 @@ pub struct ScoreBuilder {
     pub(crate) optimal_breaks: bool,
     /// Display measure numbers above the start of each system.
     pub(crate) show_measure_numbers: bool,
+    /// Whether we are currently inside a volta bracket region.
+    in_volta: bool,
+    /// Text label for the current volta bracket (set on `.volta_start()`).
+    volta_text: Option<String>,
+    /// Whether `.volta_end()` was called on the current measure (consumed at barline).
+    volta_ending: bool,
 }
 
 impl ScoreBuilder {
@@ -109,6 +116,9 @@ impl ScoreBuilder {
             auto_breaks: false,
             optimal_breaks: false,
             show_measure_numbers: false,
+            in_volta: false,
+            volta_text: None,
+            volta_ending: false,
         }
     }
 
@@ -483,10 +493,74 @@ impl ScoreBuilder {
         self
     }
 
+    /// Mark the start of a volta bracket (1st/2nd ending) on the current measure.
+    ///
+    /// `text` is the label displayed at the left side of the bracket (e.g. "1.", "2.",
+    /// "1.–3."). Call before writing notes for the first measure of the ending.
+    /// The bracket continues over subsequent measures until `.volta_end()` is called.
+    ///
+    /// A volta bracket has a left hook + text on the start measure, a top line on
+    /// continuation measures, and a right hook on the end measure (the one where
+    /// `.volta_end()` is called before the barline).
+    pub fn volta_start(mut self, text: &str) -> Self {
+        self.in_volta = true;
+        self.volta_text = Some(text.to_string());
+        self
+    }
+
+    /// Mark the current measure as the last measure of a volta bracket.
+    ///
+    /// The bracket's right hook is drawn at the end of this measure. Call before
+    /// the barline that ends this measure.
+    pub fn volta_end(mut self) -> Self {
+        self.volta_ending = true;
+        self
+    }
+
+    /// Resolve the volta annotation for the current measure being flushed.
+    fn resolve_volta(&mut self) -> Option<VoltaAnnotation> {
+        let has_text = self.volta_text.is_some();
+        let ending = std::mem::take(&mut self.volta_ending);
+
+        if has_text && ending {
+            // Single-measure volta — both hooks + text
+            let text = self.volta_text.take();
+            self.in_volta = false;
+            Some(VoltaAnnotation {
+                text,
+                hooks: VoltaHooks::Both,
+            })
+        } else if has_text {
+            // First measure of multi-measure volta — left hook + text, open right
+            let text = self.volta_text.take();
+            Some(VoltaAnnotation {
+                text,
+                hooks: VoltaHooks::LeftOnly,
+            })
+        } else if self.in_volta && ending {
+            // Last measure of multi-measure volta — right hook, close bracket
+            self.in_volta = false;
+            Some(VoltaAnnotation {
+                text: None,
+                hooks: VoltaHooks::RightOnly,
+            })
+        } else if self.in_volta {
+            // Middle measure of multi-measure volta — top line only
+            Some(VoltaAnnotation {
+                text: None,
+                hooks: VoltaHooks::Neither,
+            })
+        } else {
+            // Not in a volta
+            None
+        }
+    }
+
     /// End the current measure with a single barline and start a new one.
     pub fn barline(mut self) -> Self {
         let events = std::mem::take(&mut self.current_events);
-        self.measures.push((events, BarlineStyle::Single));
+        let volta = self.resolve_volta();
+        self.measures.push((events, BarlineStyle::Single, volta));
         self
     }
 
@@ -494,14 +568,16 @@ impl ScoreBuilder {
     /// Typically called at the end of the piece.
     pub fn end_barline(mut self) -> Self {
         let events = std::mem::take(&mut self.current_events);
-        self.measures.push((events, BarlineStyle::Final));
+        let volta = self.resolve_volta();
+        self.measures.push((events, BarlineStyle::Final, volta));
         self
     }
 
     /// End the current measure with a specific barline style.
     pub fn barline_style(mut self, style: BarlineStyle) -> Self {
         let events = std::mem::take(&mut self.current_events);
-        self.measures.push((events, style));
+        let volta = self.resolve_volta();
+        self.measures.push((events, style, volta));
         self
     }
 
@@ -509,7 +585,8 @@ impl ScoreBuilder {
     pub(crate) fn flush_pending(&mut self) {
         if !self.current_events.is_empty() {
             let events = std::mem::take(&mut self.current_events);
-            self.measures.push((events, BarlineStyle::Final));
+            let volta = self.resolve_volta();
+            self.measures.push((events, BarlineStyle::Final, volta));
         }
     }
 
@@ -521,7 +598,7 @@ impl ScoreBuilder {
         let clef = self.clef.to_clef();
         self.measures
             .iter()
-            .map(|(events, barline)| {
+            .map(|(events, barline, volta)| {
                 let mut seen: AccidentalTracker = HashMap::new();
                 let measure_events: Vec<MeasureEvent> = events
                     .iter()
@@ -530,6 +607,7 @@ impl ScoreBuilder {
                 MeasureContent {
                     events: measure_events,
                     barline: *barline,
+                    volta: volta.clone(),
                 }
             })
             .collect()

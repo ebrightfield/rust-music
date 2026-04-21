@@ -8,6 +8,7 @@ use crate::layout::system::{
     layout_system, MeasureContent, MeasureEvent, SystemPrefix,
 };
 use crate::layout::time_signature::TimeSignatureKind;
+use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use music::notation::clef::Clef;
 
 fn setup() -> (MusicFont<'static>, EngravingConfig, MeasureLayoutConfig) {
@@ -49,6 +50,7 @@ fn system_renders_staff_lines() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -67,10 +69,12 @@ fn two_measure_system() {
         MeasureContent {
             events: vec![quarter_note(4), quarter_note(6)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(2), quarter_note(8)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -93,6 +97,7 @@ fn system_with_x_y_offset() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -119,6 +124,7 @@ fn system_with_key_signature() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&prefix, &measures, &mcfg, None);
 
@@ -142,6 +148,7 @@ fn system_with_rests() {
             }),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -159,6 +166,7 @@ fn target_width_produces_wider_staff() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
 
     let natural = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -196,14 +204,17 @@ fn three_measure_system_has_correct_element_count() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -234,6 +245,7 @@ fn tie_within_measure_draws_filled_path() {
     let measures = vec![MeasureContent {
         events: vec![tied_note(4), quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -245,6 +257,7 @@ fn tie_within_measure_draws_filled_path() {
     let untied_measures = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let untied_system = layout_system(&treble_prefix(), &untied_measures, &mcfg, None);
     let mut svg_untied = make_svg();
@@ -268,10 +281,12 @@ fn tie_across_barline_draws_filled_path() {
         MeasureContent {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -294,6 +309,7 @@ fn no_tie_when_tie_forward_is_false() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -316,6 +332,7 @@ fn tie_not_drawn_when_no_matching_target() {
     let measures = vec![MeasureContent {
         events: vec![tied_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -343,6 +360,7 @@ fn multiple_ties_in_system() {
             quarter_note(6),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -364,6 +382,7 @@ fn collect_note_positions_skips_non_notes() {
             quarter_note(4),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
@@ -405,6 +424,7 @@ fn collect_note_positions_includes_chord_notes() {
             quarter_note(2),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
@@ -419,6 +439,7 @@ fn chord_tie_draws_ties_for_all_notes() {
     let measures = vec![MeasureContent {
         events: vec![tied_chord(vec![0, 4]), untied_chord(vec![0, 4])],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -439,6 +460,7 @@ fn chord_tie_to_single_note_at_matching_position() {
     let measures = vec![MeasureContent {
         events: vec![tied_chord(vec![0, 4]), quarter_note(4)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -457,6 +479,7 @@ fn untied_chord_draws_no_ties() {
     let measures = vec![MeasureContent {
         events: vec![untied_chord(vec![0, 4]), untied_chord(vec![0, 4])],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -475,10 +498,12 @@ fn chord_tie_across_barline() {
         MeasureContent {
             events: vec![tied_chord(vec![2, 6])],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![untied_chord(vec![2, 6])],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -519,6 +544,7 @@ fn slur_within_measure_draws_filled_path() {
     let measures = vec![MeasureContent {
         events: vec![slur_start_note(2), quarter_note(4), slur_end_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -540,10 +566,12 @@ fn slur_across_barline() {
         MeasureContent {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -562,6 +590,7 @@ fn no_slur_without_flags() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(2), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -579,10 +608,12 @@ fn slur_differs_from_no_slur() {
     let with_slur = vec![MeasureContent {
         events: vec![slur_start_note(2), slur_end_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let without_slur = vec![MeasureContent {
         events: vec![quarter_note(2), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
 
     let sys_s = layout_system(&treble_prefix(), &with_slur, &mcfg, None);
@@ -602,6 +633,7 @@ fn slur_start_without_end_draws_nothing() {
     let measures = vec![MeasureContent {
         events: vec![slur_start_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -643,6 +675,7 @@ fn hairpin_within_measure_draws_two_lines() {
     let measures = vec![MeasureContent {
         events: vec![cresc_start_note(4), quarter_note(6), hairpin_end_note(8)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -654,6 +687,7 @@ fn hairpin_within_measure_draws_two_lines() {
     let measures_no = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6), quarter_note(8)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     let mut svg_no = make_svg();
@@ -672,6 +706,7 @@ fn no_hairpin_without_flags() {
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -690,10 +725,12 @@ fn hairpin_start_without_end_draws_nothing_extra() {
     let with_start = vec![MeasureContent {
         events: vec![cresc_start_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let without = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let sys_s = layout_system(&treble_prefix(), &with_start, &mcfg, None);
     let sys_n = layout_system(&treble_prefix(), &without, &mcfg, None);
@@ -713,6 +750,7 @@ fn decrescendo_differs_from_crescendo() {
     let cresc_measures = vec![MeasureContent {
         events: vec![cresc_start_note(4), hairpin_end_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let decresc_measures = vec![MeasureContent {
         events: vec![
@@ -726,6 +764,7 @@ fn decrescendo_differs_from_crescendo() {
             hairpin_end_note(6),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
 
     let sys_c = layout_system(&treble_prefix(), &cresc_measures, &mcfg, None);
@@ -746,10 +785,12 @@ fn hairpin_across_barline() {
         MeasureContent {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -763,10 +804,12 @@ fn hairpin_across_barline() {
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let sys_no = layout_system(&treble_prefix(), &without_measures, &mcfg, None);
@@ -803,6 +846,7 @@ fn lyric_extender_within_measure_draws_line() {
             quarter_note(6),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -819,6 +863,7 @@ fn lyric_extender_within_measure_draws_line() {
                 quarter_note(6),
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         }];
         let sys = layout_system(&treble_prefix(), &m, &mcfg, None);
         let mut s = make_svg();
@@ -844,6 +889,7 @@ fn no_extender_for_word_continuation() {
             quarter_note(6),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -854,6 +900,7 @@ fn no_extender_for_word_continuation() {
     let measures_none = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let sys_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
     let mut svg_none = make_svg();
@@ -877,6 +924,7 @@ fn no_extender_for_hyphen_continuation() {
             note_with_lyric(6, LyricSyllable::word("py")),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -887,6 +935,7 @@ fn no_extender_for_hyphen_continuation() {
     let measures_none = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let sys_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
     let mut svg_none = make_svg();
@@ -907,10 +956,12 @@ fn lyric_extender_across_barline() {
         MeasureContent {
             events: vec![note_with_lyric(4, LyricSyllable::with_extender("love"))],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![note_with_lyric(6, LyricSyllable::word("you"))],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -923,10 +974,12 @@ fn lyric_extender_across_barline() {
         MeasureContent {
             events: vec![note_with_lyric(4, LyricSyllable::word("love"))],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         MeasureContent {
             events: vec![note_with_lyric(6, LyricSyllable::word("you"))],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
     let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
@@ -951,6 +1004,7 @@ fn lyric_extender_differs_from_no_extender() {
             quarter_note(6),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
     let without = vec![MeasureContent {
         events: vec![
@@ -958,6 +1012,7 @@ fn lyric_extender_differs_from_no_extender() {
             quarter_note(6),
         ],
         barline: BarlineStyle::Single,
+        volta: None,
     }];
 
     let sys_w = layout_system(&treble_prefix(), &with, &mcfg, None);
@@ -973,4 +1028,155 @@ fn lyric_extender_differs_from_no_extender() {
         svg_n.to_svg(),
         "extender vs no-extender should differ"
     );
+}
+
+// --- volta brackets ---
+
+#[test]
+fn volta_bracket_adds_lines_to_system() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Final,
+        volta: Some(VoltaAnnotation {
+            text: Some("1.".to_string()),
+            hooks: VoltaHooks::Both,
+        }),
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+
+    // Same without volta
+    let measures_no = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Final,
+        volta: None,
+    }];
+    let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
+
+    let with_lines = svg.to_svg().matches("<line ").count();
+    let without_lines = svg_no.to_svg().matches("<line ").count();
+    // Both hooks: +3 lines (top + left hook + right hook)
+    assert_eq!(with_lines - without_lines, 3, "both hooks adds 3 lines");
+}
+
+#[test]
+fn volta_bracket_text_appears_in_svg() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Final,
+        volta: Some(VoltaAnnotation {
+            text: Some("2.".to_string()),
+            hooks: VoltaHooks::Both,
+        }),
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains(">2.</text>"), "should contain volta text '2.'");
+}
+
+#[test]
+fn volta_no_bracket_without_annotation() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Final,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(!output.contains(">1.</text>"));
+    assert!(!output.contains(">2.</text>"));
+}
+
+#[test]
+fn volta_left_only_adds_two_lines() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Final,
+        volta: Some(VoltaAnnotation {
+            text: Some("1.".to_string()),
+            hooks: VoltaHooks::LeftOnly,
+        }),
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+
+    let measures_no = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Final,
+        volta: None,
+    }];
+    let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
+
+    let diff = svg.to_svg().matches("<line ").count()
+        - svg_no.to_svg().matches("<line ").count();
+    assert_eq!(diff, 2, "left-only volta adds 2 lines (top + left hook)");
+}
+
+#[test]
+fn volta_multi_measure_two_brackets() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: Some(VoltaAnnotation {
+                text: Some("1.".to_string()),
+                hooks: VoltaHooks::LeftOnly,
+            }),
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: Some(VoltaAnnotation {
+                text: None,
+                hooks: VoltaHooks::RightOnly,
+            }),
+        },
+    ];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains(">1.</text>"), "first measure has text");
+    // 2 brackets × top line = 2 top lines
+    // + left hook on first + right hook on second = 2 hooks
+    // Total extra lines = 4
+    let measures_no = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
+
+    let diff = svg.to_svg().matches("<line ").count()
+        - svg_no.to_svg().matches("<line ").count();
+    assert_eq!(diff, 4, "two-measure volta adds 4 lines (2 tops + left + right hooks)");
 }

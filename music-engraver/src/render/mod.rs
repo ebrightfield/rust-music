@@ -40,6 +40,7 @@ pub mod tempo_renderer;
 pub mod tie_renderer;
 pub mod time_sig_renderer;
 pub mod tuplet_renderer;
+pub mod volta_renderer;
 
 pub use accidental_renderer::draw_accidental;
 pub use articulation_renderer::draw_articulation;
@@ -76,6 +77,7 @@ pub use tab_bend_renderer::draw_tab_bend;
 pub use tab_hammer_renderer::draw_tab_legato;
 pub use tab_slide_renderer::draw_tab_slide;
 pub use tuplet_renderer::draw_tuplet_bracket;
+pub use volta_renderer::draw_volta_bracket;
 
 #[cfg(feature = "png")]
 pub mod png;

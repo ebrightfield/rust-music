@@ -7,6 +7,7 @@ use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, StemDirection};
 use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
+use crate::layout::volta::layout_volta_bracket;
 use crate::render::measure_renderer::draw_measure;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::hairpin_renderer::draw_hairpin;
@@ -14,6 +15,7 @@ use crate::render::lyric_renderer::draw_lyric_extender;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
+use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
 
 /// Collect notes from the system's positioned elements in order, yielding
@@ -92,6 +94,9 @@ pub fn draw_system(
     // Draw lyric extender lines (melisma) between syllables with Extender
     // continuation and the next note that has a lyric
     draw_system_lyric_extenders(svg, config, system, &staff, x);
+
+    // Draw volta brackets above measures that have volta annotations
+    draw_system_volta_brackets(svg, config, system, &staff, x);
 
     Ok(())
 }
@@ -437,6 +442,33 @@ fn draw_system_lyric_extenders(
             config.staff_space,
             stroke_width,
         );
+    }
+}
+
+/// Draw volta brackets above measures that have volta annotations.
+fn draw_system_volta_brackets(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) {
+    for sys_measure in &system.measures {
+        let Some(ref annotation) = sys_measure.volta else {
+            continue;
+        };
+
+        let x_left = system_x + sys_measure.x_offset;
+        let x_right = x_left + sys_measure.layout.total_width;
+
+        let bracket_layout = layout_volta_bracket(
+            annotation,
+            x_left,
+            x_right,
+            staff,
+            config.staff_space,
+        );
+        draw_volta_bracket(svg, &bracket_layout);
     }
 }
 

@@ -42,6 +42,7 @@ pub mod tempo;
 pub mod tie;
 pub mod time_signature;
 pub mod tuplet;
+pub mod volta;
 
 pub use barline::{BarlineLayout, BarlineStyle};
 pub use beam::{
@@ -102,6 +103,9 @@ pub use tab::{
 pub use tab_bend::{layout_tab_bend, BendAmount, TabBendLayout};
 pub use tab_hammer::{layout_tab_legato, LegatoKind, TabLegatoLayout};
 pub use tab_slide::{layout_tab_slide, TabSlideLayout};
+pub use volta::{
+    layout_volta_bracket, VoltaAnnotation, VoltaBracketLayout, VoltaHooks, VOLTA_ABOVE_STAFF_SS,
+};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,

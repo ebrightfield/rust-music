@@ -465,6 +465,7 @@ mod tests {
         MeasureContent {
             events: vec![quarter_note(pos)],
             barline: BarlineStyle::Single,
+            volta: None,
         }
     }
 

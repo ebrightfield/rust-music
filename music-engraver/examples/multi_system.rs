@@ -35,6 +35,7 @@ fn main() {
                 quarter(4),  // G4
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 2: A4 B4 half
         MeasureContent {
@@ -44,11 +45,13 @@ fn main() {
                 half(7),     // C5
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 3: D5 whole
         MeasureContent {
             events: vec![whole(8)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 4: quarter rest, three quarters descending
         MeasureContent {
@@ -59,11 +62,13 @@ fn main() {
                 quarter(2),
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 5: two halves
         MeasureContent {
             events: vec![half(0), half(4)],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 6: dotted half + quarter
         MeasureContent {
@@ -72,6 +77,7 @@ fn main() {
                 quarter(3),
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 7: four quarters
         MeasureContent {
@@ -82,11 +88,13 @@ fn main() {
                 quarter(8),
             ],
             barline: BarlineStyle::Single,
+            volta: None,
         },
         // Measure 8: whole note (final)
         MeasureContent {
             events: vec![whole(4)],
             barline: BarlineStyle::Final,
+            volta: None,
         },
     ];
 
