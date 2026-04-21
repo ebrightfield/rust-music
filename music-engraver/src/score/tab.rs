@@ -517,6 +517,29 @@ impl TabScoreBuilder {
 
         Ok(svg.to_svg())
     }
+
+    /// Render the tab score to a PNG byte vector at the given scale factor.
+    ///
+    /// Scale 1.0 maps SVG user units 1:1 to pixels; 2.0 produces a 2× image.
+    ///
+    /// # Panics
+    /// Panics if the bundled Bravura font lacks the TAB clef glyph (unreachable
+    /// in normal operation since Bravura contains all required SMuFL glyphs).
+    #[cfg(feature = "png")]
+    #[must_use = "the PNG bytes are returned but not used"]
+    pub fn render_png(self, scale: f32) -> Vec<u8> {
+        self.try_render_png(scale)
+            .expect("bundled Bravura font and PNG pipeline should not fail for valid input")
+    }
+
+    /// Render the tab score to a PNG byte vector, returning an error on failure.
+    #[cfg(feature = "png")]
+    pub fn try_render_png(self, scale: f32) -> Result<Vec<u8>, crate::error::EngraverError> {
+        let svg = self.try_render_svg()?;
+        let mut renderer = crate::render::png::PngRenderer::new(scale);
+        renderer.load_system_fonts();
+        Ok(renderer.render_png(&svg)?)
+    }
 }
 
 impl Default for TabScoreBuilder {
@@ -1796,5 +1819,92 @@ mod tests {
             .render_svg();
         // The .bend() after .next() marks the last flushed event
         assert!(svg.contains(">full</text>"), "bend after flush should still show label");
+    }
+
+    #[cfg(feature = "png")]
+    mod png_tests {
+        use super::*;
+
+        /// Extract PNG width and height from IHDR chunk (bytes 16–23).
+        fn png_dimensions(data: &[u8]) -> (u32, u32) {
+            assert!(data.len() >= 24, "PNG too short for IHDR");
+            let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+            let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+            (w, h)
+        }
+
+        #[test]
+        fn tab_render_png_produces_valid_png() {
+            let png = TabScoreBuilder::guitar()
+                .fret(1, 0)
+                .fret(2, 1)
+                .barline()
+                .fret(3, 2)
+                .end_barline()
+                .render_png(1.0);
+            // PNG magic bytes
+            assert_eq!(&png[..4], &[0x89, b'P', b'N', b'G']);
+            let (w, h) = png_dimensions(&png);
+            assert!(w > 50, "width should be reasonable, got {w}");
+            assert!(h > 20, "height should be reasonable, got {h}");
+        }
+
+        #[test]
+        fn tab_render_png_2x_is_larger_than_1x() {
+            let builder = || {
+                TabScoreBuilder::guitar()
+                    .fret(1, 5)
+                    .fret(2, 7)
+                    .end_barline()
+            };
+            let png_1x = builder().render_png(1.0);
+            let png_2x = builder().render_png(2.0);
+            let (w1, h1) = png_dimensions(&png_1x);
+            let (w2, h2) = png_dimensions(&png_2x);
+            assert!(
+                w2 > w1,
+                "2x width ({w2}) should be larger than 1x ({w1})"
+            );
+            assert!(
+                h2 > h1,
+                "2x height ({h2}) should be larger than 1x ({h1})"
+            );
+        }
+
+        #[test]
+        fn tab_try_render_png_matches_render_png() {
+            let builder = || {
+                TabScoreBuilder::guitar()
+                    .fret(1, 3)
+                    .end_barline()
+            };
+            let try_result = builder().try_render_png(1.0).expect("should succeed");
+            let direct = builder().render_png(1.0);
+            assert_eq!(try_result.len(), direct.len());
+        }
+
+        #[test]
+        fn tab_render_png_nonzero_for_complex_score() {
+            let png = TabScoreBuilder::guitar()
+                .quarter()
+                .fret(1, 0)
+                .fret(2, 2)
+                .fret(3, 2)
+                .next()
+                .eighth()
+                .fret(1, 3)
+                .next()
+                .fret(1, 5)
+                .barline()
+                .rest()
+                .next()
+                .fret(6, 0)
+                .end_barline()
+                .render_png(1.5);
+            assert!(!png.is_empty());
+            let (w, h) = png_dimensions(&png);
+            assert!(w > 100, "complex tab PNG width should be substantial, got {w}");
+            assert!(h > 30, "complex tab PNG height should be substantial, got {h}");
+        }
     }
 }

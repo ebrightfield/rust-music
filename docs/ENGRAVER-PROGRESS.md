@@ -759,3 +759,9 @@
 - Verified: `cargo test -p music-engraver --lib` — 1325 unit tests pass (+11 new guitar_tab tests). `cargo test -p music-engraver --test golden_svg` — 30 golden tests pass. `cargo test -p music-engraver --test svg_glyph_render` — 3 integration tests pass. `cargo test -p music-engraver --doc` — 7 doc-tests pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
 - Next: Add tab-specific features in multi-staff context (slides/bends/hammer-on visible in combined score), or add PNG rendering for guitar+tab, or begin pre-bends/release bends for tab, or other post-v1 features.
 - Open issues: I2 still deferred. Cross-system tab features (slides/bends spanning system break) not supported in multi-staff context.
+
+## 2026-04-21 — Post-v1, TabScoreBuilder PNG export methods
+- Did: Added `render_png(scale)` and `try_render_png(scale)` convenience methods to `TabScoreBuilder`, gated behind `#[cfg(feature = "png")]`. These follow the same pattern as `ScoreBuilder` and `MultiStaffScore` PNG methods: call `try_render_svg()`, create `PngRenderer`, load system fonts, render. Added 4 new tests in a `png_tests` submodule: valid PNG output with magic bytes + dimension assertions, 2x larger than 1x, try matches direct, complex score nonzero dimensions.
+- Verified: `cargo test -p music-engraver --features png --lib -- score::tab::tests::png_tests` — 4 tests pass. `cargo test -p music-engraver --lib` — 1325 unit tests pass. `cargo clippy -p music-engraver --all-targets --features png` — 0 warnings from music-engraver. `cargo check --workspace` passes.
+- Next: Add a `tab_png_export` example, or begin other post-v1 features (pre-bends/release bends for tab, Gourlay penalty tuning for line breaking, additional golden tests).
+- Open issues: I2 still deferred. Cross-system tab features not in multi-staff context.
