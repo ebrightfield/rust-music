@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="350" height="112" viewBox="-250 -250 12500 4000">
+  <line x1="0" y1="0" x2="12000" y2="0" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="250" x2="12000" y2="250" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="500" x2="12000" y2="500" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="750" x2="12000" y2="750" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1000" x2="12000" y2="1000" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1250" x2="12000" y2="1250" stroke="black" stroke-width="32.5"/>
+  <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 625)"/>
+  <rect x="3440" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3562.5" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="5015" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5137.5" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <rect x="6590" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="6712.5" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">3</text>
+  <rect x="8165" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8287.5" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <line x1="3562.5" y1="-375" x2="3562.5" y2="-1125" stroke="black" stroke-width="30"/>
+  <line x1="5137.5" y1="-375" x2="5137.5" y2="-1125" stroke="black" stroke-width="30"/>
+  <line x1="6712.5" y1="-375" x2="6712.5" y2="-1125" stroke="black" stroke-width="30"/>
+  <line x1="8287.5" y1="-375" x2="8287.5" y2="-1125" stroke="black" stroke-width="30"/>
+  <polygon points="3562.5,-1125 8287.5,-1125 8287.5,-1000 3562.5,-1000" fill="black"/>
+  <line x1="6375" y1="0" x2="6375" y2="1250" stroke="black" stroke-width="40"/>
+  <rect x="6702.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="6825" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <rect x="11427.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="11550" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">8</text>
+  <line x1="6825" y1="-375" x2="6825" y2="-1125" stroke="black" stroke-width="30"/>
+  <line x1="11550" y1="-375" x2="11550" y2="-1125" stroke="black" stroke-width="30"/>
+  <polygon points="6825,-1125 11550,-1125 11550,-1000 6825,-1000" fill="black"/>
+  <polygon points="6825,-937.5 11550,-937.5 11550,-812.5 6825,-812.5" fill="black"/>
+  <rect x="11427.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="11550" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <line x1="11550" y1="-375" x2="11550" y2="-1125" stroke="black" stroke-width="30"/>
+  <line x1="12000" y1="0" x2="12000" y2="1250" stroke="black" stroke-width="40"/>
+  <line x1="0" y1="2250" x2="12000" y2="2250" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="2500" x2="12000" y2="2500" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="2750" x2="12000" y2="2750" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="3000" x2="12000" y2="3000" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="3250" x2="12000" y2="3250" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="3500" x2="12000" y2="3500" stroke="black" stroke-width="32.5"/>
+  <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 2875)"/>
+  <rect x="3440" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3562.5" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="3440" y="3092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3562.5" y="3250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="3440" y="2842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3562.5" y="3000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <rect x="5802.5" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5925" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <rect x="5802.5" y="3092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5925" y="3250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <rect x="5802.5" y="2842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5925" y="3000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">1</text>
+  <rect x="8165" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8287.5" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">3</text>
+  <rect x="8165" y="3092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8287.5" y="3250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">3</text>
+  <rect x="8165" y="2842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8287.5" y="3000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <line x1="3562.5" y1="1875" x2="3562.5" y2="1125" stroke="black" stroke-width="30"/>
+  <line x1="5925" y1="1875" x2="5925" y2="1125" stroke="black" stroke-width="30"/>
+  <line x1="8287.5" y1="1875" x2="8287.5" y2="1125" stroke="black" stroke-width="30"/>
+  <polygon points="3562.5,1125 8287.5,1125 8287.5,1250 3562.5,1250" fill="black"/>
+  <line x1="6375" y1="2250" x2="6375" y2="3500" stroke="black" stroke-width="40"/>
+  <rect x="6702.5" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="6825" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <line x1="6825" y1="1875" x2="6825" y2="1125" stroke="black" stroke-width="30"/>
+  <rect x="11427.5" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="11550" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <rect x="13002.5" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="13125" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <rect x="14577.5" y="3342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="14700" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">8</text>
+  <rect x="16030" y="3342.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="16275" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">10</text>
+  <line x1="11550" y1="1875" x2="11550" y2="1125" stroke="black" stroke-width="30"/>
+  <line x1="13125" y1="1875" x2="13125" y2="1125" stroke="black" stroke-width="30"/>
+  <line x1="14700" y1="1875" x2="14700" y2="1125" stroke="black" stroke-width="30"/>
+  <line x1="16275" y1="1875" x2="16275" y2="1125" stroke="black" stroke-width="30"/>
+  <polygon points="11550,1125 16275,1125 16275,1250 11550,1250" fill="black"/>
+  <polygon points="11550,1312.5 16275,1312.5 16275,1437.5 11550,1437.5" fill="black"/>
+  <line x1="12000" y1="2250" x2="12000" y2="3500" stroke="black" stroke-width="40"/>
+  <line x1="12100" y1="2250" x2="12100" y2="3500" stroke="black" stroke-width="125"/>
+</svg>

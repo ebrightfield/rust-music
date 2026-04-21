@@ -22,7 +22,9 @@
 use crate::font::{bravura_font, EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, TabStaffLayout};
+use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::{SvgWriter, TextStyle};
@@ -41,6 +43,11 @@ enum TabEvent {
     /// `duration_log2`: optional rhythm for rest stem display.
     Rest {
         duration_log2: Option<u8>,
+    },
+    /// A beam group: multiple fret events connected by beam lines above the staff.
+    /// Each sub-event is (frets, duration_log2).
+    BeamGroup {
+        events: Vec<(Vec<(u8, u8)>, u8)>,
     },
 }
 
@@ -75,6 +82,10 @@ pub struct TabScoreBuilder {
     system_width: f64,
     /// Display measure numbers above the start of each system.
     show_measure_numbers: bool,
+    /// When true, we are accumulating events for a beam group.
+    in_beam_group: bool,
+    /// Accumulated beam group sub-events: (frets, duration_log2).
+    beam_group_events: Vec<(Vec<(u8, u8)>, u8)>,
 }
 
 impl TabScoreBuilder {
@@ -89,6 +100,8 @@ impl TabScoreBuilder {
             measures_per_system: 4,
             system_width: 0.0,
             show_measure_numbers: false,
+            in_beam_group: false,
+            beam_group_events: Vec::new(),
         }
     }
 
@@ -123,12 +136,16 @@ impl TabScoreBuilder {
     /// Flush any pending fret entries as a single event.
     fn flush_frets(&mut self) {
         if !self.current_frets.is_empty() {
-            let frets = std::mem::take(&mut self.current_frets);
-            let duration_log2 = self.pending_duration.take();
-            self.current_events.push(TabEvent::Fret {
-                frets,
-                duration_log2,
-            });
+            if self.in_beam_group {
+                self.flush_beam_frets();
+            } else {
+                let frets = std::mem::take(&mut self.current_frets);
+                let duration_log2 = self.pending_duration.take();
+                self.current_events.push(TabEvent::Fret {
+                    frets,
+                    duration_log2,
+                });
+            }
         }
     }
 
@@ -183,6 +200,42 @@ impl TabScoreBuilder {
     /// Convenience: set duration to whole note (duration_log2 = 0).
     pub fn whole(self) -> Self {
         self.duration(0)
+    }
+
+    /// Begin accumulating events for a beam group.
+    ///
+    /// All `.fret()` calls between `.beam_start()` and `.beam_end()` are
+    /// collected and rendered with connecting beam lines above the tab staff
+    /// instead of individual flags. Each sub-event must have a duration set
+    /// via `.eighth()`, `.duration()`, etc. Sub-events are separated by `.next()`.
+    pub fn beam_start(mut self) -> Self {
+        self.flush_frets();
+        self.in_beam_group = true;
+        self.beam_group_events.clear();
+        self
+    }
+
+    /// End the beam group and flush it as a single `BeamGroup` event.
+    ///
+    /// The accumulated sub-events are connected by horizontal beam lines.
+    /// Requires at least 2 sub-events with eighth-or-shorter durations.
+    pub fn beam_end(mut self) -> Self {
+        self.flush_beam_frets();
+        let events = std::mem::take(&mut self.beam_group_events);
+        self.in_beam_group = false;
+        if !events.is_empty() {
+            self.current_events.push(TabEvent::BeamGroup { events });
+        }
+        self
+    }
+
+    /// Flush current frets into the beam group accumulator.
+    fn flush_beam_frets(&mut self) {
+        if !self.current_frets.is_empty() {
+            let frets = std::mem::take(&mut self.current_frets);
+            let dur = self.pending_duration.take().unwrap_or(3); // default to eighth
+            self.beam_group_events.push((frets, dur));
+        }
     }
 
     /// Add a rest (empty beat with no fret numbers).
@@ -464,6 +517,17 @@ fn draw_tab_measure(
                     }
                 }
             }
+            TabEvent::BeamGroup { events: beam_events } => {
+                draw_tab_beam_group_event(
+                    svg,
+                    config,
+                    tab_staff,
+                    beam_events,
+                    event_x,
+                    spacing.max(usable_width / (event_count.max(1)) as f64),
+                    stem_width,
+                );
+            }
         }
     }
 
@@ -471,6 +535,64 @@ fn draw_tab_measure(
     draw_measure_barline(svg, font, config, tab_staff, measure_x + measure_width, &measure.barline)?;
 
     Ok(())
+}
+
+/// Draw a beam group event: fret numbers + beamed rhythm stems above the staff.
+///
+/// Sub-events are spaced evenly within the allocated `group_width` starting
+/// at `start_x`. Each sub-event's fret numbers are drawn, then beam layout
+/// and rendering connect the stems.
+fn draw_tab_beam_group_event(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    tab_staff: &TabStaffLayout,
+    events: &[(Vec<(u8, u8)>, u8)],
+    start_x: f64,
+    group_width: f64,
+    stem_width: f64,
+) {
+    if events.is_empty() {
+        return;
+    }
+
+    // Compute x positions for sub-events within the beam group
+    let sub_count = events.len();
+    let sub_spacing = if sub_count > 1 {
+        group_width / (sub_count - 1) as f64
+    } else {
+        0.0
+    };
+
+    let mut beam_notes = Vec::with_capacity(sub_count);
+
+    for (i, (frets, dur)) in events.iter().enumerate() {
+        let x = if sub_count == 1 {
+            start_x
+        } else {
+            start_x + i as f64 * sub_spacing
+        };
+
+        // Draw fret numbers
+        for &(string, fret) in frets {
+            let layout = layout_fret_number(tab_staff, string, fret, x);
+            draw_fret_number(svg, &layout);
+        }
+
+        beam_notes.push(TabBeamedNote {
+            x,
+            duration_log2: *dur,
+        });
+    }
+
+    // Layout and draw beams
+    let beam_thickness = config.beam_thickness_fu();
+    let beam_gap = config.beam_spacing_fu();
+
+    if let Some(beam_layout) =
+        layout_tab_beam_group(tab_staff, &beam_notes, stem_width, beam_thickness, beam_gap)
+    {
+        draw_tab_beam_group(svg, &beam_layout);
+    }
 }
 
 /// Draw a barline at the given x position spanning the tab staff.
@@ -971,5 +1093,170 @@ mod tests {
             svg1, svg6,
             "fret 5 on string 1 vs string 6 should have different y positions"
         );
+    }
+
+    // ---- Beam group tests ----
+
+    #[test]
+    fn beam_group_two_eighths_has_polygon() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        // Beam groups use polygons instead of flag paths
+        assert!(
+            svg.contains("<polygon "),
+            "beam group should produce beam polygon"
+        );
+        // 2 fret numbers
+        assert_eq!(svg.matches(">0</text>").count(), 1, "should show fret 0");
+        assert_eq!(svg.matches(">2</text>").count(), 1, "should show fret 2");
+    }
+
+    #[test]
+    fn beam_group_differs_from_individual_eighths() {
+        let beamed = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        let individual = TabScoreBuilder::guitar()
+            .eighth()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
+            .end_barline()
+            .render_svg();
+        assert_ne!(
+            beamed, individual,
+            "beamed should differ from individual flagged eighths"
+        );
+        // Individual has flag paths; beamed has polygons
+        assert!(beamed.contains("<polygon "), "beamed uses polygons");
+        assert!(!individual.contains("<polygon "), "individual uses flags, not polygons");
+    }
+
+    #[test]
+    fn beam_group_four_sixteenths_has_two_polygons() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .duration(4).fret(1, 0).next()
+            .duration(4).fret(1, 2).next()
+            .duration(4).fret(1, 3).next()
+            .duration(4).fret(1, 5)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        let polygon_count = svg.matches("<polygon ").count();
+        assert_eq!(
+            polygon_count, 2,
+            "4 sixteenths should have 2 beam polygons (primary + secondary), got {polygon_count}"
+        );
+        // 4 fret numbers
+        assert_eq!(svg.matches("<text ").count(), 4, "should have 4 fret numbers");
+    }
+
+    #[test]
+    fn beam_group_has_stems_as_lines() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth().fret(1, 0).next()
+            .eighth().fret(1, 2).next()
+            .eighth().fret(1, 3)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        let line_count = svg.matches("<line ").count();
+        // 6 staff lines + 2 barline (Final) + 3 beam stems = 11
+        assert_eq!(
+            line_count, 11,
+            "3-note beam group: 6 staff + 2 barline + 3 stems = 11, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn beam_group_with_chord() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth()
+            .fret(1, 0)
+            .fret(2, 1)  // chord: two strings on same beat
+            .next()
+            .eighth()
+            .fret(1, 2)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        // 3 fret numbers (0, 1, 2)
+        assert_eq!(svg.matches("<text ").count(), 3, "should have 3 fret numbers");
+        assert!(svg.contains("<polygon "), "should have beam polygon");
+    }
+
+    #[test]
+    fn beam_group_default_duration_is_eighth() {
+        // If no duration is set in beam group, defaults to eighth
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .fret(1, 0).next()
+            .fret(1, 2)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        // Should still produce a beam (default eighth = beamable)
+        assert!(
+            svg.contains("<polygon "),
+            "beam group with default duration should produce beam polygon"
+        );
+    }
+
+    #[test]
+    fn beam_group_no_flag_paths() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth().fret(1, 0).next()
+            .eighth().fret(1, 2)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        // Only 1 path: TAB clef. No flag paths since beams replace flags.
+        let path_count = svg.matches("<path ").count();
+        assert_eq!(
+            path_count, 1,
+            "beam group should have only TAB clef path (no flags), got {path_count}"
+        );
+    }
+
+    #[test]
+    fn beam_group_mixed_with_non_beamed() {
+        let svg = TabScoreBuilder::guitar()
+            .quarter().fret(1, 5).next()    // individual quarter
+            .beam_start()
+            .eighth().fret(1, 0).next()
+            .eighth().fret(1, 2)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        // Should have: 1 quarter stem + 2 beam stems = 3 rhythm stems
+        // Plus 6 staff lines + 2 barline = 8. Total: 11
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 11,
+            "quarter + 2-note beam: 6 staff + 2 barline + 3 stems = 11, got {line_count}"
+        );
+        // 1 beam polygon + 1 TAB clef path = 2 SVG elements with polygon/path
+        assert_eq!(svg.matches("<polygon ").count(), 1, "1 beam polygon");
+        assert_eq!(svg.matches("<path ").count(), 1, "1 TAB clef path (no flags on beamed)");
     }
 }

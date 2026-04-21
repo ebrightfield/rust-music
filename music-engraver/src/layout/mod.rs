@@ -32,6 +32,7 @@ pub mod slur;
 pub mod staff;
 pub mod stem;
 pub mod tab;
+pub mod tab_beam;
 pub mod tab_rhythm;
 pub mod system;
 pub mod tempo;
@@ -87,6 +88,9 @@ pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
 pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOVE_STAFF_SS};
 pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
+pub use tab_beam::{
+    compute_tab_beam_counts, layout_tab_beam_group, TabBeamGroupLayout, TabBeamedNote,
+};
 pub use tab_rhythm::{layout_tab_rhythm, needs_stem, tab_flag_count, TabRhythmLayout};
 pub use tab::{
     layout_fret_number, tab_clef_glyph, FretNumberLayout, TabStaffLayout, FRET_NUMBER_FONT_SIZE_RATIO,
