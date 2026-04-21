@@ -899,6 +899,75 @@ fn golden_volta_brackets() {
     assert_golden("volta_brackets", &build_volta_brackets());
 }
 
+fn build_cross_system_volta() -> String {
+    // A multi-measure volta "1." that spans the system break (measures 2-4,
+    // system break after measure 2). Demonstrates trailing bracket on system 1
+    // and continuation bracket on system 2.
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Sharps(0))
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: plain opening
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        // Measure 2: start of multi-measure volta "1." (left hook + text)
+        // This is the LAST measure of system 1 — the volta must continue
+        // across the system break to system 2.
+        .volta_start("1.")
+        .note(p("G", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        // --- system break here (measures_per_system=2) ---
+        // Measure 3: volta continuation (no hooks, no text — top line only)
+        .note(p("B", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        // Measure 4: volta end (right hook — closes the bracket)
+        .note(p("G", 4), Duration::WHOLE)
+        .volta_end()
+        .barline()
+        // Measure 5-6 (system 3): second ending
+        .volta_start("2.")
+        .note(p("C", 5), Duration::WHOLE)
+        .volta_end()
+        .barline()
+        .note(p("C", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_cross_system_volta() {
+    let svg = build_cross_system_volta();
+
+    // Verify structural properties before freezing as golden baseline:
+
+    // "1." label should appear on system 1 (measure 2, the volta start)
+    assert!(svg.contains(">1.<"), "should contain volta label '1.'");
+    // "2." label should appear on system 3 (measure 5)
+    assert!(svg.contains(">2.<"), "should contain volta label '2.'");
+
+    // The multi-measure volta spans measures 2-4 across system 1→2.
+    // System 1 has measure 2 with LeftOnly (left hook + text + top line = 2 lines).
+    // System 2 has measure 3 with Neither (top line only = 1 line) and
+    //          measure 4 with RightOnly (top line + right hook = 2 lines).
+    // System 3 has measure 5 with Both (left hook + text + top line + right hook = 3 lines).
+    // Total volta bracket lines: 2 + 1 + 2 + 3 = 8 extra lines beyond staff/stem.
+
+    // Count total lines — staff lines (5 per system × 3 systems = 15) + stems + volta lines
+    let line_count = svg.matches("<line").count();
+    assert!(
+        line_count >= 23,
+        "expected at least 23 lines (15 staff + stems + volta brackets), got {line_count}"
+    );
+
+    assert_golden("cross_system_volta", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -930,6 +999,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_hammer_pull",
         "tab_bends",
         "volta_brackets",
+        "cross_system_volta",
     ];
 
     for name in &names {
