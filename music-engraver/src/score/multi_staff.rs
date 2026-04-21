@@ -15,7 +15,7 @@ use crate::layout::tab::TabStaffLayout;
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
 use crate::render::page_renderer::{
     draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
-    draw_cross_system_slurs, draw_cross_system_ties,
+    draw_cross_system_ottava_brackets, draw_cross_system_slurs, draw_cross_system_ties,
 };
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::system_renderer::draw_system;
@@ -563,6 +563,7 @@ impl MultiStaffScore {
             draw_cross_system_slurs(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_hairpins(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_lyric_extenders(&mut svg, &config, stave_systems);
+            draw_cross_system_ottava_brackets(&mut svg, &font, &config, stave_systems)?;
         }
 
         Ok(svg.to_svg())

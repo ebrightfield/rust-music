@@ -478,14 +478,14 @@ fn draw_system_volta_brackets(
 }
 
 /// Positional info for a note relevant to ottava bracket drawing.
-struct OttavaNoteInfo {
-    x: f64,
-    duration_log2: u8,
-    ottava_start: Option<OttavaKind>,
-    ottava_end: bool,
+pub(crate) struct OttavaNoteInfo {
+    pub(crate) x: f64,
+    pub(crate) duration_log2: u8,
+    pub(crate) ottava_start: Option<OttavaKind>,
+    pub(crate) ottava_end: bool,
 }
 
-fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteInfo> {
+pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for elem in &measure.layout.elements {

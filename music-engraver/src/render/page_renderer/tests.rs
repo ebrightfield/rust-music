@@ -4,6 +4,7 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent};
+use crate::layout::ottava::OttavaKind;
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{MeasureContent, MeasureEvent, SystemPrefix};
 use crate::layout::time_signature::TimeSignatureKind;
@@ -1243,4 +1244,244 @@ fn cross_system_lyric_extender_lines_are_horizontal() {
         found_lyric_lines >= 2,
         "expected at least 2 horizontal lyric extender lines (trailing + incoming), found {found_lyric_lines}"
     );
+}
+
+// --- Cross-system ottava bracket tests ---
+
+fn ottava_start_note(pos: i8, kind: OttavaKind) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ottava_start: Some(kind),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+fn ottava_end_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ottava_end: true,
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_ottava_draws_two_brackets() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: ottava start on high note, system 2: ottava end
+    let measures = vec![
+        MeasureContent {
+            events: vec![ottava_start_note(10, OttavaKind::Ottava8va)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![ottava_end_note(12)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    // 1 measure per system → forces cross-system ottava
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Without ottava for comparison
+    let no_ott_measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(10)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![quarter_note(12)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let no_ott_page = layout_page(&prefix(), &no_ott_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_ott_output = draw_page(&font, &config, &no_ott_page).unwrap().to_svg();
+
+    // Cross-system ottava produces 2 half-brackets with dashed lines and labels.
+    // Each bracket adds at least: 1 <text> (label) + 1 dashed <line> + 0 or 1 hook <line>.
+    // Trailing bracket: label + dashed line (no end hook) = 1 text + 1 line
+    // Incoming bracket: label + dashed line + end hook = 1 text + 2 lines
+    let ott_lines = output.matches("<line ").count();
+    let no_lines = no_ott_output.matches("<line ").count();
+    assert!(
+        ott_lines > no_lines,
+        "cross-system ottava should add lines (dashed + hook), got {} vs {}",
+        ott_lines, no_lines
+    );
+
+    let ott_texts = output.matches("<text ").count();
+    let no_texts = no_ott_output.matches("<text ").count();
+    assert!(
+        ott_texts >= no_texts + 2,
+        "cross-system ottava should add at least 2 text labels (8va), got {} vs {}",
+        ott_texts, no_texts
+    );
+
+    // Verify the label text "8va" appears
+    assert!(
+        output.contains("8va"),
+        "cross-system ottava should contain '8va' label"
+    );
+}
+
+#[test]
+fn no_cross_system_ottava_without_flags() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(10)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![quarter_note(12)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // No "8va" or "8vb" labels should appear
+    assert!(!output.contains("8va"), "no ottava label without ottava annotations");
+    assert!(!output.contains("8vb"), "no ottava label without ottava annotations");
+}
+
+#[test]
+fn cross_system_ottava_right_half_only_when_no_end() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: ottava start, system 2: no ottava end (just a regular note)
+    let measures = vec![
+        MeasureContent {
+            events: vec![ottava_start_note(10, OttavaKind::Ottava8va)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![quarter_note(12)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Only trailing half-bracket should be drawn (1 label "8va")
+    let ott_count = output.matches("8va").count();
+    assert_eq!(
+        ott_count, 1,
+        "only trailing half-bracket should be drawn when no ottava_end in next system, got {} occurrences",
+        ott_count
+    );
+}
+
+#[test]
+fn within_system_ottava_not_duplicated_by_cross_system() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Both start and end within the same system (single measure)
+    let measures = vec![
+        MeasureContent {
+            events: vec![
+                ottava_start_note(10, OttavaKind::Ottava8va),
+                ottava_end_note(12),
+            ],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Should have exactly 1 "8va" label (the within-system bracket)
+    // Cross-system pass should not add another
+    let ott_count = output.matches("8va").count();
+    assert_eq!(
+        ott_count, 1,
+        "within-system ottava should not produce extra cross-system brackets, got {} '8va' occurrences",
+        ott_count
+    );
+}
+
+#[test]
+fn cross_system_ottava_8vb_draws_below_staff() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![ottava_start_note(-2, OttavaKind::Ottava8vb)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![ottava_end_note(-4)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // "8vb" label should appear
+    assert!(
+        output.contains("8vb"),
+        "cross-system 8vb ottava should contain '8vb' label"
+    );
+
+    // Should differ from 8va version
+    let measures_8va = vec![
+        MeasureContent {
+            events: vec![ottava_start_note(-2, OttavaKind::Ottava8va)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![ottava_end_note(-4)],
+            barline: BarlineStyle::Final,
+            volta: None,
+        },
+    ];
+    let page_8va = layout_page(&prefix(), &measures_8va, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let output_8va = draw_page(&font, &config, &page_8va).unwrap().to_svg();
+    assert_ne!(output, output_8va, "8vb and 8va cross-system ottavas should differ");
 }

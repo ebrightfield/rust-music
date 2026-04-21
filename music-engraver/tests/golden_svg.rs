@@ -1087,6 +1087,48 @@ fn golden_ottava_brackets() {
     assert_golden("ottava_brackets", &svg);
 }
 
+fn build_cross_system_ottava() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: normal opening
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        // Start 8va near end of system 1
+        .note(p("C", 6), Duration::QTR)
+        .ottava_start(OttavaKind::Ottava8va)
+        .barline()
+        // Measure 2: still in system 1
+        .note(p("D", 6), Duration::HALF)
+        .note(p("E", 6), Duration::HALF)
+        .barline()
+        // Measure 3: system 2 — end 8va
+        .note(p("F", 6), Duration::QTR)
+        .note(p("G", 6), Duration::QTR)
+        .ottava_end()
+        .note(p("A", 5), Duration::HALF)
+        .barline()
+        // Measure 4: normal closing
+        .note(p("C", 5), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_cross_system_ottava() {
+    let svg = build_cross_system_ottava();
+    // Cross-system ottava: trailing half-bracket in system 1 + incoming in system 2
+    let count_8va = svg.matches("8va").count();
+    assert!(
+        count_8va >= 2,
+        "cross-system ottava should produce at least 2 '8va' labels, got {count_8va}"
+    );
+    assert!(svg.contains("stroke-dasharray"), "should contain dashed lines");
+    assert_golden("cross_system_ottava", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1122,6 +1164,7 @@ fn golden_baselines_are_valid_svgs() {
         "guitar_tab",
         "navigation_signs",
         "ottava_brackets",
+        "cross_system_ottava",
     ];
 
     for name in &names {

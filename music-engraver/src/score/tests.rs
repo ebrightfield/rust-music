@@ -3607,3 +3607,54 @@
             _ => panic!("expected MeasureEvent::Note"),
         }
     }
+
+    #[test]
+    fn cross_system_ottava_produces_two_labels_via_score_builder() {
+        use crate::layout::ottava::OttavaKind;
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 6), Duration::QTR)
+            .ottava_start(OttavaKind::Ottava8va)
+            .barline()
+            .note(p("D", 6), Duration::QTR)
+            .ottava_end()
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        // Cross-system ottava: trailing half-bracket label + incoming half-bracket label
+        let count_8va = svg.matches("8va").count();
+        assert!(
+            count_8va >= 2,
+            "cross-system ottava should produce at least 2 '8va' labels, got {count_8va}"
+        );
+    }
+
+    #[test]
+    fn cross_system_ottava_differs_from_no_ottava() {
+        use crate::layout::ottava::OttavaKind;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 6), Duration::QTR)
+            .barline()
+            .note(p("D", 6), Duration::QTR)
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 6), Duration::QTR)
+            .ottava_start(OttavaKind::Ottava8va)
+            .barline()
+            .note(p("D", 6), Duration::QTR)
+            .ottava_end()
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        assert_ne!(without, with, "cross-system ottava should change SVG output");
+    }

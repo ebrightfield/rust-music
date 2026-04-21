@@ -1,6 +1,7 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::hairpin::layout_hairpin;
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS};
+use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::page::{PageLayout, PageSystem};
 use crate::layout::slur::{layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
@@ -11,8 +12,9 @@ use crate::layout::tie::{
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::draw_lyric_extender;
+use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
-use crate::render::system_renderer::{collect_hairpin_note_info, collect_lyric_note_info, collect_note_positions, collect_slur_note_info, draw_system};
+use crate::render::system_renderer::{collect_hairpin_note_info, collect_lyric_note_info, collect_note_positions, collect_ottava_note_info, collect_slur_note_info, draw_system};
 use crate::render::tie_renderer::draw_tie;
 use crate::render::{SvgWriter, TextStyle};
 
@@ -99,6 +101,9 @@ pub fn draw_page(
 
     // Draw cross-system lyric extender lines between adjacent systems
     draw_cross_system_lyric_extenders(&mut svg, config, &page.systems);
+
+    // Draw cross-system ottava brackets between adjacent systems
+    draw_cross_system_ottava_brackets(&mut svg, font, config, &page.systems)?;
 
     Ok(svg)
 }
@@ -758,6 +763,172 @@ fn find_last_unresolved_extender(note_info: &[crate::render::system_renderer::Ly
         return None;
     }
     None
+}
+
+/// An ottava bracket at the end of a system with no matching `ottava_end`.
+struct UnresolvedOttava {
+    /// Absolute x of the note (system_x + note_x).
+    x_start: f64,
+    /// Ottava kind (8va, 8vb, 15ma, 15mb).
+    kind: OttavaKind,
+    /// Right edge of the system's staff lines (absolute x).
+    staff_right: f64,
+}
+
+/// A note at the start of the next system that has `ottava_end = true`.
+struct IncomingOttavaTarget {
+    /// Absolute x of the note's right edge.
+    x_right: f64,
+}
+
+/// Find notes with `ottava_start` at the end of a system that have no
+/// matching `ottava_end` within the same system.
+fn find_unresolved_ottavas(
+    font: &MusicFont,
+    page_system: &PageSystem,
+) -> Result<Vec<UnresolvedOttava>, FontError> {
+    let system = &page_system.system;
+    let note_info = collect_ottava_note_info(system);
+
+    let mut unresolved = Vec::new();
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(kind) = info.ottava_start else {
+            continue;
+        };
+
+        // Check if there's a matching ottava_end within this system
+        let has_end = note_info[i + 1..].iter().any(|n| n.ottava_end);
+
+        if has_end {
+            continue; // Resolved within the system
+        }
+
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let _outline = font.glyph_outline(notehead_kind.glyph())?;
+
+        unresolved.push(UnresolvedOttava {
+            x_start: page_system.x + info.x,
+            kind,
+            staff_right: page_system.x + system.staff_width,
+        });
+    }
+
+    Ok(unresolved)
+}
+
+/// Find the first note with `ottava_end = true` in a system.
+fn find_incoming_ottava_targets(
+    font: &MusicFont,
+    page_system: &PageSystem,
+) -> Result<Vec<IncomingOttavaTarget>, FontError> {
+    let system = &page_system.system;
+    let note_info = collect_ottava_note_info(system);
+
+    let mut targets = Vec::new();
+
+    for info in &note_info {
+        if !info.ottava_end {
+            continue;
+        }
+
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        targets.push(IncomingOttavaTarget {
+            x_right: page_system.x + info.x + advance,
+        });
+
+        break; // Only need the first
+    }
+
+    Ok(targets)
+}
+
+/// Draw cross-system ottava brackets between adjacent systems.
+///
+/// For each unresolved `ottava_start` at the end of system N, draws a
+/// trailing half-bracket (no end hook) to the right edge of system N.
+/// If system N+1 has a matching `ottava_end`, draws an incoming
+/// half-bracket (with end hook, no label) from the left edge of system N+1.
+pub(crate) fn draw_cross_system_ottava_brackets(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    systems: &[PageSystem],
+) -> Result<(), FontError> {
+    for i in 0..systems.len().saturating_sub(1) {
+        let unresolved = find_unresolved_ottavas(font, &systems[i])?;
+        if unresolved.is_empty() {
+            continue;
+        }
+
+        let targets = find_incoming_ottava_targets(font, &systems[i + 1])?;
+
+        for ott_src in &unresolved {
+            let src_staff = StaffLayout::new(
+                systems[i].x,
+                systems[i].y,
+                systems[i].system.staff_width,
+                config.staff_space,
+            );
+
+            // Trailing half-bracket: from start note to right edge of system,
+            // no end hook (bracket continues into the next system).
+            let right_layout = layout_ottava_bracket(
+                ott_src.kind,
+                ott_src.x_start,
+                ott_src.staff_right,
+                &src_staff,
+                config.staff_space,
+                false, // no end hook
+            );
+            draw_ottava_bracket(svg, &right_layout);
+
+            // Incoming half-bracket at start of target system
+            if let Some(tgt) = targets.first() {
+                let tgt_system = &systems[i + 1];
+                let tgt_staff = StaffLayout::new(
+                    tgt_system.x,
+                    tgt_system.y,
+                    tgt_system.system.staff_width,
+                    config.staff_space,
+                );
+
+                // Start from the first measure's content area
+                let first_measure_x = tgt_system
+                    .system
+                    .measures
+                    .first()
+                    .map(|m| tgt_system.x + m.x_offset)
+                    .unwrap_or(tgt_system.x);
+
+                // Incoming bracket: from left edge to the end note,
+                // with end hook (bracket terminates here).
+                // Use a minimal label width so the dashed line starts promptly.
+                let incoming_layout = layout_ottava_bracket(
+                    ott_src.kind,
+                    first_measure_x,
+                    tgt.x_right,
+                    &tgt_staff,
+                    config.staff_space,
+                    true, // end hook
+                );
+                draw_ottava_bracket(svg, &incoming_layout);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
