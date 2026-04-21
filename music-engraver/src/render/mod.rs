@@ -31,6 +31,7 @@ pub mod stem_renderer;
 mod svg_writer;
 pub mod system_renderer;
 pub mod tab_renderer;
+pub mod tab_rhythm_renderer;
 pub mod tempo_renderer;
 pub mod tie_renderer;
 pub mod time_sig_renderer;
@@ -65,6 +66,7 @@ pub use tempo_renderer::draw_tempo_mark;
 pub use tie_renderer::draw_tie;
 pub use time_sig_renderer::draw_time_signature;
 pub use tab_renderer::{draw_fret_number, draw_fret_number_at, draw_tab_clef, draw_tab_staff_lines};
+pub use tab_rhythm_renderer::draw_tab_rhythm;
 pub use tuplet_renderer::draw_tuplet_bracket;
 
 #[cfg(feature = "png")]

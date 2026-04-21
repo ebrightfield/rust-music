@@ -22,7 +22,9 @@
 use crate::font::{bravura_font, EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, TabStaffLayout};
+use crate::layout::tab_rhythm::layout_tab_rhythm;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
+use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::{SvgWriter, TextStyle};
 
 /// A single event in a tab measure.
@@ -30,9 +32,16 @@ use crate::render::{SvgWriter, TextStyle};
 enum TabEvent {
     /// One or more fret numbers played simultaneously.
     /// Each entry is (string_number, fret_number) where string is 1-based.
-    Fret(Vec<(u8, u8)>),
+    /// `duration_log2`: optional rhythm (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
+    Fret {
+        frets: Vec<(u8, u8)>,
+        duration_log2: Option<u8>,
+    },
     /// A rest (blank space — no fret numbers).
-    Rest,
+    /// `duration_log2`: optional rhythm for rest stem display.
+    Rest {
+        duration_log2: Option<u8>,
+    },
 }
 
 /// A completed tab measure: events + ending barline style.
@@ -54,6 +63,8 @@ pub struct TabScoreBuilder {
     /// Accumulated fret entries for the current in-progress multi-string event.
     /// `.fret()` pushes here; `.fret()` on a different beat or `.rest()` flushes.
     current_frets: Vec<(u8, u8)>,
+    /// Pending duration for the next event (set by `.duration()`).
+    pending_duration: Option<u8>,
     /// Events accumulated for the current in-progress measure.
     current_events: Vec<TabEvent>,
     /// Completed measures.
@@ -72,6 +83,7 @@ impl TabScoreBuilder {
         Self {
             line_count,
             current_frets: Vec::new(),
+            pending_duration: None,
             current_events: Vec::new(),
             measures: Vec::new(),
             measures_per_system: 4,
@@ -112,7 +124,11 @@ impl TabScoreBuilder {
     fn flush_frets(&mut self) {
         if !self.current_frets.is_empty() {
             let frets = std::mem::take(&mut self.current_frets);
-            self.current_events.push(TabEvent::Fret(frets));
+            let duration_log2 = self.pending_duration.take();
+            self.current_events.push(TabEvent::Fret {
+                frets,
+                duration_log2,
+            });
         }
     }
 
@@ -138,10 +154,42 @@ impl TabScoreBuilder {
         self
     }
 
+    /// Set the duration for the next event (fret or rest).
+    ///
+    /// `duration_log2`: 0=whole, 1=half, 2=quarter, 3=eighth, 4=sixteenth, etc.
+    /// The duration is consumed by the next `.fret()` flush or `.rest()` call.
+    /// When set, a rhythm stem (and flag for eighths and shorter) is drawn
+    /// above the tab staff.
+    pub fn duration(mut self, duration_log2: u8) -> Self {
+        self.pending_duration = Some(duration_log2);
+        self
+    }
+
+    /// Convenience: set duration to quarter note (duration_log2 = 2).
+    pub fn quarter(self) -> Self {
+        self.duration(2)
+    }
+
+    /// Convenience: set duration to eighth note (duration_log2 = 3).
+    pub fn eighth(self) -> Self {
+        self.duration(3)
+    }
+
+    /// Convenience: set duration to half note (duration_log2 = 1).
+    pub fn half(self) -> Self {
+        self.duration(1)
+    }
+
+    /// Convenience: set duration to whole note (duration_log2 = 0).
+    pub fn whole(self) -> Self {
+        self.duration(0)
+    }
+
     /// Add a rest (empty beat with no fret numbers).
     pub fn rest(mut self) -> Self {
         self.flush_frets();
-        self.current_events.push(TabEvent::Rest);
+        let duration_log2 = self.pending_duration.take();
+        self.current_events.push(TabEvent::Rest { duration_log2 });
         self
     }
 
@@ -378,6 +426,8 @@ fn draw_tab_measure(
         0.0
     };
 
+    let stem_width = config.stem_thickness_fu();
+
     for (e_idx, event) in measure.events.iter().enumerate() {
         let event_x = if event_count == 1 {
             measure_x + padding + usable_width / 2.0
@@ -386,15 +436,33 @@ fn draw_tab_measure(
         };
 
         match event {
-            TabEvent::Fret(frets) => {
+            TabEvent::Fret {
+                frets,
+                duration_log2,
+            } => {
                 for &(string, fret) in frets {
                     let layout =
                         layout_fret_number(tab_staff, string, fret, event_x);
                     draw_fret_number(svg, &layout);
                 }
+                // Draw rhythm stem + flag above the staff if duration is set
+                if let Some(dur) = duration_log2 {
+                    if let Some(rhythm_layout) =
+                        layout_tab_rhythm(tab_staff, event_x, *dur, stem_width)
+                    {
+                        draw_tab_rhythm(svg, &rhythm_layout, font)?;
+                    }
+                }
             }
-            TabEvent::Rest => {
-                // Rests in tab are just empty space — no glyph
+            TabEvent::Rest { duration_log2 } => {
+                // Rests with duration get a rhythm stem (stem-only, no fret numbers)
+                if let Some(dur) = duration_log2 {
+                    if let Some(rhythm_layout) =
+                        layout_tab_rhythm(tab_staff, event_x, *dur, stem_width)
+                    {
+                        draw_tab_rhythm(svg, &rhythm_layout, font)?;
+                    }
+                }
             }
         }
     }
@@ -721,6 +789,161 @@ mod tests {
     fn break_tab_measures_empty() {
         let chunks = break_tab_measures(0, 4);
         assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn duration_adds_rhythm_stem() {
+        let svg = TabScoreBuilder::guitar()
+            .quarter()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // Should have a stem line above the staff (in addition to 6 staff lines + barline)
+        let line_count = svg.matches("<line ").count();
+        // 6 staff lines + 2 barline lines (final) + 1 rhythm stem = 9
+        assert!(
+            line_count >= 9,
+            "quarter note rhythm stem should add a line, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn eighth_duration_adds_stem_and_flag() {
+        let svg = TabScoreBuilder::guitar()
+            .eighth()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // Should have a flag path in addition to the TAB clef path
+        let path_count = svg.matches("<path ").count();
+        assert!(
+            path_count >= 2,
+            "eighth note should have TAB clef + flag path, got {path_count}"
+        );
+    }
+
+    #[test]
+    fn whole_note_no_stem() {
+        let svg = TabScoreBuilder::guitar()
+            .whole()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // Whole notes have no stem: only 6 staff lines + barline lines
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 8,
+            "whole note should have no rhythm stem: 6 staff + 2 barline = 8, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn no_duration_no_stem() {
+        let svg_no_dur = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        let svg_with_dur = TabScoreBuilder::guitar()
+            .quarter()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        assert_ne!(
+            svg_no_dur, svg_with_dur,
+            "fret without duration should differ from fret with duration"
+        );
+        // Without duration: no rhythm stem line beyond staff+barline
+        let lines_no_dur = svg_no_dur.matches("<line ").count();
+        let lines_with_dur = svg_with_dur.matches("<line ").count();
+        assert!(
+            lines_with_dur > lines_no_dur,
+            "duration should add a stem line ({lines_with_dur} vs {lines_no_dur})"
+        );
+    }
+
+    #[test]
+    fn duration_on_rest_draws_stem() {
+        let svg = TabScoreBuilder::guitar()
+            .quarter()
+            .rest()
+            .end_barline()
+            .render_svg();
+        // Rest with duration should draw a stem but no fret numbers
+        let line_count = svg.matches("<line ").count();
+        assert!(
+            line_count >= 9,
+            "rest with duration should have rhythm stem, got {line_count}"
+        );
+        // No fret number text
+        assert!(!svg.contains(">0</text>"));
+    }
+
+    #[test]
+    fn half_note_stem_no_flag() {
+        let svg = TabScoreBuilder::guitar()
+            .half()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // Half note: stem but no flag — only 1 path (TAB clef)
+        let path_count = svg.matches("<path ").count();
+        assert_eq!(
+            path_count, 1,
+            "half note should have TAB clef only (no flag), got {path_count}"
+        );
+        // But should have a rhythm stem line
+        let line_count = svg.matches("<line ").count();
+        assert!(
+            line_count >= 9,
+            "half note should have rhythm stem, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn multiple_events_with_mixed_durations() {
+        let svg = TabScoreBuilder::guitar()
+            .quarter()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
+            .next()
+            .fret(1, 3) // no duration — no stem
+            .end_barline()
+            .render_svg();
+        // 2 stems (quarter + eighth), 1 flag (eighth), 3 fret numbers
+        let text_count = svg.matches("<text ").count();
+        assert_eq!(text_count, 3, "should have 3 fret numbers");
+        // 6 staff lines + 2 barline + 2 stems = 10
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 10,
+            "should have 6 staff + 2 barline + 2 rhythm stems = 10, got {line_count}"
+        );
+        // 1 TAB clef + 1 eighth flag = 2 paths
+        let path_count = svg.matches("<path ").count();
+        assert_eq!(
+            path_count, 2,
+            "should have TAB clef + eighth flag = 2 paths, got {path_count}"
+        );
+    }
+
+    #[test]
+    fn duration_consumed_per_event() {
+        // .duration() only applies to the next flushed event, not subsequent ones
+        let svg = TabScoreBuilder::guitar()
+            .quarter()
+            .fret(1, 0) // gets quarter duration
+            .next()
+            .fret(1, 2) // no duration (was consumed)
+            .end_barline()
+            .render_svg();
+        // Only 1 rhythm stem (for the quarter)
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 9,
+            "only first event should have rhythm stem: 6 staff + 2 barline + 1 stem = 9, got {line_count}"
+        );
     }
 
     #[test]
