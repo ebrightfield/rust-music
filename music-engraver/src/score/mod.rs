@@ -50,6 +50,7 @@ use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
+use crate::layout::ottava::OttavaKind;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
@@ -400,6 +401,33 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.navigation_sign = Some(sign);
+        }
+        self
+    }
+
+    /// Start an ottava bracket (8va, 8vb, 15ma, 15mb) at the most recently
+    /// added note or chord. The bracket extends until `.ottava_end()` is called.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn ottava_start(mut self, kind: OttavaKind) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.ottava_start = Some(kind);
+        }
+        self
+    }
+
+    /// End an ottava bracket at the most recently added note or chord.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn ottava_end(mut self) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.ottava_end = true;
         }
         self
     }

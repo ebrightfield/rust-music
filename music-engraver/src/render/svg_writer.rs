@@ -145,6 +145,28 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
+    /// Add a dashed line between two points.
+    ///
+    /// `dash_array` is an SVG stroke-dasharray value (e.g. "8,4" for 8-unit
+    /// dashes with 4-unit gaps).
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_dashed_line(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        stroke: &str,
+        stroke_width: f64,
+        dash_array: &str,
+    ) {
+        let _ = write!(
+            self.elements,
+            r#"  <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="{stroke_width}" stroke-dasharray="{dash_array}"/>"#
+        );
+        self.elements.push('\n');
+    }
+
     /// Add a filled rectangle (axis-aligned).
     pub fn add_rect(&mut self, x: f64, y: f64, width: f64, height: f64, fill: &str) {
         let _ = write!(

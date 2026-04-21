@@ -23,6 +23,7 @@ pub mod multi_staff_renderer;
 pub mod navigation_renderer;
 pub mod note_renderer;
 pub mod ornament_renderer;
+pub mod ottava_renderer;
 pub mod page_renderer;
 pub mod rehearsal_renderer;
 pub mod rest_renderer;
@@ -61,6 +62,7 @@ pub use note_renderer::{draw_ledger_lines, draw_note, draw_notehead, draw_stemme
 pub use multi_staff_renderer::{draw_brace, draw_bracket, draw_joined_barline, draw_multi_staff_connectors};
 pub use navigation_renderer::draw_navigation_sign;
 pub use ornament_renderer::draw_ornament;
+pub use ottava_renderer::draw_ottava_bracket;
 pub use page_renderer::draw_page;
 pub use rehearsal_renderer::draw_rehearsal_mark;
 pub use rest_renderer::draw_rest;

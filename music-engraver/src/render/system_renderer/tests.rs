@@ -8,6 +8,7 @@ use crate::layout::system::{
     layout_system, MeasureContent, MeasureEvent, SystemPrefix,
 };
 use crate::layout::time_signature::TimeSignatureKind;
+use crate::layout::ottava::OttavaKind;
 use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use music::notation::clef::Clef;
 
@@ -1179,4 +1180,127 @@ fn volta_multi_measure_two_brackets() {
     let diff = svg.to_svg().matches("<line ").count()
         - svg_no.to_svg().matches("<line ").count();
     assert_eq!(diff, 4, "two-measure volta adds 4 lines (2 tops + left + right hooks)");
+}
+
+// ── Ottava bracket tests ──
+
+fn ottava_start_note(pos: i8, kind: OttavaKind) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ottava_start: Some(kind),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+fn ottava_end_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ottava_end: true,
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn ottava_bracket_adds_dashed_line_and_text() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            ottava_start_note(10, OttavaKind::Ottava8va),
+            quarter_note(12),
+            ottava_end_note(14),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains(">8va</text>"), "should contain '8va' label");
+    assert!(output.contains("stroke-dasharray"), "should have dashed line");
+}
+
+#[test]
+fn ottava_bracket_has_end_hook() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            ottava_start_note(10, OttavaKind::Ottava8va),
+            ottava_end_note(12),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    // Dashed line = 1 <line> with dasharray, hook = 1 <line> without dasharray
+    // Total should be at least 7 (5 staff lines + dashed + hook)
+    let line_count = output.matches("<line ").count();
+    assert!(line_count >= 7, "expected ≥7 lines (5 staff + dashed + hook), got {line_count}");
+}
+
+#[test]
+fn no_ottava_without_flags() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(10), quarter_note(12)],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(!output.contains("8va"), "should have no ottava label");
+    assert!(!output.contains("stroke-dasharray"), "should have no dashed line");
+}
+
+#[test]
+fn ottava_8vb_has_different_label() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            ottava_start_note(-2, OttavaKind::Ottava8vb),
+            ottava_end_note(-4),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains(">8vb</text>"), "should contain '8vb' label");
+}
+
+#[test]
+fn ottava_start_without_end_draws_nothing() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            ottava_start_note(10, OttavaKind::Ottava8va),
+            quarter_note(12),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(!output.contains("8va"), "start without end should draw no ottava bracket");
 }

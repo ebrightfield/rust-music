@@ -22,6 +22,7 @@ use music_engraver::layout::hairpin::HairpinType;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::navigation::NavigationSign;
 use music_engraver::layout::ornament::Ornament;
+use music_engraver::layout::ottava::OttavaKind;
 use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
@@ -1054,6 +1055,38 @@ fn golden_navigation_signs() {
     assert_golden("navigation_signs", &build_navigation_signs());
 }
 
+fn build_ottava_brackets() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: 8va over high notes
+        .note(p("C", 6), Duration::QTR)
+        .ottava_start(OttavaKind::Ottava8va)
+        .note(p("D", 6), Duration::QTR)
+        .note(p("E", 6), Duration::QTR)
+        .ottava_end()
+        .note(p("F", 5), Duration::QTR)
+        .barline()
+        // Measure 2: 8vb under low notes
+        .note(p("C", 3), Duration::HALF)
+        .ottava_start(OttavaKind::Ottava8vb)
+        .note(p("B", 2), Duration::HALF)
+        .ottava_end()
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_ottava_brackets() {
+    let svg = build_ottava_brackets();
+    assert!(svg.contains(">8va</text>"), "should contain 8va label");
+    assert!(svg.contains(">8vb</text>"), "should contain 8vb label");
+    assert!(svg.contains("stroke-dasharray"), "should contain dashed lines");
+    assert_golden("ottava_brackets", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1088,6 +1121,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_system_volta",
         "guitar_tab",
         "navigation_signs",
+        "ottava_brackets",
     ];
 
     for name in &names {

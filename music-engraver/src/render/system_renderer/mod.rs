@@ -1,5 +1,6 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
+use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS};
 use crate::layout::measure::MeasureElement;
 use crate::layout::slur::{layout_slur, slur_direction_from_stem};
@@ -15,6 +16,7 @@ use crate::render::lyric_renderer::draw_lyric_extender;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
+use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
 
@@ -97,6 +99,9 @@ pub fn draw_system(
 
     // Draw volta brackets above measures that have volta annotations
     draw_system_volta_brackets(svg, config, system, &staff, x);
+
+    // Draw ottava brackets (8va/8vb dashed lines) between marked notes
+    draw_system_ottava_brackets(svg, font, config, system, &staff, x)?;
 
     Ok(())
 }
@@ -470,6 +475,95 @@ fn draw_system_volta_brackets(
         );
         draw_volta_bracket(svg, &bracket_layout);
     }
+}
+
+/// Positional info for a note relevant to ottava bracket drawing.
+struct OttavaNoteInfo {
+    x: f64,
+    duration_log2: u8,
+    ottava_start: Option<OttavaKind>,
+    ottava_end: bool,
+}
+
+fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for elem in &measure.layout.elements {
+            let elem_x = measure.x_offset + elem.x;
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push(OttavaNoteInfo {
+                        x: elem_x,
+                        duration_log2: n.duration_log2,
+                        ottava_start: n.annotations.ottava_start,
+                        ottava_end: n.annotations.ottava_end,
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    notes.push(OttavaNoteInfo {
+                        x: elem_x,
+                        duration_log2: c.duration_log2,
+                        ottava_start: c.annotations.ottava_start,
+                        ottava_end: c.annotations.ottava_end,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+/// Draw ottava brackets (8va/8vb/15ma/15mb) between notes marked with
+/// `ottava_start` and `ottava_end`.
+fn draw_system_ottava_brackets(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) -> Result<(), FontError> {
+    let note_info = collect_ottava_note_info(system);
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(kind) = info.ottava_start else {
+            continue;
+        };
+
+        // Find the next note with ottava_end = true
+        let target = note_info[i + 1..]
+            .iter()
+            .find(|n| n.ottava_end);
+
+        let Some(target) = target else {
+            continue;
+        };
+
+        // Compute notehead advance width for endpoint positioning
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        let ott_x_start = system_x + info.x;
+        let ott_x_end = system_x + target.x + advance;
+
+        let bracket_layout = layout_ottava_bracket(
+            kind,
+            ott_x_start,
+            ott_x_end,
+            staff,
+            config.staff_space,
+            true,
+        );
+        draw_ottava_bracket(svg, &bracket_layout);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

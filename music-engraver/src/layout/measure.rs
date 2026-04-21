@@ -8,6 +8,7 @@ use crate::layout::lyric::LyricSyllable;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
+use crate::layout::ottava::OttavaKind;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
@@ -58,6 +59,11 @@ pub struct NoteAnnotations {
     pub ornament: Option<Ornament>,
     /// Optional navigation sign (segno, coda) placed above the staff.
     pub navigation_sign: Option<NavigationSign>,
+    /// Whether this note/chord starts an ottava bracket (8va, 8vb, etc.).
+    /// The bracket extends from this note to the note with `ottava_end = true`.
+    pub ottava_start: Option<OttavaKind>,
+    /// Whether this note/chord ends an ottava bracket.
+    pub ottava_end: bool,
 }
 
 /// A group of notes to be beamed together.

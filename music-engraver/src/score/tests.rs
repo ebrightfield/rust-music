@@ -1,4 +1,5 @@
     use super::*;
+    use crate::layout::ottava::OttavaKind;
     use music::note::note::Note;
 
     // --- duration_kind_to_log2 ---
@@ -3488,6 +3489,120 @@
                     Some(NavigationSign::Segno),
                     "navigation_sign should be preserved through convert_event"
                 );
+            }
+            _ => panic!("expected MeasureEvent::Note"),
+        }
+    }
+
+    // --- ottava brackets ---
+
+    #[test]
+    fn ottava_8va_adds_dashed_line_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 6).expect("valid"), Duration::QTR)
+            .ottava_start(OttavaKind::Ottava8va)
+            .note(Pitch::new(Note::D, 6).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 6).expect("valid"), Duration::QTR)
+            .ottava_end()
+            .note(Pitch::new(Note::F, 6).expect("valid"), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains(">8va</text>"), "should have 8va label");
+        assert!(svg.contains("stroke-dasharray"), "should have dashed line");
+    }
+
+    #[test]
+    fn ottava_rest_no_op() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .ottava_start(OttavaKind::Ottava8va)
+            .rest(Duration::QTR)
+            .ottava_end()
+            .end_barline()
+            .render_svg();
+        assert!(!svg.contains("8va"), "ottava on rest should be no-op");
+    }
+
+    #[test]
+    fn ottava_8vb_label_differs_from_8va() {
+        let svg_8va = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 5).expect("valid"), Duration::HALF)
+            .ottava_start(OttavaKind::Ottava8va)
+            .note(Pitch::new(Note::D, 5).expect("valid"), Duration::HALF)
+            .ottava_end()
+            .end_barline()
+            .render_svg();
+        let svg_8vb = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 3).expect("valid"), Duration::HALF)
+            .ottava_start(OttavaKind::Ottava8vb)
+            .note(Pitch::new(Note::D, 3).expect("valid"), Duration::HALF)
+            .ottava_end()
+            .end_barline()
+            .render_svg();
+        assert!(svg_8va.contains(">8va</text>"));
+        assert!(svg_8vb.contains(">8vb</text>"));
+    }
+
+    #[test]
+    fn no_ottava_without_calls() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 5).expect("valid"), Duration::HALF)
+            .note(Pitch::new(Note::D, 5).expect("valid"), Duration::HALF)
+            .end_barline()
+            .render_svg();
+        assert!(!svg.contains("8va"), "no 8va without ottava calls");
+        assert!(!svg.contains("stroke-dasharray"), "no dashed line without ottava calls");
+    }
+
+    #[test]
+    fn ottava_convert_event_preserves_start() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::C, 5).expect("valid"),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                ottava_start: Some(OttavaKind::Ottava8va),
+                ..Default::default()
+            },
+        };
+        let element = convert_event(&event, &builder.clef.to_clef(), &builder.key_sig, None);
+        match element {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.annotations.ottava_start, Some(OttavaKind::Ottava8va));
+            }
+            _ => panic!("expected MeasureEvent::Note"),
+        }
+    }
+
+    #[test]
+    fn ottava_convert_event_preserves_end() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::C, 5).expect("valid"),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                ottava_end: true,
+                ..Default::default()
+            },
+        };
+        let element = convert_event(&event, &builder.clef.to_clef(), &builder.key_sig, None);
+        match element {
+            MeasureEvent::Note(n) => {
+                assert!(n.annotations.ottava_end, "ottava_end should be preserved");
             }
             _ => panic!("expected MeasureEvent::Note"),
         }
