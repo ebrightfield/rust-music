@@ -25,6 +25,7 @@ use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
 use music_engraver::score::multi_staff::MultiStaffScore;
+use music_engraver::score::tab::TabScoreBuilder;
 use music_engraver::score::ScoreBuilder;
 
 fn p(name: &str, octave: u8) -> Pitch {
@@ -718,6 +719,44 @@ fn golden_multi_staff_cross_system() {
     );
 }
 
+fn build_tab_score() -> String {
+    TabScoreBuilder::guitar()
+        .measures_per_system(2)
+        // Measure 1: E minor arpeggio
+        .fret(6, 0).next()
+        .fret(5, 2).next()
+        .fret(4, 2).next()
+        .fret(3, 0)
+        .barline()
+        // Measure 2: scale on string 1
+        .fret(1, 0).next()
+        .fret(1, 3).next()
+        .fret(1, 5).next()
+        .fret(1, 7)
+        .barline()
+        // Measure 3: power chord
+        .fret(6, 0)
+        .fret(5, 2)
+        .fret(4, 2)
+        .next()
+        .fret(6, 3)
+        .fret(5, 5)
+        .fret(4, 5)
+        .barline()
+        // Measure 4: high frets
+        .fret(1, 12).next()
+        .fret(2, 12).next()
+        .fret(1, 15).next()
+        .fret(1, 17)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_score() {
+    assert_golden("tab_score", &build_tab_score());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -744,6 +783,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_system_ties",
         "expression_text",
         "multi_staff_cross_system",
+        "tab_score",
     ];
 
     for name in &names {

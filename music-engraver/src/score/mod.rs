@@ -28,6 +28,7 @@
 
 mod event;
 pub mod multi_staff;
+pub mod tab;
 
 use std::collections::HashMap;
 
