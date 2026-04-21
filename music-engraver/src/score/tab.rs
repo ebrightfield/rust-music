@@ -24,9 +24,11 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::layout::tab_slide::layout_tab_slide;
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
+use crate::render::tab_slide_renderer::draw_tab_slide;
 use crate::render::{SvgWriter, TextStyle};
 
 /// A single event in a tab measure.
@@ -35,9 +37,11 @@ enum TabEvent {
     /// One or more fret numbers played simultaneously.
     /// Each entry is (string_number, fret_number) where string is 1-based.
     /// `duration_log2`: optional rhythm (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
+    /// `slide_out`: when true, draw a slide line from this event to the next.
     Fret {
         frets: Vec<(u8, u8)>,
         duration_log2: Option<u8>,
+        slide_out: bool,
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
@@ -86,6 +90,8 @@ pub struct TabScoreBuilder {
     in_beam_group: bool,
     /// Accumulated beam group sub-events: (frets, duration_log2).
     beam_group_events: Vec<(Vec<(u8, u8)>, u8)>,
+    /// When true, the next flushed Fret event gets `slide_out = true`.
+    pending_slide: bool,
 }
 
 impl TabScoreBuilder {
@@ -102,6 +108,7 @@ impl TabScoreBuilder {
             show_measure_numbers: false,
             in_beam_group: false,
             beam_group_events: Vec::new(),
+            pending_slide: false,
         }
     }
 
@@ -141,9 +148,11 @@ impl TabScoreBuilder {
             } else {
                 let frets = std::mem::take(&mut self.current_frets);
                 let duration_log2 = self.pending_duration.take();
+                let slide_out = std::mem::take(&mut self.pending_slide);
                 self.current_events.push(TabEvent::Fret {
                     frets,
                     duration_log2,
+                    slide_out,
                 });
             }
         }
@@ -236,6 +245,23 @@ impl TabScoreBuilder {
             let dur = self.pending_duration.take().unwrap_or(3); // default to eighth
             self.beam_group_events.push((frets, dur));
         }
+    }
+
+    /// Mark the most recently added fret event (or the next one to be flushed)
+    /// for a slide into the following event. A diagonal line will be drawn from
+    /// this event's fret position(s) to the next event's matching string(s).
+    ///
+    /// If called before any `.fret()`, or after a `.rest()`, this is a no-op
+    /// (slides only apply to fret events).
+    pub fn slide(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            // Frets are still accumulating — mark the pending flush for slide
+            self.pending_slide = true;
+        } else if let Some(TabEvent::Fret { slide_out, .. }) = self.current_events.last_mut() {
+            // Frets already flushed — mark the last event
+            *slide_out = true;
+        }
+        self
     }
 
     /// Add a rest (empty beat with no fret numbers).
@@ -492,6 +518,7 @@ fn draw_tab_measure(
             TabEvent::Fret {
                 frets,
                 duration_log2,
+                ..
             } => {
                 for &(string, fret) in frets {
                     let layout =
@@ -527,6 +554,37 @@ fn draw_tab_measure(
                     spacing.max(usable_width / (event_count.max(1)) as f64),
                     stem_width,
                 );
+            }
+        }
+    }
+
+    // Second pass: draw slide lines between consecutive fret events
+    let slide_stroke = config.stem_thickness_fu();
+    for i in 0..event_count.saturating_sub(1) {
+        if let TabEvent::Fret { frets: src_frets, slide_out: true, .. } = &measure.events[i] {
+            // Find the next Fret event (skip rests)
+            if let Some(target_idx) = (i + 1..event_count).find(|&j| {
+                matches!(&measure.events[j], TabEvent::Fret { .. })
+            }) {
+                if let TabEvent::Fret { frets: tgt_frets, .. } = &measure.events[target_idx] {
+                    let src_x = if event_count == 1 {
+                        measure_x + padding + usable_width / 2.0
+                    } else {
+                        measure_x + padding + i as f64 * spacing
+                    };
+                    let tgt_x = measure_x + padding + target_idx as f64 * spacing;
+
+                    // Draw a slide line for each string that appears in both events
+                    for &(src_str, _) in src_frets {
+                        if tgt_frets.iter().any(|&(ts, _)| ts == src_str) {
+                            if let Some(slide_layout) = layout_tab_slide(
+                                tab_staff, src_str, src_x, tgt_x, slide_stroke,
+                            ) {
+                                draw_tab_slide(svg, &slide_layout);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1235,6 +1293,155 @@ mod tests {
         assert_eq!(
             path_count, 1,
             "beam group should have only TAB clef path (no flags), got {path_count}"
+        );
+    }
+
+    // ---- Slide tests ----
+
+    #[test]
+    fn slide_adds_line_between_frets() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .slide()
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // 6 staff lines + 2 barline (Final) + 1 slide line = 9
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 9,
+            "slide should add 1 extra line: 6 staff + 2 barline + 1 slide = 9, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn no_slide_without_slide_call() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // 6 staff lines + 2 barline = 8 (no slide line)
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 8,
+            "without slide: 6 staff + 2 barline = 8, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn slide_differs_from_no_slide() {
+        let with_slide = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .slide()
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        let without_slide = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        assert_ne!(with_slide, without_slide, "slide should change SVG output");
+    }
+
+    #[test]
+    fn slide_on_chord_draws_lines_for_matching_strings() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .fret(2, 5)
+            .slide()
+            .next()
+            .fret(1, 7)
+            .fret(2, 7)
+            .end_barline()
+            .render_svg();
+        // 6 staff + 2 barline + 2 slide lines (one per matching string) = 10
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 10,
+            "chord slide on 2 strings: 6 staff + 2 barline + 2 slides = 10, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn slide_only_on_matching_strings() {
+        // Source has strings 1,2; target only has string 1 → only 1 slide
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .fret(2, 5)
+            .slide()
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // 6 staff + 2 barline + 1 slide (string 1 only) = 9
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 9,
+            "slide only on matching string: 6+2+1=9, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn multiple_consecutive_slides() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 3)
+            .slide()
+            .next()
+            .fret(1, 5)
+            .slide()
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // 6 staff + 2 barline + 2 slide lines = 10
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 10,
+            "two consecutive slides: 6+2+2=10, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn slide_on_rest_target_skips_to_next_fret() {
+        // Slide should skip rest and find the next fret event
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .slide()
+            .next()
+            .rest()
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // Should still draw the slide line (skipping the rest)
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 9,
+            "slide should skip rest target: 6+2+1=9, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn slide_after_already_flushed_event() {
+        // Call .slide() after .next() — should mark the already-flushed event
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .next()
+            .slide()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // The .slide() after .next() marks the last flushed event
+        let line_count = svg.matches("<line ").count();
+        assert_eq!(
+            line_count, 9,
+            "slide after flush: 6+2+1=9, got {line_count}"
         );
     }
 
