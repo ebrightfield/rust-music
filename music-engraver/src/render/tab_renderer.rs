@@ -63,6 +63,7 @@ pub fn draw_fret_number(svg: &mut SvgWriter, layout: &FretNumberLayout) {
         anchor: "middle",
         font_weight: "bold",
         font_style: "normal",
+        dominant_baseline: "central",
     };
     svg.add_text(layout.x, layout.y, &layout.text, &text_style);
 }
@@ -199,6 +200,18 @@ mod tests {
         let output = svg.to_svg();
         assert!(output.contains(r#"font-weight="bold""#));
         assert!(output.contains(r#"text-anchor="middle""#));
+    }
+
+    #[test]
+    fn fret_number_text_has_central_baseline() {
+        let (_, _, staff) = setup();
+        let mut svg = make_svg();
+        draw_fret_number_at(&mut svg, &staff, 1, 5, 500.0);
+        let output = svg.to_svg();
+        assert!(
+            output.contains(r#"dominant-baseline="central""#),
+            "fret numbers must be vertically centered on string lines"
+        );
     }
 
     #[test]

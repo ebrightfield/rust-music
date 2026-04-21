@@ -374,6 +374,7 @@ impl MultiStaffScore {
                             anchor: "start",
                             font_weight: "normal",
                             font_style: "normal",
+                            dominant_baseline: "auto",
                         });
                     }
                 }

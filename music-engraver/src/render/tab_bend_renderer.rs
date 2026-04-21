@@ -49,6 +49,7 @@ pub fn draw_tab_bend(svg: &mut SvgWriter, layout: &TabBendLayout) {
             anchor: "middle",
             font_weight: "bold",
             font_style: "normal",
+            dominant_baseline: "auto",
         },
     );
 }

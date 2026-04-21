@@ -34,6 +34,7 @@ pub fn draw_tab_legato(svg: &mut SvgWriter, layout: &TabLegatoLayout) {
             anchor: "middle",
             font_weight: "bold",
             font_style: "normal",
+            dominant_baseline: "auto",
         },
     );
 }

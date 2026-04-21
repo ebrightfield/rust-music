@@ -43,6 +43,10 @@ pub struct TextStyle<'a> {
     pub anchor: &'a str,
     pub font_weight: &'a str,
     pub font_style: &'a str,
+    /// SVG `dominant-baseline` attribute. `"auto"` preserves the default
+    /// alphabetic baseline; `"central"` vertically centers the glyph on
+    /// the y-coordinate (useful for tab fret numbers on string lines).
+    pub dominant_baseline: &'a str,
 }
 
 impl<'a> TextStyle<'a> {
@@ -55,6 +59,7 @@ impl<'a> TextStyle<'a> {
             anchor: "middle",
             font_weight: "normal",
             font_style: "normal",
+            dominant_baseline: "auto",
         }
     }
 
@@ -67,6 +72,7 @@ impl<'a> TextStyle<'a> {
             anchor: "start",
             font_weight: "bold",
             font_style: "normal",
+            dominant_baseline: "auto",
         }
     }
 
@@ -79,6 +85,7 @@ impl<'a> TextStyle<'a> {
             anchor: "middle",
             font_weight: "normal",
             font_style: "italic",
+            dominant_baseline: "auto",
         }
     }
 }
@@ -174,10 +181,12 @@ impl SvgWriter {
     /// Add a `<text>` element at the given position with the given style.
     ///
     /// Font size is in the same coordinate system as the viewBox.
+    /// When `dominant_baseline` is not `"auto"`, the attribute is emitted
+    /// explicitly (e.g. `"central"` for vertically-centered text on a line).
     pub fn add_text(&mut self, x: f64, y: f64, text: &str, style: &TextStyle<'_>) {
         let _ = write!(
             self.elements,
-            r#"  <text x="{x}" y="{y}" font-family="{ff}" font-size="{fs}" fill="{fill}" text-anchor="{anchor}" font-weight="{fw}" font-style="{fst}">{text}</text>"#,
+            r#"  <text x="{x}" y="{y}" font-family="{ff}" font-size="{fs}" fill="{fill}" text-anchor="{anchor}" font-weight="{fw}" font-style="{fst}""#,
             ff = style.font_family,
             fs = style.font_size,
             fill = style.fill,
@@ -185,6 +194,14 @@ impl SvgWriter {
             fw = style.font_weight,
             fst = style.font_style,
         );
+        if style.dominant_baseline != "auto" {
+            let _ = write!(
+                self.elements,
+                r#" dominant-baseline="{db}""#,
+                db = style.dominant_baseline,
+            );
+        }
+        let _ = write!(self.elements, ">{text}</text>");
         self.elements.push('\n');
     }
 
@@ -312,6 +329,7 @@ mod tests {
             anchor: "start",
             font_weight: "normal",
             font_style: "italic",
+            dominant_baseline: "auto",
         };
         w.add_text(50.0, 60.0, "cresc.", &style);
         let svg = w.to_svg();
@@ -381,6 +399,7 @@ mod tests {
         assert_eq!(s.anchor, "middle");
         assert_eq!(s.font_weight, "normal");
         assert_eq!(s.font_style, "normal");
+        assert_eq!(s.dominant_baseline, "auto");
     }
 
     #[test]
@@ -422,6 +441,7 @@ mod tests {
             anchor: "end",
             font_weight: "bold",
             font_style: "italic",
+            dominant_baseline: "auto",
         };
         w.add_text(10.0, 20.0, "Test", &style);
         let svg = w.to_svg();
@@ -432,5 +452,43 @@ mod tests {
         assert!(svg.contains(r#"font-weight="bold""#));
         assert!(svg.contains(r#"font-style="italic""#));
         assert!(svg.contains(">Test</text>"));
+    }
+
+    #[test]
+    fn add_text_auto_baseline_omits_attribute() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        w.add_text(0.0, 0.0, "hello", &TextStyle::normal(50.0));
+        let svg = w.to_svg();
+        assert!(
+            !svg.contains("dominant-baseline"),
+            "auto baseline should not emit the attribute"
+        );
+    }
+
+    #[test]
+    fn add_text_central_baseline_emits_attribute() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        let style = TextStyle {
+            dominant_baseline: "central",
+            ..TextStyle::bold(50.0)
+        };
+        w.add_text(0.0, 0.0, "5", &style);
+        let svg = w.to_svg();
+        assert!(
+            svg.contains(r#"dominant-baseline="central""#),
+            "central baseline should be emitted in the text element"
+        );
+    }
+
+    #[test]
+    fn add_text_middle_baseline_emits_attribute() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        let style = TextStyle {
+            dominant_baseline: "middle",
+            ..TextStyle::normal(50.0)
+        };
+        w.add_text(0.0, 0.0, "X", &style);
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"dominant-baseline="middle""#));
     }
 }

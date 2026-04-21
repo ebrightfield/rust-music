@@ -7,22 +7,22 @@
   <line x1="0" y1="1250" x2="10000" y2="1250" stroke="black" stroke-width="32.5"/>
   <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 625)"/>
   <rect x="997.5" y="-157.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="1120" y="0" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <text x="1120" y="0" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">0</text>
   <rect x="2292.5" y="92.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="2415" y="250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <text x="2415" y="250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">2</text>
   <rect x="3587.5" y="342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="3710" y="500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <text x="3710" y="500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">2</text>
   <rect x="4882.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="5005" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <text x="5005" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">0</text>
   <line x1="5375" y1="0" x2="5375" y2="1250" stroke="black" stroke-width="40"/>
   <rect x="5622.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="5745" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <text x="5745" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">0</text>
   <rect x="6917.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="7040" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">3</text>
+  <text x="7040" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">3</text>
   <rect x="8212.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="8335" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <text x="8335" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
   <rect x="9507.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="9630" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <text x="9630" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">7</text>
   <line x1="10000" y1="0" x2="10000" y2="1250" stroke="black" stroke-width="40"/>
   <line x1="0" y1="2250" x2="10000" y2="2250" stroke="black" stroke-width="32.5"/>
   <line x1="0" y1="2500" x2="10000" y2="2500" stroke="black" stroke-width="32.5"/>
@@ -32,26 +32,26 @@
   <line x1="0" y1="3500" x2="10000" y2="3500" stroke="black" stroke-width="32.5"/>
   <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 2875)"/>
   <rect x="997.5" y="2092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="1120" y="2250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">0</text>
+  <text x="1120" y="2250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">0</text>
   <rect x="997.5" y="2342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="1120" y="2500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <text x="1120" y="2500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">2</text>
   <rect x="997.5" y="2592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="1120" y="2750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">2</text>
+  <text x="1120" y="2750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">2</text>
   <rect x="4882.5" y="2092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="5005" y="2250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">3</text>
+  <text x="5005" y="2250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">3</text>
   <rect x="4882.5" y="2342.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="5005" y="2500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <text x="5005" y="2500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
   <rect x="4882.5" y="2592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="5005" y="2750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+  <text x="5005" y="2750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
   <line x1="5375" y1="2250" x2="5375" y2="3500" stroke="black" stroke-width="40"/>
   <rect x="5500" y="3342.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="5745" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">12</text>
+  <text x="5745" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">12</text>
   <rect x="6795" y="3092.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="7040" y="3250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">12</text>
+  <text x="7040" y="3250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">12</text>
   <rect x="8090" y="3342.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="8335" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">15</text>
+  <text x="8335" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">15</text>
   <rect x="9385" y="3342.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
-  <text x="9630" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">17</text>
+  <text x="9630" y="3500" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">17</text>
   <line x1="10000" y1="2250" x2="10000" y2="3500" stroke="black" stroke-width="40"/>
   <line x1="10100" y1="2250" x2="10100" y2="3500" stroke="black" stroke-width="125"/>
 </svg>
