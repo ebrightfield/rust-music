@@ -793,6 +793,30 @@ fn golden_tab_slides() {
     assert_golden("tab_slides", &build_tab_slides());
 }
 
+fn build_tab_hammer_pull() -> String {
+    TabScoreBuilder::guitar()
+        .measures_per_system(2)
+        // Measure 1: hammer-on 5→7
+        .fret(1, 5).hammer().next().fret(1, 7).next().rest().next().rest()
+        .barline()
+        // Measure 2: pull-off 7→5
+        .fret(1, 7).pull().next().fret(1, 5).next().rest().next().rest()
+        .barline()
+        // Measure 3: chain 5→7→5
+        .fret(2, 5).hammer().next().fret(2, 7).pull().next().fret(2, 5).next().rest()
+        .barline()
+        // Measure 4: multi-string chord hammer
+        .fret(5, 5).fret(4, 7).fret(3, 7).hammer().next()
+        .fret(5, 7).fret(4, 9).fret(3, 9)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_hammer_pull() {
+    assert_golden("tab_hammer_pull", &build_tab_hammer_pull());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -821,6 +845,7 @@ fn golden_baselines_are_valid_svgs() {
         "multi_staff_cross_system",
         "tab_score",
         "tab_slides",
+        "tab_hammer_pull",
     ];
 
     for name in &names {

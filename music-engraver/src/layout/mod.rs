@@ -34,6 +34,7 @@ pub mod stem;
 pub mod tab;
 pub mod tab_beam;
 pub mod tab_rhythm;
+pub mod tab_hammer;
 pub mod tab_slide;
 pub mod system;
 pub mod tempo;
@@ -97,6 +98,7 @@ pub use tab::{
     layout_fret_number, tab_clef_glyph, FretNumberLayout, TabStaffLayout, FRET_NUMBER_FONT_SIZE_RATIO,
     TAB_4_STRING_LINE_COUNT, TAB_LINE_COUNT,
 };
+pub use tab_hammer::{layout_tab_legato, LegatoKind, TabLegatoLayout};
 pub use tab_slide::{layout_tab_slide, TabSlideLayout};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,

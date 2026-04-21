@@ -24,10 +24,12 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
+use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_slide_renderer::draw_tab_slide;
 use crate::render::{SvgWriter, TextStyle};
 
@@ -38,10 +40,12 @@ enum TabEvent {
     /// Each entry is (string_number, fret_number) where string is 1-based.
     /// `duration_log2`: optional rhythm (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
     /// `slide_out`: when true, draw a slide line from this event to the next.
+    /// `legato_out`: when Some, draw a hammer-on/pull-off arc to the next event.
     Fret {
         frets: Vec<(u8, u8)>,
         duration_log2: Option<u8>,
         slide_out: bool,
+        legato_out: Option<LegatoKind>,
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
@@ -92,6 +96,8 @@ pub struct TabScoreBuilder {
     beam_group_events: Vec<(Vec<(u8, u8)>, u8)>,
     /// When true, the next flushed Fret event gets `slide_out = true`.
     pending_slide: bool,
+    /// When Some, the next flushed Fret event gets `legato_out` set.
+    pending_legato: Option<LegatoKind>,
 }
 
 impl TabScoreBuilder {
@@ -109,6 +115,7 @@ impl TabScoreBuilder {
             in_beam_group: false,
             beam_group_events: Vec::new(),
             pending_slide: false,
+            pending_legato: None,
         }
     }
 
@@ -149,10 +156,12 @@ impl TabScoreBuilder {
                 let frets = std::mem::take(&mut self.current_frets);
                 let duration_log2 = self.pending_duration.take();
                 let slide_out = std::mem::take(&mut self.pending_slide);
+                let legato_out = self.pending_legato.take();
                 self.current_events.push(TabEvent::Fret {
                     frets,
                     duration_log2,
                     slide_out,
+                    legato_out,
                 });
             }
         }
@@ -260,6 +269,34 @@ impl TabScoreBuilder {
         } else if let Some(TabEvent::Fret { slide_out, .. }) = self.current_events.last_mut() {
             // Frets already flushed — mark the last event
             *slide_out = true;
+        }
+        self
+    }
+
+    /// Mark the current fret event for a hammer-on arc to the next event.
+    ///
+    /// A curved arc with "H" is drawn from this fret event to the next
+    /// fret event on each matching string. Works like `.slide()` but
+    /// renders a curve instead of a diagonal line.
+    pub fn hammer(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_legato = Some(LegatoKind::HammerOn);
+        } else if let Some(TabEvent::Fret { legato_out, .. }) = self.current_events.last_mut() {
+            *legato_out = Some(LegatoKind::HammerOn);
+        }
+        self
+    }
+
+    /// Mark the current fret event for a pull-off arc to the next event.
+    ///
+    /// A curved arc with "P" is drawn from this fret event to the next
+    /// fret event on each matching string. Works like `.slide()` but
+    /// renders a curve instead of a diagonal line.
+    pub fn pull(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_legato = Some(LegatoKind::PullOff);
+        } else if let Some(TabEvent::Fret { legato_out, .. }) = self.current_events.last_mut() {
+            *legato_out = Some(LegatoKind::PullOff);
         }
         self
     }
@@ -581,6 +618,34 @@ fn draw_tab_measure(
                                 tab_staff, src_str, src_x, tgt_x, slide_stroke,
                             ) {
                                 draw_tab_slide(svg, &slide_layout);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Third pass: draw hammer-on/pull-off arcs between consecutive fret events
+    for i in 0..event_count.saturating_sub(1) {
+        if let TabEvent::Fret { frets: src_frets, legato_out: Some(kind), .. } = &measure.events[i] {
+            if let Some(target_idx) = (i + 1..event_count).find(|&j| {
+                matches!(&measure.events[j], TabEvent::Fret { .. })
+            }) {
+                if let TabEvent::Fret { frets: tgt_frets, .. } = &measure.events[target_idx] {
+                    let src_x = if event_count == 1 {
+                        measure_x + padding + usable_width / 2.0
+                    } else {
+                        measure_x + padding + i as f64 * spacing
+                    };
+                    let tgt_x = measure_x + padding + target_idx as f64 * spacing;
+
+                    for &(src_str, _) in src_frets {
+                        if tgt_frets.iter().any(|&(ts, _)| ts == src_str) {
+                            if let Some(legato_layout) = layout_tab_legato(
+                                tab_staff, src_str, src_x, tgt_x, *kind, slide_stroke,
+                            ) {
+                                draw_tab_legato(svg, &legato_layout);
                             }
                         }
                     }
@@ -1465,5 +1530,126 @@ mod tests {
         // 1 beam polygon + 1 TAB clef path = 2 SVG elements with polygon/path
         assert_eq!(svg.matches("<polygon ").count(), 1, "1 beam polygon");
         assert_eq!(svg.matches("<path ").count(), 1, "1 TAB clef path (no flags on beamed)");
+    }
+
+    // --- Hammer-on / Pull-off tests ---
+
+    #[test]
+    fn hammer_on_adds_arc_path_and_h_label() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .hammer()
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef path + 1 arc path = 2 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 2,
+            "should have TAB clef + 1 hammer arc path"
+        );
+        assert!(svg.contains(">H</text>"), "should show 'H' label");
+    }
+
+    #[test]
+    fn pull_off_adds_arc_path_and_p_label() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .pull()
+            .next()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            svg.matches("<path ").count(), 2,
+            "should have TAB clef + 1 pull-off arc path"
+        );
+        assert!(svg.contains(">P</text>"), "should show 'P' label");
+    }
+
+    #[test]
+    fn no_legato_without_method_call() {
+        let svg_no = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .next()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            svg_no.matches("<path ").count(), 1,
+            "without hammer/pull, only TAB clef path"
+        );
+        assert!(!svg_no.contains(">H</text>"));
+        assert!(!svg_no.contains(">P</text>"));
+    }
+
+    #[test]
+    fn hammer_differs_from_pull() {
+        let svg_h = TabScoreBuilder::guitar()
+            .fret(1, 5).hammer().next().fret(1, 7)
+            .end_barline()
+            .render_svg();
+        let svg_p = TabScoreBuilder::guitar()
+            .fret(1, 5).pull().next().fret(1, 7)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_h, svg_p, "hammer and pull should produce different SVG");
+    }
+
+    #[test]
+    fn hammer_on_arc_is_unfilled() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5).hammer().next().fret(1, 7)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("fill=\"none\""),
+            "arc should be stroke-only (unfilled)"
+        );
+    }
+
+    #[test]
+    fn consecutive_hammer_pull_chain() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5).hammer().next()
+            .fret(1, 7).pull().next()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 2 arcs = 3 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 3,
+            "chain of hammer + pull should produce 2 arc paths + 1 TAB clef"
+        );
+        assert!(svg.contains(">H</text>"), "should show H");
+        assert!(svg.contains(">P</text>"), "should show P");
+    }
+
+    #[test]
+    fn hammer_on_rest_skips_no_target() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5).hammer().next()
+            .rest()
+            .end_barline()
+            .render_svg();
+        // No arc because the next event is a rest, not a fret
+        assert_eq!(
+            svg.matches("<path ").count(), 1,
+            "hammer before rest should not produce an arc"
+        );
+    }
+
+    #[test]
+    fn legato_with_chord_draws_arc_per_matching_string() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5).fret(2, 5).hammer().next()
+            .fret(1, 7).fret(2, 7)
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 2 arcs (one per string) = 3 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 3,
+            "chord hammer should produce 1 arc per matching string + TAB clef"
+        );
     }
 }
