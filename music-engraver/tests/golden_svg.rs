@@ -25,6 +25,7 @@ use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
 use music_engraver::score::multi_staff::MultiStaffScore;
+use music_engraver::layout::tab_bend::BendAmount;
 use music_engraver::score::tab::TabScoreBuilder;
 use music_engraver::score::ScoreBuilder;
 
@@ -817,6 +818,41 @@ fn golden_tab_hammer_pull() {
     assert_golden("tab_hammer_pull", &build_tab_hammer_pull());
 }
 
+fn build_tab_bends() -> String {
+    TabScoreBuilder::guitar()
+        .measures_per_system(2)
+        .system_width_fu(10000.0)
+        // Measure 1: full bend, half bend
+        .fret(2, 8)
+        .bend(BendAmount::Full)
+        .next()
+        .fret(1, 7)
+        .bend(BendAmount::Half)
+        .next()
+        .fret(3, 9)
+        .next()
+        .fret(1, 5)
+        .barline()
+        // Measure 2: quarter bend, chord bend
+        .fret(3, 7)
+        .bend(BendAmount::Quarter)
+        .next()
+        .fret(1, 10)
+        .fret(2, 10)
+        .bend(BendAmount::Full)
+        .next()
+        .fret(1, 12)
+        .next()
+        .fret(1, 7)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_bends() {
+    assert_golden("tab_bends", &build_tab_bends());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -846,6 +882,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_score",
         "tab_slides",
         "tab_hammer_pull",
+        "tab_bends",
     ];
 
     for name in &names {

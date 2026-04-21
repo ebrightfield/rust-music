@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="294" height="49" viewBox="-250 -250 10500 1750">
+  <line x1="0" y1="0" x2="10000" y2="0" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="250" x2="10000" y2="250" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="500" x2="10000" y2="500" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="750" x2="10000" y2="750" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1000" x2="10000" y2="1000" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1250" x2="10000" y2="1250" stroke="black" stroke-width="32.5"/>
+  <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 625)"/>
+  <rect x="997.5" y="842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1120" y="1000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">8</text>
+  <rect x="2292.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="2415" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <rect x="3587.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3710" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">9</text>
+  <rect x="4882.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5005" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">5</text>
+<path d="M1120,775 Q1207.5,687.5 1120,550" fill="none" stroke="black" stroke-width="30"/>
+<path d="M1120,487.5 L1082.5,550 L1157.5,550 Z" fill="black" stroke="none"/>
+  <text x="1120" y="446.25" font-family="sans-serif" font-size="137.5" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">full</text>
+<path d="M2415,1025 Q2502.5,937.5 2415,800" fill="none" stroke="black" stroke-width="30"/>
+<path d="M2415,737.5 L2377.5,800 L2452.5,800 Z" fill="black" stroke="none"/>
+  <text x="2415" y="696.25" font-family="sans-serif" font-size="137.5" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">1/2</text>
+  <line x1="5375" y1="0" x2="5375" y2="1250" stroke="black" stroke-width="40"/>
+  <rect x="5622.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5745" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+  <rect x="6795" y="1092.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="7040" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">10</text>
+  <rect x="6795" y="842.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="7040" y="1000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">10</text>
+  <rect x="8090" y="1092.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8335" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">12</text>
+  <rect x="9507.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="9630" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">7</text>
+<path d="M5745,525 Q5832.5,437.5 5745,300" fill="none" stroke="black" stroke-width="30"/>
+<path d="M5745,237.5 L5707.5,300 L5782.5,300 Z" fill="black" stroke="none"/>
+  <text x="5745" y="196.25" font-family="sans-serif" font-size="137.5" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">1/4</text>
+<path d="M7040,1025 Q7127.5,937.5 7040,800" fill="none" stroke="black" stroke-width="30"/>
+<path d="M7040,737.5 L7002.5,800 L7077.5,800 Z" fill="black" stroke="none"/>
+  <text x="7040" y="696.25" font-family="sans-serif" font-size="137.5" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">full</text>
+<path d="M7040,775 Q7127.5,687.5 7040,550" fill="none" stroke="black" stroke-width="30"/>
+<path d="M7040,487.5 L7002.5,550 L7077.5,550 Z" fill="black" stroke="none"/>
+  <text x="7040" y="446.25" font-family="sans-serif" font-size="137.5" fill="black" text-anchor="middle" font-weight="bold" font-style="normal">full</text>
+  <line x1="10000" y1="0" x2="10000" y2="1250" stroke="black" stroke-width="40"/>
+  <line x1="10100" y1="0" x2="10100" y2="1250" stroke="black" stroke-width="125"/>
+</svg>

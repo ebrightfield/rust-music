@@ -24,11 +24,13 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::layout::tab_bend::{layout_tab_bend, BendAmount};
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
+use crate::render::tab_bend_renderer::draw_tab_bend;
 use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_slide_renderer::draw_tab_slide;
 use crate::render::{SvgWriter, TextStyle};
@@ -41,11 +43,13 @@ enum TabEvent {
     /// `duration_log2`: optional rhythm (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
     /// `slide_out`: when true, draw a slide line from this event to the next.
     /// `legato_out`: when Some, draw a hammer-on/pull-off arc to the next event.
+    /// `bend`: when Some, draw a bend arrow above the fret number(s).
     Fret {
         frets: Vec<(u8, u8)>,
         duration_log2: Option<u8>,
         slide_out: bool,
         legato_out: Option<LegatoKind>,
+        bend: Option<BendAmount>,
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
@@ -98,6 +102,8 @@ pub struct TabScoreBuilder {
     pending_slide: bool,
     /// When Some, the next flushed Fret event gets `legato_out` set.
     pending_legato: Option<LegatoKind>,
+    /// When Some, the next flushed Fret event gets `bend` set.
+    pending_bend: Option<BendAmount>,
 }
 
 impl TabScoreBuilder {
@@ -116,6 +122,7 @@ impl TabScoreBuilder {
             beam_group_events: Vec::new(),
             pending_slide: false,
             pending_legato: None,
+            pending_bend: None,
         }
     }
 
@@ -157,11 +164,13 @@ impl TabScoreBuilder {
                 let duration_log2 = self.pending_duration.take();
                 let slide_out = std::mem::take(&mut self.pending_slide);
                 let legato_out = self.pending_legato.take();
+                let bend = self.pending_bend.take();
                 self.current_events.push(TabEvent::Fret {
                     frets,
                     duration_log2,
                     slide_out,
                     legato_out,
+                    bend,
                 });
             }
         }
@@ -297,6 +306,20 @@ impl TabScoreBuilder {
             self.pending_legato = Some(LegatoKind::PullOff);
         } else if let Some(TabEvent::Fret { legato_out, .. }) = self.current_events.last_mut() {
             *legato_out = Some(LegatoKind::PullOff);
+        }
+        self
+    }
+
+    /// Mark the current fret event for a bend arrow above the fret number(s).
+    ///
+    /// A curved arrow with the bend amount label (e.g. "full", "1/2") is drawn
+    /// above the fret number on each string. The bend arrow appears at the
+    /// fret position (in-place bend, not between two events like slides).
+    pub fn bend(mut self, amount: BendAmount) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_bend = Some(amount);
+        } else if let Some(TabEvent::Fret { bend, .. }) = self.current_events.last_mut() {
+            *bend = Some(amount);
         }
         self
     }
@@ -626,7 +649,24 @@ fn draw_tab_measure(
         }
     }
 
-    // Third pass: draw hammer-on/pull-off arcs between consecutive fret events
+    // Third pass: draw bend arrows at fret events with bend amount
+    for (e_idx, event) in measure.events.iter().enumerate() {
+        if let TabEvent::Fret { frets, bend: Some(amount), .. } = event {
+            let event_x = if event_count == 1 {
+                measure_x + padding + usable_width / 2.0
+            } else {
+                measure_x + padding + e_idx as f64 * spacing
+            };
+
+            let bend_stroke = config.stem_thickness_fu();
+            for &(string, _) in frets {
+                let bend_layout = layout_tab_bend(tab_staff, string, event_x, *amount, bend_stroke);
+                draw_tab_bend(svg, &bend_layout);
+            }
+        }
+    }
+
+    // Fourth pass: draw hammer-on/pull-off arcs between consecutive fret events
     for i in 0..event_count.saturating_sub(1) {
         if let TabEvent::Fret { frets: src_frets, legato_out: Some(kind), .. } = &measure.events[i] {
             if let Some(target_idx) = (i + 1..event_count).find(|&j| {
@@ -1651,5 +1691,109 @@ mod tests {
             svg.matches("<path ").count(), 3,
             "chord hammer should produce 1 arc per matching string + TAB clef"
         );
+    }
+
+    // --- Bend tests ---
+
+    #[test]
+    fn bend_adds_arrow_paths_and_text() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 1 bend curve + 1 arrowhead = 3 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 3,
+            "should have TAB clef + bend curve + arrowhead = 3 paths"
+        );
+        assert!(svg.contains(">full</text>"), "should show 'full' label");
+    }
+
+    #[test]
+    fn no_bend_without_method_call() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // Only 1 path: TAB clef
+        assert_eq!(
+            svg.matches("<path ").count(), 1,
+            "without bend, only TAB clef path"
+        );
+        assert!(!svg.contains(">full</text>"));
+        assert!(!svg.contains(">1/2</text>"));
+    }
+
+    #[test]
+    fn half_bend_shows_half_label() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend(BendAmount::Half)
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains(">1/2</text>"), "should show '1/2' label");
+    }
+
+    #[test]
+    fn quarter_bend_shows_quarter_label() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend(BendAmount::Quarter)
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains(">1/4</text>"), "should show '1/4' label");
+    }
+
+    #[test]
+    fn different_bend_amounts_produce_different_svg() {
+        let svg_full = TabScoreBuilder::guitar()
+            .fret(1, 7).bend(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        let svg_half = TabScoreBuilder::guitar()
+            .fret(1, 7).bend(BendAmount::Half)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_full, svg_half, "full and half bends should produce different SVG");
+    }
+
+    #[test]
+    fn bend_on_chord_draws_arrow_per_string() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .fret(2, 7)
+            .bend(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 2×(curve + arrowhead) = 5 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 5,
+            "chord bend on 2 strings: 1 TAB + 2 curves + 2 arrowheads = 5 paths"
+        );
+    }
+
+    #[test]
+    fn bend_arrowhead_is_filled() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains("fill=\"black\""), "arrowhead should be filled black");
+    }
+
+    #[test]
+    fn bend_after_already_flushed_event() {
+        // Call .bend() after .next() — should mark the already-flushed event
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .next()
+            .bend(BendAmount::Full)
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // The .bend() after .next() marks the last flushed event
+        assert!(svg.contains(">full</text>"), "bend after flush should still show label");
     }
 }
