@@ -853,6 +853,52 @@ fn golden_tab_bends() {
     assert_golden("tab_bends", &build_tab_bends());
 }
 
+fn build_volta_brackets() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Sharps(0))
+        .time_signature(4, 4)
+        .measures_per_system(3)
+        // Measure 1: plain opening
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        // Measure 2: single-measure 1st ending (both hooks)
+        .volta_start("1.")
+        .note(p("G", 4), Duration::HALF)
+        .note(p("E", 4), Duration::HALF)
+        .volta_end()
+        .barline()
+        // Measure 3: single-measure 2nd ending (both hooks)
+        .volta_start("2.")
+        .note(p("A", 4), Duration::WHOLE)
+        .volta_end()
+        .barline()
+        // Measure 4 (system 2): multi-measure 3rd ending start
+        .volta_start("3.")
+        .note(p("B", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        // Measure 5: multi-measure continuation + end
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .volta_end()
+        .barline()
+        // Measure 6: plain closing
+        .note(p("C", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_volta_brackets() {
+    assert_golden("volta_brackets", &build_volta_brackets());
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -883,6 +929,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_slides",
         "tab_hammer_pull",
         "tab_bends",
+        "volta_brackets",
     ];
 
     for name in &names {
