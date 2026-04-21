@@ -516,6 +516,54 @@ fn build_chord_symbols() -> String {
         .render_svg()
 }
 
+/// Multi-staff (grand staff) with cross-system ties and slurs.
+/// 4 measures across 2 systems, treble has tie across system break,
+/// bass has slur across system break.
+fn build_multi_staff_cross_system() -> String {
+    let treble = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Sharps(2))
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F#", 5), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .barline()
+        // Last note of system 1 — tie forward across system break
+        .note(p("A", 5), Duration::HALF)
+        .note(p("A", 5), Duration::HALF)
+        .tie()
+        .barline()
+        // First note of system 2 — tie target
+        .note(p("A", 5), Duration::HALF)
+        .note(p("D", 5), Duration::HALF)
+        .barline()
+        .note(p("E", 5), Duration::WHOLE)
+        .end_barline();
+
+    let bass = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .key_signature(KeySignature::Sharps(2))
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("D", 3), Duration::WHOLE)
+        .barline()
+        // Slur across system break
+        .note(p("A", 2), Duration::HALF)
+        .slur_start()
+        .note(p("B", 2), Duration::HALF)
+        .barline()
+        .note(p("D", 3), Duration::HALF)
+        .slur_end()
+        .note(p("A", 2), Duration::HALF)
+        .barline()
+        .note(p("D", 3), Duration::WHOLE)
+        .end_barline();
+
+    MultiStaffScore::grand_staff(treble, bass).render_svg()
+}
+
 // ---------------------------------------------------------------------------
 // Test runner
 // ---------------------------------------------------------------------------
@@ -620,6 +668,14 @@ fn golden_expression_text() {
     assert_golden("expression_text", &build_expression_text());
 }
 
+#[test]
+fn golden_multi_staff_cross_system() {
+    assert_golden(
+        "multi_staff_cross_system",
+        &build_multi_staff_cross_system(),
+    );
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -644,6 +700,7 @@ fn golden_baselines_are_valid_svgs() {
         "hairpins",
         "cross_system_ties",
         "expression_text",
+        "multi_staff_cross_system",
     ];
 
     for name in &names {

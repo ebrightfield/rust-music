@@ -662,3 +662,9 @@
 - Verified: `cargo test -p music-engraver --lib` — 1069 unit tests pass (5 new multi_staff tests: cross-system tie draws half-ties, cross-system slur draws half-slurs, cross-system hairpin draws half-wedges, spans only affect owning stave, no spans with single system). `cargo test -p music-engraver --test golden_svg` — 21 golden tests pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
 - Next: Add a golden-SVG test for multi-staff cross-system ties, or begin other post-v1 features (optimal line breaking, tablature polish).
 - Open issues: Greedy packing not globally optimal.
+
+## 2026-04-21 — Post-v1, golden-SVG corpus expansion (multi-staff cross-system spans)
+- Did: Added `golden_multi_staff_cross_system` golden-SVG regression test. 4-measure piano grand staff score across 2 systems: treble has cross-system tie on A5 (half-ties rendered), bass has cross-system slur from A2 through D3. Exercises brace connector, joined barlines, cross-system tie half-curves, cross-system slur half-curves — all in multi-staff context. Baseline: 28152 bytes, 37 paths, 51 lines. Updated `golden_baselines_are_valid_svgs` name list (now 21 entries). Total golden corpus: 21 baselines.
+- Verified: `cargo test -p music-engraver` — 1069 unit + 22 golden + 3 integration + 5 doc-tests = 1099 tests, all pass. `cargo clippy -p music-engraver --all-targets` — 0 warnings from music-engraver. `cargo check --workspace` passes.
+- Next: Begin other post-v1 features: optimal Knuth-Plass/Gourlay line breaking (replace greedy packer), or measure number golden test, or tablature polish (bends, slides).
+- Open issues: Greedy packing not globally optimal.
