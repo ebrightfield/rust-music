@@ -16,6 +16,7 @@ use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
 use music_engraver::layout::arpeggio::ArpeggioDirection;
+use music_engraver::layout::breath::BreathMark;
 use music_engraver::layout::articulation::Articulation;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::grace::GraceNoteKind;
@@ -1620,6 +1621,98 @@ fn golden_arpeggios() {
     assert_golden("arpeggios", &svg);
 }
 
+// --- Breath marks ---------------------------------------------------------
+
+fn build_breath_marks() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: comma breaths between ascending notes
+        .note(p("C", 4), Duration::QTR)
+        .breath_mark(BreathMark::Comma)
+        .note(p("E", 4), Duration::QTR)
+        .breath_mark(BreathMark::Comma)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .barline()
+        // Measure 2: tick + caesura
+        .note(p("D", 5), Duration::QTR)
+        .breath_mark(BreathMark::Tick)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("A", 4), Duration::HALF)
+        .breath_mark(BreathMark::Caesura)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_breath_marks() {
+    let svg = build_breath_marks();
+
+    // Structural assertions: breath marks add path elements
+    let path_count = svg.matches("<path ").count();
+    // 8 notes + 1 clef + 5 breath marks = at least 14 paths
+    assert!(
+        path_count >= 14,
+        "should have ≥14 paths (notes + clef + breath marks): {path_count}"
+    );
+
+    // All 3 breath mark types should produce distinct glyphs
+    let comma_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::WHOLE)
+        .breath_mark(BreathMark::Comma)
+        .end_barline()
+        .render_svg();
+    let tick_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::WHOLE)
+        .breath_mark(BreathMark::Tick)
+        .end_barline()
+        .render_svg();
+    let caesura_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::WHOLE)
+        .breath_mark(BreathMark::Caesura)
+        .end_barline()
+        .render_svg();
+
+    assert_ne!(comma_only, tick_only, "comma and tick should differ");
+    assert_ne!(tick_only, caesura_only, "tick and caesura should differ");
+    assert_ne!(comma_only, caesura_only, "comma and caesura should differ");
+
+    // Breath marks should add paths compared to a score without them
+    let no_breath = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg();
+    let with_breath = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::WHOLE)
+        .breath_mark(BreathMark::Comma)
+        .end_barline()
+        .render_svg();
+    let no_breath_paths = no_breath.matches("<path ").count();
+    let with_breath_paths = with_breath.matches("<path ").count();
+    assert_eq!(
+        with_breath_paths,
+        no_breath_paths + 1,
+        "breath mark should add exactly 1 path: {} vs {}",
+        with_breath_paths,
+        no_breath_paths
+    );
+
+    assert_golden("breath_marks", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1665,6 +1758,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_muted_strings",
         "tab_let_ring",
         "arpeggios",
+        "breath_marks",
     ];
 
     for name in &names {
