@@ -1169,6 +1169,52 @@ fn golden_pedal_marks() {
     assert_golden("pedal_marks", &svg);
 }
 
+fn build_tab_pre_bends() -> String {
+    TabScoreBuilder::guitar()
+        .measures_per_system(2)
+        .system_width_fu(10000.0)
+        // Measure 1: full pre-bend, half pre-bend
+        .fret(2, 8)
+        .pre_bend(BendAmount::Full)
+        .next()
+        .fret(1, 7)
+        .pre_bend(BendAmount::Half)
+        .next()
+        .fret(3, 9)
+        .next()
+        .fret(1, 5)
+        .barline()
+        // Measure 2: pre-bend→release sequence, chord pre-bend
+        .fret(1, 7)
+        .pre_bend(BendAmount::Full)
+        .next()
+        .fret(1, 5)
+        .release()
+        .next()
+        .fret(1, 10)
+        .fret(2, 10)
+        .pre_bend(BendAmount::Half)
+        .next()
+        .fret(1, 12)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_pre_bends() {
+    let svg = build_tab_pre_bends();
+    // Pre-bends produce straight vertical arrows (lines), not curves
+    assert!(svg.contains(">full</text>"), "should have 'full' pre-bend label");
+    assert!(svg.contains(">1/2</text>"), "should have '1/2' pre-bend label");
+    // Release bends produce downward curve paths with arrowheads
+    let filled_paths = svg.matches("fill=\"black\"").count();
+    assert!(
+        filled_paths >= 4,
+        "should have at least 4 filled arrowheads (pre-bends + release), got {filled_paths}"
+    );
+    assert_golden("tab_pre_bends", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1206,6 +1252,7 @@ fn golden_baselines_are_valid_svgs() {
         "ottava_brackets",
         "cross_system_ottava",
         "pedal_marks",
+        "tab_pre_bends",
     ];
 
     for name in &names {
