@@ -15,6 +15,7 @@ use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
+use music_engraver::layout::arpeggio::ArpeggioDirection;
 use music_engraver::layout::articulation::Articulation;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::grace::GraceNoteKind;
@@ -1540,6 +1541,85 @@ fn golden_tab_let_ring() {
     assert_golden("tab_let_ring", &svg);
 }
 
+fn build_arpeggios() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: upward arpeggio on C major triad + plain quarter
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::HALF,
+        )
+        .arpeggio(ArpeggioDirection::Up)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .barline()
+        // Measure 2: downward arpeggio on D minor triad + single-note arpeggio
+        .chord(
+            vec![p("D", 4), p("F", 4), p("A", 4)],
+            Duration::HALF,
+        )
+        .arpeggio(ArpeggioDirection::Down)
+        .note(p("E", 5), Duration::QTR)
+        .arpeggio(ArpeggioDirection::Up)
+        .rest(Duration::QTR)
+        .barline()
+        // Measure 3: wide voicing + downward arpeggio on two-note chord
+        .chord(
+            vec![p("C", 4), p("G", 4), p("E", 5)],
+            Duration::HALF,
+        )
+        .arpeggio(ArpeggioDirection::Up)
+        .chord(
+            vec![p("B", 4), p("D", 5)],
+            Duration::HALF,
+        )
+        .arpeggio(ArpeggioDirection::Down)
+        .barline()
+        // Measure 4: whole-note 4-note chord with arpeggio
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4), p("B", 4)],
+            Duration::WHOLE,
+        )
+        .arpeggio(ArpeggioDirection::Up)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_arpeggios() {
+    let svg = build_arpeggios();
+
+    // Structural assertions: arpeggios use scale(1,...) transforms
+    let scale_count = svg.matches("scale(1,").count();
+    assert!(scale_count >= 5, "should have ≥5 arpeggio scale transforms: {scale_count}");
+
+    // More paths than a plain chord score (arpeggio glyphs add paths)
+    let paths = svg.matches("<path ").count();
+    assert!(paths >= 10, "should have ≥10 paths: {paths}");
+
+    // Verify up vs down produce different SVG
+    let up_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+        .arpeggio(ArpeggioDirection::Up)
+        .end_barline()
+        .render_svg();
+    let down_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+        .arpeggio(ArpeggioDirection::Down)
+        .end_barline()
+        .render_svg();
+    assert_ne!(up_only, down_only, "up and down arpeggios should differ");
+
+    assert_golden("arpeggios", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1584,6 +1664,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_palm_mute",
         "tab_muted_strings",
         "tab_let_ring",
+        "arpeggios",
     ];
 
     for name in &names {
