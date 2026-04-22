@@ -1,7 +1,8 @@
 /// Render articulations via ScoreBuilder API.
 ///
 /// Demonstrates all 6 articulation types on notes with varying stem
-/// directions across 2 systems (4 measures) in C major 4/4.
+/// directions across 2 systems (4 measures) in C major 4/4. Also
+/// shows stacked articulations (multiple on a single note).
 use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
@@ -43,11 +44,13 @@ fn main() {
         .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::HALF)
         .articulation(Articulation::Marcato)
         .barline()
-        // Measure 4: high notes with fermata + staccatissimo
+        // Measure 4: stacked articulations — multiple per note
         .note(Pitch::new(Note::G, 5).expect("valid pitch"), Duration::HALF)
+        .articulation(Articulation::Staccato)
         .articulation(Articulation::Fermata)
         .note(Pitch::new(Note::F, 5).expect("valid pitch"), Duration::HALF)
-        .articulation(Articulation::Staccatissimo)
+        .articulation(Articulation::Staccato)
+        .articulation(Articulation::Accent)
         .end_barline()
         .render_svg();
 
@@ -68,9 +71,9 @@ fn main() {
     );
 
     // Should have articulation glyphs (each articulation adds a path)
-    // 14 notes + 2 clefs + 10 articulations = at least 26 paths
+    // 14 notes + 2 clefs + 12 articulations (including 2 stacked pairs) = at least 22 paths
     assert!(
-        path_count >= 20,
-        "expected at least 20 paths (notes + clefs + articulations), got {path_count}"
+        path_count >= 22,
+        "expected at least 22 paths (notes + clefs + articulations), got {path_count}"
     );
 }

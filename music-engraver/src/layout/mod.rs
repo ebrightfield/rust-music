@@ -84,7 +84,8 @@ pub use multi_staff::{
     MultiStaffLayout, StaffGroup,
 };
 pub use articulation::{
-    layout_articulation, Articulation, ArticulationLayout, ArticulationPlacement,
+    layout_articulation, layout_articulation_stack, Articulation, ArticulationLayout,
+    ArticulationPlacement,
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use expression::{layout_expression, ExpressionLayout};

@@ -372,7 +372,7 @@ impl ScoreBuilder {
             ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
         ) = self.current_events.last_mut()
         {
-            annotations.articulation = Some(artic);
+            annotations.articulations.push(artic);
         }
         self
     }

@@ -285,7 +285,8 @@ fn build_articulations() -> String {
         .note(p("G", 4), Duration::QTR)
         .articulation(Articulation::Accent)
         .note(p("A", 4), Duration::QTR)
-        .articulation(Articulation::Marcato)
+        .articulation(Articulation::Staccato)
+        .articulation(Articulation::Fermata)
         .end_barline()
         .render_svg()
 }

@@ -75,6 +75,11 @@ impl Articulation {
 /// articulation.
 const ARTICULATION_OFFSET_SS: f64 = 0.5;
 
+/// Vertical spacing (in staff spaces) between stacked articulations.
+/// Each successive articulation in a stack is placed this far from the
+/// previous one, moving away from the notehead.
+const ARTICULATION_STACK_SPACING_SS: f64 = 0.6;
+
 /// Computed articulation position.
 #[derive(Clone, Debug)]
 pub struct ArticulationLayout {
@@ -137,6 +142,100 @@ pub fn layout_articulation(
         glyph,
         placement,
     }
+}
+
+/// Compute positions for multiple stacked articulations on a single note.
+///
+/// Articulations are stacked outward from the notehead: the first in the list
+/// is closest to the note, each subsequent one is placed further away.
+/// Fermata is always placed above, even when other articulations are below.
+/// If the list contains a fermata mixed with non-fermata articulations,
+/// the fermata is separated and placed above, while the rest follow the
+/// normal stem-direction rule.
+pub fn layout_articulation_stack(
+    articulations: &[Articulation],
+    notehead_x: f64,
+    note_staff_position: i8,
+    stem_dir: StemDirection,
+    staff: &StaffLayout,
+) -> Vec<ArticulationLayout> {
+    if articulations.is_empty() {
+        return Vec::new();
+    }
+
+    // Separate fermata(s) from other articulations since fermata always goes above
+    let mut normal: Vec<Articulation> = Vec::new();
+    let mut fermatas: Vec<Articulation> = Vec::new();
+    for &a in articulations {
+        if a == Articulation::Fermata {
+            fermatas.push(a);
+        } else {
+            normal.push(a);
+        }
+    }
+
+    let mut result = Vec::with_capacity(articulations.len());
+    let stack_spacing = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+
+    // Place normal articulations on the stem-opposite side, stacking outward
+    if !normal.is_empty() {
+        let first_layout =
+            layout_articulation(normal[0], notehead_x, note_staff_position, stem_dir, staff);
+        let base_y = first_layout.y;
+        let placement = first_layout.placement;
+        result.push(first_layout);
+
+        for (i, &artic) in normal.iter().enumerate().skip(1) {
+            let glyph = artic.glyph(placement);
+            let y = match placement {
+                ArticulationPlacement::Above => base_y - (i as f64) * stack_spacing,
+                ArticulationPlacement::Below => base_y + (i as f64) * stack_spacing,
+            };
+            result.push(ArticulationLayout {
+                x: notehead_x,
+                y,
+                glyph,
+                placement,
+            });
+        }
+    }
+
+    // Place fermata(s) above, stacked above any above-placement articulations
+    if !fermatas.is_empty() {
+        // Find the topmost y already used (smallest y value for Above placement)
+        let topmost_above = result
+            .iter()
+            .filter(|l| l.placement == ArticulationPlacement::Above)
+            .map(|l| l.y)
+            .fold(f64::INFINITY, f64::min);
+
+        let fermata_base_y = if topmost_above.is_finite() {
+            // Stack above existing above-articulations
+            topmost_above - stack_spacing
+        } else {
+            // No above articulations yet — use the normal layout position
+            let fl = layout_articulation(
+                Articulation::Fermata,
+                notehead_x,
+                note_staff_position,
+                stem_dir,
+                staff,
+            );
+            fl.y
+        };
+
+        for (i, &f) in fermatas.iter().enumerate() {
+            let glyph = f.glyph(ArticulationPlacement::Above);
+            result.push(ArticulationLayout {
+                x: notehead_x,
+                y: fermata_base_y - (i as f64) * stack_spacing,
+                glyph,
+                placement: ArticulationPlacement::Above,
+            });
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -349,5 +448,172 @@ mod tests {
             clearance_line,
             clearance_space
         );
+    }
+
+    // --- Stacked articulation tests ---
+
+    #[test]
+    fn stack_empty_returns_empty() {
+        let staff = test_staff();
+        let result =
+            layout_articulation_stack(&[], 100.0, 4, StemDirection::Up, &staff);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn stack_single_matches_layout_articulation() {
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let single =
+            layout_articulation(Articulation::Staccato, 100.0, 4, StemDirection::Up, &staff);
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0].x, single.x);
+        assert!((stack[0].y - single.y).abs() < 0.001);
+        assert_eq!(stack[0].glyph, single.glyph);
+        assert_eq!(stack[0].placement, single.placement);
+    }
+
+    #[test]
+    fn stack_two_below_second_further_from_note() {
+        let staff = test_staff();
+        // Stem up → articulations below → higher y = further from note
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::Accent],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert!(
+            stack[1].y > stack[0].y,
+            "second below-articulation should be further from note: {} > {}",
+            stack[1].y,
+            stack[0].y
+        );
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::ArticAccentBelow);
+    }
+
+    #[test]
+    fn stack_two_above_second_further_from_note() {
+        let staff = test_staff();
+        // Stem down → articulations above → lower y = further from note
+        let stack = layout_articulation_stack(
+            &[Articulation::Tenuto, Articulation::Marcato],
+            100.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert!(
+            stack[1].y < stack[0].y,
+            "second above-articulation should be further from note: {} < {}",
+            stack[1].y,
+            stack[0].y
+        );
+        assert_eq!(stack[0].glyph, Glyph::ArticTenutoAbove);
+        assert_eq!(stack[1].glyph, Glyph::ArticMarcatoAbove);
+    }
+
+    #[test]
+    fn stack_fermata_with_staccato_separates_placement() {
+        let staff = test_staff();
+        // Stem up: staccato goes below, fermata goes above
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::FermataAbove);
+    }
+
+    #[test]
+    fn stack_fermata_above_staccato_below_non_overlapping() {
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        // Fermata (above) should have lower y than staccato (below)
+        assert!(
+            stack[1].y < stack[0].y,
+            "fermata above ({}) should have lower y than staccato below ({})",
+            stack[1].y,
+            stack[0].y
+        );
+    }
+
+    #[test]
+    fn stack_three_articulations_all_spaced_apart() {
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::Accent, Articulation::Tenuto],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 3);
+        // All below (stem up), each further from note
+        assert!(stack[1].y > stack[0].y);
+        assert!(stack[2].y > stack[1].y);
+        // Spacing should be consistent
+        let gap1 = stack[1].y - stack[0].y;
+        let gap2 = stack[2].y - stack[1].y;
+        assert!(
+            (gap1 - gap2).abs() < 0.001,
+            "spacing between stacked articulations should be uniform: {} vs {}",
+            gap1,
+            gap2
+        );
+    }
+
+    #[test]
+    fn stack_all_share_same_x() {
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::Accent, Articulation::Fermata],
+            250.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        for layout in &stack {
+            assert_eq!(layout.x, 250.0, "all stacked articulations should share x");
+        }
+    }
+
+    #[test]
+    fn stack_fermata_only_behaves_like_single() {
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let single =
+            layout_articulation(Articulation::Fermata, 100.0, 4, StemDirection::Up, &staff);
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Above);
+        assert!((stack[0].y - single.y).abs() < 0.001);
     }
 }

@@ -47,9 +47,10 @@ pub struct NoteAnnotations {
     pub tempo_mark: Option<TempoMark>,
     /// Optional expression text displayed below the staff in italic (e.g. "dolce").
     pub expression: Option<String>,
-    /// Optional articulation marking (staccato, tenuto, accent, marcato, etc.)
-    /// placed near the notehead on the opposite side from the stem.
-    pub articulation: Option<Articulation>,
+    /// Articulation markings (staccato, tenuto, accent, marcato, etc.)
+    /// placed near the notehead. Multiple articulations stack outward from
+    /// the note (e.g., staccato + accent = portato accent).
+    pub articulations: Vec<Articulation>,
     /// Optional grace note preceding the principal note.
     /// Tuple of (grace note staff position, grace note kind).
     pub grace_note: Option<(i8, GraceNoteKind)>,

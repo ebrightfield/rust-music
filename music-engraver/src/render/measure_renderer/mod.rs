@@ -24,7 +24,7 @@ use crate::layout::lyric::layout_lyric;
 use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::layout::expression::layout_expression;
 use crate::layout::rehearsal::layout_rehearsal_mark;
-use crate::layout::articulation::layout_articulation;
+use crate::layout::articulation::layout_articulation_stack;
 use crate::layout::tempo::layout_tempo_mark;
 use crate::layout::grace::layout_grace_note;
 use crate::render::articulation_renderer::draw_articulation;
@@ -208,13 +208,20 @@ fn draw_note_event(
         draw_dots(svg, staff, font, x, advance, dot_pos, note.dots)?;
     }
 
-    // Draw articulation near the notehead if present
-    if let Some(artic) = note.annotations.articulation {
+    // Draw articulation(s) near the notehead if present
+    if !note.annotations.articulations.is_empty() {
         let stem_dir = direction.unwrap_or(StemDirection::Up);
         let note_center_x = x + advance / 2.0;
-        let artic_layout =
-            layout_articulation(artic, note_center_x, position, stem_dir, staff);
-        draw_articulation(svg, font, &artic_layout)?;
+        let artic_layouts = layout_articulation_stack(
+            &note.annotations.articulations,
+            note_center_x,
+            position,
+            stem_dir,
+            staff,
+        );
+        for artic_layout in &artic_layouts {
+            draw_articulation(svg, font, artic_layout)?;
+        }
     }
 
     // Draw dynamic marking below the staff if present
@@ -430,8 +437,8 @@ fn draw_chord_event(
         }
     }
 
-    // Draw articulation near the chord if present (uses outer note position)
-    if let Some(artic) = chord.annotations.articulation {
+    // Draw articulation(s) near the chord if present (uses outer note position)
+    if !chord.annotations.articulations.is_empty() {
         let chord_center_x = x + advance / 2.0;
         // Articulation attaches to the note on the opposite side from the stem:
         // stem-up → articulation below → use lowest note; stem-down → above → use highest
@@ -439,9 +446,16 @@ fn draw_chord_event(
             StemDirection::Up => chord.staff_positions.iter().copied().min().unwrap_or(4),
             StemDirection::Down => chord.staff_positions.iter().copied().max().unwrap_or(4),
         };
-        let artic_layout =
-            layout_articulation(artic, chord_center_x, attach_pos, direction, staff);
-        draw_articulation(svg, font, &artic_layout)?;
+        let artic_layouts = layout_articulation_stack(
+            &chord.annotations.articulations,
+            chord_center_x,
+            attach_pos,
+            direction,
+            staff,
+        );
+        for artic_layout in &artic_layouts {
+            draw_articulation(svg, font, artic_layout)?;
+        }
     }
 
     // Draw dynamic marking below the staff if present

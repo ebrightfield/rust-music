@@ -2335,7 +2335,7 @@
             pitch: p("E", 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
-                articulation: Some(Articulation::Tenuto),
+                articulations: vec![Articulation::Tenuto],
                 ..NoteAnnotations::default()
             },
         };
@@ -2343,7 +2343,103 @@
         let result = convert_event(&event, &clef, &key_sig, None);
         match result {
             MeasureEvent::Note(ne) => {
-                assert_eq!(ne.annotations.articulation, Some(Articulation::Tenuto));
+                assert_eq!(ne.annotations.articulations, vec![Articulation::Tenuto]);
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn stacked_articulations_add_two_paths() {
+        use crate::layout::articulation::Articulation;
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .end_barline()
+            .render_svg();
+        let stacked = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .articulation(Articulation::Accent)
+            .end_barline()
+            .render_svg();
+        let count_single = single.matches("<path").count();
+        let count_stacked = stacked.matches("<path").count();
+        assert_eq!(
+            count_stacked,
+            count_single + 1,
+            "second articulation should add one more path: single={}, stacked={}",
+            count_single,
+            count_stacked
+        );
+    }
+
+    #[test]
+    fn stacked_articulations_differ_from_single() {
+        use crate::layout::articulation::Articulation;
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .end_barline()
+            .render_svg();
+        let stacked = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .articulation(Articulation::Accent)
+            .end_barline()
+            .render_svg();
+        assert_ne!(single, stacked, "stacked should differ from single articulation");
+    }
+
+    #[test]
+    fn stacked_fermata_plus_staccato_adds_two_paths() {
+        use crate::layout::articulation::Articulation;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .articulation(Articulation::Fermata)
+            .end_barline()
+            .render_svg();
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert_eq!(
+            count_with,
+            count_without + 2,
+            "staccato + fermata should add two paths: without={}, with={}",
+            count_without,
+            count_with
+        );
+    }
+
+    #[test]
+    fn stacked_convert_event_preserves_multiple() {
+        use crate::layout::articulation::Articulation;
+        let key_sig = KeySignature::Open;
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                articulations: vec![Articulation::Staccato, Articulation::Accent],
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.articulations.len(), 2);
+                assert_eq!(ne.annotations.articulations[0], Articulation::Staccato);
+                assert_eq!(ne.annotations.articulations[1], Articulation::Accent);
             }
             _ => panic!("expected Note event"),
         }
