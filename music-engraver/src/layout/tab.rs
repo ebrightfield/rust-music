@@ -150,6 +150,33 @@ pub fn layout_fret_number(
     }
 }
 
+/// Layout result for a muted/dead string marker ("x") on a tab staff.
+///
+/// Reuses `FretNumberLayout` with text "x" — the rendering is identical
+/// to a fret number (white background rect + centered bold text) except
+/// the text content indicates the string is muted rather than fretted.
+pub fn layout_muted_string(
+    tab_staff: &TabStaffLayout,
+    string: u8,
+    x: f64,
+) -> FretNumberLayout {
+    let y = tab_staff.string_y(string);
+    let font_size = tab_staff.staff_space * FRET_NUMBER_FONT_SIZE_RATIO;
+
+    // Single-character "x" uses the same sizing as a single-digit fret number.
+    let bg_half_width = font_size * 0.35;
+    let bg_half_height = font_size * 0.45;
+
+    FretNumberLayout {
+        x,
+        y,
+        text: "x".to_string(),
+        font_size,
+        bg_half_width,
+        bg_half_height,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,5 +347,63 @@ mod tests {
         assert!((staff.string_y(6) - 500.0).abs() < f64::EPSILON);
         let fret = layout_fret_number(&staff, 6, 3, 100.0);
         assert!((fret.y - 500.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn muted_string_text_is_x() {
+        let staff = guitar_staff();
+        let layout = layout_muted_string(&staff, 1, 100.0);
+        assert_eq!(layout.text, "x");
+    }
+
+    #[test]
+    fn muted_string_y_matches_string_position() {
+        let staff = guitar_staff();
+        let layout = layout_muted_string(&staff, 3, 100.0);
+        let expected_y = staff.string_y(3);
+        assert!(
+            (layout.y - expected_y).abs() < f64::EPSILON,
+            "muted string y should match string_y"
+        );
+    }
+
+    #[test]
+    fn muted_string_x_preserved() {
+        let staff = guitar_staff();
+        let layout = layout_muted_string(&staff, 1, 500.0);
+        assert!((layout.x - 500.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn muted_string_font_size_matches_fret_number() {
+        let staff = guitar_staff();
+        let muted = layout_muted_string(&staff, 1, 100.0);
+        let fret = layout_fret_number(&staff, 1, 5, 100.0);
+        assert!(
+            (muted.font_size - fret.font_size).abs() < f64::EPSILON,
+            "muted and fret number font sizes should match"
+        );
+    }
+
+    #[test]
+    fn muted_string_bg_same_as_single_digit_fret() {
+        let staff = guitar_staff();
+        let muted = layout_muted_string(&staff, 1, 100.0);
+        let fret = layout_fret_number(&staff, 1, 5, 100.0);
+        assert!(
+            (muted.bg_half_width - fret.bg_half_width).abs() < f64::EPSILON,
+            "muted 'x' should have same background width as single-digit fret"
+        );
+    }
+
+    #[test]
+    fn muted_string_different_strings_have_different_y() {
+        let staff = guitar_staff();
+        let m1 = layout_muted_string(&staff, 1, 100.0);
+        let m6 = layout_muted_string(&staff, 6, 100.0);
+        assert!(
+            (m1.y - m6.y).abs() > 1.0,
+            "different strings should have different y positions"
+        );
     }
 }

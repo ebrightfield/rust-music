@@ -21,7 +21,7 @@
 
 use crate::font::{bravura_font, EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
-use crate::layout::tab::{layout_fret_number, TabStaffLayout};
+use crate::layout::tab::{layout_fret_number, layout_muted_string, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_rhythm::layout_tab_rhythm;
 use crate::layout::tab_bend::{layout_tab_bend, layout_tab_pre_bend, layout_tab_release, BendAmount};
@@ -55,6 +55,7 @@ pub(crate) enum TabEvent {
     /// `vibrato`: when Some, draw a wavy vibrato line above the fret number.
     /// `harmonic`: when true, draw a natural harmonic indicator (○) above the fret number.
     /// `palm_mute`: when true, draw "P.M." text above the fret number(s).
+    /// `muted_strings`: strings displayed as "x" (dead/muted) instead of fret numbers.
     Fret {
         frets: Vec<(u8, u8)>,
         duration_log2: Option<u8>,
@@ -66,6 +67,7 @@ pub(crate) enum TabEvent {
         vibrato: Option<VibratoKind>,
         harmonic: bool,
         palm_mute: bool,
+        muted_strings: Vec<u8>,
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
@@ -130,6 +132,8 @@ pub struct TabScoreBuilder {
     pending_harmonic: bool,
     /// When true, the next flushed Fret event gets `palm_mute = true`.
     pending_palm_mute: bool,
+    /// Accumulated muted string numbers for the current event.
+    current_muted: Vec<u8>,
 }
 
 impl TabScoreBuilder {
@@ -154,6 +158,7 @@ impl TabScoreBuilder {
             pending_vibrato: None,
             pending_harmonic: false,
             pending_palm_mute: false,
+            current_muted: Vec::new(),
         }
     }
 
@@ -185,9 +190,9 @@ impl TabScoreBuilder {
         self
     }
 
-    /// Flush any pending fret entries as a single event.
+    /// Flush any pending fret entries (including muted strings) as a single event.
     fn flush_frets(&mut self) {
-        if !self.current_frets.is_empty() {
+        if !self.current_frets.is_empty() || !self.current_muted.is_empty() {
             if self.in_beam_group {
                 self.flush_beam_frets();
             } else {
@@ -201,6 +206,7 @@ impl TabScoreBuilder {
                 let vibrato = self.pending_vibrato.take();
                 let harmonic = std::mem::take(&mut self.pending_harmonic);
                 let palm_mute = std::mem::take(&mut self.pending_palm_mute);
+                let muted_strings = std::mem::take(&mut self.current_muted);
                 self.current_events.push(TabEvent::Fret {
                     frets,
                     duration_log2,
@@ -212,6 +218,7 @@ impl TabScoreBuilder {
                     vibrato,
                     harmonic,
                     palm_mute,
+                    muted_strings,
                 });
             }
         }
@@ -304,6 +311,8 @@ impl TabScoreBuilder {
             let dur = self.pending_duration.take().unwrap_or(3); // default to eighth
             self.beam_group_events.push((frets, dur));
         }
+        // Muted strings not supported in beam groups — clear to avoid stale data
+        self.current_muted.clear();
     }
 
     /// Mark the most recently added fret event (or the next one to be flushed)
@@ -440,6 +449,19 @@ impl TabScoreBuilder {
         } else if let Some(TabEvent::Fret { palm_mute, .. }) = self.current_events.last_mut() {
             *palm_mute = true;
         }
+        self
+    }
+
+    /// Add a muted/dead string marker ("x") on the given string.
+    ///
+    /// Muted strings are grouped with fret numbers into the same beat event.
+    /// Multiple `.mute()` calls before `.next()` or `.rest()` add multiple
+    /// muted strings to the same event. Commonly used for percussive muted
+    /// strums in guitar tab.
+    ///
+    /// `string` is 1-based (1 = highest pitch = bottom line in TAB).
+    pub fn mute(mut self, string: u8) -> Self {
+        self.current_muted.push(string);
         self
     }
 
@@ -721,11 +743,16 @@ pub(crate) fn draw_tab_measure(
             TabEvent::Fret {
                 frets,
                 duration_log2,
+                muted_strings,
                 ..
             } => {
                 for &(string, fret) in frets {
                     let layout =
                         layout_fret_number(tab_staff, string, fret, event_x);
+                    draw_fret_number(svg, &layout);
+                }
+                for &string in muted_strings {
+                    let layout = layout_muted_string(tab_staff, string, event_x);
                     draw_fret_number(svg, &layout);
                 }
                 // Draw rhythm stem + flag above the staff if duration is set
@@ -2471,6 +2498,96 @@ mod tests {
             svg.contains("P.M."),
             "palm_mute after flush should mark the previous event"
         );
+    }
+
+    #[test]
+    fn mute_renders_x_text() {
+        let svg = TabScoreBuilder::guitar()
+            .mute(1)
+            .mute(2)
+            .mute(3)
+            .end_barline()
+            .render_svg();
+        // Three muted strings should produce 3 "x" text elements
+        let x_count = svg.matches(">x</text>").count();
+        assert_eq!(x_count, 3, "3 muted strings should produce 3 'x' texts");
+    }
+
+    #[test]
+    fn mute_mixed_with_frets() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .mute(5)
+            .mute(6)
+            .end_barline()
+            .render_svg();
+        // Should have fret "0" and two "x" texts
+        assert!(
+            svg.contains(">0</text>"),
+            "should render fret number 0"
+        );
+        let x_count = svg.matches(">x</text>").count();
+        assert_eq!(x_count, 2, "2 muted strings should produce 2 'x' texts");
+    }
+
+    #[test]
+    fn mute_only_no_frets() {
+        let svg = TabScoreBuilder::guitar()
+            .mute(1)
+            .mute(2)
+            .mute(3)
+            .mute(4)
+            .mute(5)
+            .mute(6)
+            .end_barline()
+            .render_svg();
+        let x_count = svg.matches(">x</text>").count();
+        assert_eq!(x_count, 6, "all-mute event should show 6 x markers");
+    }
+
+    #[test]
+    fn mute_differs_from_no_mute() {
+        let base = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .end_barline()
+            .render_svg();
+        let with_mute = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .mute(6)
+            .end_barline()
+            .render_svg();
+        assert_ne!(base, with_mute, "muted string should change SVG output");
+    }
+
+    #[test]
+    fn mute_with_rhythm_stem() {
+        let svg = TabScoreBuilder::guitar()
+            .quarter()
+            .mute(1)
+            .mute(2)
+            .end_barline()
+            .render_svg();
+        // Should have 2 "x" texts and a rhythm stem line
+        let x_count = svg.matches(">x</text>").count();
+        assert_eq!(x_count, 2);
+        // Rhythm stem produces at least one <line element beyond staff lines
+        let line_count = svg.matches("<line ").count();
+        assert!(
+            line_count > 6,
+            "should have staff lines + rhythm stem, got {line_count}"
+        );
+    }
+
+    #[test]
+    fn mute_across_beats_independent() {
+        let svg = TabScoreBuilder::guitar()
+            .mute(1)
+            .next()
+            .mute(6)
+            .end_barline()
+            .render_svg();
+        let x_count = svg.matches(">x</text>").count();
+        assert_eq!(x_count, 2, "two separate beats with muted strings");
     }
 
     #[cfg(feature = "png")]
