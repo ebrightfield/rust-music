@@ -28,12 +28,14 @@ use crate::layout::tab_bend::{layout_tab_bend, layout_tab_pre_bend, layout_tab_r
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_harmonic::layout_tab_harmonic;
+use crate::layout::tab_palm_mute::{layout_tab_palm_mute, layout_tab_palm_mute_dash};
 use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::tab_bend_renderer::{draw_tab_bend, draw_tab_pre_bend, draw_tab_release};
 use crate::render::tab_harmonic_renderer::draw_tab_harmonic;
+use crate::render::tab_palm_mute_renderer::{draw_tab_palm_mute, draw_tab_palm_mute_dash};
 use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_slide_renderer::draw_tab_slide;
 use crate::render::tab_vibrato_renderer::draw_tab_vibrato;
@@ -52,6 +54,7 @@ pub(crate) enum TabEvent {
     /// `release`: when true, draw a downward release arrow.
     /// `vibrato`: when Some, draw a wavy vibrato line above the fret number.
     /// `harmonic`: when true, draw a natural harmonic indicator (○) above the fret number.
+    /// `palm_mute`: when true, draw "P.M." text above the fret number(s).
     Fret {
         frets: Vec<(u8, u8)>,
         duration_log2: Option<u8>,
@@ -62,6 +65,7 @@ pub(crate) enum TabEvent {
         release: bool,
         vibrato: Option<VibratoKind>,
         harmonic: bool,
+        palm_mute: bool,
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
@@ -124,6 +128,8 @@ pub struct TabScoreBuilder {
     pending_vibrato: Option<VibratoKind>,
     /// When true, the next flushed Fret event gets `harmonic = true`.
     pending_harmonic: bool,
+    /// When true, the next flushed Fret event gets `palm_mute = true`.
+    pending_palm_mute: bool,
 }
 
 impl TabScoreBuilder {
@@ -147,6 +153,7 @@ impl TabScoreBuilder {
             pending_release: false,
             pending_vibrato: None,
             pending_harmonic: false,
+            pending_palm_mute: false,
         }
     }
 
@@ -193,6 +200,7 @@ impl TabScoreBuilder {
                 let release = std::mem::take(&mut self.pending_release);
                 let vibrato = self.pending_vibrato.take();
                 let harmonic = std::mem::take(&mut self.pending_harmonic);
+                let palm_mute = std::mem::take(&mut self.pending_palm_mute);
                 self.current_events.push(TabEvent::Fret {
                     frets,
                     duration_log2,
@@ -203,6 +211,7 @@ impl TabScoreBuilder {
                     release,
                     vibrato,
                     harmonic,
+                    palm_mute,
                 });
             }
         }
@@ -417,6 +426,19 @@ impl TabScoreBuilder {
             self.pending_harmonic = true;
         } else if let Some(TabEvent::Fret { harmonic, .. }) = self.current_events.last_mut() {
             *harmonic = true;
+        }
+        self
+    }
+
+    /// Mark the current fret event for palm muting.
+    ///
+    /// "P.M." text is drawn above the fret number(s). When consecutive events
+    /// are palm-muted, a dashed continuation line is drawn between them.
+    pub fn palm_mute(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_palm_mute = true;
+        } else if let Some(TabEvent::Fret { palm_mute, .. }) = self.current_events.last_mut() {
+            *palm_mute = true;
         }
         self
     }
@@ -772,7 +794,7 @@ pub(crate) fn draw_tab_measure(
 
     // Third pass: draw bend/pre-bend/release arrows, vibrato, and harmonics at fret events
     for (e_idx, event) in measure.events.iter().enumerate() {
-        if let TabEvent::Fret { frets, bend, pre_bend, release, vibrato, harmonic, .. } = event {
+        if let TabEvent::Fret { frets, bend, pre_bend, release, vibrato, harmonic, palm_mute, .. } = event {
             let event_x = if event_count == 1 {
                 measure_x + padding + usable_width / 2.0
             } else {
@@ -818,6 +840,54 @@ pub(crate) fn draw_tab_measure(
                 for &(string, _) in frets {
                     let harm_layout = layout_tab_harmonic(tab_staff, string, event_x);
                     draw_tab_harmonic(svg, &harm_layout, font)?;
+                }
+            }
+
+            // Palm mute "P.M." text above the staff
+            if *palm_mute {
+                let pm_layout = layout_tab_palm_mute(tab_staff, event_x);
+                draw_tab_palm_mute(svg, &pm_layout);
+            }
+        }
+    }
+
+    // Palm mute pass: draw dashed continuation lines between consecutive palm-muted events
+    {
+        let bend_stroke = config.stem_thickness_fu();
+        let mut pm_start: Option<usize> = None;
+
+        for (e_idx, event) in measure.events.iter().enumerate() {
+            let is_pm = matches!(event, TabEvent::Fret { palm_mute: true, .. });
+
+            if is_pm {
+                if pm_start.is_none() {
+                    pm_start = Some(e_idx);
+                }
+            }
+
+            // If we hit a non-PM event or the end of the events, close the current PM span
+            if (!is_pm || e_idx == event_count - 1) && pm_start.is_some() {
+                let start_idx = pm_start.unwrap();
+                let end_idx = if is_pm { e_idx } else { e_idx - 1 };
+
+                // Draw a dashed line if the PM span covers more than one event
+                if end_idx > start_idx {
+                    let start_x = if event_count == 1 {
+                        measure_x + padding + usable_width / 2.0
+                    } else {
+                        measure_x + padding + start_idx as f64 * spacing
+                    };
+                    let end_x = measure_x + padding + end_idx as f64 * spacing;
+
+                    if let Some(dash_layout) = layout_tab_palm_mute_dash(
+                        tab_staff, start_x, end_x, bend_stroke,
+                    ) {
+                        draw_tab_palm_mute_dash(svg, &dash_layout);
+                    }
+                }
+
+                if !is_pm {
+                    pm_start = None;
                 }
             }
         }
@@ -2309,6 +2379,98 @@ mod tests {
         // Should have both harmonic glyph (filled) and vibrato wave (unfilled)
         assert!(svg.contains("scale(0.6)"), "harmonic present");
         assert!(svg.contains("fill=\"none\""), "vibrato wave present");
+    }
+
+    // --- Palm mute tests ---
+
+    #[test]
+    fn palm_mute_adds_pm_text() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .palm_mute()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("P.M."),
+            "palm mute should add P.M. text"
+        );
+    }
+
+    #[test]
+    fn no_palm_mute_without_method_call() {
+        let svg_with = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .palm_mute()
+            .end_barline()
+            .render_svg();
+        let svg_without = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_with, svg_without, "palm mute should change the output");
+    }
+
+    #[test]
+    fn palm_mute_text_is_italic() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .palm_mute()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("font-style=\"italic\""),
+            "P.M. text should be italic"
+        );
+    }
+
+    #[test]
+    fn consecutive_palm_mutes_produce_dashed_line() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .palm_mute()
+            .next()
+            .fret(1, 0)
+            .palm_mute()
+            .next()
+            .fret(1, 0)
+            .palm_mute()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("stroke-dasharray"),
+            "consecutive palm mutes should produce a dashed continuation line"
+        );
+    }
+
+    #[test]
+    fn single_palm_mute_no_dashed_line() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .palm_mute()
+            .next()
+            .fret(1, 3)
+            .end_barline()
+            .render_svg();
+        assert!(
+            !svg.contains("stroke-dasharray"),
+            "single palm mute event should not produce a dashed line"
+        );
+    }
+
+    #[test]
+    fn palm_mute_after_flush_marks_last_event() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .next()
+            .palm_mute()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        // .palm_mute() after .next() marks the already-flushed event
+        assert!(
+            svg.contains("P.M."),
+            "palm_mute after flush should mark the previous event"
+        );
     }
 
     #[cfg(feature = "png")]

@@ -41,6 +41,7 @@ pub mod tab_bend;
 pub mod tab_hammer;
 pub mod tab_slide;
 pub mod tab_harmonic;
+pub mod tab_palm_mute;
 pub mod tab_vibrato;
 pub mod system;
 pub mod tempo;
@@ -113,6 +114,10 @@ pub use tab_bend::{layout_tab_bend, BendAmount, TabBendLayout};
 pub use tab_hammer::{layout_tab_legato, LegatoKind, TabLegatoLayout};
 pub use tab_slide::{layout_tab_slide, TabSlideLayout};
 pub use tab_harmonic::{layout_tab_harmonic, TabHarmonicLayout, HARMONIC_ABOVE_FRET_SS, HARMONIC_GLYPH_SCALE};
+pub use tab_palm_mute::{
+    layout_tab_palm_mute, layout_tab_palm_mute_dash, TabPalmMuteDashLayout, TabPalmMuteLayout,
+    PALM_MUTE_ABOVE_STAFF_SS, PALM_MUTE_DASH_OFFSET_SS, PALM_MUTE_FONT_SIZE_RATIO,
+};
 pub use tab_vibrato::{layout_tab_vibrato, TabVibratoLayout, VibratoKind};
 pub use volta::{
     layout_volta_bracket, VoltaAnnotation, VoltaBracketLayout, VoltaHooks, VOLTA_ABOVE_STAFF_SS,

@@ -1348,6 +1348,63 @@ fn golden_tab_harmonics() {
     assert_golden("tab_harmonics", &svg);
 }
 
+fn build_tab_palm_mute() -> String {
+    TabScoreBuilder::guitar()
+        // Measure 1: two palm-muted + two normal
+        .quarter()
+        .fret(6, 0)
+        .fret(5, 2)
+        .palm_mute()
+        .next()
+        .quarter()
+        .fret(6, 0)
+        .fret(5, 2)
+        .palm_mute()
+        .next()
+        .quarter()
+        .fret(1, 3)
+        .next()
+        .quarter()
+        .fret(1, 5)
+        .barline()
+        // Measure 2: four consecutive palm-muted (long dashed line)
+        .quarter()
+        .fret(6, 0)
+        .palm_mute()
+        .next()
+        .quarter()
+        .fret(6, 0)
+        .palm_mute()
+        .next()
+        .quarter()
+        .fret(6, 0)
+        .palm_mute()
+        .next()
+        .quarter()
+        .fret(6, 0)
+        .palm_mute()
+        .end_barline()
+        .measures_per_system(2)
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_palm_mute() {
+    let svg = build_tab_palm_mute();
+    // Should have P.M. text elements
+    let pm_count = svg.matches("P.M.").count();
+    assert!(
+        pm_count >= 6,
+        "should have at least 6 P.M. text annotations, got {pm_count}"
+    );
+    // Should have dashed continuation lines for consecutive palm mutes
+    assert!(
+        svg.contains("stroke-dasharray"),
+        "consecutive palm mutes should produce dashed lines"
+    );
+    assert_golden("tab_palm_mute", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1389,6 +1446,7 @@ fn golden_baselines_are_valid_svgs() {
         "tremolo",
         "tab_vibrato",
         "tab_harmonics",
+        "tab_palm_mute",
     ];
 
     for name in &names {
