@@ -1304,3 +1304,187 @@ fn ottava_start_without_end_draws_nothing() {
     let output = svg.to_svg();
     assert!(!output.contains("8va"), "start without end should draw no ottava bracket");
 }
+
+// --- glissando ---
+
+fn glissando_note(pos: i8, style: GlissandoStyle) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            glissando_start: Some(style),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn glissando_within_measure_adds_line() {
+    let (font, config, mcfg) = setup();
+    // Use half notes to give notes more horizontal space
+    let gliss_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 1,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            glissando_start: Some(GlissandoStyle::Line),
+            ..NoteAnnotations::default()
+        },
+    });
+    let half_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 8,
+        duration_log2: 1,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    });
+    let measures = vec![MeasureContent {
+        events: vec![gliss_note, half_note],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    // Justify to a wide target width so notes are well-separated
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, Some(8000.0));
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Without glissando
+    let plain_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 1,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    });
+    let half_note2 = MeasureEvent::Note(NoteEvent {
+        staff_position: 8,
+        duration_log2: 1,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    });
+    let measures_no = vec![MeasureContent {
+        events: vec![plain_note, half_note2],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, Some(8000.0));
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+    let output_no = svg_no.to_svg();
+
+    let gliss_lines = output.matches("<line").count();
+    let no_gliss_lines = output_no.matches("<line").count();
+    assert!(gliss_lines > no_gliss_lines,
+        "glissando should add at least one line: {} vs {}",
+        gliss_lines, no_gliss_lines);
+}
+
+#[test]
+fn no_glissando_without_flag() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(0), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(!output.contains("gliss."), "no glissando flag means no gliss text");
+}
+
+#[test]
+fn glissando_cross_barline() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![
+        MeasureContent {
+            events: vec![glissando_note(0, GlissandoStyle::Line)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+    ];
+    // Wide target so cross-barline notes have enough separation
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, Some(8000.0));
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    let mut svg_no = make_svg();
+    let measures_no = vec![
+        MeasureContent {
+            events: vec![quarter_note(0)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+        },
+    ];
+    let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, Some(8000.0));
+    draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+    let output_no = svg_no.to_svg();
+    assert_ne!(output, output_no, "cross-barline glissando should differ from no glissando");
+}
+
+#[test]
+fn glissando_with_text_shows_label() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            glissando_note(0, GlissandoStyle::LineWithText),
+            quarter_note(8),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    // Wide target to ensure enough horizontal space for glissando line
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, Some(8000.0));
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+    assert!(output.contains("gliss."), "LineWithText should show 'gliss.' label");
+}
+
+#[test]
+fn glissando_start_without_target_draws_nothing() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![glissando_note(4, GlissandoStyle::Line)],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    let mut svg_no = make_svg();
+    let measures_no = vec![MeasureContent {
+        events: vec![quarter_note(4)],
+        barline: BarlineStyle::Single,
+        volta: None,
+    }];
+    let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+    let output_no = svg_no.to_svg();
+    assert_eq!(output.matches("<line").count(), output_no.matches("<line").count(),
+        "glissando with no target note should not add any lines");
+}

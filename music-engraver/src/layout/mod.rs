@@ -19,6 +19,7 @@ pub mod dot;
 pub mod dynamics;
 pub mod expression;
 pub mod flag;
+pub mod glissando;
 pub mod grace;
 pub mod hairpin;
 pub mod lyric;
@@ -93,6 +94,7 @@ pub use articulation::{
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use expression::{layout_expression, ExpressionLayout};
+pub use glissando::{layout_glissando, GlissandoLayout, GlissandoStyle, GLISSANDO_H_PADDING_SS};
 pub use grace::{
     grace_note_glyph, grace_note_x_reservation, layout_grace_note, GraceNoteKind, GraceNoteLayout,
     GRACE_NOTE_SCALE, GRACE_NOTE_SPACING_SS,

@@ -1,4 +1,5 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::glissando::{layout_glissando, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS};
@@ -11,6 +12,7 @@ use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::measure_renderer::draw_measure;
 use crate::render::note_renderer::NoteheadKind;
+use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::draw_lyric_extender;
 use crate::render::slur_renderer::draw_slur;
@@ -102,6 +104,9 @@ pub fn draw_system(
 
     // Draw ottava brackets (8va/8vb dashed lines) between marked notes
     draw_system_ottava_brackets(svg, font, config, system, &staff, x)?;
+
+    // Draw glissando lines between notes marked with glissando_start
+    draw_system_glissandos(svg, config, system, &staff, x);
 
     Ok(())
 }
@@ -564,6 +569,87 @@ fn draw_system_ottava_brackets(
     }
 
     Ok(())
+}
+
+/// Info about a note's glissando state for second-pass rendering.
+pub(crate) struct GlissandoNoteInfo {
+    pub x: f64,
+    pub staff_position: i8,
+    pub stem_direction: Option<StemDirection>,
+    pub glissando_start: Option<GlissandoStyle>,
+}
+
+/// Collect note info relevant to glissando rendering from a system's elements.
+pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<GlissandoNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for elem in &measure.layout.elements {
+            let elem_x = measure.x_offset + elem.x;
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push(GlissandoNoteInfo {
+                        x: elem_x,
+                        staff_position: n.staff_position,
+                        stem_direction: n.stem_direction,
+                        glissando_start: n.annotations.glissando_start,
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    // For chords, use the outer note based on stem direction
+                    let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
+                    let bot_pos = c.staff_positions.iter().copied().min().unwrap_or(0);
+                    let dir = c.stem_direction.unwrap_or_else(|| auto_stem_direction(top_pos));
+                    let attach_pos = match dir {
+                        StemDirection::Up => bot_pos,
+                        StemDirection::Down => top_pos,
+                    };
+                    notes.push(GlissandoNoteInfo {
+                        x: elem_x,
+                        staff_position: attach_pos,
+                        stem_direction: c.stem_direction,
+                        glissando_start: c.annotations.glissando_start,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+/// Draw glissando lines between notes marked with `glissando_start`.
+fn draw_system_glissandos(
+    svg: &mut SvgWriter,
+    _config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) {
+    let notes = collect_glissando_note_info(system);
+
+    for (i, note) in notes.iter().enumerate() {
+        let Some(style) = note.glissando_start else {
+            continue;
+        };
+
+        // Find the next note (any position — glissando connects to the
+        // immediately following note, unlike ties which match by position)
+        let Some(target) = notes.get(i + 1) else {
+            continue;
+        };
+
+        if let Some(layout) = layout_glissando(
+            system_x + note.x,
+            note.staff_position,
+            system_x + target.x,
+            target.staff_position,
+            staff,
+            style,
+            note.stem_direction,
+        ) {
+            draw_glissando(svg, &layout);
+        }
+    }
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::clef::ClefLayout;
 use crate::layout::dynamics::Dynamic;
+use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::lyric::LyricSyllable;
@@ -79,6 +80,10 @@ pub struct NoteAnnotations {
     /// Optional breath mark (comma, tick, or caesura) placed above the staff
     /// to the right of this note/chord, indicating a brief pause or lift.
     pub breath_mark: Option<BreathMark>,
+    /// Whether this note/chord starts a glissando line to the next note.
+    /// The diagonal line is drawn by the system renderer after all measures
+    /// are laid out.
+    pub glissando_start: Option<GlissandoStyle>,
 }
 
 /// A group of notes to be beamed together.

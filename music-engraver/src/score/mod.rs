@@ -48,6 +48,7 @@ use crate::layout::breath::BreathMark;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
+use crate::layout::glissando::GlissandoStyle;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::navigation::NavigationSign;
@@ -508,6 +509,19 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.breath_mark = Some(mark);
+        }
+        self
+    }
+
+    /// Mark the most recently added note or chord as the start of a glissando
+    /// line to the next note. The diagonal line is drawn between the two notes
+    /// during system rendering. No-op if the last event is a rest.
+    pub fn glissando(mut self, style: GlissandoStyle) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.glissando_start = Some(style);
         }
         self
     }

@@ -4235,3 +4235,152 @@
             panic!("expected Note event");
         }
     }
+
+    // --- glissando ---
+
+    #[test]
+    fn glissando_adds_line_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .glissando(GlissandoStyle::Line)
+            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        // Glissando draws a <line> element
+        let line_count = svg.matches("<line").count();
+        let no_gliss_svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        let no_gliss_line_count = no_gliss_svg.matches("<line").count();
+        assert!(line_count > no_gliss_line_count,
+            "glissando should add at least one line: {} vs {}",
+            line_count, no_gliss_line_count);
+    }
+
+    #[test]
+    fn glissando_on_rest_is_noop() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .glissando(GlissandoStyle::Line)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        let svg_no_gliss = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        assert_eq!(svg, svg_no_gliss, "glissando on rest should be no-op");
+    }
+
+    #[test]
+    fn glissando_with_text_shows_label() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+            .glissando(GlissandoStyle::LineWithText)
+            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains("gliss."), "LineWithText should show 'gliss.' label");
+    }
+
+    #[test]
+    fn glissando_line_vs_text_differ() {
+        let svg_line = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+            .glissando(GlissandoStyle::Line)
+            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+            .end_barline()
+            .render_svg();
+        let svg_text = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+            .glissando(GlissandoStyle::LineWithText)
+            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_line, svg_text, "Line and LineWithText should produce different SVGs");
+    }
+
+    #[test]
+    fn glissando_on_chord_adds_line() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid pitch"),
+                    Pitch::new(Note::E, 4).expect("valid pitch"),
+                ],
+                Duration::HALF,
+            )
+            .glissando(GlissandoStyle::Line)
+            .chord(
+                vec![
+                    Pitch::new(Note::G, 4).expect("valid pitch"),
+                    Pitch::new(Note::B, 4).expect("valid pitch"),
+                ],
+                Duration::HALF,
+            )
+            .end_barline()
+            .render_svg();
+        let no_gliss = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid pitch"),
+                    Pitch::new(Note::E, 4).expect("valid pitch"),
+                ],
+                Duration::HALF,
+            )
+            .chord(
+                vec![
+                    Pitch::new(Note::G, 4).expect("valid pitch"),
+                    Pitch::new(Note::B, 4).expect("valid pitch"),
+                ],
+                Duration::HALF,
+            )
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg, no_gliss, "chord glissando should add line elements");
+    }
+
+    #[test]
+    fn convert_event_preserves_glissando_start() {
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::C, 4).expect("valid pitch"),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                glissando_start: Some(GlissandoStyle::Line),
+                ..NoteAnnotations::default()
+            },
+        };
+        let key_sig = KeySignature::Open;
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        if let MeasureEvent::Note(note) = result {
+            assert_eq!(note.annotations.glissando_start, Some(GlissandoStyle::Line));
+        } else {
+            panic!("expected Note event");
+        }
+    }
