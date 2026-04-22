@@ -1,9 +1,16 @@
 //! Layout geometry for tablature bend notation.
 //!
-//! A bend is notated as an upward-curving arrow above the fret number on the
-//! affected string, with text indicating the bend amount (e.g. "full", "1/2",
-//! "1/4"). The arrow starts at the fret position and curves upward, with an
-//! arrowhead at the top pointing up.
+//! Three bend variants are supported:
+//!
+//! - **Bend** (`layout_tab_bend`): curved arrow upward from the fret number,
+//!   with arrowhead and amount label. Indicates string is picked then bent.
+//! - **Pre-bend** (`layout_tab_pre_bend`): straight vertical arrow from the
+//!   fret number upward. String is bent *before* picking — the player holds
+//!   the bend then strikes. Same arrowhead and label as a regular bend, but
+//!   the shaft is a straight line, not a curve.
+//! - **Release** (`layout_tab_release`): downward-curving arrow from the top
+//!   of a prior bend back toward the string line. Indicates pitch returning
+//!   to normal after a bend. Arrow points down.
 
 use super::tab::TabStaffLayout;
 
@@ -122,6 +129,135 @@ pub fn layout_tab_bend(
         x_text: x,
         y_text: y_tip - font_size * 0.3,
         font_size,
+        stroke_width,
+    }
+}
+
+/// Layout result for a pre-bend (straight vertical arrow) at a fret position.
+#[derive(Clone, Debug)]
+pub struct TabPreBendLayout {
+    /// The bend amount (determines text label).
+    pub amount: BendAmount,
+    /// X-coordinate of the arrow (at the fret number).
+    pub x: f64,
+    /// Y-coordinate of the arrow base (just above the fret number).
+    pub y_base: f64,
+    /// Y-coordinate of the arrow tip (above the string, lower y in SVG).
+    pub y_tip: f64,
+    /// Left x of arrowhead base.
+    pub arrow_x_left: f64,
+    /// Right x of arrowhead base.
+    pub arrow_x_right: f64,
+    /// Y-coordinate of arrowhead base (slightly below tip).
+    pub arrow_y_base: f64,
+    /// X-coordinate for the text label (centered above the arrow).
+    pub x_text: f64,
+    /// Y-coordinate for the text label (above the arrow tip).
+    pub y_text: f64,
+    /// Font size for the label text.
+    pub font_size: f64,
+    /// Stroke width for the arrow line.
+    pub stroke_width: f64,
+}
+
+/// Compute pre-bend arrow geometry at a fret position on a string.
+///
+/// A pre-bend is a straight vertical line (not curved) with an upward
+/// arrowhead, indicating the string is bent before being picked.
+pub fn layout_tab_pre_bend(
+    tab_staff: &TabStaffLayout,
+    string: u8,
+    x: f64,
+    amount: BendAmount,
+    stroke_width: f64,
+) -> TabPreBendLayout {
+    let ss = tab_staff.staff_space;
+    let y_string = tab_staff.string_y(string);
+
+    let bend_height = ss * BEND_HEIGHT_RATIO;
+    let y_base = y_string - ss * 0.45;
+    let y_tip = y_base - bend_height;
+
+    let arrow_half_w = ss * ARROWHEAD_HALF_WIDTH_RATIO;
+    let arrow_h = ss * ARROWHEAD_HEIGHT_RATIO;
+    let font_size = ss * 0.55;
+
+    TabPreBendLayout {
+        amount,
+        x,
+        y_base,
+        y_tip,
+        arrow_x_left: x - arrow_half_w,
+        arrow_x_right: x + arrow_half_w,
+        arrow_y_base: y_tip + arrow_h,
+        x_text: x,
+        y_text: y_tip - font_size * 0.3,
+        font_size,
+        stroke_width,
+    }
+}
+
+/// Layout result for a release bend (downward arrow from bent position).
+#[derive(Clone, Debug)]
+pub struct TabReleaseLayout {
+    /// X-coordinate of the arrow start (at the fret number).
+    pub x: f64,
+    /// Y-coordinate of the arrow start (top — where the bend was held).
+    pub y_top: f64,
+    /// Y-coordinate of the arrow tip (bottom — released position near string).
+    pub y_bottom: f64,
+    /// X-coordinate of the curve's control point.
+    pub x_control: f64,
+    /// Y-coordinate of the curve's control point.
+    pub y_control: f64,
+    /// Left x of arrowhead base.
+    pub arrow_x_left: f64,
+    /// Right x of arrowhead base.
+    pub arrow_x_right: f64,
+    /// Y-coordinate of arrowhead base (slightly above tip, since arrow points down).
+    pub arrow_y_base: f64,
+    /// Stroke width for the arrow curve.
+    pub stroke_width: f64,
+}
+
+/// Compute release bend geometry at a fret position on a string.
+///
+/// A release bend shows pitch returning down after a bend or pre-bend.
+/// The arrow curves downward from above the string to near the string,
+/// with an arrowhead pointing down.
+pub fn layout_tab_release(
+    tab_staff: &TabStaffLayout,
+    string: u8,
+    x: f64,
+    stroke_width: f64,
+) -> TabReleaseLayout {
+    let ss = tab_staff.staff_space;
+    let y_string = tab_staff.string_y(string);
+
+    let bend_height = ss * BEND_HEIGHT_RATIO;
+    let y_base = y_string - ss * 0.45;
+    // Top starts where a bend/pre-bend arrow tip would be
+    let y_top = y_base - bend_height;
+    // Bottom ends near the string
+    let y_bottom = y_base;
+
+    let half_width = ss * BEND_HALF_WIDTH_RATIO;
+    let x_control = x + half_width;
+    let y_control = (y_top + y_bottom) / 2.0;
+
+    let arrow_half_w = ss * ARROWHEAD_HALF_WIDTH_RATIO;
+    let arrow_h = ss * ARROWHEAD_HEIGHT_RATIO;
+
+    TabReleaseLayout {
+        x,
+        y_top,
+        y_bottom,
+        x_control,
+        y_control,
+        arrow_x_left: x - arrow_half_w,
+        arrow_x_right: x + arrow_half_w,
+        // Arrowhead base is above the tip (arrow points down)
+        arrow_y_base: y_bottom - arrow_h,
         stroke_width,
     }
 }
@@ -253,5 +389,140 @@ mod tests {
             h_large > h_small,
             "larger staff space should produce taller bend arrow"
         );
+    }
+
+    // --- Pre-bend layout tests ---
+
+    #[test]
+    fn pre_bend_tip_above_base() {
+        let staff = test_staff();
+        let layout = layout_tab_pre_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            layout.y_tip < layout.y_base,
+            "tip ({}) should be above base ({}) in SVG coords",
+            layout.y_tip, layout.y_base
+        );
+    }
+
+    #[test]
+    fn pre_bend_arrowhead_between_tip_and_base() {
+        let staff = test_staff();
+        let layout = layout_tab_pre_bend(&staff, 3, 500.0, BendAmount::Half, 5.0);
+        assert!(
+            layout.arrow_y_base > layout.y_tip && layout.arrow_y_base < layout.y_base,
+            "arrowhead base ({}) should be between tip ({}) and base ({})",
+            layout.arrow_y_base, layout.y_tip, layout.y_base
+        );
+    }
+
+    #[test]
+    fn pre_bend_x_preserved() {
+        let staff = test_staff();
+        let layout = layout_tab_pre_bend(&staff, 1, 750.0, BendAmount::Full, 5.0);
+        assert!((layout.x - 750.0).abs() < 0.001);
+        assert!((layout.x_text - 750.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn pre_bend_text_above_tip() {
+        let staff = test_staff();
+        let layout = layout_tab_pre_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            layout.y_text < layout.y_tip,
+            "text ({}) should be above tip ({})",
+            layout.y_text, layout.y_tip
+        );
+    }
+
+    #[test]
+    fn pre_bend_tip_matches_regular_bend_tip() {
+        let staff = test_staff();
+        let pb = layout_tab_pre_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let b = layout_tab_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        // Both use the same BEND_HEIGHT_RATIO and y_base calculation,
+        // so their tips should be at the same height
+        assert!(
+            (pb.y_tip - b.y_tip).abs() < 0.001,
+            "tips should match: pre-bend={}, bend={}",
+            pb.y_tip, b.y_tip
+        );
+    }
+
+    #[test]
+    fn pre_bend_amount_preserved() {
+        let staff = test_staff();
+        let l = layout_tab_pre_bend(&staff, 1, 500.0, BendAmount::Quarter, 5.0);
+        assert_eq!(l.amount, BendAmount::Quarter);
+    }
+
+    #[test]
+    fn pre_bend_arrowhead_straddles_x() {
+        let staff = test_staff();
+        let layout = layout_tab_pre_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(layout.arrow_x_left < 500.0);
+        assert!(layout.arrow_x_right > 500.0);
+    }
+
+    // --- Release layout tests ---
+
+    #[test]
+    fn release_top_above_bottom() {
+        let staff = test_staff();
+        let layout = layout_tab_release(&staff, 1, 500.0, 5.0);
+        assert!(
+            layout.y_top < layout.y_bottom,
+            "top ({}) should be above bottom ({}) in SVG coords",
+            layout.y_top, layout.y_bottom
+        );
+    }
+
+    #[test]
+    fn release_arrowhead_near_bottom() {
+        let staff = test_staff();
+        let layout = layout_tab_release(&staff, 3, 500.0, 5.0);
+        // Arrow points down, so arrowhead base is above the bottom (tip)
+        assert!(
+            layout.arrow_y_base < layout.y_bottom,
+            "arrowhead base ({}) should be above bottom ({})",
+            layout.arrow_y_base, layout.y_bottom
+        );
+        assert!(
+            layout.arrow_y_base > layout.y_top,
+            "arrowhead base ({}) should be below top ({})",
+            layout.arrow_y_base, layout.y_top
+        );
+    }
+
+    #[test]
+    fn release_control_point_between_top_and_bottom() {
+        let staff = test_staff();
+        let layout = layout_tab_release(&staff, 1, 500.0, 5.0);
+        assert!(
+            layout.y_control > layout.y_top && layout.y_control < layout.y_bottom,
+            "control ({}) should be between top ({}) and bottom ({})",
+            layout.y_control, layout.y_top, layout.y_bottom
+        );
+    }
+
+    #[test]
+    fn release_x_preserved() {
+        let staff = test_staff();
+        let layout = layout_tab_release(&staff, 1, 750.0, 5.0);
+        assert!((layout.x - 750.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn release_stroke_width_preserved() {
+        let staff = test_staff();
+        let layout = layout_tab_release(&staff, 1, 500.0, 7.5);
+        assert!((layout.stroke_width - 7.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn release_arrowhead_straddles_x() {
+        let staff = test_staff();
+        let layout = layout_tab_release(&staff, 1, 500.0, 5.0);
+        assert!(layout.arrow_x_left < 500.0);
+        assert!(layout.arrow_x_right > 500.0);
     }
 }
