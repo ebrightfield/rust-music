@@ -2016,3 +2016,162 @@ fn pedal_down_and_up_produce_different_output() {
     let up_svg = make(PedalMark::Up);
     assert_ne!(down_svg, up_svg, "pedal down and up should differ");
 }
+
+// ── Tremolo tests ──────────────────────────────────────────────
+
+#[test]
+fn note_with_tremolo_adds_extra_path() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let with = NoteEvent {
+        staff_position: 4,
+        duration_log2: 2, // quarter note (has stem)
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            tremolo: Some(crate::layout::tremolo::TremoloCount::Single),
+            ..NoteAnnotations::default()
+        },
+    };
+    let without = NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    };
+
+    let elements_with = vec![MeasureElement::Note(with)];
+    let elements_without = vec![MeasureElement::Note(without)];
+
+    let layout_with = layout_measure(&elements_with, &cfg);
+    let layout_without = layout_measure(&elements_without, &cfg);
+
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+
+    let with_paths = svg_with.to_svg().matches("<path ").count();
+    let without_paths = svg_without.to_svg().matches("<path ").count();
+    assert!(with_paths > without_paths, "tremolo should add an extra path: with={}, without={}", with_paths, without_paths);
+}
+
+#[test]
+fn chord_with_tremolo_adds_extra_path() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let with = ChordEvent {
+        staff_positions: vec![0, 4, 8],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            tremolo: Some(crate::layout::tremolo::TremoloCount::Double),
+            ..NoteAnnotations::default()
+        },
+    };
+    let without = ChordEvent {
+        staff_positions: vec![0, 4, 8],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    };
+
+    let elements_with = vec![MeasureElement::Chord(with)];
+    let elements_without = vec![MeasureElement::Chord(without)];
+
+    let layout_with = layout_measure(&elements_with, &cfg);
+    let layout_without = layout_measure(&elements_without, &cfg);
+
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+
+    let with_paths = svg_with.to_svg().matches("<path ").count();
+    let without_paths = svg_without.to_svg().matches("<path ").count();
+    assert!(with_paths > without_paths, "chord tremolo should add extra path");
+}
+
+#[test]
+fn different_tremolo_counts_produce_different_svgs() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |count: crate::layout::tremolo::TremoloCount| -> String {
+        let note = NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                tremolo: Some(count),
+                ..NoteAnnotations::default()
+            },
+        };
+        let elements = vec![MeasureElement::Note(note)];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+
+    let single = make(crate::layout::tremolo::TremoloCount::Single);
+    let double = make(crate::layout::tremolo::TremoloCount::Double);
+    let triple = make(crate::layout::tremolo::TremoloCount::Triple);
+
+    assert_ne!(single, double, "single and double tremolo should differ");
+    assert_ne!(double, triple, "double and triple tremolo should differ");
+    assert_ne!(single, triple, "single and triple tremolo should differ");
+}
+
+#[test]
+fn whole_note_tremolo_not_drawn_without_stem() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let with = NoteEvent {
+        staff_position: 4,
+        duration_log2: 0, // whole note — no stem
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            tremolo: Some(crate::layout::tremolo::TremoloCount::Single),
+            ..NoteAnnotations::default()
+        },
+    };
+    let without = NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    };
+
+    let elements_with = vec![MeasureElement::Note(with)];
+    let elements_without = vec![MeasureElement::Note(without)];
+
+    let layout_with = layout_measure(&elements_with, &cfg);
+    let layout_without = layout_measure(&elements_without, &cfg);
+
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+
+    // Whole notes have no stem, so tremolo can't be drawn on a stem
+    let with_paths = svg_with.to_svg().matches("<path ").count();
+    let without_paths = svg_without.to_svg().matches("<path ").count();
+    assert_eq!(with_paths, without_paths, "whole note tremolo should not add path (no stem)");
+}

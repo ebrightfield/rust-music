@@ -54,6 +54,7 @@ use crate::layout::ottava::OttavaKind;
 use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
+use crate::layout::tremolo::TremoloCount;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
@@ -457,6 +458,21 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.pedal = Some(PedalMark::Up);
+        }
+        self
+    }
+
+    /// Attach tremolo slashes (1–3) to the most recently added note or chord.
+    ///
+    /// The slashes are drawn across the stem of the note/chord. Single slash =
+    /// eighth-note subdivision, double = sixteenth, triple = thirty-second.
+    /// No-op if the last event was a rest.
+    pub fn tremolo(mut self, count: TremoloCount) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.tremolo = Some(count);
         }
         self
     }

@@ -13,6 +13,7 @@ use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
+use crate::layout::tremolo::TremoloCount;
 use crate::layout::time_signature::TimeSignatureKind;
 
 /// Articulation and expression annotations attached to a note or chord event.
@@ -67,6 +68,8 @@ pub struct NoteAnnotations {
     pub ottava_end: bool,
     /// Optional pedal marking (Ped. down or * up) placed below the staff.
     pub pedal: Option<PedalMark>,
+    /// Optional tremolo slashes (1–3) drawn on the stem of this note/chord.
+    pub tremolo: Option<TremoloCount>,
 }
 
 /// A group of notes to be beamed together.

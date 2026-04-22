@@ -1,5 +1,6 @@
     use super::*;
     use crate::layout::ottava::OttavaKind;
+    use crate::layout::tremolo::TremoloCount;
     use music::note::note::Note;
 
     // --- duration_kind_to_log2 ---
@@ -3779,6 +3780,118 @@
         let result = convert_event(&event, &clef, &key_sig, None);
         if let MeasureEvent::Note(note) = result {
             assert_eq!(note.annotations.pedal, Some(PedalMark::Down));
+        } else {
+            panic!("expected Note event");
+        }
+    }
+
+    // ── Tremolo tests ──────────────────────────────────────────────
+
+    #[test]
+    fn tremolo_adds_extra_path_to_svg() {
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .tremolo(TremoloCount::Single)
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with_paths = with.matches("<path ").count();
+        let without_paths = without.matches("<path ").count();
+        assert!(with_paths > without_paths, "tremolo should add a path: with={}, without={}", with_paths, without_paths);
+    }
+
+    #[test]
+    fn tremolo_on_rest_is_noop() {
+        let with_call = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .tremolo(TremoloCount::Double)
+            .end_barline()
+            .render_svg();
+        let without_call = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(with_call, without_call, "tremolo on rest should be no-op");
+    }
+
+    #[test]
+    fn different_tremolo_counts_differ() {
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .tremolo(TremoloCount::Single)
+            .end_barline()
+            .render_svg();
+        let triple = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .tremolo(TremoloCount::Triple)
+            .end_barline()
+            .render_svg();
+        assert_ne!(single, triple, "single and triple tremolo should produce different SVGs");
+    }
+
+    #[test]
+    fn chord_tremolo_adds_path() {
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid"),
+                    Pitch::new(Note::E, 4).expect("valid"),
+                ],
+                Duration::QTR,
+            )
+            .tremolo(TremoloCount::Double)
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid"),
+                    Pitch::new(Note::E, 4).expect("valid"),
+                ],
+                Duration::QTR,
+            )
+            .end_barline()
+            .render_svg();
+        assert!(
+            with.matches("<path ").count() > without.matches("<path ").count(),
+            "chord tremolo should add extra path"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_tremolo() {
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::G, 4).expect("valid"),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                tremolo: Some(TremoloCount::Triple),
+                ..NoteAnnotations::default()
+            },
+        };
+        let key_sig = KeySignature::Open;
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        if let MeasureEvent::Note(note) = result {
+            assert_eq!(note.annotations.tremolo, Some(TremoloCount::Triple));
         } else {
             panic!("expected Note event");
         }

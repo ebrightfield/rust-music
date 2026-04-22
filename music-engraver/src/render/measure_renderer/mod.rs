@@ -36,6 +36,7 @@ use crate::render::rest_renderer::draw_rest;
 use crate::render::staff_renderer::draw_clef;
 use crate::render::stem_renderer::{draw_stem, stem_endpoints, stem_x};
 use crate::render::time_sig_renderer::draw_time_signature;
+use crate::render::tremolo_renderer::draw_tremolo;
 use crate::render::SvgWriter;
 
 #[cfg(test)]
@@ -182,6 +183,22 @@ fn draw_note_event(
                 StemDirection::Down => y_bottom,
             };
             draw_flag(svg, font, sx, tip_y, flags, dir)?;
+        }
+    }
+
+    // Draw tremolo slashes on the stem if present
+    if let Some(tremolo_count) = note.annotations.tremolo {
+        if let Some(dir) = direction {
+            let sx = stem_x(x, advance, dir, config.stem_thickness_fu());
+            let notehead_y = staff.y_of(position);
+            let (y_top, y_bottom) = stem_endpoints(staff, position, dir);
+            let tip_y = match dir {
+                StemDirection::Up => y_top,
+                StemDirection::Down => y_bottom,
+            };
+            let trem_layout =
+                crate::layout::tremolo::layout_tremolo(tremolo_count, sx, notehead_y, tip_y, staff, dir);
+            draw_tremolo(svg, font, &trem_layout)?;
         }
     }
 
@@ -379,6 +396,23 @@ fn draw_chord_event(
                 StemDirection::Down => y_bottom,
             };
             draw_flag(svg, font, sx, tip_y, flags, direction)?;
+        }
+
+        // Draw tremolo slashes on the chord stem if present
+        if let Some(tremolo_count) = chord.annotations.tremolo {
+            let tip_y = match direction {
+                StemDirection::Up => y_top,
+                StemDirection::Down => y_bottom,
+            };
+            // Use the far note (tip side) as the notehead reference
+            let far_pos = match direction {
+                StemDirection::Up => layouts.iter().map(|n| n.staff_position).max().unwrap(),
+                StemDirection::Down => layouts.iter().map(|n| n.staff_position).min().unwrap(),
+            };
+            let notehead_y = staff.y_of(far_pos);
+            let trem_layout =
+                crate::layout::tremolo::layout_tremolo(tremolo_count, sx, notehead_y, tip_y, staff, direction);
+            draw_tremolo(svg, font, &trem_layout)?;
         }
     }
 
