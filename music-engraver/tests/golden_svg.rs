@@ -1129,6 +1129,46 @@ fn golden_cross_system_ottava() {
     assert_golden("cross_system_ottava", &svg);
 }
 
+fn build_pedal_marks() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        // Pedal down on first note, up on last
+        .note(p("C", 4), Duration::QTR)
+        .pedal_down()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .pedal_up()
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_pedal_marks() {
+    let svg = build_pedal_marks();
+    // Pedal down (Ped.) and pedal up (*) produce 2 extra paths
+    let base_svg = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    let pedal_paths = svg.matches("<path").count();
+    let base_paths = base_svg.matches("<path").count();
+    assert_eq!(
+        pedal_paths,
+        base_paths + 2,
+        "pedal marks should add exactly 2 paths (Ped. + *)"
+    );
+    assert_golden("pedal_marks", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1165,6 +1205,7 @@ fn golden_baselines_are_valid_svgs() {
         "navigation_signs",
         "ottava_brackets",
         "cross_system_ottava",
+        "pedal_marks",
     ];
 
     for name in &names {
