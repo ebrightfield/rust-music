@@ -4106,3 +4106,132 @@
             panic!("expected Chord event");
         }
     }
+
+    // --- Breath mark tests ---
+
+    #[test]
+    fn breath_mark_adds_path_to_svg() {
+        use crate::layout::breath::BreathMark;
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .breath_mark(BreathMark::Comma)
+            .note(Pitch::new(Note::G, 4).expect("valid"), Duration::QTR)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        // Breath mark should add 1 extra path vs without
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::G, 4).expect("valid"), Duration::QTR)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        let paths_with = svg.matches("<path").count();
+        let paths_without = without.matches("<path").count();
+        assert_eq!(
+            paths_with,
+            paths_without + 1,
+            "breath mark should add exactly 1 path"
+        );
+    }
+
+    #[test]
+    fn breath_mark_on_rest_is_noop() {
+        use crate::layout::breath::BreathMark;
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .breath_mark(BreathMark::Comma)
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert_eq!(with, without, "breath mark on rest should be no-op");
+    }
+
+    #[test]
+    fn different_breath_marks_differ() {
+        use crate::layout::breath::BreathMark;
+        let make = |mark: BreathMark| {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .note(Pitch::new(Note::C, 5).expect("valid"), Duration::HALF)
+                .breath_mark(mark)
+                .rest(Duration::HALF)
+                .end_barline()
+                .render_svg()
+        };
+        let comma = make(BreathMark::Comma);
+        let tick = make(BreathMark::Tick);
+        let caesura = make(BreathMark::Caesura);
+        assert_ne!(comma, tick, "comma and tick should differ");
+        assert_ne!(tick, caesura, "tick and caesura should differ");
+    }
+
+    #[test]
+    fn breath_mark_on_chord() {
+        use crate::layout::breath::BreathMark;
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid"),
+                    Pitch::new(Note::E, 4).expect("valid"),
+                ],
+                Duration::HALF,
+            )
+            .breath_mark(BreathMark::Caesura)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid"),
+                    Pitch::new(Note::E, 4).expect("valid"),
+                ],
+                Duration::HALF,
+            )
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        assert_ne!(with, without, "caesura on chord should add path");
+        assert!(
+            with.matches("<path").count() > without.matches("<path").count(),
+            "breath mark should add at least 1 path"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_breath_mark() {
+        use crate::layout::breath::BreathMark;
+        let event = ScoreEvent::Note {
+            pitch: Pitch::new(Note::A, 4).expect("valid"),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                breath_mark: Some(BreathMark::Tick),
+                ..NoteAnnotations::default()
+            },
+        };
+        let key_sig = KeySignature::Open;
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        if let MeasureEvent::Note(note) = result {
+            assert_eq!(note.annotations.breath_mark, Some(BreathMark::Tick));
+        } else {
+            panic!("expected Note event");
+        }
+    }

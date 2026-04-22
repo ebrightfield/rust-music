@@ -2286,3 +2286,162 @@ fn arpeggio_up_and_down_differ_on_chord() {
         "up and down arpeggio should produce different SVG"
     );
 }
+
+// --- Breath mark tests ---
+
+#[test]
+fn note_with_breath_mark_produces_extra_path() {
+    use crate::layout::breath::BreathMark;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Without breath mark
+    let elements_no = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout_no = layout_measure(&elements_no, &cfg);
+    let mut svg_no = make_svg();
+    draw_measure(&mut svg_no, &staff, &font, &config, &layout_no, 0.0, &Clef::Treble).unwrap();
+    let without = svg_no.to_svg();
+
+    // With breath mark
+    let elements_yes = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            breath_mark: Some(BreathMark::Comma),
+            ..Default::default()
+        },
+    })];
+    let layout_yes = layout_measure(&elements_yes, &cfg);
+    let mut svg_yes = make_svg();
+    draw_measure(&mut svg_yes, &staff, &font, &config, &layout_yes, 0.0, &Clef::Treble).unwrap();
+    let with = svg_yes.to_svg();
+
+    let paths_without = without.matches("<path").count();
+    let paths_with = with.matches("<path").count();
+    assert_eq!(
+        paths_with,
+        paths_without + 1,
+        "breath mark should add exactly 1 path element"
+    );
+}
+
+#[test]
+fn chord_with_breath_mark_adds_path() {
+    use crate::layout::breath::BreathMark;
+    use crate::layout::measure::ChordEvent;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Without breath mark
+    let elements_no = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4, 7],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout_no = layout_measure(&elements_no, &cfg);
+    let mut svg_no = make_svg();
+    draw_measure(&mut svg_no, &staff, &font, &config, &layout_no, 0.0, &Clef::Treble).unwrap();
+    let without = svg_no.to_svg();
+
+    // With breath mark
+    let elements_yes = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4, 7],
+        duration_log2: 2,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            breath_mark: Some(BreathMark::Comma),
+            ..Default::default()
+        },
+    })];
+    let layout_yes = layout_measure(&elements_yes, &cfg);
+    let mut svg_yes = make_svg();
+    draw_measure(&mut svg_yes, &staff, &font, &config, &layout_yes, 0.0, &Clef::Treble).unwrap();
+    let with = svg_yes.to_svg();
+
+    let paths_without = without.matches("<path").count();
+    let paths_with = with.matches("<path").count();
+    assert_eq!(
+        paths_with,
+        paths_without + 1,
+        "breath mark on chord should add exactly 1 path element"
+    );
+}
+
+#[test]
+fn different_breath_marks_produce_different_svg() {
+    use crate::layout::breath::BreathMark;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |mark: BreathMark| -> String {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                breath_mark: Some(mark),
+                ..Default::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+
+    let comma = make(BreathMark::Comma);
+    let tick = make(BreathMark::Tick);
+    let caesura = make(BreathMark::Caesura);
+
+    assert_ne!(comma, tick, "comma and tick should differ");
+    assert_ne!(tick, caesura, "tick and caesura should differ");
+    assert_ne!(comma, caesura, "comma and caesura should differ");
+}
+
+#[test]
+fn breath_mark_translate_is_right_of_note() {
+    use crate::layout::breath::BreathMark;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            breath_mark: Some(BreathMark::Comma),
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+
+    // The breath mark translate x should appear in the SVG
+    // and be positive (to the right of x=0)
+    let translate_count = output.matches("translate(").count();
+    assert!(
+        translate_count >= 2,
+        "should have at least 2 translate()s (notehead + breath mark), got {translate_count}"
+    );
+}

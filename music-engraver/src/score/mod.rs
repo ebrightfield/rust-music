@@ -44,6 +44,7 @@ use crate::font::bravura_font;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
+use crate::layout::breath::BreathMark;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
@@ -492,6 +493,21 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.arpeggio = Some(direction);
+        }
+        self
+    }
+
+    /// Attach a breath mark (comma, tick, or caesura) to the most recently
+    /// added note or chord. The mark is placed above the staff, to the right
+    /// of the notehead, indicating a brief pause or lift before the next note.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn breath_mark(mut self, mark: BreathMark) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.breath_mark = Some(mark);
         }
         self
     }

@@ -1,6 +1,7 @@
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
+use crate::layout::breath::BreathMark;
 use crate::layout::clef::ClefLayout;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::grace::GraceNoteKind;
@@ -75,6 +76,9 @@ pub struct NoteAnnotations {
     /// Optional arpeggio (rolled chord) wavy line drawn to the left of the
     /// chord noteheads. Primarily used on chords but valid on single notes.
     pub arpeggio: Option<ArpeggioDirection>,
+    /// Optional breath mark (comma, tick, or caesura) placed above the staff
+    /// to the right of this note/chord, indicating a brief pause or lift.
+    pub breath_mark: Option<BreathMark>,
 }
 
 /// A group of notes to be beamed together.

@@ -7,6 +7,7 @@
 
 pub mod accidental_renderer;
 pub mod arpeggio_renderer;
+pub mod breath_renderer;
 pub mod articulation_renderer;
 pub mod barline_renderer;
 pub mod beam_renderer;
@@ -53,6 +54,7 @@ pub mod volta_renderer;
 
 pub use accidental_renderer::draw_accidental;
 pub use arpeggio_renderer::draw_arpeggio;
+pub use breath_renderer::draw_breath_mark;
 pub use articulation_renderer::draw_articulation;
 pub use chord_symbol_renderer::draw_chord_symbol;
 pub use barline_renderer::draw_barline;

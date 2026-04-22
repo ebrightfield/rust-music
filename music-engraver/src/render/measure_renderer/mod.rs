@@ -296,6 +296,14 @@ fn draw_note_event(
         crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, note_center_x)?;
     }
 
+    // Draw breath mark above the staff, to the right of the note
+    if let Some(breath) = note.annotations.breath_mark {
+        let note_right_x = x + advance;
+        let breath_layout =
+            crate::layout::breath::layout_breath_mark(breath, note_right_x, staff);
+        crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
+    }
+
     Ok(())
 }
 
@@ -539,6 +547,14 @@ fn draw_chord_event(
     if let Some(pedal_mark) = chord.annotations.pedal {
         let chord_center_x = x + advance / 2.0;
         crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, chord_center_x)?;
+    }
+
+    // Draw breath mark above the staff, to the right of the chord
+    if let Some(breath) = chord.annotations.breath_mark {
+        let chord_right_x = x + advance;
+        let breath_layout =
+            crate::layout::breath::layout_breath_mark(breath, chord_right_x, staff);
+        crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
     }
 
     Ok(())

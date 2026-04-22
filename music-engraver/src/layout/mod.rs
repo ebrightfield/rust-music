@@ -8,6 +8,7 @@
 
 pub mod accidental;
 pub mod arpeggio;
+pub mod breath;
 pub mod articulation;
 pub mod barline;
 pub mod beam;
@@ -85,6 +86,7 @@ pub use multi_staff::{
     MultiStaffLayout, StaffGroup,
 };
 pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
+pub use breath::{layout_breath_mark, BreathMark, BreathMarkLayout, BREATH_MARK_ABOVE_STAFF_SS, BREATH_MARK_RIGHT_PADDING_SS};
 pub use articulation::{
     layout_articulation, layout_articulation_stack, Articulation, ArticulationLayout,
     ArticulationPlacement,
