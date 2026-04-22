@@ -23,6 +23,7 @@ use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::navigation::NavigationSign;
 use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::ottava::OttavaKind;
+use music_engraver::layout::tremolo::TremoloCount;
 use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
@@ -1215,6 +1216,53 @@ fn golden_tab_pre_bends() {
     assert_golden("tab_pre_bends", &svg);
 }
 
+/// Tremolo slashes on stems: single, double, triple across notes.
+fn build_tremolo() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .tremolo(TremoloCount::Single)
+        .note(p("E", 4), Duration::QTR)
+        .tremolo(TremoloCount::Double)
+        .note(p("G", 4), Duration::QTR)
+        .tremolo(TremoloCount::Triple)
+        .note(p("B", 4), Duration::QTR)
+        .tremolo(TremoloCount::Single)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tremolo() {
+    let svg = build_tremolo();
+    // 4 notes + 1 clef + 4 tremolo glyphs = at least 9 paths
+    let path_count = svg.matches("<path").count();
+    assert!(
+        path_count >= 9,
+        "expected at least 9 paths (notes + clef + tremolo), got {path_count}"
+    );
+    // Each tremolo glyph is a distinct path; verify all 3 glyph types differ
+    // by checking that the SVG contains more paths than just notes+clef
+    let svg_without_tremolo = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    let paths_without = svg_without_tremolo.matches("<path").count();
+    assert!(
+        path_count > paths_without,
+        "tremolo version ({path_count} paths) should have more paths than plain ({paths_without})"
+    );
+    assert_golden("tremolo", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1253,6 +1301,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_system_ottava",
         "pedal_marks",
         "tab_pre_bends",
+        "tremolo",
     ];
 
     for name in &names {
