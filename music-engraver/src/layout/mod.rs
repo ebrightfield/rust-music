@@ -7,6 +7,7 @@
 //! into complete scored layouts.
 
 pub mod accidental;
+pub mod arpeggio;
 pub mod articulation;
 pub mod barline;
 pub mod beam;
@@ -83,6 +84,7 @@ pub use multi_staff::{
     layout_multi_staff, staff_layouts_from_multi, BraceLayout, BracketLayout, ConnectorKind,
     MultiStaffLayout, StaffGroup,
 };
+pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
 pub use articulation::{
     layout_articulation, layout_articulation_stack, Articulation, ArticulationLayout,
     ArticulationPlacement,

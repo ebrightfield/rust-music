@@ -2175,3 +2175,114 @@ fn whole_note_tremolo_not_drawn_without_stem() {
     let without_paths = svg_without.to_svg().matches("<path ").count();
     assert_eq!(with_paths, without_paths, "whole note tremolo should not add path (no stem)");
 }
+
+// --- arpeggio ---
+
+#[test]
+fn chord_with_arpeggio_adds_path() {
+    use crate::layout::arpeggio::ArpeggioDirection;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |arp: Option<ArpeggioDirection>| {
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 8],
+            duration_log2: 1,
+            dots: 0,
+            accidentals: vec![],
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                arpeggio: arp,
+                ..NoteAnnotations::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg().matches("<path ").count()
+    };
+
+    let with = make(Some(ArpeggioDirection::Up));
+    let without = make(None);
+    assert!(with > without, "chord with arpeggio should have more paths: {with} vs {without}");
+}
+
+#[test]
+fn chord_without_arpeggio_has_no_extra_path() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::Chord(ChordEvent {
+        staff_positions: vec![0, 4, 8],
+        duration_log2: 1,
+        dots: 0,
+        accidentals: vec![],
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    // Without arpeggio, no arpeggio transform should appear
+    assert!(!output.contains("scale(1,"), "no vertical scaling without arpeggio");
+}
+
+#[test]
+fn note_with_arpeggio_adds_path() {
+    use crate::layout::arpeggio::ArpeggioDirection;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |arp: Option<ArpeggioDirection>| {
+        let elements = vec![MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 0,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                arpeggio: arp,
+                ..NoteAnnotations::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg().matches("<path ").count()
+    };
+
+    let with = make(Some(ArpeggioDirection::Up));
+    let without = make(None);
+    assert!(with > without, "note with arpeggio should have more paths: {with} vs {without}");
+}
+
+#[test]
+fn arpeggio_up_and_down_differ_on_chord() {
+    use crate::layout::arpeggio::ArpeggioDirection;
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let make = |dir: ArpeggioDirection| {
+        let elements = vec![MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 4, 8],
+            duration_log2: 1,
+            dots: 0,
+            accidentals: vec![],
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                arpeggio: Some(dir),
+                ..NoteAnnotations::default()
+            },
+        })];
+        let layout = layout_measure(&elements, &cfg);
+        let mut svg = make_svg();
+        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        svg.to_svg()
+    };
+
+    assert_ne!(
+        make(ArpeggioDirection::Up),
+        make(ArpeggioDirection::Down),
+        "up and down arpeggio should produce different SVG"
+    );
+}

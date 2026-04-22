@@ -41,6 +41,7 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
+use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::grace::GraceNoteKind;
@@ -473,6 +474,24 @@ impl ScoreBuilder {
         ) = self.current_events.last_mut()
         {
             annotations.tremolo = Some(count);
+        }
+        self
+    }
+
+    /// Attach an arpeggio (rolled chord) marking to the most recently added
+    /// note or chord. A wavy vertical line is drawn to the left of the
+    /// noteheads, indicating the chord should be played as a roll.
+    ///
+    /// `ArpeggioDirection::Up` (default, low to high) uses the ArpeggiatoUp glyph;
+    /// `ArpeggioDirection::Down` uses ArpeggiatoDown.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn arpeggio(mut self, direction: ArpeggioDirection) -> Self {
+        if let Some(
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        ) = self.current_events.last_mut()
+        {
+            annotations.arpeggio = Some(direction);
         }
         self
     }

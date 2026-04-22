@@ -3992,3 +3992,117 @@
             panic!("expected Note event");
         }
     }
+
+    // --- arpeggio ---
+
+    #[test]
+    fn arpeggio_on_chord_adds_path() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(
+                vec![
+                    Pitch::new(Note::C, 4).expect("valid pitch"),
+                    Pitch::new(Note::E, 4).expect("valid pitch"),
+                    Pitch::new(Note::G, 4).expect("valid pitch"),
+                ],
+                Duration::HALF,
+            )
+            .arpeggio(ArpeggioDirection::Up)
+            .rest(Duration::HALF)
+            .end_barline()
+            .render_svg();
+        let paths = svg.matches("<path ").count();
+        // Without arpeggio, a 3-note chord has ~4 paths (clef + 3 noteheads)
+        // With arpeggio, we add 1 more path for the wavy line
+        assert!(paths >= 5, "arpeggio should add a path: found {paths} paths");
+    }
+
+    #[test]
+    fn arpeggio_on_rest_is_noop() {
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .arpeggio(ArpeggioDirection::Up)
+            .end_barline()
+            .render_svg();
+        assert_eq!(without, with, "arpeggio on rest should be no-op");
+    }
+
+    #[test]
+    fn arpeggio_up_differs_from_down() {
+        let make = |dir: ArpeggioDirection| {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .chord(
+                    vec![
+                        Pitch::new(Note::C, 4).expect("valid pitch"),
+                        Pitch::new(Note::E, 4).expect("valid pitch"),
+                        Pitch::new(Note::G, 4).expect("valid pitch"),
+                    ],
+                    Duration::WHOLE,
+                )
+                .arpeggio(dir)
+                .end_barline()
+                .render_svg()
+        };
+        assert_ne!(
+            make(ArpeggioDirection::Up),
+            make(ArpeggioDirection::Down),
+            "up and down arpeggio should produce different SVG"
+        );
+    }
+
+    #[test]
+    fn arpeggio_on_single_note_adds_path() {
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::WHOLE)
+            .arpeggio(ArpeggioDirection::Up)
+            .end_barline()
+            .render_svg();
+        let paths_without = without.matches("<path ").count();
+        let paths_with = with.matches("<path ").count();
+        assert!(
+            paths_with > paths_without,
+            "arpeggio on single note should add path: {paths_with} vs {paths_without}"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_arpeggio() {
+        let event = ScoreEvent::Chord {
+            pitches: vec![
+                Pitch::new(Note::C, 4).expect("valid pitch"),
+                Pitch::new(Note::E, 4).expect("valid pitch"),
+            ],
+            duration: Duration::HALF,
+            annotations: NoteAnnotations {
+                arpeggio: Some(ArpeggioDirection::Down),
+                ..NoteAnnotations::default()
+            },
+        };
+        let key_sig = KeySignature::Open;
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &key_sig, None);
+        if let MeasureEvent::Chord(chord) = result {
+            assert_eq!(chord.annotations.arpeggio, Some(ArpeggioDirection::Down));
+        } else {
+            panic!("expected Chord event");
+        }
+    }

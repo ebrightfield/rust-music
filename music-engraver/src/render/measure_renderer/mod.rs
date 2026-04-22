@@ -161,6 +161,15 @@ fn draw_note_event(
     // Draw ledger lines
     draw_ledger_lines(svg, staff, config, x, advance, position);
 
+    // Draw arpeggio wavy line to the left of the note if present
+    if let Some(arp_dir) = note.annotations.arpeggio {
+        if let Some(arp_layout) =
+            crate::layout::arpeggio::layout_arpeggio(arp_dir, &[position], x, staff)
+        {
+            crate::render::arpeggio_renderer::draw_arpeggio(svg, font, &arp_layout)?;
+        }
+    }
+
     // Determine stem direction
     let needs_stem = note.duration_log2 >= 1; // whole notes have no stem
     let direction = if needs_stem {
@@ -357,6 +366,15 @@ fn draw_chord_event(
 
         // Draw ledger lines for this note
         draw_ledger_lines(svg, staff, config, note_x, advance, note_layout.staff_position);
+    }
+
+    // Draw arpeggio wavy line to the left of the chord if present
+    if let Some(arp_dir) = chord.annotations.arpeggio {
+        if let Some(arp_layout) =
+            crate::layout::arpeggio::layout_arpeggio(arp_dir, &chord.staff_positions, x, staff)
+        {
+            crate::render::arpeggio_renderer::draw_arpeggio(svg, font, &arp_layout)?;
+        }
     }
 
     // Draw shared stem spanning from the closest to farthest note

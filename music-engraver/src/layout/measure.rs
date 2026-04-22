@@ -1,3 +1,4 @@
+use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
@@ -71,6 +72,9 @@ pub struct NoteAnnotations {
     pub pedal: Option<PedalMark>,
     /// Optional tremolo slashes (1–3) drawn on the stem of this note/chord.
     pub tremolo: Option<TremoloCount>,
+    /// Optional arpeggio (rolled chord) wavy line drawn to the left of the
+    /// chord noteheads. Primarily used on chords but valid on single notes.
+    pub arpeggio: Option<ArpeggioDirection>,
 }
 
 /// A group of notes to be beamed together.
