@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="294" height="49" viewBox="-250 -250 10500 1750">
+  <line x1="0" y1="0" x2="10000" y2="0" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="250" x2="10000" y2="250" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="500" x2="10000" y2="500" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="750" x2="10000" y2="750" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1000" x2="10000" y2="1000" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="1250" x2="10000" y2="1250" stroke="black" stroke-width="32.5"/>
+  <path d="M27 277L27 748L239 748C324 748 378 691 378 613C378 557 352 522 292 499C335 479 357 444 357 397C357 328 307 277 218 277ZM61 228L111 87L292 87L341 228L408 228L243 -242L165 -242L-3 228ZM18 -764L18 -711L173 -711L173 -293L233 -293L233 -711L387 -711L387 -764ZM87 533L234 533C290 533 318 568 318 614C318 659 290 695 234 695L87 695ZM203 330C270 330 297 357 297 405C297 453 270 480 203 480L87 480L87 330ZM203 -178L276 36L126 36Z" fill="black" transform="translate(250, 625)"/>
+  <rect x="997.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="1120" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
+  <line x1="1120" y1="-375" x2="1120" y2="-1125" stroke="black" stroke-width="30"/>
+  <rect x="2292.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="2415" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">7</text>
+  <rect x="3587.5" y="842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="3710" y="1000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
+  <rect x="4882.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5005" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
+<path d="M932.50 1050.00 Q963.75 987.50 995.00 1050.00 Q1026.25 1112.50 1057.50 1050.00 Q1088.75 987.50 1120.00 1050.00 Q1151.25 1112.50 1182.50 1050.00 Q1213.75 987.50 1245.00 1050.00 Q1276.25 1112.50 1307.50 1050.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M2227.50 1050.00 Q2258.75 987.50 2290.00 1050.00 Q2321.25 1112.50 2352.50 1050.00 Q2383.75 987.50 2415.00 1050.00 Q2446.25 1112.50 2477.50 1050.00 Q2508.75 987.50 2540.00 1050.00 Q2571.25 1112.50 2602.50 1050.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M3522.50 800.00 Q3553.75 737.50 3585.00 800.00 Q3616.25 862.50 3647.50 800.00 Q3678.75 737.50 3710.00 800.00 Q3741.25 862.50 3772.50 800.00 Q3803.75 737.50 3835.00 800.00 Q3866.25 862.50 3897.50 800.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="5375" y1="0" x2="5375" y2="1250" stroke="black" stroke-width="40"/>
+  <rect x="5500" y="1092.5" width="489.99999999999994" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="5745" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">12</text>
+  <rect x="6917.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="7040" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">9</text>
+  <rect x="8212.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8335" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">7</text>
+  <rect x="8212.5" y="842.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="8335" y="1000" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">7</text>
+  <rect x="9507.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
+  <text x="9630" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
+<path d="M5557.50 1050.00 Q5588.75 937.50 5620.00 1050.00 Q5651.25 1162.50 5682.50 1050.00 Q5713.75 937.50 5745.00 1050.00 Q5776.25 1162.50 5807.50 1050.00 Q5838.75 937.50 5870.00 1050.00 Q5901.25 1162.50 5932.50 1050.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6852.50 550.00 Q6883.75 437.50 6915.00 550.00 Q6946.25 662.50 6977.50 550.00 Q7008.75 437.50 7040.00 550.00 Q7071.25 662.50 7102.50 550.00 Q7133.75 437.50 7165.00 550.00 Q7196.25 662.50 7227.50 550.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8147.50 1050.00 Q8178.75 987.50 8210.00 1050.00 Q8241.25 1112.50 8272.50 1050.00 Q8303.75 987.50 8335.00 1050.00 Q8366.25 1112.50 8397.50 1050.00 Q8428.75 987.50 8460.00 1050.00 Q8491.25 1112.50 8522.50 1050.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8147.50 800.00 Q8178.75 737.50 8210.00 800.00 Q8241.25 862.50 8272.50 800.00 Q8303.75 737.50 8335.00 800.00 Q8366.25 862.50 8397.50 800.00 Q8428.75 737.50 8460.00 800.00 Q8491.25 862.50 8522.50 800.00" fill="none" stroke="black" stroke-width="30.00" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="10000" y1="0" x2="10000" y2="1250" stroke="black" stroke-width="40"/>
+  <line x1="10100" y1="0" x2="10100" y2="1250" stroke="black" stroke-width="125"/>
+</svg>

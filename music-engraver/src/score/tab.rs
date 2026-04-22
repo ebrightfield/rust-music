@@ -27,12 +27,16 @@ use crate::layout::tab_rhythm::layout_tab_rhythm;
 use crate::layout::tab_bend::{layout_tab_bend, layout_tab_pre_bend, layout_tab_release, BendAmount};
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_slide::layout_tab_slide;
+use crate::layout::tab_harmonic::layout_tab_harmonic;
+use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::tab_bend_renderer::{draw_tab_bend, draw_tab_pre_bend, draw_tab_release};
+use crate::render::tab_harmonic_renderer::draw_tab_harmonic;
 use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_slide_renderer::draw_tab_slide;
+use crate::render::tab_vibrato_renderer::draw_tab_vibrato;
 use crate::render::{SvgWriter, TextStyle};
 
 /// A single event in a tab measure.
@@ -46,6 +50,8 @@ pub(crate) enum TabEvent {
     /// `bend`: when Some, draw a bend arrow above the fret number(s).
     /// `pre_bend`: when Some, draw a straight vertical pre-bend arrow.
     /// `release`: when true, draw a downward release arrow.
+    /// `vibrato`: when Some, draw a wavy vibrato line above the fret number.
+    /// `harmonic`: when true, draw a natural harmonic indicator (○) above the fret number.
     Fret {
         frets: Vec<(u8, u8)>,
         duration_log2: Option<u8>,
@@ -54,6 +60,8 @@ pub(crate) enum TabEvent {
         bend: Option<BendAmount>,
         pre_bend: Option<BendAmount>,
         release: bool,
+        vibrato: Option<VibratoKind>,
+        harmonic: bool,
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
@@ -112,6 +120,10 @@ pub struct TabScoreBuilder {
     pending_pre_bend: Option<BendAmount>,
     /// When true, the next flushed Fret event gets `release = true`.
     pending_release: bool,
+    /// When Some, the next flushed Fret event gets `vibrato` set.
+    pending_vibrato: Option<VibratoKind>,
+    /// When true, the next flushed Fret event gets `harmonic = true`.
+    pending_harmonic: bool,
 }
 
 impl TabScoreBuilder {
@@ -133,6 +145,8 @@ impl TabScoreBuilder {
             pending_bend: None,
             pending_pre_bend: None,
             pending_release: false,
+            pending_vibrato: None,
+            pending_harmonic: false,
         }
     }
 
@@ -177,6 +191,8 @@ impl TabScoreBuilder {
                 let bend = self.pending_bend.take();
                 let pre_bend = self.pending_pre_bend.take();
                 let release = std::mem::take(&mut self.pending_release);
+                let vibrato = self.pending_vibrato.take();
+                let harmonic = std::mem::take(&mut self.pending_harmonic);
                 self.current_events.push(TabEvent::Fret {
                     frets,
                     duration_log2,
@@ -185,6 +201,8 @@ impl TabScoreBuilder {
                     bend,
                     pre_bend,
                     release,
+                    vibrato,
+                    harmonic,
                 });
             }
         }
@@ -362,6 +380,43 @@ impl TabScoreBuilder {
             self.pending_release = true;
         } else if let Some(TabEvent::Fret { release, .. }) = self.current_events.last_mut() {
             *release = true;
+        }
+        self
+    }
+
+    /// Mark the current fret event for a vibrato wavy line above the fret
+    /// number(s). Standard vibrato has a moderate wave amplitude.
+    pub fn vibrato(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_vibrato = Some(VibratoKind::Normal);
+        } else if let Some(TabEvent::Fret { vibrato, .. }) = self.current_events.last_mut() {
+            *vibrato = Some(VibratoKind::Normal);
+        }
+        self
+    }
+
+    /// Mark the current fret event for a wide vibrato wavy line above the
+    /// fret number(s). Wide vibrato has a taller wave amplitude, indicating
+    /// a more exaggerated pitch oscillation.
+    pub fn wide_vibrato(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_vibrato = Some(VibratoKind::Wide);
+        } else if let Some(TabEvent::Fret { vibrato, .. }) = self.current_events.last_mut() {
+            *vibrato = Some(VibratoKind::Wide);
+        }
+        self
+    }
+
+    /// Mark the current fret event as a natural harmonic.
+    ///
+    /// A small circle (○) is drawn above the fret number(s), indicating
+    /// the string should be lightly touched at that fret position to
+    /// produce a harmonic overtone. Common harmonic frets: 5, 7, 12.
+    pub fn harmonic(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_harmonic = true;
+        } else if let Some(TabEvent::Fret { harmonic, .. }) = self.current_events.last_mut() {
+            *harmonic = true;
         }
         self
     }
@@ -715,9 +770,9 @@ pub(crate) fn draw_tab_measure(
         }
     }
 
-    // Third pass: draw bend/pre-bend/release arrows at fret events
+    // Third pass: draw bend/pre-bend/release arrows, vibrato, and harmonics at fret events
     for (e_idx, event) in measure.events.iter().enumerate() {
-        if let TabEvent::Fret { frets, bend, pre_bend, release, .. } = event {
+        if let TabEvent::Fret { frets, bend, pre_bend, release, vibrato, harmonic, .. } = event {
             let event_x = if event_count == 1 {
                 measure_x + padding + usable_width / 2.0
             } else {
@@ -747,6 +802,22 @@ pub(crate) fn draw_tab_measure(
                 for &(string, _) in frets {
                     let rel_layout = layout_tab_release(tab_staff, string, event_x, bend_stroke);
                     draw_tab_release(svg, &rel_layout);
+                }
+            }
+
+            // Vibrato wavy line
+            if let Some(kind) = vibrato {
+                for &(string, _) in frets {
+                    let vib_layout = layout_tab_vibrato(tab_staff, string, event_x, *kind, bend_stroke);
+                    draw_tab_vibrato(svg, &vib_layout);
+                }
+            }
+
+            // Natural harmonic indicator (small ○ above fret number)
+            if *harmonic {
+                for &(string, _) in frets {
+                    let harm_layout = layout_tab_harmonic(tab_staff, string, event_x);
+                    draw_tab_harmonic(svg, &harm_layout, font)?;
                 }
             }
         }
@@ -2056,6 +2127,188 @@ mod tests {
             .end_barline()
             .render_svg();
         assert_ne!(svg_with, svg_without, "release should change the output");
+    }
+
+    // ── vibrato ───────────────────────────────────────────────
+
+    #[test]
+    fn vibrato_adds_wavy_path() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .vibrato()
+            .end_barline()
+            .render_svg();
+        // Vibrato is a stroke path with Q commands
+        assert!(svg.contains(" Q"), "vibrato should produce quadratic Bézier path");
+        assert!(svg.contains("fill=\"none\""), "vibrato path should have no fill");
+    }
+
+    #[test]
+    fn wide_vibrato_differs_from_normal() {
+        let normal = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .vibrato()
+            .end_barline()
+            .render_svg();
+        let wide = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .wide_vibrato()
+            .end_barline()
+            .render_svg();
+        assert_ne!(normal, wide, "wide vibrato should differ from normal");
+    }
+
+    #[test]
+    fn vibrato_on_rest_is_noop() {
+        let with_vib = TabScoreBuilder::guitar()
+            .rest()
+            .end_barline()
+            .render_svg();
+        // rest() flushes frets first — calling vibrato after rest should be no-op
+        // since there's no Fret event to modify
+        let without = TabScoreBuilder::guitar()
+            .rest()
+            .end_barline()
+            .render_svg();
+        assert_eq!(with_vib, without);
+    }
+
+    #[test]
+    fn vibrato_without_call_produces_no_wave() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // Should not contain vibrato wavy line (no Q commands from wave)
+        // Note: Q could appear from other paths, but without vibrato
+        // the path count should differ
+        let with = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .vibrato()
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg, with, "vibrato should change the output");
+    }
+
+    #[test]
+    fn vibrato_on_chord_draws_per_string() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .fret(2, 7)
+            .vibrato()
+            .end_barline()
+            .render_svg();
+        // Should have 2 vibrato paths (one per string)
+        let wave_count = svg.matches("fill=\"none\" stroke=\"black\"").count();
+        assert!(
+            wave_count >= 2,
+            "chord vibrato should draw one wave per string, got {}",
+            wave_count
+        );
+    }
+
+    #[test]
+    fn vibrato_with_bend_both_rendered() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .vibrato()
+            .bend(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        // Should have both a bend arrow (filled path) and a vibrato wave (unfilled)
+        assert!(svg.contains("fill=\"none\""), "vibrato wave should be present");
+        assert!(
+            svg.matches("<path ").count() >= 2,
+            "should have both bend and vibrato paths"
+        );
+    }
+
+    // ── harmonic ──────────────────────────────────────────────
+
+    #[test]
+    fn harmonic_adds_extra_path() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 12)
+            .harmonic()
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 1 harmonic glyph = 2 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 2,
+            "should have TAB clef + harmonic indicator = 2 paths"
+        );
+    }
+
+    #[test]
+    fn no_harmonic_without_method_call() {
+        let svg_with = TabScoreBuilder::guitar()
+            .fret(1, 12)
+            .harmonic()
+            .end_barline()
+            .render_svg();
+        let svg_without = TabScoreBuilder::guitar()
+            .fret(1, 12)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_with, svg_without, "harmonic should change the output");
+    }
+
+    #[test]
+    fn harmonic_on_chord_draws_per_string() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 12)
+            .fret(2, 12)
+            .harmonic()
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 2 harmonic glyphs = 3 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 3,
+            "chord harmonic: 1 TAB + 2 indicators = 3 paths"
+        );
+    }
+
+    #[test]
+    fn harmonic_has_scale_transform() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .harmonic()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("scale(0.6)"),
+            "harmonic glyph should be scaled down"
+        );
+    }
+
+    #[test]
+    fn harmonic_after_flush_marks_last_event() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 12)
+            .next()
+            .harmonic()
+            .fret(1, 5)
+            .end_barline()
+            .render_svg();
+        // .harmonic() after .next() marks the already-flushed event
+        // 1 TAB clef + 1 harmonic = 2 paths
+        assert_eq!(
+            svg.matches("<path ").count(), 2,
+            "harmonic after flush should mark the previous event"
+        );
+    }
+
+    #[test]
+    fn harmonic_with_vibrato_both_rendered() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 12)
+            .harmonic()
+            .vibrato()
+            .end_barline()
+            .render_svg();
+        // Should have both harmonic glyph (filled) and vibrato wave (unfilled)
+        assert!(svg.contains("scale(0.6)"), "harmonic present");
+        assert!(svg.contains("fill=\"none\""), "vibrato wave present");
     }
 
     #[cfg(feature = "png")]

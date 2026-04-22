@@ -1263,6 +1263,91 @@ fn golden_tremolo() {
     assert_golden("tremolo", &svg);
 }
 
+fn build_tab_vibrato() -> String {
+    TabScoreBuilder::guitar()
+        // Measure 1: normal vibrato on single notes
+        .quarter()
+        .fret(1, 5)
+        .vibrato()
+        .next()
+        .fret(1, 7)
+        .vibrato()
+        .next()
+        .fret(2, 5)
+        .vibrato()
+        .next()
+        .fret(1, 5)
+        .barline()
+        // Measure 2: wide vibrato + chord vibrato
+        .fret(1, 12)
+        .wide_vibrato()
+        .next()
+        .fret(3, 9)
+        .wide_vibrato()
+        .next()
+        .fret(1, 7)
+        .fret(2, 7)
+        .vibrato()
+        .next()
+        .fret(1, 5)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_vibrato() {
+    let svg = build_tab_vibrato();
+    // Should have vibrato wave paths (unfilled strokes with Q commands)
+    let wave_count = svg.matches("fill=\"none\" stroke=\"black\"").count();
+    assert!(
+        wave_count >= 5,
+        "should have at least 5 vibrato waves, got {wave_count}"
+    );
+    assert_golden("tab_vibrato", &svg);
+}
+
+fn build_tab_harmonics() -> String {
+    TabScoreBuilder::guitar()
+        // Measure 1: natural harmonics at fret 12
+        .fret(1, 12)
+        .harmonic()
+        .next()
+        .fret(2, 12)
+        .harmonic()
+        .next()
+        .fret(3, 12)
+        .harmonic()
+        .next()
+        .fret(4, 12)
+        .harmonic()
+        .barline()
+        // Measure 2: chord harmonic at fret 7 + single harmonics
+        .fret(1, 7)
+        .fret(2, 7)
+        .fret(3, 7)
+        .harmonic()
+        .next()
+        .fret(1, 5)
+        .harmonic()
+        .next()
+        .fret(6, 12)
+        .harmonic()
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_harmonics() {
+    let svg = build_tab_harmonics();
+    // Should have harmonic glyph paths (filled black with scale(0.6))
+    let scale_count = svg.matches("scale(0.6)").count();
+    assert!(
+        scale_count >= 8,
+        "should have at least 8 harmonic indicators, got {scale_count}"
+    );
+    assert_golden("tab_harmonics", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1302,6 +1387,8 @@ fn golden_baselines_are_valid_svgs() {
         "pedal_marks",
         "tab_pre_bends",
         "tremolo",
+        "tab_vibrato",
+        "tab_harmonics",
     ];
 
     for name in &names {
