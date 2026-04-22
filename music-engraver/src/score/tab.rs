@@ -886,10 +886,8 @@ pub(crate) fn draw_tab_measure(
         for (e_idx, event) in measure.events.iter().enumerate() {
             let is_pm = matches!(event, TabEvent::Fret { palm_mute: true, .. });
 
-            if is_pm {
-                if pm_start.is_none() {
-                    pm_start = Some(e_idx);
-                }
+            if is_pm && pm_start.is_none() {
+                pm_start = Some(e_idx);
             }
 
             // If we hit a non-PM event or the end of the events, close the current PM span

@@ -1405,6 +1405,73 @@ fn golden_tab_palm_mute() {
     assert_golden("tab_palm_mute", &svg);
 }
 
+#[test]
+fn golden_tab_muted_strings() {
+    let svg = TabScoreBuilder::guitar()
+        // All-mute percussive strum
+        .mute(1)
+        .mute(2)
+        .mute(3)
+        .mute(4)
+        .mute(5)
+        .mute(6)
+        .next()
+        // Power chord with muted high strings
+        .fret(6, 0)
+        .fret(5, 2)
+        .mute(3)
+        .mute(2)
+        .mute(1)
+        .next()
+        // Normal frets for contrast
+        .fret(1, 5)
+        .fret(2, 3)
+        .barline()
+        // Individual mutes in sequence
+        .mute(6)
+        .next()
+        .mute(5)
+        .next()
+        // Mixed fret + mute
+        .fret(6, 3)
+        .mute(1)
+        .mute(2)
+        .next()
+        .fret(1, 12)
+        .mute(6)
+        .end_barline()
+        .measures_per_system(2)
+        .render_svg();
+
+    // Verify muted string "x" markers
+    let x_count = svg.matches(">x</text>").count();
+    assert!(
+        x_count >= 12,
+        "should have at least 12 'x' markers, got {x_count}"
+    );
+
+    // Verify fret numbers coexist with mutes
+    assert!(svg.contains(">0</text>"), "fret 0 should be present");
+    assert!(svg.contains(">12</text>"), "fret 12 should be present");
+
+    // Each x marker gets a white background rect
+    let rect_count = svg.matches("<rect ").count();
+    assert!(
+        rect_count >= x_count,
+        "each 'x' marker should have a background rect"
+    );
+
+    // Verify muted score differs from unmuted
+    let no_mute = TabScoreBuilder::guitar()
+        .fret(6, 0)
+        .fret(5, 2)
+        .end_barline()
+        .render_svg();
+    assert_ne!(svg, no_mute, "muted should differ from unmuted");
+
+    assert_golden("tab_muted_strings", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1447,6 +1514,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_vibrato",
         "tab_harmonics",
         "tab_palm_mute",
+        "tab_muted_strings",
     ];
 
     for name in &names {
