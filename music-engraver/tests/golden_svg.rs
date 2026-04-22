@@ -1473,6 +1473,73 @@ fn golden_tab_muted_strings() {
     assert_golden("tab_muted_strings", &svg);
 }
 
+#[test]
+fn golden_tab_let_ring() {
+    let svg = TabScoreBuilder::guitar()
+        // Measure 1: Arpeggio with let ring (dashed continuation)
+        .quarter()
+        .fret(6, 0)
+        .let_ring()
+        .next()
+        .quarter()
+        .fret(5, 2)
+        .let_ring()
+        .next()
+        .quarter()
+        .fret(4, 2)
+        .let_ring()
+        .next()
+        .quarter()
+        .fret(3, 1)
+        .let_ring()
+        .barline()
+        // Measure 2: Single let ring on chord, then normal
+        .half()
+        .fret(6, 0)
+        .fret(5, 2)
+        .fret(4, 2)
+        .let_ring()
+        .next()
+        .quarter()
+        .fret(1, 3)
+        .next()
+        .quarter()
+        .fret(1, 5)
+        .end_barline()
+        .measures_per_system(2)
+        .render_svg();
+
+    // Should have "let ring" italic text elements
+    let lr_count = svg.matches("let ring").count();
+    assert!(
+        lr_count >= 4,
+        "should have at least 4 'let ring' annotations, got {lr_count}"
+    );
+
+    // Should be italic
+    assert!(
+        svg.contains("italic"),
+        "let ring text should be rendered in italic"
+    );
+
+    // Should have dashed continuation lines for consecutive let ring events
+    assert!(
+        svg.contains("stroke-dasharray"),
+        "consecutive let ring events should produce dashed lines"
+    );
+
+    // Verify let ring score differs from plain score
+    let no_lr = TabScoreBuilder::guitar()
+        .fret(6, 0)
+        .next()
+        .fret(5, 2)
+        .end_barline()
+        .render_svg();
+    assert_ne!(svg, no_lr, "let ring should differ from plain score");
+
+    assert_golden("tab_let_ring", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1516,6 +1583,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_harmonics",
         "tab_palm_mute",
         "tab_muted_strings",
+        "tab_let_ring",
     ];
 
     for name in &names {
