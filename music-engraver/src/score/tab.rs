@@ -28,6 +28,7 @@ use crate::layout::tab_bend::{layout_tab_bend, layout_tab_pre_bend, layout_tab_r
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_harmonic::layout_tab_harmonic;
+use crate::layout::tab_let_ring::{layout_tab_let_ring, layout_tab_let_ring_dash};
 use crate::layout::tab_palm_mute::{layout_tab_palm_mute, layout_tab_palm_mute_dash};
 use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
@@ -35,6 +36,7 @@ use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staf
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::tab_bend_renderer::{draw_tab_bend, draw_tab_pre_bend, draw_tab_release};
 use crate::render::tab_harmonic_renderer::draw_tab_harmonic;
+use crate::render::tab_let_ring_renderer::{draw_tab_let_ring, draw_tab_let_ring_dash};
 use crate::render::tab_palm_mute_renderer::{draw_tab_palm_mute, draw_tab_palm_mute_dash};
 use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_slide_renderer::draw_tab_slide;
@@ -55,6 +57,7 @@ pub(crate) enum TabEvent {
     /// `vibrato`: when Some, draw a wavy vibrato line above the fret number.
     /// `harmonic`: when true, draw a natural harmonic indicator (○) above the fret number.
     /// `palm_mute`: when true, draw "P.M." text above the fret number(s).
+    /// `let_ring`: when true, draw "let ring" text above the fret number(s).
     /// `muted_strings`: strings displayed as "x" (dead/muted) instead of fret numbers.
     Fret {
         frets: Vec<(u8, u8)>,
@@ -67,6 +70,7 @@ pub(crate) enum TabEvent {
         vibrato: Option<VibratoKind>,
         harmonic: bool,
         palm_mute: bool,
+        let_ring: bool,
         muted_strings: Vec<u8>,
     },
     /// A rest (blank space — no fret numbers).
@@ -132,6 +136,8 @@ pub struct TabScoreBuilder {
     pending_harmonic: bool,
     /// When true, the next flushed Fret event gets `palm_mute = true`.
     pending_palm_mute: bool,
+    /// When true, the next flushed Fret event gets `let_ring = true`.
+    pending_let_ring: bool,
     /// Accumulated muted string numbers for the current event.
     current_muted: Vec<u8>,
 }
@@ -158,6 +164,7 @@ impl TabScoreBuilder {
             pending_vibrato: None,
             pending_harmonic: false,
             pending_palm_mute: false,
+            pending_let_ring: false,
             current_muted: Vec::new(),
         }
     }
@@ -206,6 +213,7 @@ impl TabScoreBuilder {
                 let vibrato = self.pending_vibrato.take();
                 let harmonic = std::mem::take(&mut self.pending_harmonic);
                 let palm_mute = std::mem::take(&mut self.pending_palm_mute);
+                let let_ring = std::mem::take(&mut self.pending_let_ring);
                 let muted_strings = std::mem::take(&mut self.current_muted);
                 self.current_events.push(TabEvent::Fret {
                     frets,
@@ -218,6 +226,7 @@ impl TabScoreBuilder {
                     vibrato,
                     harmonic,
                     palm_mute,
+                    let_ring,
                     muted_strings,
                 });
             }
@@ -448,6 +457,19 @@ impl TabScoreBuilder {
             self.pending_palm_mute = true;
         } else if let Some(TabEvent::Fret { palm_mute, .. }) = self.current_events.last_mut() {
             *palm_mute = true;
+        }
+        self
+    }
+
+    /// Mark the current fret event for "let ring" sustain.
+    ///
+    /// "let ring" text is drawn above the fret number(s). When consecutive events
+    /// are marked let ring, a dashed continuation line is drawn between them.
+    pub fn let_ring(mut self) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_let_ring = true;
+        } else if let Some(TabEvent::Fret { let_ring, .. }) = self.current_events.last_mut() {
+            *let_ring = true;
         }
         self
     }
@@ -821,7 +843,7 @@ pub(crate) fn draw_tab_measure(
 
     // Third pass: draw bend/pre-bend/release arrows, vibrato, and harmonics at fret events
     for (e_idx, event) in measure.events.iter().enumerate() {
-        if let TabEvent::Fret { frets, bend, pre_bend, release, vibrato, harmonic, palm_mute, .. } = event {
+        if let TabEvent::Fret { frets, bend, pre_bend, release, vibrato, harmonic, palm_mute, let_ring, .. } = event {
             let event_x = if event_count == 1 {
                 measure_x + padding + usable_width / 2.0
             } else {
@@ -875,6 +897,12 @@ pub(crate) fn draw_tab_measure(
                 let pm_layout = layout_tab_palm_mute(tab_staff, event_x);
                 draw_tab_palm_mute(svg, &pm_layout);
             }
+
+            // "let ring" text above the staff (higher than P.M.)
+            if *let_ring {
+                let lr_layout = layout_tab_let_ring(tab_staff, event_x);
+                draw_tab_let_ring(svg, &lr_layout);
+            }
         }
     }
 
@@ -913,6 +941,44 @@ pub(crate) fn draw_tab_measure(
 
                 if !is_pm {
                     pm_start = None;
+                }
+            }
+        }
+    }
+
+    // Let ring pass: draw dashed continuation lines between consecutive let-ring events
+    {
+        let bend_stroke = config.stem_thickness_fu();
+        let mut lr_start: Option<usize> = None;
+
+        for (e_idx, event) in measure.events.iter().enumerate() {
+            let is_lr = matches!(event, TabEvent::Fret { let_ring: true, .. });
+
+            if is_lr && lr_start.is_none() {
+                lr_start = Some(e_idx);
+            }
+
+            if (!is_lr || e_idx == event_count - 1) && lr_start.is_some() {
+                let start_idx = lr_start.unwrap();
+                let end_idx = if is_lr { e_idx } else { e_idx - 1 };
+
+                if end_idx > start_idx {
+                    let start_x = if event_count == 1 {
+                        measure_x + padding + usable_width / 2.0
+                    } else {
+                        measure_x + padding + start_idx as f64 * spacing
+                    };
+                    let end_x = measure_x + padding + end_idx as f64 * spacing;
+
+                    if let Some(dash_layout) = layout_tab_let_ring_dash(
+                        tab_staff, start_x, end_x, bend_stroke,
+                    ) {
+                        draw_tab_let_ring_dash(svg, &dash_layout);
+                    }
+                }
+
+                if !is_lr {
+                    lr_start = None;
                 }
             }
         }
@@ -2495,6 +2561,98 @@ mod tests {
         assert!(
             svg.contains("P.M."),
             "palm_mute after flush should mark the previous event"
+        );
+    }
+
+    #[test]
+    fn let_ring_adds_text() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .let_ring()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("let ring"),
+            "let ring should add 'let ring' text"
+        );
+    }
+
+    #[test]
+    fn no_let_ring_without_method_call() {
+        let svg_with = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .let_ring()
+            .end_barline()
+            .render_svg();
+        let svg_without = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_with, svg_without, "let ring should change the output");
+    }
+
+    #[test]
+    fn let_ring_text_is_italic() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .let_ring()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("font-style=\"italic\""),
+            "let ring text should be italic"
+        );
+    }
+
+    #[test]
+    fn consecutive_let_rings_produce_dashed_line() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .let_ring()
+            .next()
+            .fret(1, 3)
+            .let_ring()
+            .next()
+            .fret(1, 5)
+            .let_ring()
+            .end_barline()
+            .render_svg();
+        // Dashed continuation line from consecutive let ring events
+        let dash_count = svg.matches("stroke-dasharray").count();
+        assert!(
+            dash_count >= 1,
+            "consecutive let ring events should produce dashed continuation line(s), found {dash_count}"
+        );
+    }
+
+    #[test]
+    fn single_let_ring_no_dashed_line() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .let_ring()
+            .next()
+            .fret(1, 3)
+            .end_barline()
+            .render_svg();
+        // Only one let ring event — no dashed line
+        assert!(
+            !svg.contains("stroke-dasharray"),
+            "single let ring event should not produce a dashed line"
+        );
+    }
+
+    #[test]
+    fn let_ring_after_flush_marks_last_event() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 5)
+            .next()
+            .let_ring()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("let ring"),
+            "let_ring after flush should mark the previous event"
         );
     }
 
