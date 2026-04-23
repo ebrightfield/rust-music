@@ -1971,6 +1971,76 @@ fn golden_voices() {
     assert_golden("voices", &svg);
 }
 
+fn build_voice_collision() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: unison collisions — both voices on C5 then D5
+        .note(p("C", 5), Duration::HALF)
+        .note(p("D", 5), Duration::HALF)
+        .voice(1)
+        .note(p("C", 5), Duration::HALF)
+        .note(p("D", 5), Duration::HALF)
+        .barline()
+        // Measure 2: second-apart collisions — voice 1 one step below voice 0
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .note(p("G", 5), Duration::HALF)
+        .voice(1)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::HALF)
+        .barline()
+        // Measure 3: mixed — unison on beat 1 & 3, far apart on beat 2 & 4
+        .note(p("C", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .note(p("C", 6), Duration::QTR)
+        .voice(1)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .barline()
+        // Measure 4: well-separated voices — no collision
+        .note(p("A", 5), Duration::WHOLE)
+        .voice(1)
+        .note(p("C", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_voice_collision() {
+    let svg = build_voice_collision();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    let path_count = svg.matches("<path ").count();
+    assert!(
+        path_count >= 15,
+        "should have at least 15 paths (clef + noteheads from both voices), got {path_count}"
+    );
+
+    let line_count = svg.matches("<line ").count();
+    assert!(
+        line_count >= 20,
+        "should have at least 20 lines (staff + stems + barlines), got {line_count}"
+    );
+
+    // The collision-heavy score should differ from the basic voices golden
+    // (which has well-separated voices and no collisions).
+    let basic_voices = build_voices();
+    assert_ne!(
+        svg, basic_voices,
+        "collision example should differ from basic voices"
+    );
+
+    assert_golden("voice_collision", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -2020,6 +2090,7 @@ fn golden_baselines_are_valid_svgs() {
         "glissandos",
         "cross_system_glissandos",
         "voices",
+        "voice_collision",
     ];
 
     for name in &names {
