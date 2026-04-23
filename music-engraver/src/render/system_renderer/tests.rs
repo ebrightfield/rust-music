@@ -1567,3 +1567,233 @@ fn glissando_start_without_target_draws_nothing() {
     assert_eq!(output.matches("<line").count(), output_no.matches("<line").count(),
         "glissando with no target note should not add any lines");
 }
+
+// --- additional voice span rendering ---
+
+fn voice_note(pos: i8, dir: StemDirection) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(dir),
+        annotations: NoteAnnotations::default(),
+    })
+}
+
+fn voice_tied_note(pos: i8, dir: StemDirection) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(dir),
+        annotations: NoteAnnotations { tie_forward: true, ..Default::default() },
+    })
+}
+
+#[test]
+fn tie_in_additional_voice_draws_filled_path() {
+    let (font, config, mcfg) = setup();
+    // Primary voice: two plain notes (stems up)
+    // Additional voice: tied note → target note (stems down)
+    let measures = vec![MeasureContent {
+        events: vec![
+            voice_note(8, StemDirection::Up),
+            voice_note(8, StemDirection::Up),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![
+            voice_tied_note(0, StemDirection::Down),
+            voice_note(0, StemDirection::Down),
+        ]],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Without tie in additional voice
+    let measures_no_tie = vec![MeasureContent {
+        events: vec![
+            voice_note(8, StemDirection::Up),
+            voice_note(8, StemDirection::Up),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![
+            voice_note(0, StemDirection::Down),
+            voice_note(0, StemDirection::Down),
+        ]],
+    }];
+    let system_no = layout_system(&treble_prefix(), &measures_no_tie, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+    let output_no = svg_no.to_svg();
+
+    let tied_fills = output.matches(r#"stroke="none""#).count();
+    let untied_fills = output_no.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        tied_fills,
+        untied_fills + 1,
+        "tie in additional voice should add 1 filled path (the tie curve)"
+    );
+}
+
+#[test]
+fn slur_in_additional_voice_draws_filled_path() {
+    let (font, config, mcfg) = setup();
+    let slur_start_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations { slur_start: true, ..Default::default() },
+    });
+    let slur_end_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations { slur_end: true, ..Default::default() },
+    });
+    let measures = vec![MeasureContent {
+        events: vec![
+            voice_note(8, StemDirection::Up),
+            voice_note(8, StemDirection::Up),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![slur_start_note, slur_end_note]],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Without slur
+    let measures_no = vec![MeasureContent {
+        events: vec![
+            voice_note(8, StemDirection::Up),
+            voice_note(8, StemDirection::Up),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![
+            voice_note(0, StemDirection::Down),
+            voice_note(4, StemDirection::Down),
+        ]],
+    }];
+    let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+    let output_no = svg_no.to_svg();
+
+    let slurred_fills = output.matches(r#"stroke="none""#).count();
+    let plain_fills = output_no.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        slurred_fills,
+        plain_fills + 1,
+        "slur in additional voice should add 1 filled path (the slur curve)"
+    );
+}
+
+#[test]
+fn hairpin_in_additional_voice_draws_lines() {
+    use crate::layout::hairpin::HairpinType;
+    let (font, config, mcfg) = setup();
+    let hp_start_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations {
+            hairpin_start: Some(HairpinType::Crescendo),
+            ..Default::default()
+        },
+    });
+    let hp_end_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations { hairpin_end: true, ..Default::default() },
+    });
+    let measures = vec![MeasureContent {
+        events: vec![
+            voice_note(8, StemDirection::Up),
+            voice_note(8, StemDirection::Up),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![hp_start_note, hp_end_note]],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Without hairpin
+    let measures_no = vec![MeasureContent {
+        events: vec![
+            voice_note(8, StemDirection::Up),
+            voice_note(8, StemDirection::Up),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![
+            voice_note(0, StemDirection::Down),
+            voice_note(4, StemDirection::Down),
+        ]],
+    }];
+    let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
+    let mut svg_no = make_svg();
+    draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
+    let output_no = svg_no.to_svg();
+
+    let hp_lines = output.matches("<line ").count();
+    let plain_lines = output_no.matches("<line ").count();
+    assert_eq!(
+        hp_lines,
+        plain_lines + 2,
+        "hairpin in additional voice should add 2 lines (the wedge)"
+    );
+}
+
+#[test]
+fn collect_note_positions_includes_additional_voices() {
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![voice_note(8, StemDirection::Up)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![vec![voice_note(0, StemDirection::Down)]],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let positions = collect_note_positions(&system);
+    // Should have 2 notes: 1 primary + 1 additional
+    assert_eq!(positions.len(), 2, "collect should include notes from additional voices");
+    assert_eq!(positions[0].1, 8, "first note is primary voice at pos 8");
+    assert_eq!(positions[1].1, 0, "second note is additional voice at pos 0");
+}
+
+#[test]
+fn collect_note_positions_without_additional_voices_unchanged() {
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![voice_note(4, StemDirection::Up), voice_note(6, StemDirection::Up)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let positions = collect_note_positions(&system);
+    assert_eq!(positions.len(), 2, "should have exactly 2 notes");
+    assert_eq!(positions[0].1, 4);
+    assert_eq!(positions[1].1, 6);
+}

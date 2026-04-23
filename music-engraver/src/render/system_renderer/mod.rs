@@ -3,7 +3,7 @@ use crate::layout::glissando::{layout_glissando, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS};
-use crate::layout::measure::MeasureElement;
+use crate::layout::measure::{MeasureElement, PositionedElement};
 use crate::layout::slur::{layout_slur, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, StemDirection};
@@ -22,22 +22,38 @@ use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
 
+/// Iterate over all positioned elements in a measure, including both the
+/// primary voice and any additional voices. Each element is yielded with
+/// its absolute x within the system (`measure.x_offset + elem.x`).
+///
+/// Additional voices share the same x-coordinate space as the primary
+/// voice (they were scaled to match width in `layout_system()`), so spans
+/// (ties, slurs, hairpins, etc.) resolve correctly across all voices.
+fn all_measure_elements(measure: &crate::layout::system::SystemMeasure) -> impl Iterator<Item = (f64, &PositionedElement)> {
+    let base_x = measure.x_offset;
+    let primary = measure.layout.elements.iter().map(move |e| (base_x + e.x, e));
+    let additional = measure.additional_voice_layouts.iter().flat_map(move |voice_layout| {
+        voice_layout.elements.iter().map(move |e| (base_x + e.x, e))
+    });
+    primary.chain(additional)
+}
+
 /// Collect notes from the system's positioned elements in order, yielding
 /// (x_in_system, staff_position, duration_log2, tie_forward, stem_direction_override)
 /// for each note event. Chord notes are expanded into individual entries so
 /// each chord note can be tied independently. Skips clefs, rests, barlines, etc.
+///
+/// Scans both the primary voice and any additional voices so that ties
+/// within secondary voices are resolved.
 pub(crate) fn collect_note_positions(system: &SystemLayout) -> Vec<(f64, i8, u8, bool, Option<StemDirection>)> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for elem in &measure.layout.elements {
-            let elem_x = measure.x_offset + elem.x;
+        for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
                     notes.push((elem_x, n.staff_position, n.duration_log2, n.annotations.tie_forward, n.stem_direction));
                 }
                 MeasureElement::Chord(c) => {
-                    // Each note in the chord gets its own entry so ties can
-                    // match by staff position independently.
                     for &pos in &c.staff_positions {
                         notes.push((elem_x, pos, c.duration_log2, c.annotations.tie_forward, c.stem_direction));
                     }
@@ -194,8 +210,7 @@ pub(crate) struct SlurNoteInfo {
 pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for elem in &measure.layout.elements {
-            let elem_x = measure.x_offset + elem.x;
+        for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
                     notes.push(SlurNoteInfo {
@@ -208,8 +223,6 @@ pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo>
                     });
                 }
                 MeasureElement::Chord(c) => {
-                    // For slurs, use the chord's outer note (top for stems up,
-                    // bottom for stems down) as the attachment point.
                     let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
                     let bot_pos = c.staff_positions.iter().copied().min().unwrap_or(0);
                     let dir = c.stem_direction.unwrap_or_else(|| auto_stem_direction(top_pos));
@@ -309,8 +322,7 @@ pub(crate) struct HairpinNoteInfo {
 pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for elem in &measure.layout.elements {
-            let elem_x = measure.x_offset + elem.x;
+        for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
                     notes.push(HairpinNoteInfo {
@@ -401,8 +413,7 @@ pub(crate) struct LyricNoteInfo {
 pub(crate) fn collect_lyric_note_info(system: &SystemLayout) -> Vec<LyricNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for elem in &measure.layout.elements {
-            let elem_x = measure.x_offset + elem.x;
+        for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
                     notes.push(LyricNoteInfo {
@@ -505,8 +516,7 @@ pub(crate) struct OttavaNoteInfo {
 pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for elem in &measure.layout.elements {
-            let elem_x = measure.x_offset + elem.x;
+        for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
                     notes.push(OttavaNoteInfo {
@@ -595,8 +605,7 @@ pub(crate) struct GlissandoNoteInfo {
 pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<GlissandoNoteInfo> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for elem in &measure.layout.elements {
-            let elem_x = measure.x_offset + elem.x;
+        for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
                     notes.push(GlissandoNoteInfo {
@@ -607,7 +616,6 @@ pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<Glissand
                     });
                 }
                 MeasureElement::Chord(c) => {
-                    // For chords, use the outer note based on stem direction
                     let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
                     let bot_pos = c.staff_positions.iter().copied().min().unwrap_or(0);
                     let dir = c.stem_direction.unwrap_or_else(|| auto_stem_direction(top_pos));

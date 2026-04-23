@@ -4863,3 +4863,103 @@
             "second (collision) vs third (no collision) should produce different SVGs"
         );
     }
+
+    // --- additional voice span rendering (ties, slurs, hairpins) ---
+
+    #[test]
+    fn tie_in_additional_voice_produces_filled_path() {
+        let svg_tied = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .tie()
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_untied = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let tied_fills = svg_tied.matches(r#"stroke="none""#).count();
+        let untied_fills = svg_untied.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            tied_fills,
+            untied_fills + 1,
+            "tie in voice 1 should add 1 filled path; tied={}, untied={}", tied_fills, untied_fills
+        );
+    }
+
+    #[test]
+    fn slur_in_additional_voice_produces_filled_path() {
+        let svg_slurred = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .slur_start()
+            .note(p("E", 4), Duration::QTR)
+            .slur_end()
+            .end_barline()
+            .render_svg();
+
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let slurred_fills = svg_slurred.matches(r#"stroke="none""#).count();
+        let plain_fills = svg_plain.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            slurred_fills,
+            plain_fills + 1,
+            "slur in voice 1 should add 1 filled path; slurred={}, plain={}", slurred_fills, plain_fills
+        );
+    }
+
+    #[test]
+    fn hairpin_in_additional_voice_produces_lines() {
+        let svg_hp = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .cresc()
+            .note(p("E", 4), Duration::QTR)
+            .hairpin_end()
+            .end_barline()
+            .render_svg();
+
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let hp_lines = svg_hp.matches("<line ").count();
+        let plain_lines = svg_plain.matches("<line ").count();
+        assert_eq!(
+            hp_lines,
+            plain_lines + 2,
+            "hairpin in voice 1 should add 2 lines (wedge); hp={}, plain={}", hp_lines, plain_lines
+        );
+    }
