@@ -32,6 +32,7 @@ fn make_measure(pos: i8) -> MeasureContent {
         events: vec![quarter_note(pos)],
         barline: BarlineStyle::Single,
         volta: None,
+        additional_voices: vec![],
     }
 }
 
@@ -163,11 +164,13 @@ fn cross_system_tie_draws_two_half_ties() {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     // 1 measure per system → forces cross-system tie
@@ -197,11 +200,13 @@ fn no_cross_system_tie_without_tie_forward() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -226,11 +231,13 @@ fn cross_system_tie_with_no_matching_target_draws_right_half_only() {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -259,11 +266,13 @@ fn within_system_tie_does_not_produce_cross_system_tie() {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -289,11 +298,13 @@ fn cross_system_tie_differs_from_no_tie() {
             events: vec![tied_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 
@@ -302,11 +313,13 @@ fn cross_system_tie_differs_from_no_tie() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 
@@ -354,11 +367,13 @@ fn cross_system_slur_draws_two_half_slurs() {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     // 1 measure per system → forces cross-system slur
@@ -388,11 +403,13 @@ fn no_cross_system_slur_without_flags() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -417,11 +434,13 @@ fn cross_system_slur_right_half_only_when_no_end() {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],  // no slur_end
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -450,11 +469,13 @@ fn within_system_slur_not_duplicated_as_cross_system() {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -480,11 +501,13 @@ fn cross_system_slur_differs_from_no_slur() {
             events: vec![slur_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let without_slur = vec![
@@ -492,11 +515,13 @@ fn cross_system_slur_differs_from_no_slur() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 
@@ -546,11 +571,13 @@ fn cross_system_hairpin_draws_four_lines() {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     // 1 measure per system → forces cross-system hairpin
@@ -566,11 +593,13 @@ fn cross_system_hairpin_draws_four_lines() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let no_hp_page = layout_page(&prefix(), &no_hp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -600,11 +629,13 @@ fn no_cross_system_hairpin_without_flags() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -632,11 +663,13 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)], // no hairpin_end
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -650,11 +683,13 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -683,11 +718,13 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -702,11 +739,13 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
@@ -730,11 +769,13 @@ fn cross_system_hairpin_differs_from_no_hairpin() {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let without_hp = vec![
@@ -742,11 +783,13 @@ fn cross_system_hairpin_differs_from_no_hairpin() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 
@@ -771,11 +814,13 @@ fn cross_system_decresc_differs_from_cresc() {
             events: vec![cresc_start_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let decresc = vec![
@@ -789,11 +834,13 @@ fn cross_system_decresc_differs_from_cresc() {
                 annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Decrescendo), ..Default::default() },})],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 
@@ -1030,11 +1077,13 @@ fn cross_system_lyric_extender_draws_two_lines() {
             events: vec![note_with_extender(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     // 1 measure per system → forces cross-system extender
@@ -1053,11 +1102,13 @@ fn cross_system_lyric_extender_draws_two_lines() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page_no_ext = layout_page(&prefix(), &measures_no_ext, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1086,11 +1137,13 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
             events: vec![note_with_lyric_word(4, "sing")],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1103,11 +1156,13 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page_bare = layout_page(&prefix(), &measures_bare, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1131,11 +1186,13 @@ fn within_system_extender_does_not_produce_cross_system_extender() {
             events: vec![note_with_extender(4), quarter_note(6)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
@@ -1164,11 +1221,13 @@ fn cross_system_lyric_extender_differs_from_no_extender() {
             events: vec![note_with_extender(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let measures_bare = vec![
@@ -1176,11 +1235,13 @@ fn cross_system_lyric_extender_differs_from_no_extender() {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 
@@ -1205,11 +1266,13 @@ fn cross_system_lyric_extender_lines_are_horizontal() {
             events: vec![note_with_extender(4)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1289,11 +1352,13 @@ fn cross_system_ottava_draws_two_brackets() {
             events: vec![ottava_start_note(10, OttavaKind::Ottava8va)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![ottava_end_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     // 1 measure per system → forces cross-system ottava
@@ -1309,11 +1374,13 @@ fn cross_system_ottava_draws_two_brackets() {
             events: vec![quarter_note(10)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let no_ott_page = layout_page(&prefix(), &no_ott_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1358,11 +1425,13 @@ fn no_cross_system_ottava_without_flags() {
             events: vec![quarter_note(10)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1387,11 +1456,13 @@ fn cross_system_ottava_right_half_only_when_no_end() {
             events: vec![ottava_start_note(10, OttavaKind::Ottava8va)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![quarter_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1423,6 +1494,7 @@ fn within_system_ottava_not_duplicated_by_cross_system() {
             ],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1451,11 +1523,13 @@ fn cross_system_ottava_8vb_draws_below_staff() {
             events: vec![ottava_start_note(-2, OttavaKind::Ottava8vb)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![ottava_end_note(-4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
@@ -1474,14 +1548,241 @@ fn cross_system_ottava_8vb_draws_below_staff() {
             events: vec![ottava_start_note(-2, OttavaKind::Ottava8va)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         MeasureContent {
             events: vec![ottava_end_note(-4)],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
     let page_8va = layout_page(&prefix(), &measures_8va, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
     let output_8va = draw_page(&font, &config, &page_8va).unwrap().to_svg();
     assert_ne!(output, output_8va, "8vb and 8va cross-system ottavas should differ");
+}
+
+// --- Cross-system glissando tests ---
+
+fn glissando_note(pos: i8, style: GlissandoStyle) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            glissando_start: Some(style),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_glissando_draws_two_half_lines() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1: note with glissando_start (last note, no target in system)
+    // System 2: note as target
+    let measures = vec![
+        MeasureContent {
+            events: vec![glissando_note(0, GlissandoStyle::Line)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    let no_gliss_measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(0)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let no_gliss_page = layout_page(&prefix(), &no_gliss_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_gliss_output = draw_page(&font, &config, &no_gliss_page).unwrap().to_svg();
+
+    let line_count = output.matches("<line ").count();
+    let no_gliss_line_count = no_gliss_output.matches("<line ").count();
+
+    // Should have 2 extra lines: trailing half + incoming half
+    assert!(
+        line_count >= no_gliss_line_count + 2,
+        "cross-system glissando should add ≥2 lines: {line_count} vs {no_gliss_line_count}"
+    );
+}
+
+#[test]
+fn no_cross_system_glissando_without_flag() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures_no_flag = vec![
+        MeasureContent {
+            events: vec![quarter_note(0)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let measures_with_flag = vec![
+        MeasureContent {
+            events: vec![glissando_note(0, GlissandoStyle::Line)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page_no = layout_page(&prefix(), &measures_no_flag, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_with = layout_page(&prefix(), &measures_with_flag, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let output_no = draw_page(&font, &config, &page_no).unwrap().to_svg();
+    let output_with = draw_page(&font, &config, &page_with).unwrap().to_svg();
+
+    let lines_no = output_no.matches("<line ").count();
+    let lines_with = output_with.matches("<line ").count();
+    assert!(
+        lines_with > lines_no,
+        "without flag should have fewer lines than with flag: {lines_no} vs {lines_with}"
+    );
+}
+
+#[test]
+fn within_system_glissando_not_duplicated_as_cross_system() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Both notes in the same system — glissando resolves within system
+    let measures = vec![
+        MeasureContent {
+            events: vec![
+                glissando_note(0, GlissandoStyle::Line),
+                quarter_note(8),
+            ],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // One glissando line (within-system), not three (within + 2 half)
+    let line_count = output.matches("<line ").count();
+    // 5 staff lines + 2 stems + 1 glissando = 8
+    assert!(
+        line_count <= 10,
+        "within-system glissando should not be duplicated as cross-system: {line_count}"
+    );
+}
+
+#[test]
+fn cross_system_glissando_differs_from_no_glissando() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_gliss = vec![
+        MeasureContent {
+            events: vec![glissando_note(4, GlissandoStyle::Line)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let without_gliss = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let page_with = layout_page(&prefix(), &with_gliss, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_without = layout_page(&prefix(), &without_gliss, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let out_with = draw_page(&font, &config, &page_with).unwrap().to_svg();
+    let out_without = draw_page(&font, &config, &page_without).unwrap().to_svg();
+
+    assert_ne!(out_with, out_without, "glissando version should differ from non-glissando");
+}
+
+#[test]
+fn cross_system_glissando_with_text_shows_label() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![glissando_note(0, GlissandoStyle::LineWithText)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    assert!(
+        output.contains("gliss."),
+        "LineWithText cross-system glissando should show 'gliss.' label"
+    );
 }

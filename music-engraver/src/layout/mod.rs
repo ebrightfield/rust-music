@@ -94,7 +94,10 @@ pub use articulation::{
 };
 pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
 pub use expression::{layout_expression, ExpressionLayout};
-pub use glissando::{layout_glissando, GlissandoLayout, GlissandoStyle, GLISSANDO_H_PADDING_SS};
+pub use glissando::{
+    layout_glissando, layout_half_glissando_left, layout_half_glissando_right, GlissandoLayout,
+    GlissandoStyle, GLISSANDO_H_PADDING_SS,
+};
 pub use grace::{
     grace_note_glyph, grace_note_x_reservation, layout_grace_note, GraceNoteKind, GraceNoteLayout,
     GRACE_NOTE_SCALE, GRACE_NOTE_SPACING_SS,

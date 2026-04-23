@@ -63,6 +63,7 @@ fn main() {
             ],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         // Measure 2: dotted half G4, quarter rest
         MeasureContent {
@@ -82,6 +83,7 @@ fn main() {
             ],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         },
         // Measure 3: E4 eighth, F#4 eighth, G4 eighth, A4 eighth, B4 half
         MeasureContent {
@@ -129,6 +131,7 @@ fn main() {
             ],
             barline: BarlineStyle::Final,
             volta: None,
+            additional_voices: vec![],
         },
     ];
 

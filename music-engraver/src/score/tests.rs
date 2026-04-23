@@ -4384,3 +4384,293 @@
             panic!("expected Note event");
         }
     }
+
+    // --- cross-system glissando tests ---
+
+    #[test]
+    fn cross_system_glissando_adds_extra_lines() {
+        let with_gliss = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .glissando(GlissandoStyle::Line)
+            .barline()
+            .note(p("G", 5), Duration::QTR)
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        let without_gliss = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .barline()
+            .note(p("G", 5), Duration::QTR)
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        let gliss_lines = with_gliss.matches("<line ").count();
+        let no_gliss_lines = without_gliss.matches("<line ").count();
+
+        assert!(
+            gliss_lines > no_gliss_lines,
+            "cross-system glissando should add extra lines: {gliss_lines} vs {no_gliss_lines}"
+        );
+    }
+
+    #[test]
+    fn cross_system_glissando_differs_from_no_glissando() {
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .barline()
+            .note(p("A", 5), Duration::QTR)
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .glissando(GlissandoStyle::Line)
+            .barline()
+            .note(p("A", 5), Duration::QTR)
+            .end_barline()
+            .measures_per_system(1)
+            .render_svg();
+
+        assert_ne!(without, with, "cross-system glissando should change SVG output");
+    }
+
+    // --- multi-voice ---
+
+    #[test]
+    fn voice_defaults_to_zero() {
+        let builder = ScoreBuilder::new();
+        assert_eq!(builder.current_voice, 0);
+    }
+
+    #[test]
+    fn voice_switches_active_voice() {
+        let builder = ScoreBuilder::new().voice(1);
+        assert_eq!(builder.current_voice, 1);
+    }
+
+    #[test]
+    fn barline_resets_voice_to_zero() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .voice(1)
+            .note(p("C", 4), Duration::WHOLE)
+            .barline();
+        assert_eq!(builder.current_voice, 0);
+    }
+
+    #[test]
+    fn end_barline_resets_voice_to_zero() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .voice(1)
+            .note(p("C", 4), Duration::WHOLE)
+            .end_barline();
+        assert_eq!(builder.current_voice, 0);
+    }
+
+    #[test]
+    fn single_voice_no_additional_voices() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("D", 4), Duration::QTR)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0].events.len(), 2);
+        assert!(contents[0].additional_voices.is_empty());
+    }
+
+    #[test]
+    fn two_voices_splits_into_primary_and_additional() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::HALF)
+            .note(p("D", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::WHOLE)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        assert_eq!(contents.len(), 1);
+        // Voice 0: 2 half notes
+        assert_eq!(contents[0].events.len(), 2);
+        // Voice 1: 1 whole note
+        assert_eq!(contents[0].additional_voices.len(), 1);
+        assert_eq!(contents[0].additional_voices[0].len(), 1);
+    }
+
+    #[test]
+    fn multi_voice_forces_stem_up_on_voice_0() {
+        use crate::layout::stem::StemDirection;
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            // High note normally gets stem down, but voice 0 in
+            // multi-voice forces stem up
+            .note(p("A", 5), Duration::QTR)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Voice 0 note should have stem up forced
+        match &contents[0].events[0] {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.stem_direction, Some(StemDirection::Up),
+                    "voice 0 in multi-voice should force stem up");
+            }
+            other => panic!("expected Note, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn multi_voice_forces_stem_down_on_voice_1() {
+        use crate::layout::stem::StemDirection;
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .voice(1)
+            // Low note normally gets stem up, but voice 1 forces stem down
+            .note(p("C", 4), Duration::QTR)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Voice 1 note should have stem down forced
+        match &contents[0].additional_voices[0][0] {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.stem_direction, Some(StemDirection::Down),
+                    "voice 1 should force stem down");
+            }
+            other => panic!("expected Note, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_voice_does_not_force_stems() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("A", 5), Duration::QTR)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Single voice should use auto stem direction (None = auto)
+        match &contents[0].events[0] {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.stem_direction, None,
+                    "single voice should leave stem direction as auto (None)");
+            }
+            other => panic!("expected Note, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn multi_voice_render_svg_produces_valid_output() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 5), Duration::HALF)
+            .note(p("D", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert!(svg.starts_with("<svg"), "should produce valid SVG");
+        assert!(svg.contains("</svg>"));
+        // Voice 0 has 2 notes, voice 1 has 1 note = 3 note paths minimum
+        let path_count = svg.matches("<path ").count();
+        assert!(path_count >= 3,
+            "multi-voice SVG should have at least 3 paths (clef + noteheads), got {path_count}");
+    }
+
+    #[test]
+    fn voice_reset_across_measures() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::HALF)
+            .voice(1)
+            .note(p("C", 4), Duration::HALF)
+            .barline()
+            // After barline, voice should be 0 again
+            .note(p("D", 5), Duration::WHOLE)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Measure 0: multi-voice (voice 0 + voice 1)
+        assert_eq!(contents[0].additional_voices.len(), 1);
+        // Measure 1: single voice (only voice 0)
+        assert!(contents[1].additional_voices.is_empty(),
+            "measure after barline should be single-voice since voice resets to 0");
+    }
+
+    #[test]
+    fn multi_voice_beam_group_forces_stems() {
+        use crate::layout::stem::StemDirection;
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .beam_group(vec![
+                (p("E", 5), Duration::EIGHTH),
+                (p("F", 5), Duration::EIGHTH),
+            ])
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Voice 0 beam group should have stem up forced
+        match &contents[0].events[0] {
+            MeasureEvent::BeamGroup(bg) => {
+                assert_eq!(bg.stem_direction, Some(StemDirection::Up),
+                    "voice 0 beam group in multi-voice should force stem up");
+            }
+            other => panic!("expected BeamGroup, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn multi_voice_chord_forces_stems() {
+        use crate::layout::stem::StemDirection;
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(vec![p("E", 5), p("G", 5)], Duration::HALF)
+            .voice(1)
+            .chord(vec![p("C", 4), p("E", 4)], Duration::HALF)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Voice 0 chord: stems up
+        match &contents[0].events[0] {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.stem_direction, Some(StemDirection::Up));
+            }
+            other => panic!("expected Chord, got {other:?}"),
+        }
+        // Voice 1 chord: stems down
+        match &contents[0].additional_voices[0][0] {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.stem_direction, Some(StemDirection::Down));
+            }
+            other => panic!("expected Chord, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn multi_voice_rest_has_no_stem_direction() {
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .voice(1)
+            .rest(Duration::QTR)
+            .end_barline();
+        let contents = builder.build_measure_contents();
+        // Voice 1 rest should still be a rest (no stem to force)
+        match &contents[0].additional_voices[0][0] {
+            MeasureEvent::Rest(r) => {
+                assert_eq!(r.duration_log2, 2, "quarter rest log2 = 2");
+            }
+            other => panic!("expected Rest, got {other:?}"),
+        }
+    }

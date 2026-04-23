@@ -466,6 +466,7 @@ mod tests {
             events: vec![quarter_note(pos)],
             barline: BarlineStyle::Single,
             volta: None,
+            additional_voices: vec![],
         }
     }
 

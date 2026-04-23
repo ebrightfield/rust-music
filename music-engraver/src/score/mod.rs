@@ -72,6 +72,26 @@ use event::{
     note_altered_in_key, note_key, resolve_accidental, should_show_accidental,
 };
 
+/// Force stem direction on a `MeasureEvent` based on voice index.
+///
+/// Voice 0 (and even voices) get stems up; voice 1 (and odd voices) get stems down.
+/// This follows standard engraving convention for two-voice writing on a single staff.
+fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
+    use crate::layout::stem::StemDirection;
+    let dir = if voice % 2 == 0 {
+        StemDirection::Up
+    } else {
+        StemDirection::Down
+    };
+    match event {
+        MeasureEvent::Note(n) => n.stem_direction = Some(dir),
+        MeasureEvent::Chord(c) => c.stem_direction = Some(dir),
+        MeasureEvent::BeamGroup(bg) => bg.stem_direction = Some(dir),
+        MeasureEvent::TupletGroup(tg) => tg.beam_group.stem_direction = Some(dir),
+        MeasureEvent::Rest(_) => {} // rests have no stem
+    }
+}
+
 /// Builder for constructing a score from `music` crate types and rendering to SVG.
 ///
 /// Events are grouped into measures delimited by `barline()` / `end_barline()` calls.
@@ -87,9 +107,14 @@ pub struct ScoreBuilder {
     /// When None and time_sig is Some, uses Numeric display.
     time_sig_kind: Option<TimeSignatureKind>,
     /// Events accumulated for the current (in-progress) measure.
-    current_events: Vec<ScoreEvent>,
-    /// Completed measures: (events, barline style, optional volta annotation).
-    pub(crate) measures: Vec<(Vec<ScoreEvent>, BarlineStyle, Option<VoltaAnnotation>)>,
+    /// Each entry is `(voice_index, event)` where voice 0 is the primary voice.
+    current_events: Vec<(u8, ScoreEvent)>,
+    /// Completed measures: (voiced events, barline style, optional volta annotation).
+    pub(crate) measures: Vec<(Vec<(u8, ScoreEvent)>, BarlineStyle, Option<VoltaAnnotation>)>,
+    /// Active voice index (0 = primary). Voice 0 stems follow auto-detection;
+    /// when multiple voices are present, voice 0 forces stems up, voice 1 forces
+    /// stems down.
+    current_voice: u8,
     /// Measures per system (for line breaking). 0 = auto (4 per system).
     pub(crate) measures_per_system: usize,
     /// System width in font design units. 0 = auto.
@@ -118,6 +143,7 @@ impl ScoreBuilder {
             time_sig_kind: None,
             current_events: Vec::new(),
             measures: Vec::new(),
+            current_voice: 0,
             measures_per_system: 4,
             system_width: 0.0,
             auto_breaks: false,
@@ -217,7 +243,7 @@ impl ScoreBuilder {
 
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Note { pitch, duration, annotations: NoteAnnotations::default() });
+        self.current_events.push((self.current_voice, ScoreEvent::Note { pitch, duration, annotations: NoteAnnotations::default() }));
         self
     }
 
@@ -228,7 +254,7 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()`. Has no effect if the last event
     /// is not a note.
     pub fn tie(mut self) -> Self {
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.tie_forward = true;
         }
         self
@@ -240,7 +266,7 @@ impl ScoreBuilder {
     /// `slur_end()` called on it, within the same system. The curve direction
     /// is determined by the stem direction of the start note.
     pub fn slur_start(mut self) -> Self {
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.slur_start = true;
         }
         self
@@ -251,7 +277,7 @@ impl ScoreBuilder {
     /// Pairs with a preceding `slur_start()` call. The slur is drawn between
     /// the most recent `slur_start` note and this note.
     pub fn slur_end(mut self) -> Self {
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.slur_end = true;
         }
         self
@@ -264,7 +290,7 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()` or `.chord()`. Has no effect
     /// if the last event is not a note or chord.
     pub fn dynamic(mut self, dyn_mark: Dynamic) -> Self {
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.dynamic = Some(dyn_mark);
         }
         self
@@ -274,7 +300,7 @@ impl ScoreBuilder {
     /// recently added note or chord. The wedge extends from this note to the
     /// next note/chord with `hairpin_end()`.
     pub fn hairpin_start(mut self, kind: HairpinType) -> Self {
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.hairpin_start = Some(kind);
         }
         self
@@ -282,7 +308,7 @@ impl ScoreBuilder {
 
     /// Mark the most recently added note or chord as the end of a hairpin wedge.
     pub fn hairpin_end(mut self) -> Self {
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.hairpin_end = true;
         }
         self
@@ -309,7 +335,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn rehearsal_mark(mut self, text: impl Into<String>, style: RehearsalStyle) -> Self {
         let mark = Some((text.into(), style));
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.rehearsal_mark = mark;
         }
         self
@@ -324,7 +350,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn tempo(mut self, mark: TempoMark) -> Self {
         let m = Some(mark);
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.tempo_mark = m;
         }
         self
@@ -339,7 +365,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn expression(mut self, text: impl Into<String>) -> Self {
         let e = Some(text.into());
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) = self.current_events.last_mut() {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
             annotations.expression = e;
         }
         self
@@ -357,7 +383,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn lyric(mut self, syllable: LyricSyllable) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.lyric = Some(syllable);
@@ -372,7 +398,7 @@ impl ScoreBuilder {
     /// Fermata is always placed above. No-op if the last event was a rest.
     pub fn articulation(mut self, artic: Articulation) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.articulations.push(artic);
@@ -388,7 +414,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn ornament(mut self, orn: Ornament) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.ornament = Some(orn);
@@ -402,7 +428,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn navigation_sign(mut self, sign: NavigationSign) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.navigation_sign = Some(sign);
@@ -416,7 +442,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn ottava_start(mut self, kind: OttavaKind) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.ottava_start = Some(kind);
@@ -429,7 +455,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn ottava_end(mut self) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.ottava_end = true;
@@ -443,7 +469,7 @@ impl ScoreBuilder {
     /// dynamics, expression text, and lyrics. No-op if the last event was a rest.
     pub fn pedal_down(mut self) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.pedal = Some(PedalMark::Down);
@@ -457,7 +483,7 @@ impl ScoreBuilder {
     /// vertical position as pedal-down markings. No-op if the last event was a rest.
     pub fn pedal_up(mut self) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.pedal = Some(PedalMark::Up);
@@ -472,7 +498,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn tremolo(mut self, count: TremoloCount) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.tremolo = Some(count);
@@ -490,7 +516,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn arpeggio(mut self, direction: ArpeggioDirection) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.arpeggio = Some(direction);
@@ -505,7 +531,7 @@ impl ScoreBuilder {
     /// No-op if the last event was a rest.
     pub fn breath_mark(mut self, mark: BreathMark) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.breath_mark = Some(mark);
@@ -518,7 +544,7 @@ impl ScoreBuilder {
     /// during system rendering. No-op if the last event is a rest.
     pub fn glissando(mut self, style: GlissandoStyle) -> Self {
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.glissando_start = Some(style);
@@ -538,7 +564,7 @@ impl ScoreBuilder {
         let clef = self.clef.to_clef();
         let staff_pos = pitch_to_staff_position(&pitch, &clef);
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.grace_note = Some((staff_pos, kind));
@@ -554,7 +580,7 @@ impl ScoreBuilder {
     pub fn chord_symbol(mut self, symbol: impl Into<String>) -> Self {
         let s = Some(symbol.into());
         if let Some(
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
             annotations.chord_symbol = s;
@@ -567,7 +593,7 @@ impl ScoreBuilder {
     /// All notes in the chord share the same duration. Noteheads that are a
     /// second apart are automatically offset to avoid collision.
     pub fn chord(mut self, pitches: Vec<Pitch>, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Chord { pitches, duration, annotations: NoteAnnotations::default() });
+        self.current_events.push((self.current_voice, ScoreEvent::Chord { pitches, duration, annotations: NoteAnnotations::default() }));
         self
     }
 
@@ -594,7 +620,7 @@ impl ScoreBuilder {
     ///     .render_svg();
     /// ```
     pub fn beam_group(mut self, notes: Vec<(Pitch, Duration)>) -> Self {
-        self.current_events.push(ScoreEvent::BeamGroup { notes });
+        self.current_events.push((self.current_voice, ScoreEvent::BeamGroup { notes }));
         self
     }
 
@@ -620,13 +646,13 @@ impl ScoreBuilder {
     ///     .render_svg();
     /// ```
     pub fn tuplet(mut self, tuplet_number: u32, notes: Vec<(Pitch, Duration)>) -> Self {
-        self.current_events.push(ScoreEvent::TupletGroup { notes, tuplet_number });
+        self.current_events.push((self.current_voice, ScoreEvent::TupletGroup { notes, tuplet_number }));
         self
     }
 
     /// Add a rest to the current measure.
     pub fn rest(mut self, duration: Duration) -> Self {
-        self.current_events.push(ScoreEvent::Rest { duration });
+        self.current_events.push((self.current_voice, ScoreEvent::Rest { duration }));
         self
     }
 
@@ -694,27 +720,32 @@ impl ScoreBuilder {
     }
 
     /// End the current measure with a single barline and start a new one.
+    /// Resets the active voice to 0.
     pub fn barline(mut self) -> Self {
         let events = std::mem::take(&mut self.current_events);
         let volta = self.resolve_volta();
         self.measures.push((events, BarlineStyle::Single, volta));
+        self.current_voice = 0;
         self
     }
 
     /// End the current measure with a final (double) barline.
-    /// Typically called at the end of the piece.
+    /// Typically called at the end of the piece. Resets the active voice to 0.
     pub fn end_barline(mut self) -> Self {
         let events = std::mem::take(&mut self.current_events);
         let volta = self.resolve_volta();
         self.measures.push((events, BarlineStyle::Final, volta));
+        self.current_voice = 0;
         self
     }
 
     /// End the current measure with a specific barline style.
+    /// Resets the active voice to 0.
     pub fn barline_style(mut self, style: BarlineStyle) -> Self {
         let events = std::mem::take(&mut self.current_events);
         let volta = self.resolve_volta();
         self.measures.push((events, style, volta));
+        self.current_voice = 0;
         self
     }
 
@@ -725,29 +756,83 @@ impl ScoreBuilder {
             let volta = self.resolve_volta();
             self.measures.push((events, BarlineStyle::Final, volta));
         }
+        self.current_voice = 0;
     }
 
     /// Convert accumulated `ScoreEvent`s into `MeasureContent`s suitable for layout.
     ///
     /// Each measure's accidentals are tracked independently (courtesy naturals,
-    /// suppression of redundant accidentals within a measure).
+    /// suppression of redundant accidentals within a measure). When multiple
+    /// voices are present, voice 0 goes in `events` and voices 1+ go in
+    /// `additional_voices`. Multi-voice measures force stem directions:
+    /// voice 0 = stems up, voice 1 = stems down.
     pub(crate) fn build_measure_contents(&self) -> Vec<MeasureContent> {
         let clef = self.clef.to_clef();
         self.measures
             .iter()
-            .map(|(events, barline, volta)| {
+            .map(|(voiced_events, barline, volta)| {
+                // Determine the maximum voice index in this measure.
+                let max_voice = voiced_events.iter().map(|(v, _)| *v).max().unwrap_or(0);
+                let is_multi_voice = max_voice > 0;
+
                 let mut seen: AccidentalTracker = HashMap::new();
-                let measure_events: Vec<MeasureEvent> = events
-                    .iter()
-                    .map(|e| convert_event(e, &clef, &self.key_sig, Some(&mut seen)))
-                    .collect();
+
+                // Separate events by voice.
+                let mut voice_buckets: Vec<Vec<MeasureEvent>> =
+                    (0..=max_voice).map(|_| Vec::new()).collect();
+
+                for (voice, event) in voiced_events {
+                    let mut me = convert_event(event, &clef, &self.key_sig, Some(&mut seen));
+                    if is_multi_voice {
+                        force_stem_direction(&mut me, *voice);
+                    }
+                    voice_buckets[*voice as usize].push(me);
+                }
+
+                let primary = voice_buckets.remove(0);
                 MeasureContent {
-                    events: measure_events,
+                    events: primary,
                     barline: *barline,
                     volta: volta.clone(),
+                    additional_voices: voice_buckets,
                 }
             })
             .collect()
+    }
+
+    /// Switch the active voice for subsequent events.
+    ///
+    /// Voice 0 is the primary (default) voice. Voice 1 is the secondary voice.
+    /// When a measure contains events from more than one voice, stem directions
+    /// are forced: voice 0 stems up, voice 1 stems down. Voices 2+ default to
+    /// stems up (even voices up, odd voices down).
+    ///
+    /// Call `voice(0)` to return to the primary voice. The voice resets to 0
+    /// at each barline automatically.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use music_engraver::score::ScoreBuilder;
+    /// # use music::notation::clef::Clef;
+    /// # use music::notation::rhythm::duration::Duration;
+    /// # use music::note::pitch::Pitch;
+    /// # use music::note::note::Note;
+    /// let svg = ScoreBuilder::new()
+    ///     .clef(Clef::Treble)
+    ///     .time_signature(4, 4)
+    ///     // Voice 0: melody (stems up)
+    ///     .note(Pitch::new(Note::E, 5).unwrap(), Duration::HALF)
+    ///     .note(Pitch::new(Note::D, 5).unwrap(), Duration::HALF)
+    ///     // Voice 1: bass (stems down)
+    ///     .voice(1)
+    ///     .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+    ///     .voice(0) // back to primary
+    ///     .end_barline()
+    ///     .render_svg();
+    /// ```
+    pub fn voice(mut self, voice_index: u8) -> Self {
+        self.current_voice = voice_index;
+        self
     }
 
     /// Build the system prefix (clef, key sig, time sig) for this score's stave.

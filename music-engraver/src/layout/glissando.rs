@@ -62,7 +62,7 @@ pub fn layout_glissando(
     style: GlissandoStyle,
     _stem_direction: Option<StemDirection>,
 ) -> Option<GlissandoLayout> {
-    let ss = staff.staff_space as f64;
+    let ss = staff.staff_space;
     let h_pad = GLISSANDO_H_PADDING_SS * ss;
     // Notehead advance width is approximately 1.18 staff spaces in Bravura.
     // The x_source position is at the notehead's left edge, so we advance
@@ -109,6 +109,96 @@ pub fn layout_glissando(
         text_x,
         text_y,
         text_font_size,
+    })
+}
+
+/// Compute a trailing half-glissando from a note to the right edge of a system.
+///
+/// Used for cross-system glissandos: the note at the end of system N has
+/// `glissando_start` but no target within the system. The half-line slopes
+/// gently toward the staff center, hinting at a continuation.
+pub fn layout_half_glissando_right(
+    x_source: f64,
+    staff_pos_source: i8,
+    x_right_edge: f64,
+    staff: &StaffLayout,
+    style: GlissandoStyle,
+) -> Option<GlissandoLayout> {
+    let ss = staff.staff_space;
+    let notehead_width = ss * 1.18;
+    let h_pad = GLISSANDO_H_PADDING_SS * ss;
+
+    let x_start = x_source + notehead_width + h_pad;
+    let x_end = x_right_edge - h_pad * 0.5;
+
+    if x_end - x_start < ss * 0.3 {
+        return None;
+    }
+
+    let y_source = staff.y_of(staff_pos_source);
+    // Slope toward the middle line (staff pos 4) to suggest continuation
+    let mid_y = staff.y_of(4);
+    let slope_ratio = 0.25;
+    let y_end = y_source + (mid_y - y_source) * slope_ratio;
+
+    let stroke_width = ss * 0.08;
+    let show_text = style == GlissandoStyle::LineWithText;
+    let text_x = (x_start + x_end) / 2.0;
+    let text_y = (y_source + y_end) / 2.0;
+    let text_font_size = ss * 0.9;
+
+    Some(GlissandoLayout {
+        x_start,
+        y_start: y_source,
+        x_end,
+        y_end,
+        stroke_width,
+        show_text,
+        text_x,
+        text_y,
+        text_font_size,
+    })
+}
+
+/// Compute an incoming half-glissando from the left edge of a system to a note.
+///
+/// Used for cross-system glissandos: the first note in system N+1 receives
+/// a continuation line from the left. The line slopes from the staff center
+/// toward the target note.
+pub fn layout_half_glissando_left(
+    x_left_edge: f64,
+    x_target: f64,
+    staff_pos_target: i8,
+    staff: &StaffLayout,
+) -> Option<GlissandoLayout> {
+    let ss = staff.staff_space;
+    let h_pad = GLISSANDO_H_PADDING_SS * ss;
+
+    let x_start = x_left_edge + h_pad * 0.5;
+    let x_end = x_target - h_pad;
+
+    if x_end - x_start < ss * 0.3 {
+        return None;
+    }
+
+    let y_target = staff.y_of(staff_pos_target);
+    // Start from near the middle line, slope toward the target
+    let mid_y = staff.y_of(4);
+    let slope_ratio = 0.25;
+    let y_start = y_target + (mid_y - y_target) * slope_ratio;
+
+    let stroke_width = ss * 0.08;
+
+    Some(GlissandoLayout {
+        x_start,
+        y_start,
+        x_end,
+        y_end: y_target,
+        stroke_width,
+        show_text: false, // no text label on incoming half
+        text_x: 0.0,
+        text_y: 0.0,
+        text_font_size: 0.0,
     })
 }
 
@@ -216,5 +306,105 @@ mod tests {
         let desc = layout_glissando(X1, 8, X2, 0, &staff, GlissandoStyle::Line, None).unwrap();
         // y_start and y_end should be swapped
         assert!((asc.y_start - desc.y_end).abs() < 1.0, "endpoint y values should approximately swap");
+    }
+
+    // --- half-glissando right (trailing) ---
+
+    #[test]
+    fn half_right_produces_layout_for_valid_span() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line);
+        assert!(layout.is_some(), "valid span should produce layout");
+    }
+
+    #[test]
+    fn half_right_x_start_past_notehead() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
+        assert!(layout.x_start > 100.0, "x_start should be right of source x");
+    }
+
+    #[test]
+    fn half_right_x_end_near_staff_edge() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
+        assert!(layout.x_end < 5000.0, "x_end should be left of right edge");
+        assert!(layout.x_end > 4900.0, "x_end should be near the right edge");
+    }
+
+    #[test]
+    fn half_right_slopes_toward_middle() {
+        let staff = test_staff();
+        let mid_y = staff.y_of(4);
+        // Source at bottom line (pos 0), above middle → should slope toward middle
+        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
+        let source_y = staff.y_of(0);
+        // y_end should be between source and mid_y
+        assert!(
+            (layout.y_end - source_y).abs() < (source_y - mid_y).abs(),
+            "y_end should be between source and middle line"
+        );
+    }
+
+    #[test]
+    fn half_right_too_close_returns_none() {
+        let staff = test_staff();
+        // Source close to right edge
+        let layout = layout_half_glissando_right(4900.0, 0, 5000.0, &staff, GlissandoStyle::Line);
+        assert!(layout.is_none(), "too-close span should return None");
+    }
+
+    #[test]
+    fn half_right_with_text_shows_text() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::LineWithText).unwrap();
+        assert!(layout.show_text, "LineWithText should show text on trailing half");
+    }
+
+    // --- half-glissando left (incoming) ---
+
+    #[test]
+    fn half_left_produces_layout_for_valid_span() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff);
+        assert!(layout.is_some(), "valid span should produce layout");
+    }
+
+    #[test]
+    fn half_left_x_end_left_of_target() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff).unwrap();
+        assert!(layout.x_end < 1200.0, "x_end should be left of target x");
+    }
+
+    #[test]
+    fn half_left_slopes_toward_target() {
+        let staff = test_staff();
+        let target_y = staff.y_of(8);
+        let mid_y = staff.y_of(4);
+        let layout = layout_half_glissando_left(0.0, 1200.0, 8, &staff).unwrap();
+        // y_start should be between target and mid_y
+        assert!(
+            (layout.y_start - target_y).abs() < (target_y - mid_y).abs(),
+            "y_start should be between target and middle line"
+        );
+        assert!(
+            (layout.y_end - target_y).abs() < 0.01,
+            "y_end should match target y"
+        );
+    }
+
+    #[test]
+    fn half_left_no_text() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff).unwrap();
+        assert!(!layout.show_text, "incoming half should never show text");
+    }
+
+    #[test]
+    fn half_left_too_close_returns_none() {
+        let staff = test_staff();
+        let layout = layout_half_glissando_left(1100.0, 1200.0, 4, &staff);
+        assert!(layout.is_none(), "too-close span should return None");
     }
 }

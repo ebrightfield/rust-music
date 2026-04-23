@@ -19,6 +19,7 @@ use music_engraver::layout::arpeggio::ArpeggioDirection;
 use music_engraver::layout::breath::BreathMark;
 use music_engraver::layout::articulation::Articulation;
 use music_engraver::layout::dynamics::Dynamic;
+use music_engraver::layout::glissando::GlissandoStyle;
 use music_engraver::layout::grace::GraceNoteKind;
 use music_engraver::layout::hairpin::HairpinType;
 use music_engraver::layout::key_signature::KeySignature;
@@ -1713,6 +1714,189 @@ fn golden_breath_marks() {
     assert_golden("breath_marks", &svg);
 }
 
+// --- Glissandos -----------------------------------------------------------
+
+fn build_glissandos() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: ascending plain line C4→G4, descending plain line E5→B4
+        .note(p("C", 4), Duration::QTR)
+        .glissando(GlissandoStyle::Line)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .glissando(GlissandoStyle::Line)
+        .note(p("B", 4), Duration::QTR)
+        .barline()
+        // Measure 2: ascending with "gliss." text, wide interval
+        .note(p("C", 4), Duration::HALF)
+        .glissando(GlissandoStyle::LineWithText)
+        .note(p("A", 5), Duration::HALF)
+        .barline()
+        // Measure 3: descending with text label G5→C4
+        .note(p("G", 5), Duration::QTR)
+        .glissando(GlissandoStyle::LineWithText)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::HALF)
+        .barline()
+        // Measure 4: same-pitch horizontal glissando + plain quarter
+        .note(p("D", 5), Duration::HALF)
+        .glissando(GlissandoStyle::Line)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_glissandos() {
+    let svg = build_glissandos();
+
+    // Structural assertions: glissando adds lines beyond staff+stems
+    let line_count = svg.matches("<line ").count();
+    assert!(
+        line_count >= 15,
+        "should have ≥15 lines (5 staff + stems + glissando lines): {line_count}"
+    );
+
+    // "gliss." text should appear for LineWithText style
+    let gliss_text_count = svg.matches("gliss.").count();
+    assert!(
+        gliss_text_count >= 2,
+        "should have ≥2 'gliss.' labels: {gliss_text_count}"
+    );
+
+    // Line style vs LineWithText should differ
+    let line_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::HALF)
+        .glissando(GlissandoStyle::Line)
+        .note(p("G", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+    let with_text = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::HALF)
+        .glissando(GlissandoStyle::LineWithText)
+        .note(p("G", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+    assert_ne!(line_only, with_text, "Line and LineWithText should differ");
+
+    // Glissando should add lines compared to no-glissando version
+    let no_gliss = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::HALF)
+        .note(p("G", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+    let with_gliss = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::HALF)
+        .glissando(GlissandoStyle::Line)
+        .note(p("G", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+    let no_gliss_lines = no_gliss.matches("<line ").count();
+    let with_gliss_lines = with_gliss.matches("<line ").count();
+    assert!(
+        with_gliss_lines > no_gliss_lines,
+        "glissando should add at least one line: {} vs {}",
+        with_gliss_lines,
+        no_gliss_lines
+    );
+
+    assert_golden("glissandos", &svg);
+}
+
+fn build_cross_system_glissandos() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: ascending quarter notes
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .glissando(GlissandoStyle::Line)
+        .barline()
+        // Measure 2: target of cross-system glissando, then descending with text gliss
+        .note(p("D", 5), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .glissando(GlissandoStyle::LineWithText)
+        .barline()
+        // Measure 3: target of text glissando across system break, then plain notes
+        .note(p("C", 4), Duration::HALF)
+        .note(p("E", 4), Duration::HALF)
+        .barline()
+        // Measure 4: within-system glissando for contrast
+        .note(p("G", 4), Duration::HALF)
+        .glissando(GlissandoStyle::Line)
+        .note(p("C", 5), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_cross_system_glissandos() {
+    let svg = build_cross_system_glissandos();
+
+    // Cross-system glissando should produce extra lines
+    let line_count = svg.matches("<line ").count();
+    assert!(
+        line_count >= 15,
+        "should have ≥15 lines (10 staff + stems + glissando lines): {line_count}"
+    );
+
+    // LineWithText cross-system glissando should show "gliss." label
+    let gliss_text_count = svg.matches("gliss.").count();
+    assert!(
+        gliss_text_count >= 1,
+        "cross-system LineWithText should show at least 1 'gliss.' label: {gliss_text_count}"
+    );
+
+    // Compare with version without glissandos
+    let without_gliss = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .barline()
+        .note(p("D", 5), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("C", 4), Duration::HALF)
+        .note(p("E", 4), Duration::HALF)
+        .barline()
+        .note(p("G", 4), Duration::HALF)
+        .note(p("C", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+
+    let without_lines = without_gliss.matches("<line ").count();
+    assert!(
+        line_count > without_lines,
+        "glissando version should have more lines than plain: {line_count} vs {without_lines}"
+    );
+
+    assert_golden("cross_system_glissandos", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1759,6 +1943,8 @@ fn golden_baselines_are_valid_svgs() {
         "tab_let_ring",
         "arpeggios",
         "breath_marks",
+        "glissandos",
+        "cross_system_glissandos",
     ];
 
     for name in &names {
