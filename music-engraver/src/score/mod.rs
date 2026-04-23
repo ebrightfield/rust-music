@@ -72,13 +72,16 @@ use event::{
     note_altered_in_key, note_key, resolve_accidental, should_show_accidental,
 };
 
+/// A completed measure: voiced events, barline style, and optional volta annotation.
+pub(crate) type CompletedMeasure = (Vec<(u8, ScoreEvent)>, BarlineStyle, Option<VoltaAnnotation>);
+
 /// Force stem direction on a `MeasureEvent` based on voice index.
 ///
 /// Voice 0 (and even voices) get stems up; voice 1 (and odd voices) get stems down.
 /// This follows standard engraving convention for two-voice writing on a single staff.
 fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
     use crate::layout::stem::StemDirection;
-    let dir = if voice % 2 == 0 {
+    let dir = if voice.is_multiple_of(2) {
         StemDirection::Up
     } else {
         StemDirection::Down
@@ -109,8 +112,8 @@ pub struct ScoreBuilder {
     /// Events accumulated for the current (in-progress) measure.
     /// Each entry is `(voice_index, event)` where voice 0 is the primary voice.
     current_events: Vec<(u8, ScoreEvent)>,
-    /// Completed measures: (voiced events, barline style, optional volta annotation).
-    pub(crate) measures: Vec<(Vec<(u8, ScoreEvent)>, BarlineStyle, Option<VoltaAnnotation>)>,
+    /// Completed measures.
+    pub(crate) measures: Vec<CompletedMeasure>,
     /// Active voice index (0 = primary). Voice 0 stems follow auto-detection;
     /// when multiple voices are present, voice 0 forces stems up, voice 1 forces
     /// stems down.

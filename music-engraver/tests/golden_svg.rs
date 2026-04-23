@@ -1897,6 +1897,80 @@ fn golden_cross_system_glissandos() {
     assert_golden("cross_system_glissandos", &svg);
 }
 
+/// Multi-voice writing: two voices on one staff with forced stem directions.
+fn build_voices() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Measure 1: voice 0 = melody (stems up), voice 1 = bass (stems down)
+        .note(p("E", 5), Duration::HALF)
+        .note(p("D", 5), Duration::HALF)
+        .voice(1)
+        .note(p("C", 4), Duration::WHOLE)
+        .barline()
+        // Measure 2: voice 0 = quarter notes up, voice 1 = half notes down
+        .note(p("G", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .voice(1)
+        .note(p("B", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_voices() {
+    let svg = build_voices();
+
+    // Must be valid SVG
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Multi-voice forces stem directions — both up and down stems should be present.
+    // Voice 0 stems up (right side of notehead), voice 1 stems down (left side).
+    // Count paths (noteheads + clef glyph) — at minimum: 1 clef + 6 voice-0 notes + 3 voice-1 notes = 10
+    let path_count = svg.matches("<path ").count();
+    assert!(
+        path_count >= 10,
+        "should have at least 10 paths (clef + noteheads), got {path_count}"
+    );
+
+    // Count lines — staff lines + stems + barlines.
+    // 5 staff lines + at least 9 stems + barlines = ≥16
+    let line_count = svg.matches("<line ").count();
+    assert!(
+        line_count >= 16,
+        "should have at least 16 lines (staff + stems + barlines), got {line_count}"
+    );
+
+    // Compare against single-voice rendering — multi-voice should differ
+    let single_voice = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("E", 5), Duration::HALF)
+        .note(p("D", 5), Duration::HALF)
+        .barline()
+        .note(p("G", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .end_barline()
+        .render_svg();
+
+    assert_ne!(
+        svg, single_voice,
+        "multi-voice output should differ from single-voice"
+    );
+
+    assert_golden("voices", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -1945,6 +2019,7 @@ fn golden_baselines_are_valid_svgs() {
         "breath_marks",
         "glissandos",
         "cross_system_glissandos",
+        "voices",
     ];
 
     for name in &names {
