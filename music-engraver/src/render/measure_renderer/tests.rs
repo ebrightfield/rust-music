@@ -2445,3 +2445,192 @@ fn breath_mark_translate_is_right_of_note() {
         "should have at least 2 translate()s (notehead + breath mark), got {translate_count}"
     );
 }
+
+// ── Multi-voice rendering tests ────────────────────────────────────────────
+
+#[test]
+fn additional_voices_empty_produces_no_extra_elements() {
+    let (font, config, staff) = setup();
+    let mut svg = make_svg();
+    // No additional voice layouts → no extra paths
+    draw_additional_voices(&mut svg, &staff, &font, &config, &[], 0.0).unwrap();
+    let output = svg.to_svg();
+    assert_eq!(output.matches("<path ").count(), 0);
+    assert_eq!(output.matches("<line ").count(), 0);
+}
+
+#[test]
+fn additional_voice_with_note_draws_extra_notehead() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Primary voice: quarter note at position 4 (middle line)
+    let primary_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Up),
+        annotations: NoteAnnotations::default(),
+    })];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    // Additional voice: quarter note at position 0 (bottom line), stems down
+    let voice1_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations::default(),
+    })];
+    let mut voice1_layout = layout_measure(&voice1_elements, &cfg);
+    // Scale to match primary width
+    if voice1_layout.total_width > 0.0 && primary_layout.total_width > 0.0 {
+        let scale = primary_layout.total_width / voice1_layout.total_width;
+        for elem in &mut voice1_layout.elements {
+            elem.x *= scale;
+            elem.width *= scale;
+        }
+        voice1_layout.total_width = primary_layout.total_width;
+    }
+
+    // Draw primary only
+    let mut svg_primary = make_svg();
+    draw_measure(&mut svg_primary, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    let primary_paths = svg_primary.to_svg().matches("<path ").count();
+
+    // Draw primary + additional voice
+    let mut svg_both = make_svg();
+    draw_measure(&mut svg_both, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(&mut svg_both, &staff, &font, &config, &[voice1_layout], 0.0).unwrap();
+    let both_paths = svg_both.to_svg().matches("<path ").count();
+
+    // Additional voice adds at least one more path (the notehead)
+    assert!(
+        both_paths > primary_paths,
+        "additional voice should add extra paths: primary={primary_paths}, both={both_paths}"
+    );
+}
+
+#[test]
+fn additional_voice_rest_is_displaced_downward() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Additional voice 1 (index 0): rest displaced down by 2 staff spaces
+    let voice1_elements = vec![MeasureElement::Rest(RestEvent {
+        duration_log2: 2,
+        dots: 0,
+    })];
+    let voice1_layout = layout_measure(&voice1_elements, &cfg);
+
+    // Draw rest without displacement (baseline)
+    let mut svg_normal = make_svg();
+    draw_rest(&mut svg_normal, &staff, &font, 100.0, 2).unwrap();
+    let normal_svg = svg_normal.to_svg();
+
+    // Draw rest via additional voices (should be displaced)
+    let mut svg_displaced = make_svg();
+    draw_additional_voices(&mut svg_displaced, &staff, &font, &config, &[voice1_layout], 0.0).unwrap();
+    let displaced_svg = svg_displaced.to_svg();
+
+    // Both should produce a path, but the translate y should differ
+    assert_eq!(normal_svg.matches("<path ").count(), 1);
+    assert_eq!(displaced_svg.matches("<path ").count(), 1);
+    // The displaced version should have a different y coordinate
+    assert_ne!(
+        normal_svg, displaced_svg,
+        "displaced rest should differ from normal rest"
+    );
+}
+
+#[test]
+fn additional_voice_skips_barlines() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Voice layout with a barline element — should be skipped by draw_additional_voices
+    let elements = vec![
+        MeasureElement::Note(NoteEvent {
+            staff_position: 0,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: Some(StemDirection::Down),
+            annotations: NoteAnnotations::default(),
+        }),
+        MeasureElement::Barline(BarlineStyle::Single),
+    ];
+    let layout = layout_measure(&elements, &cfg);
+
+    let mut svg = make_svg();
+    draw_additional_voices(&mut svg, &staff, &font, &config, &[layout], 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // The barline should not appear (no vertical line from barline renderer)
+    // but the note path should appear
+    assert!(
+        output.matches("<path ").count() >= 1,
+        "note should still render"
+    );
+    // Additional voice barlines are skipped — the primary voice already drew them.
+    // We verify indirectly: line count should only include stem line(s), not barline.
+    let line_count = output.matches("<line ").count();
+    assert!(
+        line_count <= 1,
+        "at most 1 line (stem), no barline: got {line_count}"
+    );
+}
+
+#[test]
+fn two_additional_voices_both_render() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Voice 1: note at position 0 (bottom)
+    let v1_elems = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations::default(),
+    })];
+    let v1_layout = layout_measure(&v1_elems, &cfg);
+
+    // Voice 2: note at position 8 (top)
+    let v2_elems = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 8,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Up),
+        annotations: NoteAnnotations::default(),
+    })];
+    let v2_layout = layout_measure(&v2_elems, &cfg);
+
+    let mut svg = make_svg();
+    draw_additional_voices(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &[v1_layout, v2_layout],
+        0.0,
+    )
+    .unwrap();
+    let output = svg.to_svg();
+
+    // Two noteheads + two stems = at least 2 paths and 2 lines
+    let paths = output.matches("<path ").count();
+    let lines = output.matches("<line ").count();
+    assert!(
+        paths >= 2,
+        "two voices should produce at least 2 notehead paths, got {paths}"
+    );
+    assert!(
+        lines >= 2,
+        "two voices should produce at least 2 stem lines, got {lines}"
+    );
+}

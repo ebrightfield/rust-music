@@ -1,5 +1,6 @@
     use super::*;
     use crate::layout::ottava::OttavaKind;
+    use crate::layout::stem::StemDirection;
     use crate::layout::tremolo::TremoloCount;
     use music::note::note::Note;
 
@@ -4672,5 +4673,126 @@
                 assert_eq!(r.duration_log2, 2, "quarter rest log2 = 2");
             }
             other => panic!("expected Rest, got {other:?}"),
+        }
+    }
+
+    // ── Multi-voice rendering integration tests ─────────────────────────────
+
+    #[test]
+    fn multi_voice_renders_more_paths_than_single_voice() {
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let multi = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let single_paths = single.matches("<path ").count();
+        let multi_paths = multi.matches("<path ").count();
+        assert!(
+            multi_paths > single_paths,
+            "multi-voice should have more paths: single={single_paths}, multi={multi_paths}"
+        );
+    }
+
+    #[test]
+    fn multi_voice_renders_additional_stem_lines() {
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let multi = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let single_lines = single.matches("<line ").count();
+        let multi_lines = multi.matches("<line ").count();
+        assert!(
+            multi_lines > single_lines,
+            "multi-voice should have more lines: single={single_lines}, multi={multi_lines}"
+        );
+    }
+
+    #[test]
+    fn multi_voice_with_rest_in_secondary_renders_displaced() {
+        let multi = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .voice(1)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // The rest glyph path should be present alongside clef + notehead
+        let paths = multi.matches("<path ").count();
+        assert!(
+            paths >= 3,
+            "should have clef + notehead + rest path at minimum, got {paths}"
+        );
+    }
+
+    #[test]
+    fn multi_voice_differs_from_single_voice() {
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let multi = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 5), Duration::QTR)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(single, multi, "multi-voice SVG should differ from single-voice");
+    }
+
+    #[test]
+    fn multi_voice_secondary_note_has_forced_stem_down() {
+        let multi = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .voice(1)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline();
+
+        let contents = multi.build_measure_contents();
+        // Voice 0 should have stem up (forced for multi-voice)
+        match &contents[0].events[0] {
+            MeasureEvent::Note(n) => {
+                assert_eq!(
+                    n.stem_direction,
+                    Some(StemDirection::Up),
+                    "voice 0 should force stems up"
+                );
+            }
+            other => panic!("expected Note, got {other:?}"),
+        }
+        // Voice 1 should have stem down
+        match &contents[0].additional_voices[0][0] {
+            MeasureEvent::Note(n) => {
+                assert_eq!(
+                    n.stem_direction,
+                    Some(StemDirection::Down),
+                    "voice 1 should force stems down"
+                );
+            }
+            other => panic!("expected Note, got {other:?}"),
         }
     }

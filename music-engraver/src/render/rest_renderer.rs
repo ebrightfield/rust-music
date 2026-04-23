@@ -17,13 +17,29 @@ pub fn draw_rest(
     x: f64,
     log2_duration: u8,
 ) -> Result<f64, FontError> {
+    draw_rest_displaced(svg, staff, font, x, log2_duration, 0.0)
+}
+
+/// Draw a rest glyph with a vertical displacement from the default staff position.
+///
+/// `y_displacement` shifts the rest up (negative) or down (positive) in font design
+/// units. Used for multi-voice layouts where secondary-voice rests are displaced
+/// away from the primary voice to avoid collision.
+pub fn draw_rest_displaced(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    x: f64,
+    log2_duration: u8,
+    y_displacement: f64,
+) -> Result<f64, FontError> {
     let glyph = match rest_glyph(log2_duration) {
         Some(g) => g,
         None => return Ok(0.0),
     };
 
     let outline = font.glyph_outline(glyph)?;
-    let y = rest_y(staff, log2_duration);
+    let y = rest_y(staff, log2_duration) + y_displacement;
     let transform = format!("translate({x}, {y})");
     svg.add_path(&outline.path_data, "black", Some(&transform));
     Ok(outline.advance_width as f64)
@@ -139,5 +155,58 @@ mod tests {
                 "rest log2={d} should produce exactly one path"
             );
         }
+    }
+
+    #[test]
+    fn draw_rest_displaced_zero_matches_normal() {
+        let (font, staff) = setup();
+        let mut svg_normal = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        draw_rest(&mut svg_normal, &staff, &font, 500.0, 2).unwrap();
+
+        let mut svg_displaced = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        draw_rest_displaced(&mut svg_displaced, &staff, &font, 500.0, 2, 0.0).unwrap();
+
+        assert_eq!(
+            svg_normal.to_svg(),
+            svg_displaced.to_svg(),
+            "zero displacement should match normal rest"
+        );
+    }
+
+    #[test]
+    fn draw_rest_displaced_nonzero_differs_from_normal() {
+        let (font, staff) = setup();
+        let mut svg_normal = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        draw_rest(&mut svg_normal, &staff, &font, 500.0, 2).unwrap();
+
+        let mut svg_displaced = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        draw_rest_displaced(&mut svg_displaced, &staff, &font, 500.0, 2, 200.0).unwrap();
+
+        assert_ne!(
+            svg_normal.to_svg(),
+            svg_displaced.to_svg(),
+            "nonzero displacement should differ from normal rest"
+        );
+        // Both should still produce exactly one path
+        assert_eq!(svg_displaced.to_svg().matches("<path ").count(), 1);
+    }
+
+    #[test]
+    fn draw_rest_displaced_positive_moves_down() {
+        let (font, staff) = setup();
+        // Normal quarter rest at position 4: y = staff.y_of(4)
+        let normal_y = crate::layout::rest::rest_y(&staff, 2);
+
+        let displacement = 250.0; // One staff space
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
+        draw_rest_displaced(&mut svg, &staff, &font, 500.0, 2, displacement).unwrap();
+        let output = svg.to_svg();
+
+        // The translate should contain the displaced y value
+        let expected_y = normal_y + displacement;
+        assert!(
+            output.contains(&format!("translate(500, {expected_y})")),
+            "displaced rest should have y={expected_y}, SVG: {output}"
+        );
     }
 }

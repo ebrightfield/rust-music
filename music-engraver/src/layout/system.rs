@@ -113,10 +113,14 @@ pub struct SystemLayout {
 pub struct SystemMeasure {
     /// X-offset of this measure's left edge within the system.
     pub x_offset: f64,
-    /// The laid-out measure.
+    /// The laid-out measure (voice 0 / primary voice).
     pub layout: MeasureLayout,
     /// Optional volta bracket annotation for this measure.
     pub volta: Option<VoltaAnnotation>,
+    /// Laid-out additional voices (voice 1, voice 2, …).
+    /// Each entry shares the same temporal x-positions as the primary voice
+    /// but may have different notes/rests with forced stem directions.
+    pub additional_voice_layouts: Vec<MeasureLayout>,
 }
 
 /// Lay out a system of measures.
@@ -142,7 +146,7 @@ pub fn layout_system(
         };
     }
 
-    // First pass: lay out each measure at natural width
+    // First pass: lay out primary voice for each measure at natural width
     let mut measure_elements: Vec<Vec<MeasureElement>> = Vec::with_capacity(measures.len());
 
     // First measure: prefix + events + barline
@@ -170,11 +174,39 @@ pub fn layout_system(
         measure_elements.push(elems);
     }
 
-    // Lay out each measure
+    // Lay out primary voice for each measure
     let mut layouts: Vec<MeasureLayout> = measure_elements
         .iter()
         .map(|elems| layout_measure(elems, config))
         .collect();
+
+    // Lay out additional voices for each measure. Each additional voice is
+    // laid out independently, then scaled to match the primary voice's width
+    // so that temporal positions align visually.
+    let mut additional_voice_layouts: Vec<Vec<MeasureLayout>> =
+        Vec::with_capacity(measures.len());
+    for (i, measure) in measures.iter().enumerate() {
+        let mut voice_layouts = Vec::new();
+        for voice_events in &measure.additional_voices {
+            let mut elems: Vec<MeasureElement> =
+                voice_events.iter().map(measure_event_to_element).collect();
+            // Additional voices share the barline with the primary voice
+            elems.push(MeasureElement::Barline(measure.barline));
+            let mut voice_layout = layout_measure(&elems, config);
+            // Scale to match primary voice width
+            let primary_width = layouts[i].total_width;
+            if voice_layout.total_width > 0.0 && primary_width > 0.0 {
+                let scale = primary_width / voice_layout.total_width;
+                for elem in &mut voice_layout.elements {
+                    elem.x *= scale;
+                    elem.width *= scale;
+                }
+                voice_layout.total_width = primary_width;
+            }
+            voice_layouts.push(voice_layout);
+        }
+        additional_voice_layouts.push(voice_layouts);
+    }
 
     let natural_width: f64 = layouts.iter().map(|l| l.total_width).sum();
 
@@ -189,6 +221,16 @@ pub fn layout_system(
                 }
                 layout.total_width *= scale;
             }
+            // Scale additional voice layouts identically
+            for voice_layouts in &mut additional_voice_layouts {
+                for vl in voice_layouts.iter_mut() {
+                    for elem in &mut vl.elements {
+                        elem.x *= scale;
+                        elem.width *= scale;
+                    }
+                    vl.total_width *= scale;
+                }
+            }
         }
     }
 
@@ -200,6 +242,7 @@ pub fn layout_system(
             x_offset: x,
             layout: layout.clone(),
             volta: measures[i].volta.clone(),
+            additional_voice_layouts: additional_voice_layouts[i].clone(),
         });
         x += layout.total_width;
     }

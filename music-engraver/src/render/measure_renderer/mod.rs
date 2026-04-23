@@ -32,7 +32,7 @@ use crate::render::grace_renderer::draw_grace_note;
 use crate::render::key_sig_renderer::draw_key_signature;
 use crate::render::tempo_renderer::draw_tempo_mark;
 use crate::render::note_renderer::{draw_ledger_lines, draw_notehead, NoteheadKind};
-use crate::render::rest_renderer::draw_rest;
+use crate::render::rest_renderer::{draw_rest, draw_rest_displaced};
 use crate::render::staff_renderer::draw_clef;
 use crate::render::stem_renderer::{draw_stem, stem_endpoints, stem_x};
 use crate::render::time_sig_renderer::draw_time_signature;
@@ -106,6 +106,85 @@ pub fn draw_measure(
         }
     }
 
+    Ok(())
+}
+
+/// Draw additional voices for a measure at the same x-positions as the primary voice.
+///
+/// Each voice layout contains only rhythmic elements (notes/rests/chords/beams/tuplets)
+/// and barlines. Barlines are skipped (already drawn by the primary voice). Rests are
+/// displaced vertically to avoid collision with the primary voice: voice 1 rests move
+/// down (below staff center), voice 2 rests move up. The displacement is 2 staff spaces.
+pub fn draw_additional_voices(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    voice_layouts: &[MeasureLayout],
+    x_offset: f64,
+) -> Result<(), FontError> {
+    for (voice_idx, voice_layout) in voice_layouts.iter().enumerate() {
+        // Voice index 0 = additional voice 1 (odd → stems down, rests displaced down)
+        // Voice index 1 = additional voice 2 (even → stems up, rests displaced up)
+        // Displacement: odd voices move rests down, even voices move rests up
+        let rest_displacement = if voice_idx % 2 == 0 {
+            // Odd-numbered voice (voice 1, 3, …): displace rests down (positive y)
+            staff.staff_space * 2.0
+        } else {
+            // Even-numbered additional voice (voice 2, 4, …): displace rests up (negative y)
+            -(staff.staff_space * 2.0)
+        };
+
+        for positioned in &voice_layout.elements {
+            let elem_x = x_offset + positioned.x;
+            match &positioned.element {
+                // Skip non-rhythmic elements — the primary voice already drew them
+                MeasureElement::Clef(_)
+                | MeasureElement::KeySignature(_)
+                | MeasureElement::TimeSignature(_)
+                | MeasureElement::Barline(_) => {}
+
+                MeasureElement::Note(note) => {
+                    draw_note_event(svg, staff, font, config, elem_x, note)?;
+                }
+                MeasureElement::Chord(chord) => {
+                    draw_chord_event(svg, staff, font, config, elem_x, chord)?;
+                }
+                MeasureElement::BeamGroup(bg) => {
+                    draw_beam_group_event(
+                        svg,
+                        staff,
+                        font,
+                        config,
+                        elem_x,
+                        positioned.width,
+                        bg,
+                    )?;
+                }
+                MeasureElement::TupletGroup(tg) => {
+                    draw_tuplet_group_event(
+                        svg,
+                        staff,
+                        font,
+                        config,
+                        elem_x,
+                        positioned.width,
+                        tg,
+                    )?;
+                }
+                MeasureElement::Rest(rest) => {
+                    draw_rest_displaced(
+                        svg,
+                        staff,
+                        font,
+                        elem_x,
+                        rest.duration_log2,
+                        rest_displacement,
+                    )?;
+                }
+            }
+        }
+    }
     Ok(())
 }
 

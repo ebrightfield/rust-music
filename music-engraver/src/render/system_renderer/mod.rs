@@ -10,7 +10,7 @@ use crate::layout::stem::{auto_stem_direction, StemDirection};
 use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::layout::volta::layout_volta_bracket;
-use crate::render::measure_renderer::draw_measure;
+use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
@@ -72,18 +72,29 @@ pub fn draw_system(
     // Draw continuous staff lines
     draw_staff_lines(svg, &staff, config);
 
-    // Draw each measure at its offset
+    // Draw each measure at its offset (primary voice + additional voices)
     let clef = system.clef_kind.to_clef();
     for sys_measure in &system.measures {
+        let measure_x = x + sys_measure.x_offset;
         draw_measure(
             svg,
             &staff,
             font,
             config,
             &sys_measure.layout,
-            x + sys_measure.x_offset,
+            measure_x,
             &clef,
         )?;
+        if !sys_measure.additional_voice_layouts.is_empty() {
+            draw_additional_voices(
+                svg,
+                &staff,
+                font,
+                config,
+                &sys_measure.additional_voice_layouts,
+                measure_x,
+            )?;
+        }
     }
 
     // Draw ties between notes with tie_forward = true and their target notes
