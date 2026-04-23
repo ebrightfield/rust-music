@@ -91,6 +91,7 @@ pub fn draw_system(
                 &staff,
                 font,
                 config,
+                &sys_measure.layout,
                 &sys_measure.additional_voice_layouts,
                 measure_x,
             )?;

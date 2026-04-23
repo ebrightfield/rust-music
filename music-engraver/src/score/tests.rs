@@ -4796,3 +4796,70 @@
             other => panic!("expected Note, got {other:?}"),
         }
     }
+
+    // ── Cross-voice collision avoidance integration tests ────────────────────
+
+    #[test]
+    fn multi_voice_unison_collision_differs_from_no_collision() {
+        let pitch_c4 = Pitch::new(Note::C, 4).expect("valid pitch");
+        let pitch_g5 = Pitch::new(Note::G, 5).expect("valid pitch");
+
+        // Unison: both voices play C4
+        let svg_unison = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch_c4, Duration::WHOLE)
+            .voice(1)
+            .note(pitch_c4, Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        // Far apart: voice 0 plays C4, voice 1 plays G5
+        let svg_far = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch_c4, Duration::WHOLE)
+            .voice(1)
+            .note(pitch_g5, Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            svg_unison, svg_far,
+            "unison voices (collision) should produce different SVG than far-apart voices"
+        );
+    }
+
+    #[test]
+    fn multi_voice_second_collision_differs_from_third() {
+        let pitch_e4 = Pitch::new(Note::E, 4).expect("valid pitch");
+        let pitch_f4 = Pitch::new(Note::F, 4).expect("valid pitch");
+        let pitch_g4 = Pitch::new(Note::G, 4).expect("valid pitch");
+
+        // Second apart (E4 vs F4): collision
+        let svg_second = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch_f4, Duration::WHOLE)
+            .voice(1)
+            .note(pitch_e4, Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        // Third apart (E4 vs G4): no collision
+        let svg_third = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch_g4, Duration::WHOLE)
+            .voice(1)
+            .note(pitch_e4, Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg_second.contains("<svg"));
+        assert!(svg_third.contains("<svg"));
+        assert_ne!(
+            svg_second, svg_third,
+            "second (collision) vs third (no collision) should produce different SVGs"
+        );
+    }

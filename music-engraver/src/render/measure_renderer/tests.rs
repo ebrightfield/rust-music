@@ -2453,7 +2453,8 @@ fn additional_voices_empty_produces_no_extra_elements() {
     let (font, config, staff) = setup();
     let mut svg = make_svg();
     // No additional voice layouts → no extra paths
-    draw_additional_voices(&mut svg, &staff, &font, &config, &[], 0.0).unwrap();
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    draw_additional_voices(&mut svg, &staff, &font, &config, &empty_primary, &[], 0.0).unwrap();
     let output = svg.to_svg();
     assert_eq!(output.matches("<path ").count(), 0);
     assert_eq!(output.matches("<line ").count(), 0);
@@ -2503,7 +2504,7 @@ fn additional_voice_with_note_draws_extra_notehead() {
     // Draw primary + additional voice
     let mut svg_both = make_svg();
     draw_measure(&mut svg_both, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg_both, &staff, &font, &config, &[voice1_layout], 0.0).unwrap();
+    draw_additional_voices(&mut svg_both, &staff, &font, &config, &primary_layout, &[voice1_layout], 0.0).unwrap();
     let both_paths = svg_both.to_svg().matches("<path ").count();
 
     // Additional voice adds at least one more path (the notehead)
@@ -2532,7 +2533,8 @@ fn additional_voice_rest_is_displaced_downward() {
 
     // Draw rest via additional voices (should be displaced)
     let mut svg_displaced = make_svg();
-    draw_additional_voices(&mut svg_displaced, &staff, &font, &config, &[voice1_layout], 0.0).unwrap();
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    draw_additional_voices(&mut svg_displaced, &staff, &font, &config, &empty_primary, &[voice1_layout], 0.0).unwrap();
     let displaced_svg = svg_displaced.to_svg();
 
     // Both should produce a path, but the translate y should differ
@@ -2565,7 +2567,8 @@ fn additional_voice_skips_barlines() {
     let layout = layout_measure(&elements, &cfg);
 
     let mut svg = make_svg();
-    draw_additional_voices(&mut svg, &staff, &font, &config, &[layout], 0.0).unwrap();
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    draw_additional_voices(&mut svg, &staff, &font, &config, &empty_primary, &[layout], 0.0).unwrap();
     let output = svg.to_svg();
 
     // The barline should not appear (no vertical line from barline renderer)
@@ -2611,11 +2614,13 @@ fn two_additional_voices_both_render() {
     let v2_layout = layout_measure(&v2_elems, &cfg);
 
     let mut svg = make_svg();
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
     draw_additional_voices(
         &mut svg,
         &staff,
         &font,
         &config,
+        &empty_primary,
         &[v1_layout, v2_layout],
         0.0,
     )
@@ -2632,5 +2637,177 @@ fn two_additional_voices_both_render() {
     assert!(
         lines >= 2,
         "two voices should produce at least 2 stem lines, got {lines}"
+    );
+}
+
+// ── Cross-voice collision avoidance tests ────────────────────────────────
+
+#[test]
+fn collision_at_unison_offsets_additional_voice_notehead() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Primary: quarter at position 4, stems up
+    let primary_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Up),
+        annotations: NoteAnnotations::default(),
+    })];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    // Additional: quarter at SAME position 4, stems down → collision
+    let voice1_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations::default(),
+    })];
+    let mut voice1_layout = layout_measure(&voice1_elements, &cfg);
+    // Scale to match primary
+    let scale = primary_layout.total_width / voice1_layout.total_width;
+    for elem in &mut voice1_layout.elements {
+        elem.x *= scale;
+        elem.width *= scale;
+    }
+    voice1_layout.total_width = primary_layout.total_width;
+
+    // Draw with collision: additional voice's note should be offset
+    let mut svg_collision = make_svg();
+    draw_measure(&mut svg_collision, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(&mut svg_collision, &staff, &font, &config, &primary_layout, &[voice1_layout.clone()], 0.0).unwrap();
+    let collision_svg = svg_collision.to_svg();
+
+    // Draw without collision: note at position 0 (far from primary pos 4)
+    let far_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 0,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations::default(),
+    })];
+    let mut far_layout = layout_measure(&far_elements, &cfg);
+    let scale2 = primary_layout.total_width / far_layout.total_width;
+    for elem in &mut far_layout.elements {
+        elem.x *= scale2;
+        elem.width *= scale2;
+    }
+    far_layout.total_width = primary_layout.total_width;
+
+    let mut svg_no_collision = make_svg();
+    draw_measure(&mut svg_no_collision, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(&mut svg_no_collision, &staff, &font, &config, &primary_layout, &[far_layout], 0.0).unwrap();
+    let no_collision_svg = svg_no_collision.to_svg();
+
+    // The collision version should differ from the no-collision version
+    // (different translate() positions due to offset)
+    assert_ne!(
+        collision_svg, no_collision_svg,
+        "unison collision should produce different SVG than non-colliding voices"
+    );
+}
+
+#[test]
+fn collision_at_second_offsets_additional_voice_notehead() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Primary: quarter at position 5, stems up
+    let primary_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 5,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Up),
+        annotations: NoteAnnotations::default(),
+    })];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    // Additional: quarter at position 4 (second below), stems down → collision
+    let voice1_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations::default(),
+    })];
+    let mut voice1_layout = layout_measure(&voice1_elements, &cfg);
+    let scale = primary_layout.total_width / voice1_layout.total_width;
+    for elem in &mut voice1_layout.elements {
+        elem.x *= scale;
+        elem.width *= scale;
+    }
+    voice1_layout.total_width = primary_layout.total_width;
+
+    // Draw with collision
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(&mut svg, &staff, &font, &config, &primary_layout, &[voice1_layout], 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Should have 2 notehead paths (primary + additional)
+    let paths = output.matches("<path ").count();
+    assert!(
+        paths >= 2,
+        "second collision should still render both noteheads, got {paths} paths"
+    );
+}
+
+#[test]
+fn no_collision_at_third_no_offset() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Primary: quarter at position 6, stems up
+    let primary_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 6,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Up),
+        annotations: NoteAnnotations::default(),
+    })];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    // Additional: quarter at position 4 (third below = distance 2), stems down → NO collision
+    let voice1_elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(StemDirection::Down),
+        annotations: NoteAnnotations::default(),
+    })];
+    let mut voice1_layout = layout_measure(&voice1_elements, &cfg);
+    let scale = primary_layout.total_width / voice1_layout.total_width;
+    for elem in &mut voice1_layout.elements {
+        elem.x *= scale;
+        elem.width *= scale;
+    }
+    voice1_layout.total_width = primary_layout.total_width;
+
+    // Draw with collision detection (but no actual collision)
+    let mut svg_with_detection = make_svg();
+    draw_measure(&mut svg_with_detection, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(&mut svg_with_detection, &staff, &font, &config, &primary_layout, &[voice1_layout.clone()], 0.0).unwrap();
+    let detected_svg = svg_with_detection.to_svg();
+
+    // Draw without any collision detection (empty primary)
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let mut svg_no_detection = make_svg();
+    draw_measure(&mut svg_no_detection, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(&mut svg_no_detection, &staff, &font, &config, &empty_primary, &[voice1_layout], 0.0).unwrap();
+    let undetected_svg = svg_no_detection.to_svg();
+
+    // For a third (no collision), both should produce identical output
+    assert_eq!(
+        detected_svg, undetected_svg,
+        "notes a third apart should not be offset (no collision)"
     );
 }

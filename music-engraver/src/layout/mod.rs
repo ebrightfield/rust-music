@@ -53,6 +53,7 @@ pub mod tie;
 pub mod tremolo;
 pub mod time_signature;
 pub mod tuplet;
+pub mod voice_collision;
 pub mod volta;
 
 pub use barline::{BarlineLayout, BarlineStyle};
@@ -138,6 +139,7 @@ pub use volta::{
     layout_volta_bracket, VoltaAnnotation, VoltaBracketLayout, VoltaHooks, VOLTA_ABOVE_STAFF_SS,
 };
 pub use tremolo::{layout_tremolo, TremoloCount, TremoloLayout};
+pub use voice_collision::{compute_voice_collision_offsets, VoiceCollisionOffset};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,

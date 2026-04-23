@@ -115,14 +115,24 @@ pub fn draw_measure(
 /// and barlines. Barlines are skipped (already drawn by the primary voice). Rests are
 /// displaced vertically to avoid collision with the primary voice: voice 1 rests move
 /// down (below staff center), voice 2 rests move up. The displacement is 2 staff spaces.
+///
+/// Noteheads that collide with the primary voice (unison or second apart) are offset
+/// horizontally by one notehead width to avoid overlap.
 pub fn draw_additional_voices(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
     font: &MusicFont,
     config: &EngravingConfig,
+    primary_layout: &MeasureLayout,
     voice_layouts: &[MeasureLayout],
     x_offset: f64,
 ) -> Result<(), FontError> {
+    // Notehead width for computing collision offsets (filled notehead is the common case)
+    let notehead_width = font
+        .glyph_outline(smufl::Glyph::NoteheadBlack)
+        .map(|o| o.advance_width as f64)
+        .unwrap_or(250.0);
+
     for (voice_idx, voice_layout) in voice_layouts.iter().enumerate() {
         // Voice index 0 = additional voice 1 (odd → stems down, rests displaced down)
         // Voice index 1 = additional voice 2 (even → stems up, rests displaced up)
@@ -135,8 +145,18 @@ pub fn draw_additional_voices(
             -(staff.staff_space * 2.0)
         };
 
-        for positioned in &voice_layout.elements {
-            let elem_x = x_offset + positioned.x;
+        // Compute collision offsets between primary and this additional voice
+        let collision_offsets =
+            crate::layout::voice_collision::compute_voice_collision_offsets(primary_layout, voice_layout);
+
+        for (elem_idx, positioned) in voice_layout.elements.iter().enumerate() {
+            let collision_shift = collision_offsets
+                .iter()
+                .find(|o| o.element_index == elem_idx)
+                .map(|o| o.x_offset_noteheads * notehead_width)
+                .unwrap_or(0.0);
+            let elem_x = x_offset + positioned.x + collision_shift;
+
             match &positioned.element {
                 // Skip non-rhythmic elements — the primary voice already drew them
                 MeasureElement::Clef(_)
@@ -173,11 +193,13 @@ pub fn draw_additional_voices(
                     )?;
                 }
                 MeasureElement::Rest(rest) => {
+                    // Rests don't get collision offset — use original x
+                    let rest_x = x_offset + positioned.x;
                     draw_rest_displaced(
                         svg,
                         staff,
                         font,
-                        elem_x,
+                        rest_x,
                         rest.duration_log2,
                         rest_displacement,
                     )?;
