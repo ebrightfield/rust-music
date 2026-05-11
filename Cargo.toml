@@ -5,4 +5,5 @@ members = [
     "musical-combinatorics",
     "lilypond-parser",
     "music-midi",
+    "slonimsky",
 ]

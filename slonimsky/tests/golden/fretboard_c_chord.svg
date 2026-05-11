@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 270" width="200" height="270">
+  <style>
+    .note-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; }
+    .title-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; }
+    .fret-text { font-family: Arial, sans-serif; font-size: 10px; text-anchor: middle; }
+    .string-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; }
+  </style>
+  <line x1="20.0" y1="30.0" x2="170.0" y2="30.0" stroke="#333333" stroke-width="4" stroke-opacity="1"/>
+  <line x1="20.0" y1="70.0" x2="170.0" y2="70.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="20.0" y1="110.0" x2="170.0" y2="110.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="20.0" y1="150.0" x2="170.0" y2="150.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="20.0" y1="190.0" x2="170.0" y2="190.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="20.0" y1="230.0" x2="170.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="20.0" y1="30.0" x2="20.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="50.0" y1="30.0" x2="50.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="80.0" y1="30.0" x2="80.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="110.0" y1="30.0" x2="110.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="140.0" y1="30.0" x2="140.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <line x1="170.0" y1="30.0" x2="170.0" y2="230.0" stroke="#333333" stroke-width="1" stroke-opacity="1"/>
+  <text x="20.0" y="255.0" class="string-text">E</text>
+  <text x="50.0" y="255.0" class="string-text">A</text>
+  <text x="80.0" y="255.0" class="string-text">D</text>
+  <text x="110.0" y="255.0" class="string-text">G</text>
+  <text x="140.0" y="255.0" class="string-text">B</text>
+  <text x="170.0" y="255.0" class="string-text">E</text>
+  <circle cx="95.0" cy="130.0" r="4" fill="#cccccc" stroke="none" stroke-width="0"/>
+  <circle cx="95.0" cy="210.0" r="4" fill="#cccccc" stroke="none" stroke-width="0"/>
+  <text x="20.0" y="15.0" class="string-text" fill="#333333">×</text>
+  <circle cx="50.0" cy="130.0" r="10" fill="#4a90d9" stroke="#333333" stroke-width="1"/>
+  <circle cx="80.0" cy="90.0" r="10" fill="#4a90d9" stroke="#333333" stroke-width="1"/>
+  <circle cx="110.0" cy="18.0" r="6" fill="none" stroke="#333333" stroke-width="1.5"/>
+  <circle cx="140.0" cy="50.0" r="10" fill="#4a90d9" stroke="#333333" stroke-width="1"/>
+  <circle cx="170.0" cy="18.0" r="6" fill="none" stroke="#333333" stroke-width="1.5"/>
+</svg>

@@ -1,0 +1,10 @@
+=== Sight-Reading Exercise ===
+Key: D harmonic-major
+Difficulty: 4/5
+Measures: 4 (4/4 time)
+Notes: 24
+
+  m1: D4 (eighth)  C#4 (quarter)  E4 (eighth)  C#4 (half)  D4 (eighth)  E4 (eighth)
+  m2: D4 (eighth)  F#4 (quarter)  D4 (eighth)  E4 (half)  G4 (eighth)  F#4 (eighth)
+  m3: A4 (eighth)  F#4 (quarter)  G4 (eighth)  F#4 (half)  E4 (eighth)  G4 (eighth)
+  m4: E4 (eighth)  F#4 (quarter)  A#4 (eighth)  A4 (half)  C#5 (eighth)  A4 (eighth)

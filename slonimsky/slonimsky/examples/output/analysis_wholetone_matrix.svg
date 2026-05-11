@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 320" width="340" height="320">
+  <style>
+    .note-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; }
+    .title-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; }
+    .fret-text { font-family: Arial, sans-serif; font-size: 10px; text-anchor: middle; }
+    .string-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; }
+  </style>
+  <text x="170.0" y="25.0" class="title-text">Whole-Tone Scale (6-35)</text>
+  <text x="65.0" y="127.0" class="string-text">0</text>
+  <rect x="80.0" y="110.0" width="35.0" height="35.0" fill="#cccccc" stroke="#333333" stroke-width="1"/>
+  <text x="97.0" y="131.0" class="note-text">0</text>
+  <rect x="115.0" y="110.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="132.0" y="131.0" class="note-text">2</text>
+  <rect x="150.0" y="110.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="167.0" y="131.0" class="note-text">4</text>
+  <rect x="185.0" y="110.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="202.0" y="131.0" class="note-text">6</text>
+  <rect x="220.0" y="110.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="237.0" y="131.0" class="note-text">8</text>
+  <rect x="255.0" y="110.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="272.0" y="131.0" class="note-text">10</text>
+  <text x="65.0" y="162.0" class="string-text">2</text>
+  <rect x="80.0" y="145.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="97.0" y="166.0" class="note-text">10</text>
+  <rect x="115.0" y="145.0" width="35.0" height="35.0" fill="#cccccc" stroke="#333333" stroke-width="1"/>
+  <text x="132.0" y="166.0" class="note-text">0</text>
+  <rect x="150.0" y="145.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="167.0" y="166.0" class="note-text">2</text>
+  <rect x="185.0" y="145.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="202.0" y="166.0" class="note-text">4</text>
+  <rect x="220.0" y="145.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="237.0" y="166.0" class="note-text">6</text>
+  <rect x="255.0" y="145.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="272.0" y="166.0" class="note-text">8</text>
+  <text x="65.0" y="197.0" class="string-text">4</text>
+  <rect x="80.0" y="180.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="97.0" y="201.0" class="note-text">8</text>
+  <rect x="115.0" y="180.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="132.0" y="201.0" class="note-text">10</text>
+  <rect x="150.0" y="180.0" width="35.0" height="35.0" fill="#cccccc" stroke="#333333" stroke-width="1"/>
+  <text x="167.0" y="201.0" class="note-text">0</text>
+  <rect x="185.0" y="180.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="202.0" y="201.0" class="note-text">2</text>
+  <rect x="220.0" y="180.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="237.0" y="201.0" class="note-text">4</text>
+  <rect x="255.0" y="180.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="272.0" y="201.0" class="note-text">6</text>
+  <text x="65.0" y="232.0" class="string-text">6</text>
+  <rect x="80.0" y="215.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="97.0" y="236.0" class="note-text">6</text>
+  <rect x="115.0" y="215.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="132.0" y="236.0" class="note-text">8</text>
+  <rect x="150.0" y="215.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="167.0" y="236.0" class="note-text">10</text>
+  <rect x="185.0" y="215.0" width="35.0" height="35.0" fill="#cccccc" stroke="#333333" stroke-width="1"/>
+  <text x="202.0" y="236.0" class="note-text">0</text>
+  <rect x="220.0" y="215.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="237.0" y="236.0" class="note-text">2</text>
+  <rect x="255.0" y="215.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="272.0" y="236.0" class="note-text">4</text>
+  <text x="65.0" y="267.0" class="string-text">8</text>
+  <rect x="80.0" y="250.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="97.0" y="271.0" class="note-text">4</text>
+  <rect x="115.0" y="250.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="132.0" y="271.0" class="note-text">6</text>
+  <rect x="150.0" y="250.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="167.0" y="271.0" class="note-text">8</text>
+  <rect x="185.0" y="250.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="202.0" y="271.0" class="note-text">10</text>
+  <rect x="220.0" y="250.0" width="35.0" height="35.0" fill="#cccccc" stroke="#333333" stroke-width="1"/>
+  <text x="237.0" y="271.0" class="note-text">0</text>
+  <rect x="255.0" y="250.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="272.0" y="271.0" class="note-text">2</text>
+  <text x="65.0" y="302.0" class="string-text">10</text>
+  <rect x="80.0" y="285.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="97.0" y="306.0" class="note-text">2</text>
+  <rect x="115.0" y="285.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="132.0" y="306.0" class="note-text">4</text>
+  <rect x="150.0" y="285.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="167.0" y="306.0" class="note-text">6</text>
+  <rect x="185.0" y="285.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="202.0" y="306.0" class="note-text">8</text>
+  <rect x="220.0" y="285.0" width="35.0" height="35.0" fill="#ffffff" stroke="#333333" stroke-width="1"/>
+  <text x="237.0" y="306.0" class="note-text">10</text>
+  <rect x="255.0" y="285.0" width="35.0" height="35.0" fill="#cccccc" stroke="#333333" stroke-width="1"/>
+  <text x="272.0" y="306.0" class="note-text">0</text>
+  <text x="97.0" y="95.0" class="string-text">0</text>
+  <text x="132.0" y="95.0" class="string-text">2</text>
+  <text x="167.0" y="95.0" class="string-text">4</text>
+  <text x="202.0" y="95.0" class="string-text">6</text>
+  <text x="237.0" y="95.0" class="string-text">8</text>
+  <text x="272.0" y="95.0" class="string-text">10</text>
+</svg>

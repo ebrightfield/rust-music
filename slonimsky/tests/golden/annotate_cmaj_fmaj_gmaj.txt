@@ -1,0 +1,22 @@
+Key: (not specified)
+
+Step 1: C4,E4,G4 → C4,F4,A4
+  Voice 1: C4 → C4  (+0 st, common tone)
+  Voice 2: E4 → F4  (+1 st, step)
+  Voice 3: G4 → A4  (+2 st, step)
+  L1 cost: 3   L∞ cost: 2   Crossings: none
+  Smoothness: excellent
+
+Step 2: C4,F4,A4 → B3,D4,G4
+  Voice 1: C4 → B3  (-1 st, step)
+  Voice 2: F4 → D4  (-3 st, skip)
+  Voice 3: A4 → G4  (-2 st, step)
+  L1 cost: 6   L∞ cost: 3   Crossings: none
+  Smoothness: good
+
+Summary:
+  Total L1 cost: 9
+  Average L1 per step: 4.5
+  Max L∞ cost: 3
+  Voice crossings: 0
+  Smoothness rating: excellent

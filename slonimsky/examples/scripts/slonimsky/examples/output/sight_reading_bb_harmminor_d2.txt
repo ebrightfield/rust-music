@@ -1,0 +1,10 @@
+=== Sight-Reading Exercise ===
+Key: A# harmonic-minor
+Difficulty: 2/5
+Measures: 4 (4/4 time)
+Notes: 24
+
+  m1: A#4 (quarter)  C5 (eighth)  C#5 (eighth)  F5 (quarter)  F#5 (eighth)  F5 (eighth)
+  m2: F#5 (quarter)  F5 (eighth)  C#5 (eighth)  D#5 (quarter)  F5 (eighth)  F#5 (eighth)
+  m3: A#5 (quarter)  C6 (eighth)  A#5 (eighth)  C6 (quarter)  A#5 (eighth)  F#5 (eighth)
+  m4: A5 (quarter)  A#5 (eighth)  C6 (eighth)  A5 (quarter)  F#5 (eighth)  A5 (eighth)

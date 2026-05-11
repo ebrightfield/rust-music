@@ -1,0 +1,269 @@
+============================================
+  SCALE CLASSIFICATION — Forte Set-Class Analysis
+============================================
+
+=== 1. Forte Classification of Common Scales ===
+
+--- C Major (Ionian) ---
+PCs: {0 2 4 5 7 9 11}
+PcSet:      {0, 2, 4, 5, 7, 9, 11}
+Prime form: [0, 1, 3, 5, 6, 8, 10]
+Forte:      7-35
+IV:         <2, 5, 4, 3, 6, 1>
+T-symmetry: none (only T0)
+I-symmetry: no
+
+--- C Natural Minor (Aeolian) ---
+PCs: {0 2 3 5 7 8 10}
+PcSet:      {0, 2, 3, 5, 7, 8, 10}
+Prime form: [0, 1, 3, 5, 6, 8, 10]
+Forte:      7-35
+IV:         <2, 5, 4, 3, 6, 1>
+T-symmetry: none (only T0)
+I-symmetry: no
+
+--- C Harmonic Minor ---
+PCs: {0 2 3 5 7 8 11}
+PcSet:      {0, 2, 3, 5, 7, 8, 11}
+Prime form: [0, 1, 3, 4, 6, 8, 9]
+Forte:      7-32
+IV:         <3, 3, 5, 4, 4, 2>
+T-symmetry: none (only T0)
+I-symmetry: no
+
+--- C Melodic Minor (ascending) ---
+PCs: {0 2 3 5 7 9 11}
+PcSet:      {0, 2, 3, 5, 7, 9, 11}
+Prime form: [0, 1, 3, 4, 6, 8, 10]
+Forte:      7-34
+IV:         <2, 5, 4, 4, 4, 2>
+T-symmetry: none (only T0)
+I-symmetry: no
+
+--- C Whole-Tone ---
+PCs: {0 2 4 6 8 10}
+PcSet:      {0, 2, 4, 6, 8, 10}
+Prime form: [0, 2, 4, 6, 8, 10]
+Forte:      6-35
+IV:         <0, 6, 0, 6, 0, 3>
+T-symmetry: T2, T4, T6
+I-symmetry: yes (palindromic intervals)
+
+--- C Octatonic (half-whole) ---
+PCs: {0 1 3 4 6 7 9 10}
+PcSet:      {0, 1, 3, 4, 6, 7, 9, 10}
+Prime form: [0, 1, 3, 4, 6, 7, 9, 10]
+Forte:      8-28
+IV:         <4, 4, 8, 4, 4, 4>
+T-symmetry: T3, T6
+I-symmetry: no
+
+--- C Harmonic Major ---
+PCs: {0 2 4 5 7 8 11}
+PcSet:      {0, 2, 4, 5, 7, 8, 11}
+Prime form: [0, 1, 3, 4, 6, 8, 9]
+Forte:      7-32
+IV:         <3, 3, 5, 4, 4, 2>
+T-symmetry: none (only T0)
+I-symmetry: no
+
+--- C Hungarian Minor ---
+PCs: {0 2 3 6 7 8 11}
+PcSet:      {0, 2, 3, 6, 7, 8, 11}
+Prime form: [0, 1, 2, 5, 6, 8, 9]
+Forte:      7-22
+IV:         <4, 2, 4, 5, 4, 2>
+T-symmetry: none (only T0)
+I-symmetry: no
+
+
+=== 2. Set-Class Equivalences (TnI) ===
+
+Scales sharing a Forte number are related by transposition and/or inversion.
+
+Major vs Natural Minor:
+  Major:   Forte:      7-35
+  N.Minor: Forte:      7-35
+  → Same set class? Both are 7-35 (the diatonic collection).
+
+Harmonic Minor vs Harmonic Major:
+  H.Minor: Forte:      7-32
+  H.Major: Forte:      7-32
+  → Compare: same or different set class?
+
+Melodic Minor vs Hungarian Minor:
+  M.Minor: Forte:      7-34
+  Hung:    Forte:      7-22
+
+
+=== 3. Interval Vector Comparison ===
+
+The interval vector (IC1..IC6) reveals the intervallic DNA of each scale.
+Notation: m2/M7  M2/m7  m3/M6  M3/m6  P4/P5  TT
+
+  C Major (Ionian)                    Interval vector: <2, 5, 4, 3, 6, 1>
+  C Natural Minor (Aeolian)           Interval vector: <2, 5, 4, 3, 6, 1>
+  C Harmonic Minor                    Interval vector: <3, 3, 5, 4, 4, 2>
+  C Melodic Minor (ascending)         Interval vector: <2, 5, 4, 4, 4, 2>
+  C Whole-Tone                        Interval vector: <0, 6, 0, 6, 0, 3>
+  C Octatonic (half-whole)            Interval vector: <4, 4, 8, 4, 4, 4>
+  C Harmonic Major                    Interval vector: <3, 3, 5, 4, 4, 2>
+  C Hungarian Minor                   Interval vector: <4, 2, 4, 5, 4, 2>
+
+Notes:
+  - Diatonic (7-35) has the unique property of maximal evenness.
+  - Whole-tone (6-35) has no m2, m3, P4, or TT — only M2, M3, and TT.
+  - Octatonic (8-28) has high symmetry and equal distribution.
+
+
+=== 4. Symmetry Properties ===
+
+Whole-tone scale (transpositionally symmetric):
+PcSet: {0, 2, 4, 6, 8, 10}
+
+Transpositional symmetries: T2, T4, T6
+
+Inversionally symmetric: yes (palindromic intervals)
+
+Octatonic scale (transpositionally symmetric):
+PcSet: {0, 1, 3, 4, 6, 7, 9, 10}
+
+Transpositional symmetries: T3, T6
+
+Inversionally symmetric: no
+Inverted form: {0, 2, 3, 5, 6, 8, 9, 11}
+
+Major scale (no transpositional symmetry):
+PcSet: {0, 2, 4, 5, 7, 9, 11}
+
+Transpositional symmetries: none (only T0)
+
+Inversionally symmetric: no
+Inverted form: {0, 1, 3, 5, 7, 8, 10}
+
+
+=== 5. Common Tones Between Parallel Scales ===
+
+C Major vs C Natural Minor (parallel major/minor):
+Set 1: {0, 2, 4, 5, 7, 9, 11} = C D E F G A B
+Set 2: {0, 2, 3, 5, 7, 8, 10} = C D D#/Eb F G G#/Ab A#/Bb
+
+Common tones: {0, 2, 5, 7} = C D F G
+Count: 4
+
+C Major vs C Harmonic Minor (raised 7th):
+Set 1: {0, 2, 4, 5, 7, 9, 11} = C D E F G A B
+Set 2: {0, 2, 3, 5, 7, 8, 11} = C D D#/Eb F G G#/Ab B
+
+Common tones: {0, 2, 5, 7, 11} = C D F G B
+Count: 5
+
+C Major vs C Melodic Minor (raised 6th and 7th):
+Set 1: {0, 2, 4, 5, 7, 9, 11} = C D E F G A B
+Set 2: {0, 2, 3, 5, 7, 9, 11} = C D D#/Eb F G A B
+
+Common tones: {0, 2, 5, 7, 9, 11} = C D F G A B
+Count: 6
+
+C Harmonic Minor vs C Melodic Minor (differ by one note):
+Set 1: {0, 2, 3, 5, 7, 8, 11} = C D D#/Eb F G G#/Ab B
+Set 2: {0, 2, 3, 5, 7, 9, 11} = C D D#/Eb F G A B
+
+Common tones: {0, 2, 3, 5, 7, 11} = C D D#/Eb F G B
+Count: 6
+
+C Major vs C Harmonic Major (lowered 6th):
+Set 1: {0, 2, 4, 5, 7, 9, 11} = C D E F G A B
+Set 2: {0, 2, 4, 5, 7, 8, 11} = C D E F G G#/Ab B
+
+Common tones: {0, 2, 4, 5, 7, 11} = C D E F G B
+Count: 6
+
+
+=== 6. Triad Content of Selected Scales ===
+
+Major scale — named triads (C(7,3) = 35 subsets, showing first 15):
+Subchords of {0,2,4,5,7,9,11} (size 3):
+
+    1. {0,2,4}  CMaj (9)
+    2. {0,2,5}  Csus4
+    3. {0,2,7}  Csus2
+    4. {0,2,9}  CMaj6 (9)
+    5. {0,2,11}  CMaj7 (9)
+    6. {0,4,5}  CMaj (11)
+    7. {0,4,7}  CMaj
+    8. {0,4,9}  CMaj6
+    9. {0,4,11}  CMaj7 (no5)
+   10. {0,5,7}  Csus4
+   11. {0,5,9}  ?
+   12. {0,5,11}  CMaj7sus
+   13. {0,7,9}  CMaj6
+   14. {0,7,11}  CMaj7
+   15. {0,9,11}  ?
+   16. {2,4,5}  Dmin (9)
+   17. {2,4,7}  Dsus4
+   18. {2,4,9}  Dsus2
+   19. {2,4,11}  DMaj6 (9)
+   20. {2,5,7}  Dmin (11)
+   21. {2,5,9}  Dmin
+   22. {2,5,11}  Dmin6
+   23. {2,7,9}  Dsus4
+   24. {2,7,11}  ?
+   25. {2,9,11}  DMaj6
+   26. {4,5,7}  Emin (♭9)
+   27. {4,5,9}  Esus4 (♭9)
+   28. {4,5,11}  ?
+   29. {4,7,9}  Emin (11)
+   30. {4,7,11}  Emin
+   31. {4,9,11}  Esus4
+   32. {5,7,9}  FMaj (9)
+   33. {5,7,11}  ?
+   34. {5,9,11}  FMaj (♭5)
+   35. {7,9,11}  GMaj (9)
+
+Total: 35 subchords
+
+Harmonic minor — named triads:
+Subchords of {0,2,3,5,7,8,11} (size 3):
+
+    1. {0,2,3}  Cmin (9)
+    2. {0,2,5}  Csus4
+    3. {0,2,7}  Csus2
+    4. {0,2,8}  ?
+    5. {0,2,11}  CMaj7 (9)
+    6. {0,3,5}  Cmin (11)
+    7. {0,3,7}  Cmin
+    8. {0,3,8}  ?
+    9. {0,3,11}  Cmin7 (no5)
+   10. {0,5,7}  Csus4
+   11. {0,5,8}  ?
+   12. {0,5,11}  CMaj7sus
+   13. {0,7,8}  ?
+   14. {0,7,11}  CMaj7
+   15. {0,8,11}  ?
+   16. {2,3,5}  Dmin (♭9)
+   17. {2,3,7}  Dsus4 (♭9)
+   18. {2,3,8}  ?
+   19. {2,3,11}  Dmin6 (♭9)
+   20. {2,5,7}  Dmin (11)
+   21. {2,5,8}  Ddim
+   22. {2,5,11}  Dmin6
+   23. {2,7,8}  ?
+   24. {2,7,11}  ?
+   25. {2,8,11}  Ddim7
+   26. {3,5,7}  D#/EbMaj (9)
+   27. {3,5,8}  D#/Ebsus4
+   28. {3,5,11}  ?
+   29. {3,7,8}  D#/EbMaj (11)
+   30. {3,7,11}  D#/EbAug
+   31. {3,8,11}  ?
+   32. {5,7,8}  Fmin (9)
+   33. {5,7,11}  ?
+   34. {5,8,11}  Fdim
+   35. {7,8,11}  GMaj (♭9)
+
+Total: 35 subchords
+
+============================================
+  End of Scale Classification Report
+============================================

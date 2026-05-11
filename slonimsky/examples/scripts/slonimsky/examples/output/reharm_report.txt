@@ -1,0 +1,220 @@
+
+==== 1. ORIGINAL PROGRESSION: I-vi-ii-V in C major ====
+
+Chords: Cmaj → Am → Dm → G
+
+Key: C major (estimated, confidence: 7/7)
+
+  Chord        PcSet          Quality      Deg    Roman   
+  ──────────── ────────────── ──────────── ────── ────────
+  C,E,G        {0, 4, 7}      CMaj         1      I       
+  A,C,E        {0, 4, 9}      Amin         6      vi      
+  D,F,A        {2, 5, 9}      Dmin         2      ii      
+  G,B,D        {2, 7, 11}     GMaj         5      V       
+
+Common tones: C,E,G→A,C,E: {0, 4}  A,C,E→D,F,A: {9}  D,F,A→G,B,D: {2}
+Voice-leading cost (L1): 2 → 3 → 4  total: 9
+
+Voice-leading plan:
+Progression: C,E,G → A,C,E → D,F,A → G,B,D
+Voices: 3
+Metric: L1
+
+  Start: C4 E4 G4 (C,E,G)
+  Step 1: C4 E4 G4 → C4 E4 A4  dist=2  (A,C,E)
+  Step 2: C4 E4 A4 → D4 F4 A4  dist=3  (D,F,A)
+  Step 3: D4 F4 A4 → D4 G4 B4  dist=4  (G,B,D)
+
+Total voice-leading cost: 9 (L1, 3 steps)
+
+
+==== 2. SUBSTITUTION CANDIDATES ====
+
+--- Substitutes for Am (vi, PcSet {0,4,9}) ---
+Closest known chords/scales to {9,0,4}:
+
+    1. F Maj7 (dist=1, common={0,4,9}, 3 common tones)
+    2. F#/Gb Min7b5 (dist=1, common={0,4,9}, 3 common tones)
+    3. A Min7 (dist=1, common={0,4,9}, 3 common tones)
+    4. A MinMaj7 (dist=1, common={0,4,9}, 3 common tones)
+    5. A Maj(add#9) (dist=1, common={0,4,9}, 3 common tones)
+    6. A Min(add9) (dist=1, common={0,4,9}, 3 common tones)
+    7. A Min(addb9) (dist=1, common={0,4,9}, 3 common tones)
+    8. A Min(add11) (dist=1, common={0,4,9}, 3 common tones)
+
+Total: 8 results (distance > 0)
+
+--- Substitutes for Dm (ii, PcSet {2,5,9}) ---
+Closest known chords/scales to {2,5,9}:
+
+    1. D Min7 (dist=1, common={2,5,9}, 3 common tones)
+    2. D MinMaj7 (dist=1, common={2,5,9}, 3 common tones)
+    3. D Maj(add#9) (dist=1, common={2,5,9}, 3 common tones)
+    4. D Min(add9) (dist=1, common={2,5,9}, 3 common tones)
+    5. D Min(addb9) (dist=1, common={2,5,9}, 3 common tones)
+    6. D Min(add11) (dist=1, common={2,5,9}, 3 common tones)
+    7. D Min(add#11) (dist=1, common={2,5,9}, 3 common tones)
+    8. A#/Bb Maj7 (dist=1, common={2,5,9}, 3 common tones)
+
+Total: 8 results (distance > 0)
+
+--- Substitutes for G (V, PcSet {7,11,2}) ---
+Closest known chords/scales to {7,11,2}:
+
+    1. D#/Eb AugMaj7 (dist=1, common={2,7,11}, 3 common tones)
+    2. E Min7 (dist=1, common={2,7,11}, 3 common tones)
+    3. G Maj7 (dist=1, common={2,7,11}, 3 common tones)
+    4. G Dom7 (dist=1, common={2,7,11}, 3 common tones)
+    5. G Maj(add9) (dist=1, common={2,7,11}, 3 common tones)
+    6. G Maj(addb9) (dist=1, common={2,7,11}, 3 common tones)
+    7. G Maj(add#9) (dist=1, common={2,7,11}, 3 common tones)
+    8. G Maj(add11) (dist=1, common={2,7,11}, 3 common tones)
+
+Total: 8 results (distance > 0)
+
+
+==== 3. REHARMONIZATION #1: Tritone substitution (G → Db7) ====
+
+Replace G major (V) with Db7 (bII7 = {1,5,8,11})
+Shared tritone: B(11) and F(5) are common to G7 and Db7
+
+Common tones between G major and Db major:
+Set 1: {2, 7, 11} = D G B
+Set 2: {1, 5, 8} = C#/Db F G#/Ab
+
+Common tones: {} = (empty)
+Count: 0
+
+Progression with tritone sub (Cmaj → Am → Dm → Db7):
+Key: C major (estimated, confidence: 6/8)
+
+  Chord        PcSet          Quality      Deg    Roman   
+  ──────────── ────────────── ──────────── ────── ────────
+  C,E,G        {0, 4, 7}      CMaj         1      I       
+  A,C,E        {0, 4, 9}      Amin         6      vi      
+  D,F,A        {2, 5, 9}      Dmin         2      ii      
+  Db,F,Ab      {1, 5, 8}      C#/DbMaj     -      ♭/♯I    *
+
+Common tones: C,E,G→A,C,E: {0, 4}  A,C,E→D,F,A: {9}  D,F,A→Db,F,Ab: {5}
+Voice-leading cost (L1): 2 → 3 → 2  total: 7
+
+Voice-leading plan:
+Progression: C,E,G → A,C,E → D,F,A → C#/Db,F,G#/Ab
+Voices: 3
+Metric: L1
+
+  Start: C4 E4 G4 (C,E,G)
+  Step 1: C4 E4 G4 → C4 E4 A4  dist=2  (A,C,E)
+  Step 2: C4 E4 A4 → D4 F4 A4  dist=3  (D,F,A)
+  Step 3: D4 F4 A4 → C#4 F4 Ab4  dist=2  (C#/Db,F,G#/Ab)
+
+Total voice-leading cost: 7 (L1, 3 steps)
+
+
+==== 4. REHARMONIZATION #2: vi → iii (Am → Em) ====
+
+Replace Am (vi, {0,4,9}) with Em (iii, {4,7,11})
+
+Common tones between Am and Em:
+Set 1: {0, 4, 9} = C E A
+Set 2: {4, 7, 11} = E G B
+
+Common tones: {4} = E
+Count: 1
+
+Progression (Cmaj → Em → Dm → G):
+Key: C major (estimated, confidence: 7/7)
+
+  Chord        PcSet          Quality      Deg    Roman   
+  ──────────── ────────────── ──────────── ────── ────────
+  C,E,G        {0, 4, 7}      CMaj         1      I       
+  E,G,B        {4, 7, 11}     Emin         3      iii     
+  D,F,A        {2, 5, 9}      Dmin         2      ii      
+  G,B,D        {2, 7, 11}     GMaj         5      V       
+
+Common tones: C,E,G→E,G,B: {4, 7}  E,G,B→D,F,A: ∅  D,F,A→G,B,D: {2}
+Voice-leading cost (L1): 11 → 6 → 4  total: 21
+
+Voice-leading plan:
+Progression: C,E,G → E,G,B → D,F,A → G,B,D
+Voices: 3
+Metric: L1
+
+  Start: C4 E4 G4 (C,E,G)
+  Step 1: C4 E4 G4 → B3 E4 G4  dist=1  (E,G,B)
+  Step 2: B3 E4 G4 → D4 F4 A4  dist=6  (D,F,A)
+  Step 3: D4 F4 A4 → D4 G4 B4  dist=4  (G,B,D)
+
+Total voice-leading cost: 11 (L1, 3 steps)
+
+
+==== 5. REHARMONIZATION #3: ii → IV (Dm → Fmaj7) ====
+
+Replace Dm (ii, {2,5,9}) with Fmaj7 (IV7, {0,4,5,9})
+
+Common tones between Dm and F major:
+Set 1: {2, 5, 9} = D F A
+Set 2: {0, 5, 9} = C F A
+
+Common tones: {5, 9} = F A
+Count: 2
+
+Progression (Cmaj → Am → Fmaj7 → G):
+Key: C major (estimated, confidence: 7/7)
+
+  Chord        PcSet          Quality      Deg    Roman   
+  ──────────── ────────────── ──────────── ────── ────────
+  C,E,G        {0, 4, 7}      CMaj         1      I       
+  A,C,E        {0, 4, 9}      Amin         6      vi      
+  F,A,C        {0, 5, 9}      FMaj         4      IV      
+  G,B,D        {2, 7, 11}     GMaj         5      V       
+
+Common tones: C,E,G→A,C,E: {0, 4}  A,C,E→F,A,C: {0, 9}  F,A,C→G,B,D: ∅
+Voice-leading cost (L1): 2 → 1 → 6  total: 9
+
+Voice-leading plan:
+Progression: C,E,G → A,C,E → F,A,C → G,B,D
+Voices: 3
+Metric: L1
+
+  Start: C4 E4 G4 (C,E,G)
+  Step 1: C4 E4 G4 → C4 E4 A4  dist=2  (A,C,E)
+  Step 2: C4 E4 A4 → C4 F4 A4  dist=1  (F,A,C)
+  Step 3: C4 F4 A4 → B3 D4 G4  dist=6  (G,B,D)
+
+Total voice-leading cost: 9 (L1, 3 steps)
+
+
+==== 6. VOICE-LEADING COST COMPARISON ====
+
+Original I-vi-ii-V:
+Total voice-leading cost: 9 (L1, 3 steps)
+
+Tritone sub (Cmaj→Am→Dm→Db):
+Total voice-leading cost: 7 (L1, 3 steps)
+
+iii sub (Cmaj→Em→Dm→G):
+Total voice-leading cost: 11 (L1, 3 steps)
+
+IV sub (Cmaj→Am→F→G):
+Total voice-leading cost: 9 (L1, 3 steps)
+
+
+==== 7. FULL ANALYSIS: Best reharmonization ====
+
+Selecting Cmaj→Am→F→G (I-vi-IV-V) as the smoothest diatonic alternative
+
+Key: C major (estimated, confidence: 7/7)
+
+  Chord        PcSet          Quality      Deg    Roman   
+  ──────────── ────────────── ──────────── ────── ────────
+  C,E,G        {0, 4, 7}      CMaj         1      I       
+  A,C,E        {0, 4, 9}      Amin         6      vi      
+  F,A,C        {0, 5, 9}      FMaj         4      IV      
+  G,B,D        {2, 7, 11}     GMaj         5      V       
+
+Common tones: C,E,G→A,C,E: {0, 4}  A,C,E→F,A,C: {0, 9}  F,A,C→G,B,D: ∅
+Voice-leading cost (L1): 2 → 1 → 6  total: 9
+
+---
+Generated by slonimsky reharmonization_explorer.sh

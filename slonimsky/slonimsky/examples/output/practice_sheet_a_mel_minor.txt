@@ -1,0 +1,103 @@
+Practice Sheet: A Melodic Minor
+============================================================
+
+SCALE
+-----
+  Notes: C D E F#/Gb G#/Ab A B
+  PCs:   {0, 2, 4, 6, 8, 9, 11}
+  Interval Vector: <2, 5, 4, 4, 4, 2>
+
+MODES
+-----
+   1. Melodic Minor        A B C D E F#/Gb G#/Ab
+   2. Dorian b2            A A#/Bb C D E F#/Gb G
+   3. Lydian Augmented     A B C#/Db D#/Eb F F#/Gb G#/Ab
+   4. Lydian Dominant      A B C#/Db D#/Eb E F#/Gb G
+   5. Mixolydian b6        A B C#/Db D E F G
+   6. Locrian #2           A B C D D#/Eb F G
+   7. Altered              A A#/Bb C C#/Db D#/Eb F G
+
+DIATONIC TRIADS (35 total)
+---------------
+   1. CMaj (9)     C D E
+   2. ?            C D F#/Gb
+   3. ?            C D G#/Ab
+   4. CMaj6 (9)    C D A
+   5. CMaj7 (9)    C D B
+   6. CMaj (♭5)    C E F#/Gb
+   7. CAug         C E G#/Ab
+   8. CMaj6        C E A
+   9. CMaj7 (no5)  C E B
+  10. ?            C F#/Gb G#/Ab
+  11. Cdim7        C F#/Gb A
+  12. CminMaj7 (♭5) C F#/Gb B
+  13. ?            C G#/Ab A
+  14. ?            C G#/Ab B
+  15. ?            C A B
+  16. DMaj (9)     D E F#/Gb
+  17. ?            D E G#/Ab
+  18. Dsus2        D E A
+  19. DMaj6 (9)    D E B
+  20. DMaj (♭5)    D F#/Gb G#/Ab
+  21. DMaj         D F#/Gb A
+  22. DMaj6        D F#/Gb B
+  23. ?            D G#/Ab A
+  24. Ddim7        D G#/Ab B
+  25. DMaj6        D A B
+  26. EMaj (9)     E F#/Gb G#/Ab
+  27. Esus4        E F#/Gb A
+  28. Esus2        E F#/Gb B
+  29. EMaj (11)    E G#/Ab A
+  30. EMaj         E G#/Ab B
+  31. Esus4        E A B
+  32. F#/Gbmin (9) F#/Gb G#/Ab A
+  33. F#/Gbsus4    F#/Gb G#/Ab B
+  34. F#/Gbmin (11) F#/Gb A B
+  35. G#/Abmin (♭9) G#/Ab A B
+
+DIATONIC SEVENTH CHORDS (35 total)
+-----------------------
+   1. CMaj (9, ♭5) C D E F#/Gb
+   2. CAug (9)     C D E G#/Ab
+   3. CMaj6 (9)    C D E A
+   4. CMaj7 (no5) (9) C D E B
+   5. ?            C D F#/Gb G#/Ab
+   6. Cdim7 (9)    C D F#/Gb A
+   7. ?            C D F#/Gb B
+   8. ?            C D G#/Ab A
+   9. ?            C D G#/Ab B
+  10. CMaj7 (9, 13) C D A B
+  11. CAug (♯11)   C E F#/Gb G#/Ab
+  12. CMaj6 (♭5)   C E F#/Gb A
+  13. CMaj7 (♭5)   C E F#/Gb B
+  14. CAug (13)    C E G#/Ab A
+  15. C+Maj7       C E G#/Ab B
+  16. CMaj7 (no5) (13) C E A B
+  17. Cdim7 (♭13)  C F#/Gb G#/Ab A
+  18. ?            C F#/Gb G#/Ab B
+  19. ?            C F#/Gb A B
+  20. ?            C G#/Ab A B
+  21. DMaj (9, ♭5) D E F#/Gb G#/Ab
+  22. DMaj (9)     D E F#/Gb A
+  23. DMaj6 (9)    D E F#/Gb B
+  24. ?            D E G#/Ab A
+  25. Ddim7 (9)    D E G#/Ab B
+  26. Dsus2 (13)   D E A B
+  27. DMaj (♯11)   D F#/Gb G#/Ab A
+  28. DMaj6 (♭5)   D F#/Gb G#/Ab B
+  29. DMaj6        D F#/Gb A B
+  30. Dmin6 (♯11)  D G#/Ab A B
+  31. ?            E F#/Gb G#/Ab A
+  32. EMaj (9)     E F#/Gb G#/Ab B
+  33. Esus4        E F#/Gb A B
+  34. EMaj (11)    E G#/Ab A B
+  35. ?            F#/Gb G#/Ab A B
+
+PRACTICE SUGGESTIONS
+--------------------
+  1. Play the scale ascending and descending across all strings
+  2. Play each mode starting from its root degree
+  3. Arpeggiate each diatonic triad through the scale
+  4. Arpeggiate each diatonic seventh chord through the scale
+  5. Play the ii-V-I progression in this key:
+     ii:  B minor  →  V:  E dom7  →  I:  A major

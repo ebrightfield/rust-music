@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1986" viewBox="0 0 800 1986">
+<style>
+  text { font-family: sans-serif; }
+  .title { font-size: 20px; font-weight: bold; }
+  .section { font-size: 14px; font-weight: bold; }
+  .body { font-size: 12px; }
+  .small { font-size: 10px; }
+</style>
+<rect width="800" height="1986" fill="#ffffff"/>
+<text x="400" y="30" text-anchor="middle" class="title" fill="#333333">C Major — Practice Sheet</text>
+<g transform="translate(20,50) scale(0.55)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 265" width="240" height="265">
+  <style>
+    .note-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; }
+    .title-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; }
+    .fret-text { font-family: Arial, sans-serif; font-size: 10px; text-anchor: middle; }
+    .string-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; }
+  </style>
+  <text x="120.0" y="18.0" class="title-text">C Major</text>
+  <circle cx="120.0" cy="145.0" r="80" fill="none" stroke="#cccccc" stroke-width="1"/>
+  <g class="interval-lines">
+  <line x1="120.0" y1="65.0" x2="189.3" y2="105.0" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="189.3" y1="105.0" x2="189.3" y2="185.0" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="189.3" y1="185.0" x2="160.0" y2="214.3" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="160.0" y1="214.3" x2="80.0" y2="214.3" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="80.0" y1="214.3" x2="40.0" y2="145.0" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="40.0" y1="145.0" x2="80.0" y2="75.7" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="80.0" y1="75.7" x2="120.0" y2="65.0" stroke="#4a90d9" stroke-width="2" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="120.0" cy="65.0" r="14" fill="#2d5a87" stroke="#333333" stroke-width="1.5"/>
+  <text x="120.0" y="65.0" class="note-text" fill="#ffffff">C</text>
+  <circle cx="160.0" cy="75.7" r="14" fill="#ffffff" stroke="#333333" stroke-width="1.5"/>
+  <text x="160.0" y="75.7" class="note-text" fill="#333333">C#</text>
+  <circle cx="189.3" cy="105.0" r="14" fill="#4a90d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="189.3" y="105.0" class="note-text" fill="#ffffff">D</text>
+  <circle cx="200.0" cy="145.0" r="14" fill="#ffffff" stroke="#333333" stroke-width="1.5"/>
+  <text x="200.0" y="145.0" class="note-text" fill="#333333">Eb</text>
+  <circle cx="189.3" cy="185.0" r="14" fill="#4a90d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="189.3" y="185.0" class="note-text" fill="#ffffff">E</text>
+  <circle cx="160.0" cy="214.3" r="14" fill="#4a90d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="160.0" y="214.3" class="note-text" fill="#ffffff">F</text>
+  <circle cx="120.0" cy="225.0" r="14" fill="#ffffff" stroke="#333333" stroke-width="1.5"/>
+  <text x="120.0" y="225.0" class="note-text" fill="#333333">F#</text>
+  <circle cx="80.0" cy="214.3" r="14" fill="#4a90d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="80.0" y="214.3" class="note-text" fill="#ffffff">G</text>
+  <circle cx="50.7" cy="185.0" r="14" fill="#ffffff" stroke="#333333" stroke-width="1.5"/>
+  <text x="50.7" y="185.0" class="note-text" fill="#333333">Ab</text>
+  <circle cx="40.0" cy="145.0" r="14" fill="#4a90d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="40.0" y="145.0" class="note-text" fill="#ffffff">A</text>
+  <circle cx="50.7" cy="105.0" r="14" fill="#ffffff" stroke="#333333" stroke-width="1.5"/>
+  <text x="50.7" y="105.0" class="note-text" fill="#333333">Bb</text>
+  <circle cx="80.0" cy="75.7" r="14" fill="#4a90d9" stroke="#333333" stroke-width="1.5"/>
+  <text x="80.0" y="75.7" class="note-text" fill="#ffffff">B</text>
+</svg></g>
+<text x="340" y="80" class="section" fill="#333333">Scale Notes</text>
+<text x="340" y="100" class="body" fill="#333333">C  D  E  F  G  A  B</text>
+<text x="340" y="120" class="body" fill="#333333">Interval Vector: &lt;2, 5, 4, 3, 6, 1&gt;</text>
+<text x="340" y="150" class="section" fill="#333333">Modes</text>
+<text x="340" y="168" class="small" fill="#333333">1. Ionian — C D E F G A B</text>
+<text x="340" y="184" class="small" fill="#333333">2. Dorian — C D D#/Eb F G A A#/Bb</text>
+<text x="340" y="200" class="small" fill="#333333">3. Phrygian — C C#/Db D#/Eb F G G#/Ab A#/Bb</text>
+<text x="340" y="216" class="small" fill="#333333">4. Lydian — C D E F#/Gb G A B</text>
+<text x="340" y="232" class="small" fill="#333333">5. Mixolydian — C D E F G A A#/Bb</text>
+<text x="340" y="248" class="small" fill="#333333">6. Aeolian — C D D#/Eb F G G#/Ab A#/Bb</text>
+<text x="340" y="264" class="small" fill="#333333">7. Locrian — C C#/Db D#/Eb F F#/Gb G#/Ab A#/Bb</text>
+<text x="340" y="290" class="section" fill="#333333">Diatonic Triads</text>
+<text x="340" y="308" class="small" fill="#333333">CMaj (9)     C D E</text>
+<text x="340" y="324" class="small" fill="#333333">Csus4        C D F</text>
+<text x="340" y="340" class="small" fill="#333333">Csus2        C D G</text>
+<text x="340" y="356" class="small" fill="#333333">CMaj6 (9)    C D A</text>
+<text x="340" y="372" class="small" fill="#333333">CMaj7 (9)    C D B</text>
+<text x="340" y="388" class="small" fill="#333333">CMaj (11)    C E F</text>
+<text x="340" y="404" class="small" fill="#333333">CMaj         C E G</text>
+<text x="340" y="420" class="small" fill="#333333">CMaj6        C E A</text>
+<text x="340" y="436" class="small" fill="#333333">CMaj7 (no5)  C E B</text>
+<text x="340" y="452" class="small" fill="#333333">Csus4        C F G</text>
+<text x="340" y="468" class="small" fill="#333333">?            C F A</text>
+<text x="340" y="484" class="small" fill="#333333">CMaj7sus     C F B</text>
+<text x="340" y="500" class="small" fill="#333333">CMaj6        C G A</text>
+<text x="340" y="516" class="small" fill="#333333">CMaj7        C G B</text>
+<text x="340" y="532" class="small" fill="#333333">?            C A B</text>
+<text x="340" y="548" class="small" fill="#333333">Dmin (9)     D E F</text>
+<text x="340" y="564" class="small" fill="#333333">Dsus4        D E G</text>
+<text x="340" y="580" class="small" fill="#333333">Dsus2        D E A</text>
+<text x="340" y="596" class="small" fill="#333333">DMaj6 (9)    D E B</text>
+<text x="340" y="612" class="small" fill="#333333">Dmin (11)    D F G</text>
+<text x="340" y="628" class="small" fill="#333333">Dmin         D F A</text>
+<text x="340" y="644" class="small" fill="#333333">Dmin6        D F B</text>
+<text x="340" y="660" class="small" fill="#333333">Dsus4        D G A</text>
+<text x="340" y="676" class="small" fill="#333333">?            D G B</text>
+<text x="340" y="692" class="small" fill="#333333">DMaj6        D A B</text>
+<text x="340" y="708" class="small" fill="#333333">Emin (♭9)    E F G</text>
+<text x="340" y="724" class="small" fill="#333333">Esus4 (♭9)   E F A</text>
+<text x="340" y="740" class="small" fill="#333333">?            E F B</text>
+<text x="340" y="756" class="small" fill="#333333">Emin (11)    E G A</text>
+<text x="340" y="772" class="small" fill="#333333">Emin         E G B</text>
+<text x="340" y="788" class="small" fill="#333333">Esus4        E A B</text>
+<text x="340" y="804" class="small" fill="#333333">FMaj (9)     F G A</text>
+<text x="340" y="820" class="small" fill="#333333">?            F G B</text>
+<text x="340" y="836" class="small" fill="#333333">FMaj (♭5)    F A B</text>
+<text x="340" y="852" class="small" fill="#333333">GMaj (9)     G A B</text>
+<text x="340" y="878" class="section" fill="#333333">Diatonic Seventh Chords</text>
+<text x="340" y="896" class="small" fill="#333333">?            C D E F</text>
+<text x="340" y="912" class="small" fill="#333333">CMaj (9)     C D E G</text>
+<text x="340" y="928" class="small" fill="#333333">CMaj6 (9)    C D E A</text>
+<text x="340" y="944" class="small" fill="#333333">CMaj7 (no5) (9) C D E B</text>
+<text x="340" y="960" class="small" fill="#333333">Csus4        C D F G</text>
+<text x="340" y="976" class="small" fill="#333333">Csus4 (13)   C D F A</text>
+<text x="340" y="992" class="small" fill="#333333">CMaj7sus     C D F B</text>
+<text x="340" y="1008" class="small" fill="#333333">Csus2 (13)   C D G A</text>
+<text x="340" y="1024" class="small" fill="#333333">Csus2        C D G B</text>
+<text x="340" y="1040" class="small" fill="#333333">CMaj7 (9, 13) C D A B</text>
+<text x="340" y="1056" class="small" fill="#333333">CMaj (11)    C E F G</text>
+<text x="340" y="1072" class="small" fill="#333333">?            C E F A</text>
+<text x="340" y="1088" class="small" fill="#333333">CMaj7 (no5) (11) C E F B</text>
+<text x="340" y="1104" class="small" fill="#333333">CMaj6        C E G A</text>
+<text x="340" y="1120" class="small" fill="#333333">CMaj7        C E G B</text>
+<text x="340" y="1136" class="small" fill="#333333">CMaj7 (no5) (13) C E A B</text>
+<text x="340" y="1152" class="small" fill="#333333">Csus4 (13)   C F G A</text>
+<text x="340" y="1168" class="small" fill="#333333">CMaj7sus     C F G B</text>
+<text x="340" y="1184" class="small" fill="#333333">?            C F A B</text>
+<text x="340" y="1200" class="small" fill="#333333">CMaj7 (13)   C G A B</text>
+<text x="340" y="1216" class="small" fill="#333333">?            D E F G</text>
+<text x="340" y="1232" class="small" fill="#333333">Dmin (9)     D E F A</text>
+<text x="340" y="1248" class="small" fill="#333333">Dmin6 (9)    D E F B</text>
+<text x="340" y="1264" class="small" fill="#333333">Dsus4        D E G A</text>
+<text x="340" y="1280" class="small" fill="#333333">Dsus4 (13)   D E G B</text>
+<text x="340" y="1296" class="small" fill="#333333">Dsus2 (13)   D E A B</text>
+<text x="340" y="1312" class="small" fill="#333333">Dmin (11)    D F G A</text>
+<text x="340" y="1328" class="small" fill="#333333">?            D F G B</text>
+<text x="340" y="1344" class="small" fill="#333333">Dmin6        D F A B</text>
+<text x="340" y="1360" class="small" fill="#333333">Dsus4 (13)   D G A B</text>
+<text x="340" y="1376" class="small" fill="#333333">?            E F G A</text>
+<text x="340" y="1392" class="small" fill="#333333">Emin (♭9)    E F G B</text>
+<text x="340" y="1408" class="small" fill="#333333">?            E F A B</text>
+<text x="340" y="1424" class="small" fill="#333333">Emin (11)    E G A B</text>
+<text x="340" y="1440" class="small" fill="#333333">FMaj (9, ♭5) F G A B</text>
+</svg>

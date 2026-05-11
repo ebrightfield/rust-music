@@ -1,0 +1,14 @@
+Superchords of {0,4,7} (size 4..=4):
+
+  --- 4-note chords ---
+    1. C Maj7
+    2. C Dom7
+    3. C Maj(add9)
+    4. C Maj(addb9)
+    5. C Maj(add#9)
+    6. C Maj(add11)
+    7. C Maj(add#11)
+    8. G#/Ab AugMaj7
+    9. A Min7
+
+Total: 9 superchords

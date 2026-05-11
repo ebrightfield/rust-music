@@ -1,0 +1,8 @@
+Subchords of {0,4,7,11} (size 3):
+
+    1. {0,4,7}  CMaj
+    2. {0,4,11}  CMaj7 (no5)
+    3. {0,7,11}  CMaj7
+    4. {4,7,11}  Emin
+
+Total: 4 subchords

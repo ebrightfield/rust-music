@@ -102,13 +102,16 @@ impl IntervalMatrix {
     /// Returns an array of 6 elements: [ic1_count, ic2_count, ic3_count, ic4_count, ic5_count, ic6_count]
     pub fn reduced_interval_vector(&self) -> [usize; 6] {
         let full_vector = self.interval_vector();
+        // The full vector counts ordered pairs (both directions), so each
+        // unordered pair is counted twice. Divide by 2 to get the standard
+        // music-theory interval-class vector.
         [
-            full_vector[1] + full_vector[11], // IC1 + IC11 -> ic1
-            full_vector[2] + full_vector[10], // IC2 + IC10 -> ic2
-            full_vector[3] + full_vector[9],  // IC3 + IC9 -> ic3
-            full_vector[4] + full_vector[8],  // IC4 + IC8 -> ic4
-            full_vector[5] + full_vector[7],  // IC5 + IC7 -> ic5
-            full_vector[6],                    // IC6 (tritone, its own inverse)
+            (full_vector[1] + full_vector[11]) / 2, // IC1 + IC11 -> ic1
+            (full_vector[2] + full_vector[10]) / 2, // IC2 + IC10 -> ic2
+            (full_vector[3] + full_vector[9]) / 2,  // IC3 + IC9 -> ic3
+            (full_vector[4] + full_vector[8]) / 2,  // IC4 + IC8 -> ic4
+            (full_vector[5] + full_vector[7]) / 2,  // IC5 + IC7 -> ic5
+            full_vector[6] / 2,                      // IC6 (tritone, its own inverse)
         ]
     }
 
@@ -186,8 +189,8 @@ mod tests {
         let reduced = matrix.reduced_interval_vector();
 
         // In traditional set theory notation: <001110>
-        // ic1: 0, ic2: 0, ic3: 2 (IC3 + IC9), ic4: 2 (IC4 + IC8), ic5: 2 (IC5 + IC7), ic6: 0
-        assert_eq!(reduced, [0, 0, 2, 2, 2, 0]);
+        // ic1: 0, ic2: 0, ic3: 1, ic4: 1, ic5: 1, ic6: 0
+        assert_eq!(reduced, [0, 0, 1, 1, 1, 0]);
     }
 
     #[test]
@@ -221,8 +224,8 @@ mod tests {
 
         // Diminished seventh: ic3 appears 4 times (each note is a minor third from 2 others)
         // ic6 appears 2 times (two tritone pairs: C-Gb, Eb-A)
-        assert_eq!(reduced[2], 8); // ic3: 4 pairs × 2 directions
-        assert_eq!(reduced[5], 4); // ic6: 2 pairs × 2 directions
+        assert_eq!(reduced[2], 4); // ic3: 4 unordered pairs
+        assert_eq!(reduced[5], 2); // ic6: 2 unordered tritone pairs
     }
 }
 

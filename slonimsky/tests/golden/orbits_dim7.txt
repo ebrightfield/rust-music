@@ -1,0 +1,5 @@
+PcSet: {0, 3, 6, 9}
+
+Transpositional symmetries: T3, T6
+
+Inversionally symmetric: yes (palindromic intervals)

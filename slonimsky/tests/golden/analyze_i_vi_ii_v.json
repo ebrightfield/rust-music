@@ -1,0 +1,65 @@
+{
+  "key": {
+    "root": "C",
+    "scale": "major",
+    "confidence": 7
+  },
+  "chords": [
+    {
+      "input": "C,E,G",
+      "pcs": [0, 4, 7],
+      "root": "C",
+      "quality": "CMaj",
+      "degree": 1,
+      "roman": "I",
+      "diatonic": true
+    },
+    {
+      "input": "A,C,E",
+      "pcs": [0, 4, 9],
+      "root": "A",
+      "quality": "Amin",
+      "degree": 6,
+      "roman": "vi",
+      "diatonic": true
+    },
+    {
+      "input": "D,F,A",
+      "pcs": [2, 5, 9],
+      "root": "D",
+      "quality": "Dmin",
+      "degree": 2,
+      "roman": "ii",
+      "diatonic": true
+    },
+    {
+      "input": "G,B,D",
+      "pcs": [2, 7, 11],
+      "root": "G",
+      "quality": "GMaj",
+      "degree": 5,
+      "roman": "V",
+      "diatonic": true
+    }
+  ],
+  "transitions": [
+    {
+      "from": 0,
+      "to": 1,
+      "common_tones": [0, 4],
+      "l1_cost": 2
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "common_tones": [9],
+      "l1_cost": 3
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "common_tones": [2],
+      "l1_cost": 4
+    }
+  ]
+}

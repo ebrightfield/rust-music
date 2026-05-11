@@ -1,0 +1,10 @@
+=== Sight-Reading Exercise ===
+Key: A melodic-minor
+Difficulty: 5/5
+Measures: 4 (4/4 time)
+Notes: 28
+
+  m1: A4 (eighth)  E5 (eighth)  F#5 (quarter)  E4 (dotted-quarter)  B4 (eighth)  C5 (half)  G#4 (eighth)
+  m2: D5 (eighth)  E5 (quarter)  G#5 (dotted-quarter)  C5 (eighth)  B4 (half)  C6 (eighth)  F#5 (eighth)
+  m3: E5 (quarter)  A5 (dotted-quarter)  D5 (eighth)  C5 (half)  A4 (eighth)  D4 (eighth)  C4 (quarter)
+  m4: D5 (dotted-quarter)  G#4 (eighth)  F#4 (half)  B4 (eighth)  E4 (eighth)  D4 (quarter)  B3 (dotted-quarter)

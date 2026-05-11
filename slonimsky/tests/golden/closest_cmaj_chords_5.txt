@@ -1,0 +1,9 @@
+Closest known chords/scales to {0,4,7}:
+
+    1. C Maj7 (dist=1, common={0,4,7}, 3 common tones)
+    2. C Dom7 (dist=1, common={0,4,7}, 3 common tones)
+    3. C Maj(add9) (dist=1, common={0,4,7}, 3 common tones)
+    4. C Maj(addb9) (dist=1, common={0,4,7}, 3 common tones)
+    5. C Maj(add#9) (dist=1, common={0,4,7}, 3 common tones)
+
+Total: 5 results (distance > 0)

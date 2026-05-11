@@ -1,0 +1,3 @@
+PcSet:      {0, 4, 7}
+Prime form: [0, 3, 7]
+Forte:      3-11

@@ -1,0 +1,10 @@
+PcSet: {0, 4, 7}
+
+Interval vector: <0, 0, 1, 1, 1, 0>
+
+  ic1: 0 (m2/M7)
+  ic2: 0 (M2/m7)
+  ic3: 1 (m3/M6)
+  ic4: 1 (M3/m6)
+  ic5: 1 (P4/P5)
+  ic6: 0 (tritone)

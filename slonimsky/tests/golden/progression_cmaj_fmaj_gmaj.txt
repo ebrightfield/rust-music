@@ -1,0 +1,9 @@
+Progression: C,E,G → F,A,C → G,B,D
+Voices: 3
+Metric: L1
+
+  Start: C4 E4 G4 (C,E,G)
+  Step 1: C4 E4 G4 → C4 F4 A4  dist=3  (F,A,C)
+  Step 2: C4 F4 A4 → B3 D4 G4  dist=6  (G,B,D)
+
+Total voice-leading cost: 9 (L1, 2 steps)

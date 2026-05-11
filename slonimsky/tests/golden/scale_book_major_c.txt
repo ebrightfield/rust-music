@@ -1,0 +1,39 @@
+Scale Book: major (7 modes × 1 keys = 7 entries)
+============================================================
+
+Mode 1: Ionian
+  Parent intervals: PcSet([Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11])
+----------------------------------------
+      C Ionian: C D E F G A B
+
+Mode 2: Dorian
+  Parent intervals: PcSet([Pc0, Pc2, Pc3, Pc5, Pc7, Pc9, Pc10])
+----------------------------------------
+      C Dorian: C D D#/Eb F G A A#/Bb
+
+Mode 3: Phrygian
+  Parent intervals: PcSet([Pc0, Pc1, Pc3, Pc5, Pc7, Pc8, Pc10])
+----------------------------------------
+      C Phrygian: C C#/Db D#/Eb F G G#/Ab A#/Bb
+
+Mode 4: Lydian
+  Parent intervals: PcSet([Pc0, Pc2, Pc4, Pc6, Pc7, Pc9, Pc11])
+----------------------------------------
+      C Lydian: C D E F#/Gb G A B
+
+Mode 5: Mixolydian
+  Parent intervals: PcSet([Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc10])
+----------------------------------------
+      C Mixolydian: C D E F G A A#/Bb
+
+Mode 6: Aeolian
+  Parent intervals: PcSet([Pc0, Pc2, Pc3, Pc5, Pc7, Pc8, Pc10])
+----------------------------------------
+      C Aeolian: C D D#/Eb F G G#/Ab A#/Bb
+
+Mode 7: Locrian
+  Parent intervals: PcSet([Pc0, Pc1, Pc3, Pc5, Pc6, Pc8, Pc10])
+----------------------------------------
+      C Locrian: C C#/Db D#/Eb F F#/Gb G#/Ab A#/Bb
+
+Total: 7 entries
