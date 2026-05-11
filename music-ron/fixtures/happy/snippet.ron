@@ -1,0 +1,12 @@
+// Happy-path Snippet fixture (REQ-O36, spec §6.1).
+(
+  kind: "Snippet",
+  meta: (title: Some("Exercise 1"), tags: ["warmup"]),
+  clef: "treble",
+  events: [
+    Note(pitch: "c4", duration: "4"),
+    Note(pitch: "e4", duration: "4"),
+    Note(pitch: "g4", duration: "4"),
+    Rest(duration: "4"),
+  ],
+)

@@ -87,7 +87,7 @@ fn parse_pitch(s: &str) -> Result<Pitch> {
     let note_str = &s[..digit_start];
     let octave_str = &s[digit_start..];
     let note = parse_note(note_str).with_context(|| format!("in pitch '{}'", s))?;
-    let octave: u8 = octave_str
+    let octave: i8 = octave_str
         .parse()
         .with_context(|| format!("invalid octave '{}' in pitch '{}'", octave_str, s))?;
     Ok(Pitch::new(note, octave))

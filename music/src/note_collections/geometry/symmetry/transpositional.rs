@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::error::MusicSemanticsError;
 use crate::note::{Note, Pitch};
 use crate::note::pitch_class::Pc;
-use crate::note_collections::{NoteSet, PcSet, Voicing};
+use crate::note_collections::{NoteSet, Voicing, pc_set::PcShape};
 
 /// A type that can be transposed. Any type that has modes is necessarily
 /// transposable, but not every transposable type has modes, because only
@@ -28,7 +28,7 @@ impl Transpose for Pc {
     }
 }
 
-/// A [PcSet] transposed is still just itself or a mode of itself, because it's zeroed.
+/// A [PcShape] transposed is still just itself or a mode of itself, because it's zeroed.
 /// We therefore put the [Transpose] trait on `Vec<Pc>` instead.
 impl Transpose for Vec<Pc> {
     fn transpose(&self, semitones: i8) -> Self {
@@ -88,13 +88,12 @@ pub trait Modes: PartialEq + Sized {
     }
 }
 
-impl Modes for PcSet {
+// REQ-O14: PcShape implements Modes; PcContent does NOT.
+impl Modes for PcShape {
     fn modes(&self) -> Vec<Self> {
         (0..self.len())
-            .map(|i| {
-                self.rotate(isize::try_from(i).unwrap())
-            })
-           .collect()
+            .map(|i| self.rotate(isize::try_from(i).unwrap()))
+            .collect()
     }
 }
 
@@ -172,7 +171,7 @@ pub fn transpose(pcs: &Vec<Pc>, semitones: u8) -> Vec<Pc> {
 
 /// A pitch set possesses a [TranspositionalSymmetry] of `N` when
 /// it can be transposed up or down by `N` semitones to arrive at an equivalent
-/// [crate::note_collections::PcSet].
+/// [crate::note_collections::PcShape].
 /// Most chords and scales do not exhibit any kind of transpositional symmetry,
 /// and it is highly associated with musical dissonance.
 /// Transpositionally symmetrical chord or scales can easily produce tonal ambiguity.

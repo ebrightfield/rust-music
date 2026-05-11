@@ -1,6 +1,6 @@
 use anyhow::Result;
 use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::PcContent;
 use music::geometry::symmetry::intervallic::IntervallicSymmetry;
 use music::geometry::symmetry::transpositional::{
     find_transpositional_symmetries, TranspositionalSymmetry,
@@ -52,7 +52,7 @@ fn sym_label(s: &TranspositionalSymmetry) -> &'static str {
 
 pub fn run(args: OrbitsArgs) -> Result<()> {
     let pcs = parse_input_to_pcs(&args.input)?;
-    let pc_set = PcSet::from_unzeroed(pcs.clone());
+    let pc_set = PcContent::new(pcs.clone());
 
     println!("PcSet: {}", format_pc_set(&pc_set));
     println!();
@@ -105,7 +105,8 @@ pub fn run(args: OrbitsArgs) -> Result<()> {
     }
 
     if show_i {
-        let inverted = pc_set.invert_intervals();
+        let pc_shape = pc_set.to_shape();
+        let inverted = pc_shape.invert_intervals();
         if let Some(inv) = inverted {
             println!("Inversionally symmetric: no");
             println!("Inverted form: {}", format_pc_set(&inv));
@@ -128,7 +129,7 @@ mod tests {
     #[test]
     fn dim7_has_t3_and_t6() {
         let pcs = pcs_from(&[0, 3, 6, 9]);
-        let pc_set = PcSet::from_unzeroed(pcs);
+        let pc_set = PcContent::new(pcs);
         let sym = find_transpositional_symmetries(&pc_set.to_vec());
         assert!(!sym.is_empty());
         // Should have T3 and T6 symmetry
@@ -148,7 +149,7 @@ mod tests {
     #[test]
     fn augmented_triad_has_t4() {
         let pcs = pcs_from(&[0, 4, 8]);
-        let pc_set = PcSet::from_unzeroed(pcs);
+        let pc_set = PcContent::new(pcs);
         let sym = find_transpositional_symmetries(&pc_set.to_vec());
         let mut all_labels: Vec<&str> = Vec::new();
         for syms in sym.values() {
@@ -165,7 +166,7 @@ mod tests {
     #[test]
     fn major_triad_no_t_symmetry() {
         let pcs = pcs_from(&[0, 4, 7]);
-        let pc_set = PcSet::from_unzeroed(pcs);
+        let pc_set = PcContent::new(pcs);
         let sym = find_transpositional_symmetries(&pc_set.to_vec());
         assert!(sym.is_empty());
     }
@@ -173,19 +174,20 @@ mod tests {
     #[test]
     fn dim7_is_inversionally_symmetric() {
         let pcs = pcs_from(&[0, 3, 6, 9]);
-        let pc_set = PcSet::from_unzeroed(pcs);
-        assert!(pc_set.is_inversionally_symmetric());
+        let pc_set = PcContent::new(pcs);
+        assert!(pc_set.to_shape().is_inversionally_symmetric());
     }
 
     #[test]
     fn major_triad_not_inversionally_symmetric() {
         let pcs = pcs_from(&[0, 4, 7]);
-        let pc_set = PcSet::from_unzeroed(pcs);
+        let pc_set = PcContent::new(pcs);
+        let pc_shape = pc_set.to_shape();
         // Major triad inverts to minor triad — not symmetric
-        assert!(!pc_set.is_inversionally_symmetric());
-        let inverted = pc_set.invert_intervals().unwrap();
-        // Inverted form should be a different PcSet
-        assert_ne!(pc_set, inverted);
+        assert!(!pc_shape.is_inversionally_symmetric());
+        let inverted = pc_shape.invert_intervals().unwrap();
+        // Inverted form should be a different pitch-class shape
+        assert_ne!(pc_shape, inverted);
     }
 
     #[test]
@@ -202,7 +204,7 @@ mod tests {
     #[test]
     fn whole_tone_has_t2() {
         let pcs = pcs_from(&[0, 2, 4, 6, 8, 10]);
-        let pc_set = PcSet::from_unzeroed(pcs);
+        let pc_set = PcContent::new(pcs);
         let sym = find_transpositional_symmetries(&pc_set.to_vec());
         let mut all_labels: Vec<&str> = Vec::new();
         for syms in sym.values() {

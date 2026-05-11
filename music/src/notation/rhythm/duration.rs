@@ -14,6 +14,7 @@ pub type DurationTicks = usize;
 /// The longest duration here is a double-whole-note, and the shortest duration
 /// is a 128th note. This range of values was chosen because it covers what Lilypond
 /// is capable of.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum DurationKind {
     Breve,

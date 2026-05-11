@@ -1,16 +1,7 @@
 // REQ-O2: Voicing -> parallel NoteOns + NoteOffs
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError,
-            dynamics::VelocityPolicy};
+use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
 use music::note_collections::voicing::Voicing;
-
-fn velocity_for(ctx: &ConvertCtx<'_>) -> u8 {
-    match &ctx.velocity {
-        VelocityPolicy::Fixed(v) => *v,
-        VelocityPolicy::FromDynamic(d) => d.velocity(),
-        VelocityPolicy::PerEvent(_) => 80,
-    }
-}
 
 impl ToMidiEvents for Voicing {
     fn append_midi(
@@ -19,7 +10,7 @@ impl ToMidiEvents for Voicing {
     ) -> Result<AbsoluteTicks, MidiConversionError> {
         // REQ-O2: parallel NoteOns, then parallel NoteOffs at base + quarter
         let gate = ctx.ppq as u64;
-        let vel = velocity_for(ctx);
+        let vel = ctx.velocity.velocity_no_event();
         // Voicing derefs to Vec<Pitch>
         for pitch in self.iter() {
             if pitch.midi_note > 127 {

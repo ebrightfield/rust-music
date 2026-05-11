@@ -1,0 +1,6 @@
+// Error fixture: SyntaxError (REQ-O33, O37).
+// Malformed RON — missing closing paren.
+(
+  kind: "Snippet",
+  clef: "treble",
+  events: [

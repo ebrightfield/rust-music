@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::PcShape;
 use music::note_collections::{StackedIntervals, Voicing};
 use musical_combinatorics::canonical_voicings::CanonicalVoicings;
 use musical_combinatorics::FourNoteChordQuality;
@@ -47,10 +47,10 @@ pub fn run(args: VoicingsArgs) -> Result<()> {
         );
     }
 
-    // Convert PCs to Notes in PcSet order
+    // Convert PCs to Notes in input order
     let notes: Vec<Note> = pcs.iter().map(|&pc| pc_to_note(pc)).collect();
 
-    let pc_set = PcSet::from_unzeroed(pcs.clone());
+    let pc_set = PcShape::new(pcs.clone());
 
     // Display header
     let pc_strs: Vec<String> = pcs.iter().map(|pc| pc_label(*pc).to_string()).collect();

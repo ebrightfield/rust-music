@@ -1,0 +1,7 @@
+// Error fixture: AmbiguousIdentity (REQ-O27, O37).
+// Both chord and pcs present — XOR violated.
+(
+  kind: "PitchCircle",
+  chord: "Cmaj7",
+  pcs: [0, 4, 7, 11],
+)

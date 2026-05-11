@@ -2,9 +2,8 @@ use anyhow::{Context, Result};
 use music::note::pitch_class::Pc;
 use music::note_collections::chord_name::naming_heuristics::infer_chord_quality;
 use music::note_collections::chord_name::{ChordNameDisplayConfig, MajNotation};
-use music::note_collections::geometry::sets::get_subchords;
 use music::note_collections::geometry::symmetry::transpositional::Modes;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::{AsPcSlice, PcContent, PcShape};
 use music::note_collections::OctavePartition;
 use music::svg::PitchCircleBuilder;
 use musical_combinatorics::seven_note_scales::SevenNoteScaleQuality;
@@ -35,8 +34,8 @@ struct ScaleInfo {
 
 /// Bundled data for rendering a practice sheet (avoids too-many-arguments).
 struct SheetData {
-    scale_pcs: PcSet,
-    modes: Vec<PcSet>,
+    scale_pcs: PcContent,
+    modes: Vec<PcShape>,
     mode_names: &'static [&'static str],
     key: Pc,
     scale_label: &'static str,
@@ -84,7 +83,7 @@ fn resolve_key(key_str: Option<&str>) -> Result<Pc> {
     }
 }
 
-/// Transpose a PcSet by semitones.
+/// Transpose a slice of pitch classes by semitones.
 fn transpose_pcs(pcs: &[Pc], semitones: u8) -> Vec<Pc> {
     pcs.iter()
         .map(|&pc| Pc::from((u8::from(pc) + semitones) % 12))
@@ -136,18 +135,45 @@ fn try_name_subset(pcs: &[Pc]) -> Option<String> {
     }
 }
 
-/// Get subchords of a given size from a PcSet, with optional names.
-fn get_named_subchords(pcs: &PcSet, size: u8) -> Vec<(Vec<Pc>, Option<String>)> {
-    match get_subchords(pcs, size) {
-        Ok(subs) => subs
-            .into_iter()
-            .map(|sub| {
-                let name = try_name_subset(&sub);
-                (sub, name)
-            })
-            .collect(),
-        Err(_) => Vec::new(),
+/// Compute every k-subset of `pcs`, preserving the input order. This mirrors
+/// the behaviour of `itertools::combinations` and lets us reason about
+/// subchords in their absolute (key-rooted) form without zero-anchoring.
+fn combinations<T: Clone>(pcs: &[T], k: usize) -> Vec<Vec<T>> {
+    if k == 0 {
+        return vec![Vec::new()];
     }
+    let mut out = Vec::new();
+    if k > pcs.len() {
+        return out;
+    }
+    for (i, head) in pcs.iter().enumerate() {
+        for mut tail in combinations(&pcs[i + 1..], k - 1) {
+            tail.insert(0, head.clone());
+            out.push(tail);
+        }
+    }
+    out
+}
+
+/// Get subchords of a given size from a pitch-class set, with optional names.
+///
+/// `pcs` carries the absolute (un-zeroed) pitch classes for the scale in the
+/// requested key. We enumerate size-`size` subsets directly on the absolute
+/// PCs so the returned subsets retain their key spellings (e.g. the I chord
+/// in G major returns [G, B, D] rather than [0, 4, 7]).
+fn get_named_subchords(pcs: &PcContent, size: u8) -> Vec<(Vec<Pc>, Option<String>)> {
+    // Match the old `get_subchords` constraints: size must be at least 3
+    // and strictly less than the cardinality of the set.
+    if size < 3 || (size as usize) >= pcs.len() {
+        return Vec::new();
+    }
+    combinations(pcs.as_pc_slice(), size as usize)
+        .into_iter()
+        .map(|sub| {
+            let name = try_name_subset(&sub);
+            (sub, name)
+        })
+        .collect()
 }
 
 pub fn run(args: PracticeSheetArgs) -> Result<()> {
@@ -156,17 +182,19 @@ pub fn run(args: PracticeSheetArgs) -> Result<()> {
     let scale_info = resolve_scale(scale_name)?;
     let theme = resolve_theme(args.theme.as_deref())?;
 
-    // Build the scale PcSet in the requested key
+    // Build the scale pitch-class set in the requested key
     let parent_partition = OctavePartition::from(&scale_info.quality);
-    let parent_pcs_c = PcSet::from(&parent_partition);
-    let transposed = transpose_pcs(parent_pcs_c.as_slice(), u8::from(key));
-    let scale_pcs = PcSet::from_unzeroed(transposed.clone());
+    let parent_pcs_c = PcShape::from(&parent_partition);
+    let transposed = transpose_pcs(parent_pcs_c.as_pc_slice(), u8::from(key));
+    let scale_pcs = PcContent::new(transposed.clone());
 
     // Get all modes (relative to C), we'll transpose for display
     let modes = parent_pcs_c.modes();
 
-    // Compute interval vector (reduced)
-    let matrix = music::note_collections::geometry::IntervalMatrix::new(&scale_pcs);
+    // Compute interval vector (reduced) — IntervalMatrix is a shape-level
+    // computation, so derive the shape from the key-transposed content.
+    let scale_shape = scale_pcs.to_shape();
+    let matrix = music::note_collections::geometry::IntervalMatrix::new(&scale_shape);
     let iv = matrix.reduced_interval_vector();
 
     // Get triads and seventh chords in the scale
@@ -230,7 +258,7 @@ fn print_text_report(data: &SheetData) -> Result<()> {
     writeln!(out)?;
     writeln!(out, "SCALE")?;
     writeln!(out, "-----")?;
-    let rooted = rotate_to_root(data.scale_pcs.as_slice(), data.key);
+    let rooted = rotate_to_root(data.scale_pcs.as_pc_slice(), data.key);
     let note_labels: Vec<&str> = rooted.iter().map(|&pc| pc_label(pc)).collect();
     writeln!(out, "  Notes: {}", note_labels.join(" "))?;
     let pc_ints: Vec<String> = rooted.iter().map(|&pc| u8::from(pc).to_string()).collect();
@@ -244,7 +272,7 @@ fn print_text_report(data: &SheetData) -> Result<()> {
     writeln!(out, "-----")?;
     for (i, mode) in data.modes.iter().enumerate() {
         let name = data.mode_names.get(i).unwrap_or(&"?");
-        let transposed = transpose_pcs(mode.as_slice(), u8::from(data.key));
+        let transposed = transpose_pcs(mode.as_pc_slice(), u8::from(data.key));
         let labels: Vec<&str> = transposed.iter().map(|&pc| pc_label(pc)).collect();
         writeln!(out, "  {:2}. {:20} {}", i + 1, name, labels.join(" "))?;
     }
@@ -321,7 +349,7 @@ fn build_svg(data: &SheetData, theme: &music::svg::SvgTheme) -> String {
 
     // Pitch circle (embedded as scaled group, left side)
     let circle_svg = PitchCircleBuilder::new()
-        .from_pc_set(&data.scale_pcs)
+        .pitches(data.scale_pcs.iter().cloned())
         .root(data.key)
         .show_intervals(true)
         .theme(theme.clone())
@@ -342,7 +370,7 @@ fn build_svg(data: &SheetData, theme: &music::svg::SvgTheme) -> String {
 "#,
     ));
     y += 20;
-    let rooted = rotate_to_root(data.scale_pcs.as_slice(), data.key);
+    let rooted = rotate_to_root(data.scale_pcs.as_pc_slice(), data.key);
     let note_labels: Vec<&str> = rooted.iter().map(|&pc| pc_label(pc)).collect();
     svg.push_str(&format!(
         r#"<text x="{rx}" y="{y}" class="body" fill="{text_color}">{}</text>
@@ -367,7 +395,7 @@ fn build_svg(data: &SheetData, theme: &music::svg::SvgTheme) -> String {
     y += 18;
     for (i, mode) in data.modes.iter().enumerate() {
         let name = data.mode_names.get(i).unwrap_or(&"?");
-        let transposed = transpose_pcs(mode.as_slice(), u8::from(data.key));
+        let transposed = transpose_pcs(mode.as_pc_slice(), u8::from(data.key));
         let labels: Vec<&str> = transposed.iter().map(|&pc| pc_label(pc)).collect();
         svg.push_str(&format!(
             r#"<text x="{rx}" y="{y}" class="small" fill="{text_color}">{}. {} — {}</text>

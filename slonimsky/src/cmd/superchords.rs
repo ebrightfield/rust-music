@@ -1,6 +1,6 @@
 use anyhow::Result;
 use music::note::pitch_class::Pc;
-use music::note_collections::PcSet;
+use music::note_collections::PcShape;
 use std::collections::HashSet;
 
 use super::input::{parse_input_to_pcs, pc_label};
@@ -159,7 +159,7 @@ pub fn run(args: SuperchordsArgs) -> Result<()> {
             .then_with(|| u8::from(&a.root).cmp(&u8::from(&b.root)))
     });
 
-    let pc_set = PcSet::new(pcs.clone());
+    let pc_set = PcShape::new(pcs.clone());
     let header_pcs: Vec<u8> = pc_set.iter().map(u8::from).collect();
     println!(
         "Superchords of {{{}}} (size {min_size}..={max_size}):",

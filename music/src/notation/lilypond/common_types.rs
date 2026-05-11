@@ -151,7 +151,7 @@ impl<'a> ToLilypondString for RhythmicNotatedEvent<'a> {
 mod pitch_to_lilypond_tests {
     use super::*;
 
-    fn render(note: Note, octave: u8) -> String {
+    fn render(note: Note, octave: i8) -> String {
         Pitch::new(note, octave).to_lilypond_string()
     }
 
@@ -193,7 +193,7 @@ mod pitch_to_lilypond_tests {
             Gisis, Aeses, Aes, A, Ais, Aisis, Beses, Bes, B, Bis,
         ];
         for n in notes {
-            for oct in 0u8..=8u8 {
+            for oct in -1i8..=9i8 {
                 if let Ok(p) = Pitch::try_new(n, oct) {
                     let _ = p.to_lilypond_string();
                 }

@@ -1,16 +1,20 @@
-//! Chord name parsing - converts string chord symbols into (Note, PcSet) pairs.
+//! Chord name parsing - converts string chord symbols into (Note, PcShape) pairs.
 //!
 //! This module provides the reverse operation of chord naming heuristics:
 //! given a chord symbol string like "CMaj7" or "F#m7b5", it produces the root
-//! note and corresponding pitch class set.
+//! note and corresponding pitch class shape (interval template rooted at Pc0).
 
 use std::str::FromStr;
 use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note::pitch_class::Pc;
-use crate::note_collections::pc_set::PcSet;
+use crate::note_collections::pc_set::PcShape;
 
-/// Parse a chord name into a root note and pitch class set.
+/// Parse a chord name into a root note and interval-template shape.
+///
+/// The returned `PcShape` contains the chord's interval template rooted at `Pc0`
+/// (REQ-O22): e.g. `F#m7b5` → `[Pc0, Pc3, Pc6, Pc10]`, not the sounding pcs
+/// `[Pc0, Pc4, Pc6, Pc9]`.
 ///
 /// # Supported formats
 /// - Major: C, CMaj, Cmajor
@@ -29,11 +33,11 @@ use crate::note_collections::pc_set::PcSet;
 /// use music::note_collections::chord_name::parsing::parse_chord_name;
 /// use music::note::note::Note;
 ///
-/// let (root, pcs) = parse_chord_name("CMaj7").unwrap();
+/// let (root, shape) = parse_chord_name("CMaj7").unwrap();
 /// assert_eq!(root, Note::C);
-/// assert_eq!(pcs.len(), 4); // C, E, G, B
+/// assert_eq!(shape.len(), 4); // C, E, G, B intervals: [0,4,7,11]
 /// ```
-pub fn parse_chord_name(name: &str) -> Result<(Note, PcSet), MusicSemanticsError> {
+pub fn parse_chord_name(name: &str) -> Result<(Note, PcShape), MusicSemanticsError> {
     let name = name.trim();
     if name.is_empty() {
         return Err(MusicSemanticsError::EmptySetOfNotes);
@@ -41,21 +45,19 @@ pub fn parse_chord_name(name: &str) -> Result<(Note, PcSet), MusicSemanticsError
 
     // Parse root note first
     let (root, quality_str) = parse_root(name)?;
-    let root_pc = Pc::from(&root);
 
-    // Parse quality to get intervals from root
+    // Parse quality to get intervals from root (these are already root-relative, i.e. the
+    // interval template). We do NOT add the root_pc offset — the intervals ARE the shape.
+    // REQ-O22: PcShape = interval template rooted at Pc0.
     let intervals = parse_quality(quality_str)?;
 
-    // Build PcSet from root + intervals
+    // Build PcShape directly from the intervals (which are already relative to root=0)
     let pcs: Vec<Pc> = intervals
         .iter()
-        .map(|interval| {
-            let pc_val = (u8::from(root_pc) + interval) % 12;
-            Pc::from(pc_val)
-        })
+        .map(|interval| Pc::from(interval))
         .collect();
 
-    Ok((root, PcSet::new(pcs)))
+    Ok((root, PcShape::new(pcs)))
 }
 
 /// Parse the root note from the beginning of a chord name.
@@ -339,27 +341,34 @@ fn parse_alterations(alt_str: &str, pcs: &mut Vec<u8>) {
 mod tests {
     use super::*;
 
+    // Helper: since parse_chord_name now returns interval templates (PcShape rooted at Pc0),
+    // all checks use interval-relative pitch classes (not absolute sounding pcs).
+
     #[test]
     fn test_parse_major_chords() {
-        // C major
-        let (root, pcs) = parse_chord_name("C").unwrap();
+        // C major: interval template [0, 4, 7]
+        let (root, shape) = parse_chord_name("C").unwrap();
         assert_eq!(root, Note::C);
-        assert!(pcs.contains(&Pc::Pc0)); // C
-        assert!(pcs.contains(&Pc::Pc4)); // E
-        assert!(pcs.contains(&Pc::Pc7)); // G
+        assert!(shape.contains(&Pc::Pc0)); // root
+        assert!(shape.contains(&Pc::Pc4)); // major 3rd
+        assert!(shape.contains(&Pc::Pc7)); // perfect 5th
 
-        // G major
-        let (root, _pcs) = parse_chord_name("G").unwrap();
+        // G major: same interval template (rooted at Pc0)
+        let (root, shape) = parse_chord_name("G").unwrap();
         assert_eq!(root, Note::G);
+        assert!(shape.contains(&Pc::Pc0));
+        assert!(shape.contains(&Pc::Pc4));
+        assert!(shape.contains(&Pc::Pc7));
     }
 
     #[test]
     fn test_parse_minor_chords() {
-        let (root, pcs) = parse_chord_name("Am").unwrap();
+        // Am: interval template [0, 3, 7]
+        let (root, shape) = parse_chord_name("Am").unwrap();
         assert_eq!(root, Note::A);
-        assert!(pcs.contains(&Pc::Pc9));  // A
-        assert!(pcs.contains(&Pc::Pc0));  // C (minor 3rd from A)
-        assert!(pcs.contains(&Pc::Pc4));  // E
+        assert!(shape.contains(&Pc::Pc0));  // root (interval 0)
+        assert!(shape.contains(&Pc::Pc3));  // minor 3rd
+        assert!(shape.contains(&Pc::Pc7));  // perfect 5th
 
         let (root, _) = parse_chord_name("Dm").unwrap();
         assert_eq!(root, Note::D);
@@ -370,20 +379,20 @@ mod tests {
 
     #[test]
     fn test_parse_seventh_chords() {
-        // Dominant 7th
-        let (root, pcs) = parse_chord_name("G7").unwrap();
+        // Dominant 7th: interval template [0,4,7,10]
+        let (root, shape) = parse_chord_name("G7").unwrap();
         assert_eq!(root, Note::G);
-        assert_eq!(pcs.len(), 4);
+        assert_eq!(shape.len(), 4);
 
-        // Major 7th
-        let (root, pcs) = parse_chord_name("CMaj7").unwrap();
+        // Major 7th: interval template [0,4,7,11]
+        let (root, shape) = parse_chord_name("CMaj7").unwrap();
         assert_eq!(root, Note::C);
-        assert!(pcs.contains(&Pc::Pc11)); // B (major 7th)
+        assert!(shape.contains(&Pc::Pc11)); // major 7th interval
 
-        // Minor 7th
-        let (root, pcs) = parse_chord_name("Am7").unwrap();
+        // Minor 7th: interval template [0,3,7,10]
+        let (root, shape) = parse_chord_name("Am7").unwrap();
         assert_eq!(root, Note::A);
-        assert_eq!(pcs.len(), 4);
+        assert_eq!(shape.len(), 4);
     }
 
     #[test]
@@ -400,71 +409,71 @@ mod tests {
 
     #[test]
     fn test_parse_diminished() {
-        let (root, pcs) = parse_chord_name("Bdim").unwrap();
+        let (root, shape) = parse_chord_name("Bdim").unwrap();
         assert_eq!(root, Note::B);
-        assert_eq!(pcs.len(), 3);
+        assert_eq!(shape.len(), 3);
 
-        let (root, pcs) = parse_chord_name("Cdim7").unwrap();
+        let (root, shape) = parse_chord_name("Cdim7").unwrap();
         assert_eq!(root, Note::C);
-        assert_eq!(pcs.len(), 4);
+        assert_eq!(shape.len(), 4);
     }
 
     #[test]
     fn test_parse_augmented() {
-        let (root, pcs) = parse_chord_name("C+").unwrap();
+        // Augmented: interval template [0, 4, 8]
+        let (root, shape) = parse_chord_name("C+").unwrap();
         assert_eq!(root, Note::C);
-        assert!(pcs.contains(&Pc::Pc0)); // C
-        assert!(pcs.contains(&Pc::Pc4)); // E
-        assert!(pcs.contains(&Pc::Pc8)); // G#
+        assert!(shape.contains(&Pc::Pc0)); // root
+        assert!(shape.contains(&Pc::Pc4)); // major 3rd
+        assert!(shape.contains(&Pc::Pc8)); // augmented 5th
     }
 
     #[test]
     fn test_parse_half_diminished() {
-        // Use a C-based chord for simpler debugging
-        let (root, pcs) = parse_chord_name("Cm7b5").unwrap();
+        // Half-diminished interval template: [0, 3, 6, 10]
+        let (root, shape) = parse_chord_name("Cm7b5").unwrap();
         assert_eq!(root, Note::C);
-        assert_eq!(pcs.len(), 4, "pcs = {:?}", pcs);
-        // C half-dim: C Eb Gb Bb = 0, 3, 6, 10
-        assert!(pcs.contains(&Pc::Pc0), "Missing C, pcs = {:?}", pcs);  // C (root)
-        assert!(pcs.contains(&Pc::Pc3), "Missing Eb, pcs = {:?}", pcs); // Eb (minor 3rd)
-        assert!(pcs.contains(&Pc::Pc6), "Missing Gb, pcs = {:?}", pcs); // Gb (flat 5)
-        assert!(pcs.contains(&Pc::Pc10), "Missing Bb, pcs = {:?}", pcs); // Bb (minor 7th)
+        assert_eq!(shape.len(), 4, "shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc0), "Missing root, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc3), "Missing m3, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc6), "Missing b5, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc10), "Missing m7, shape = {:?}", shape);
     }
 
     #[test]
     fn test_parse_suspended() {
-        // Use C-based chords for simpler verification
-        let (root, pcs) = parse_chord_name("Csus4").unwrap();
+        // Sus4 interval template: [0, 5, 7]
+        let (root, shape) = parse_chord_name("Csus4").unwrap();
         assert_eq!(root, Note::C);
-        // C sus4 = C F G = 0, 5, 7
-        assert!(pcs.contains(&Pc::Pc0), "Missing C, pcs = {:?}", pcs);  // C (root)
-        assert!(pcs.contains(&Pc::Pc5), "Missing F, pcs = {:?}", pcs);  // F (sus4)
-        assert!(pcs.contains(&Pc::Pc7), "Missing G, pcs = {:?}", pcs);  // G (5th)
+        assert!(shape.contains(&Pc::Pc0), "Missing root, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc5), "Missing 4th, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc7), "Missing 5th, shape = {:?}", shape);
 
-        let (root, pcs) = parse_chord_name("Csus2").unwrap();
+        // Sus2 interval template: [0, 2, 7]
+        let (root, shape) = parse_chord_name("Csus2").unwrap();
         assert_eq!(root, Note::C);
-        // C sus2 = C D G = 0, 2, 7
-        assert!(pcs.contains(&Pc::Pc0), "Missing C, pcs = {:?}", pcs);  // C (root)
-        assert!(pcs.contains(&Pc::Pc2), "Missing D, pcs = {:?}", pcs);  // D (sus2)
-        assert!(pcs.contains(&Pc::Pc7), "Missing G, pcs = {:?}", pcs);  // G (5th)
+        assert!(shape.contains(&Pc::Pc0), "Missing root, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc2), "Missing 2nd, shape = {:?}", shape);
+        assert!(shape.contains(&Pc::Pc7), "Missing 5th, shape = {:?}", shape);
     }
 
     #[test]
     fn test_parse_power_chord() {
-        let (root, pcs) = parse_chord_name("E5").unwrap();
+        let (root, shape) = parse_chord_name("E5").unwrap();
         assert_eq!(root, Note::E);
-        assert_eq!(pcs.len(), 2);
+        assert_eq!(shape.len(), 2);
     }
 
     #[test]
     fn test_parse_sixth_chords() {
-        let (root, pcs) = parse_chord_name("C6").unwrap();
+        // C6 interval template: [0, 4, 7, 9]
+        let (root, shape) = parse_chord_name("C6").unwrap();
         assert_eq!(root, Note::C);
-        assert!(pcs.contains(&Pc::Pc9)); // A (6th)
+        assert!(shape.contains(&Pc::Pc9)); // 6th interval
 
-        let (root, pcs) = parse_chord_name("Am6").unwrap();
+        let (root, shape) = parse_chord_name("Am6").unwrap();
         assert_eq!(root, Note::A);
-        assert_eq!(pcs.len(), 4);
+        assert_eq!(shape.len(), 4);
     }
 
     #[test]

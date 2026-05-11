@@ -56,7 +56,7 @@ fn initial_voicing(pcs: &[Pc]) -> Voicing {
         }
         last_midi = midi;
         let note = pc_to_note(*pc);
-        let octave = midi / 12 - 1; // MIDI 60 = C4 → 60/12 - 1 = 4
+        let octave = (midi / 12) as i8 - 1; // MIDI 60 = C4 → 60/12 - 1 = 4
         pitches.push(Pitch::new(note, octave));
     }
     Voicing::new(pitches)

@@ -5,7 +5,7 @@ use music::melody::sequencer::{MelodicEvent, MelodicSequencer, MelodicSequencerC
 use music::melody::{Direction, PitchBounds, TurnaroundMode};
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::{AsPcSlice, PcShape};
 use music::note_collections::NoteSet;
 use music::note_collections::OctavePartition;
 use music::note::pitch::Pitch;
@@ -46,7 +46,7 @@ fn resolve_scale(name: Option<&str>) -> Result<SevenNoteScaleQuality> {
     }
 }
 
-/// Transpose a PcSet by semitones.
+/// Transpose a slice of pitch classes by semitones.
 fn transpose_pcs(pcs: &[Pc], semitones: u8) -> Vec<Pc> {
     pcs.iter()
         .map(|&pc| Pc::from((u8::from(pc) + semitones) % 12))
@@ -56,9 +56,9 @@ fn transpose_pcs(pcs: &[Pc], semitones: u8) -> Vec<Pc> {
 /// Build a NoteSet for the given key and scale quality.
 fn build_scale_noteset(root: Note, quality: SevenNoteScaleQuality) -> NoteSet {
     let partition = OctavePartition::from(&quality);
-    let parent_pcs = PcSet::from(&partition);
+    let parent_pcs = PcShape::from(&partition);
     let root_pc = Pc::from(&root);
-    let transposed = transpose_pcs(parent_pcs.as_slice(), u8::from(root_pc));
+    let transposed = transpose_pcs(parent_pcs.as_pc_slice(), u8::from(root_pc));
     // Map PCs to Notes via first available spelling
     let notes: Vec<Note> = transposed.iter().map(|pc| pc.notes()[0]).collect();
     NoteSet::new(notes)

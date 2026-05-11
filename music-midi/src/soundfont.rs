@@ -10,7 +10,6 @@
 //! Downloads are capped at [`MAX_BYTES`] (256 MiB). Only HTTPS URLs are accepted.
 // REQ-O13, X4, X5, X10: SoundFont loader.
 // Phase 5-pre has pinned the canonical download source and SHA-256; constants below.
-#![cfg(feature = "render")]
 
 use crate::error::MidiConversionError;
 use sha2::{Digest, Sha256};
@@ -31,6 +30,13 @@ use std::{
 // Version: GeneralUser GS v2.0.3 (commit 9704918364, 2026-02-23)
 // Size: 32,319,396 bytes (~30.8 MiB), well under the 256 MiB download cap.
 // Magic header verified: RIFF + 4-byte length + sfbk.
+/// Pinned SF2 URL. Rotating the pin requires the 5-step procedure documented in
+/// `docs/soundfont-pinning.md`.
+///
+/// # Known Limitations (Tier C debt — D9)
+/// The pin is manual: `SF_URL` and `SF_SHA256_HEX` must be edited together in a
+/// single commit after running `cargo make sf2-rotate-dry-run`. See
+/// `docs/spec-music-midi-debt.md` §4 R27-R28 and §6 D9 for context.
 pub const SF_URL: &str =
     "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/9704918364/GeneralUser-GS.sf2";
 
@@ -74,9 +80,13 @@ pub trait Synthesizer {
 }
 
 /// WAV sink seam. Callers push stereo i16 frames; call `finalize` when done.
+///
+/// Implementations that write to disk or other fallible sinks must surface
+/// errors via the `Result` return; otherwise a partial/corrupt output can
+/// silently succeed (see QA W6/W7). Pure in-memory sinks return `Ok(())`.
 pub trait WavSink {
-    fn write_frame(&mut self, l: i16, r: i16);
-    fn finalize(self: Box<Self>);
+    fn write_frame(&mut self, l: i16, r: i16) -> Result<(), MidiConversionError>;
+    fn finalize(self: Box<Self>) -> Result<(), MidiConversionError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,16 +129,28 @@ pub struct OxiSynthAdapter {
 impl OxiSynthAdapter {
     /// Create a new synth loaded with the given SF2 bytes at `sample_rate` Hz.
     ///
-    /// Returns [`MidiConversionError::SoundFont`] if `oxisynth` cannot parse the SF2 data.
+    /// Returns [`MidiConversionError::SoundFont`] if `oxisynth` cannot parse the SF2 data,
+    /// INCLUDING if the parser panics mid-way through malformed data (caught via
+    /// `std::panic::catch_unwind`). See `docs/spec-music-midi-debt.md` §4 R4-R5.
     pub fn new(sf_bytes: &[u8], sample_rate: f32) -> Result<Self, MidiConversionError> {
-        let mut synth = oxisynth::Synth::default();
-        synth.set_sample_rate(sample_rate);
-        let font = oxisynth::SoundFont::load(&mut std::io::Cursor::new(sf_bytes))
-            .map_err(|_| MidiConversionError::SoundFont(
-                "oxisynth failed to parse SF2 data".into(),
-            ))?;
-        synth.add_font(font, true);
-        Ok(Self { inner: synth, sample_rate })
+        let bytes_vec = sf_bytes.to_vec();
+        let sr = sample_rate;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut synth = oxisynth::Synth::default();
+            synth.set_sample_rate(sr);
+            let font = oxisynth::SoundFont::load(&mut std::io::Cursor::new(&bytes_vec))
+                .map_err(|_| MidiConversionError::SoundFont(
+                    "oxisynth failed to parse SF2 data".into(),
+                ))?;
+            synth.add_font(font, true);
+            Ok::<_, MidiConversionError>(Self { inner: synth, sample_rate: sr })
+        }));
+        match result {
+            Ok(inner) => inner,
+            Err(_panic_payload) => Err(MidiConversionError::SoundFont(
+                "soundfont parser panicked on malformed SF2 data".into(),
+            )),
+        }
     }
 }
 
@@ -194,13 +216,23 @@ impl HoundWav {
 }
 
 impl WavSink for HoundWav {
-    fn write_frame(&mut self, l: i16, r: i16) {
-        let _ = self.writer.write_sample(l);
-        let _ = self.writer.write_sample(r);
+    fn write_frame(&mut self, l: i16, r: i16) -> Result<(), MidiConversionError> {
+        // Surface hound I/O errors (W6): disk-full or other failures here
+        // previously produced a corrupt WAV that passed as Ok(()).
+        self.writer
+            .write_sample(l)
+            .map_err(|e| MidiConversionError::SoundFont(e.to_string()))?;
+        self.writer
+            .write_sample(r)
+            .map_err(|e| MidiConversionError::SoundFont(e.to_string()))?;
+        Ok(())
     }
 
-    fn finalize(self: Box<Self>) {
-        let _ = self.writer.finalize();
+    fn finalize(self: Box<Self>) -> Result<(), MidiConversionError> {
+        // W7: dropping the finalize error can leave an invalid RIFF length.
+        self.writer
+            .finalize()
+            .map_err(|e| MidiConversionError::SoundFont(e.to_string()))
     }
 }
 

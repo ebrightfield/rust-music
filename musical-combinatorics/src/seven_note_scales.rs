@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use music::note::Pc;
 use music::note::Pc::*;
-use music::note_collections::{OctavePartition, PcSet};
+use music::note_collections::{OctavePartition, pc_set::{PcShape, AsPcSlice}};
 
 /// This is a non-exhaustive collection of pertinent seven-note scales.
 /// They all are derived from the following procedure:
@@ -107,14 +107,14 @@ impl From<SevenNoteScaleQuality> for OctavePartition {
     }
 }
 
-impl TryFrom<&PcSet> for SevenNoteScaleQuality {
+impl TryFrom<&PcShape> for SevenNoteScaleQuality {
     type Error = anyhow::Error;
 
-    fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
+    fn try_from(value: &PcShape) -> Result<Self, Self::Error> {
         if value.len() != 7 {
             return Err(anyhow!("wrong size for seven note scale: {:?}", value));
         }
-        let pitches = value.as_slice();
+        let pitches = value.as_pc_slice();
         match pitches {
             MAJOR_SCALE_PCS => Ok(SevenNoteScaleQuality::Major),
             MELODIC_MINOR_PCS => Ok(SevenNoteScaleQuality::MelodicMinor),
@@ -150,8 +150,8 @@ mod tests {
     // Convert to and from intervallically descriptive types.
     fn test_quality(quality: SevenNoteScaleQuality) {
         let partition = OctavePartition::from(&quality);
-        let pc_set = PcSet::from(&partition);
-        assert_eq!(quality, SevenNoteScaleQuality::try_from(&pc_set).unwrap())
+        let pc_shape = PcShape::from(&partition);
+        assert_eq!(quality, SevenNoteScaleQuality::try_from(&pc_shape).unwrap())
     }
     #[test]
     fn chord_quality_identification() {

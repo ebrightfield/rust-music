@@ -338,6 +338,30 @@ fn sf_url_is_https() {
     );
 }
 
+/// REQ-O6: malformed SF2 bytes must return Err(SoundFont(_)), never panic.
+#[test]
+fn soundfont_malformed_no_panic() {
+    // A clearly-malformed header: RIFF size of 7 (impossibly small), followed by
+    // nonsense. This has historically tripped oxisynth's parser into a panic.
+    const MALFORMED: &[u8] = &[
+        b'R', b'I', b'F', b'F',
+        0x07, 0x00, 0x00, 0x00,
+        b's', b'f', b'b', b'k',
+        0xFF, 0xFF, 0xFF,
+    ];
+    let result = music_midi::soundfont::OxiSynthAdapter::new(MALFORMED, 48_000.0);
+    match result {
+        Err(MidiConversionError::SoundFont(msg)) => {
+            assert!(
+                msg.contains("panic") || msg.contains("parse") || msg.contains("SF2"),
+                "expected a diagnostic SoundFont message, got: {msg}"
+            );
+        }
+        Ok(_) => panic!("expected Err(SoundFont(_)), got Ok(...)"),
+        Err(other) => panic!("expected Err(SoundFont(_)), got Err({other:?})"),
+    }
+}
+
 /// Cache layout uses only const literal path segments (not tested at runtime,
 /// but we verify the constants have the expected shape).
 #[test]

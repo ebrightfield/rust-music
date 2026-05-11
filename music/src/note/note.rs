@@ -17,6 +17,7 @@ use crate::note::pitch_class::Pc;
 ///
 /// - Flat (b) = "es"
 /// - Sharp (#) = "es"
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Note {
     C,

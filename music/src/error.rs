@@ -4,7 +4,7 @@ use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 use crate::note::spelling::{Accidental, Letter};
 use crate::note_collections::interval_class::IntervalClass;
-use crate::note_collections::PcSet;
+use crate::note_collections::pc_set::PcShape;
 
 #[derive(Debug, Clone, Error)]
 pub enum MusicSemanticsError {
@@ -44,7 +44,7 @@ pub enum MusicSemanticsError {
     #[error("Not a valid choice for N notes per string: {0:?}")]
     InvalidNNotesPerString((usize, usize)),
     #[error("Size {0} too large for subchords on {1:?}")]
-    SizeTooLargeForSubchords(u8, PcSet),
+    SizeTooLargeForSubchords(u8, PcShape),
     #[error("Size {0} too small for chords")]
     SizeTooSmallForChords(usize),
     #[error("Collection size is not the same: {0} != {1}")]

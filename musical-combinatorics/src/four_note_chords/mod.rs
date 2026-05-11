@@ -1,11 +1,11 @@
 use music::note_collections::octave_partition::OctavePartition;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::{PcShape, AsPcSlice};
 use music::note::pitch_class::Pc;
 use music::note::pitch_class::Pc::*;
 use anyhow::anyhow;
 use crate::canonical_voicings::CanonicalVoicings;
 
-// A note_collections quality for every possible four-note [PcSet].
+// A note_collections quality for every possible four-note [PcShape].
 #[derive(Debug, Clone, PartialEq)]
 pub enum FourNoteChordQuality {
     // Seventh Chords
@@ -60,7 +60,7 @@ pub enum FourNoteChordQuality {
 }
 
 impl FourNoteChordQuality {
-    pub fn identify(pcs: &PcSet) -> anyhow::Result<(usize, FourNoteChordQuality)> {
+    pub fn identify(pcs: &PcShape) -> anyhow::Result<(usize, FourNoteChordQuality)> {
         if pcs.len() != 4 {
             return Err(anyhow!("wrong size for four note chord: {:?}", pcs));
         }
@@ -182,14 +182,14 @@ impl From<&FourNoteChordQuality> for OctavePartition {
     }
 }
 
-impl TryFrom<&PcSet> for FourNoteChordQuality {
+impl TryFrom<&PcShape> for FourNoteChordQuality {
     type Error = anyhow::Error;
 
-    fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
+    fn try_from(value: &PcShape) -> Result<Self, Self::Error> {
         if value.len() != 4 {
             return Err(anyhow!("wrong size for four note chord: {:?}", value));
         }
-        let pitches = value.as_slice();
+        let pitches = value.as_pc_slice();
         match pitches {
             MAJ7_PCS => Ok(FourNoteChordQuality::Maj7),
             DOM7_PCS => Ok(FourNoteChordQuality::Dom7),
@@ -258,8 +258,8 @@ mod tests {
     // Convert to and from intervallically descriptive types.
     fn test_quality(quality: FourNoteChordQuality) {
         let partition = OctavePartition::from(&quality);
-        let pc_set = PcSet::from(&partition);
-        assert_eq!(quality, FourNoteChordQuality::try_from(&pc_set).unwrap())
+        let pc_shape = PcShape::from(&partition);
+        assert_eq!(quality, FourNoteChordQuality::try_from(&pc_shape).unwrap())
     }
 
     #[test]

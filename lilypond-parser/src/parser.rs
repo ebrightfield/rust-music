@@ -391,13 +391,13 @@ fn pitch_from_parsed(note: Note, octave_delta: i32, span: Span) -> Result<Pitch,
         Note::Bis => rendered_octave + 1,
         _ => rendered_octave,
     };
-    if original_octave < 0 || original_octave > 8 {
+    if original_octave < -1 || original_octave > 9 {
         return Err(ParseError::new(
             ParseErrorKind::OctaveOutOfRange(original_octave),
             span,
         ));
     }
-    Pitch::try_new(note, original_octave as u8).map_err(|_| {
+    Pitch::try_new(note, original_octave as i8).map_err(|_| {
         ParseError::new(ParseErrorKind::OctaveOutOfRange(original_octave), span)
     })
 }
@@ -503,7 +503,7 @@ mod tests {
     fn octave_marks() {
         // Middle C = c' in LilyPond absolute mode (octave 4).
         let items = parse("c'4 c4 c,4 c''4").unwrap();
-        let octaves: Vec<u8> = items.iter().map(|i| match i {
+        let octaves: Vec<i8> = items.iter().map(|i| match i {
             Item::Event(Event::Note(p, _)) => p.octave,
             _ => panic!(),
         }).collect();

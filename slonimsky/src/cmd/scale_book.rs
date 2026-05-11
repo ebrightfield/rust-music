@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::{AsPcSlice, PcShape};
 use music::note_collections::geometry::symmetry::transpositional::Modes;
 use music::svg::PitchCircleBuilder;
 use musical_combinatorics::seven_note_scales::SevenNoteScaleQuality;
@@ -106,9 +106,9 @@ pub fn run(args: ScaleBookArgs) -> Result<()> {
     let keys = resolve_keys(args.keys.as_deref())?;
     let theme = resolve_theme(args.theme.as_deref())?;
 
-    // Get parent scale PcSet (rooted at C = Pc0)
+    // Get parent scale PcShape (rooted at C = Pc0)
     let parent_partition = music::note_collections::OctavePartition::from(&scale_info.quality);
-    let parent_pcs = PcSet::from(&parent_partition);
+    let parent_pcs = PcShape::from(&parent_partition);
     let modes = parent_pcs.modes();
 
     if args.verbose {
@@ -146,7 +146,7 @@ pub fn run(args: ScaleBookArgs) -> Result<()> {
 }
 
 fn print_text_report(
-    modes: &[PcSet],
+    modes: &[PcShape],
     mode_names: &[&str],
     keys: &[Pc],
     scale_name: &str,
@@ -165,7 +165,7 @@ fn print_text_report(
 
         for &key in keys {
             let key_label = pc_label(key);
-            let transposed = transpose_pcs(mode.as_slice(), u8::from(key));
+            let transposed = transpose_pcs(mode.as_pc_slice(), u8::from(key));
             let labels: Vec<&str> = transposed.iter().map(|&pc| pc_label(pc)).collect();
             writeln!(out, "  {key_label:>5} {name}: {}", labels.join(" "))?;
         }
@@ -177,7 +177,7 @@ fn print_text_report(
 }
 
 fn build_grid_svg(
-    modes: &[PcSet],
+    modes: &[PcShape],
     mode_names: &[&str],
     keys: &[Pc],
     theme: &music::svg::SvgTheme,
@@ -229,12 +229,11 @@ fn build_grid_svg(
 
         for (col, &key) in keys.iter().enumerate() {
             let x_base = 80 + col * cell_w;
-            let transposed = transpose_pcs(mode.as_slice(), u8::from(key));
-            let pc_set = PcSet::from_unzeroed(transposed);
+            let transposed = transpose_pcs(mode.as_pc_slice(), u8::from(key));
 
             let title = format!("{} {name}", pc_label(key));
             let cell_svg = PitchCircleBuilder::new()
-                .from_pc_set(&pc_set)
+                .pitches(transposed.iter().cloned())
                 .root(key)
                 .show_intervals(true)
                 .theme(theme.clone())
@@ -304,7 +303,7 @@ mod tests {
     fn major_modes_count() {
         let info = resolve_scale("major").unwrap();
         let partition = music::note_collections::OctavePartition::from(&info.quality);
-        let parent = PcSet::from(&partition);
+        let parent = PcShape::from(&partition);
         let modes = parent.modes();
         assert_eq!(modes.len(), 7);
     }

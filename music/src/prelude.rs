@@ -7,7 +7,7 @@
 //! ```
 //! use music::prelude::*;
 //!
-//! let c_major = PcSet::new(vec![pc!(0), pc!(4), pc!(7)]);
+//! let c_major = PcShape::new(vec![pc!(0), pc!(4), pc!(7)]);
 //! let spelled = c_major.try_spell(&Note::C).unwrap();
 //! ```
 
@@ -18,7 +18,7 @@ pub use crate::note::pitch_class::PcIter;
 pub use crate::note::spelling::{Accidental, Letter};
 
 // Collections.
-pub use crate::note_collections::{NoteSet, PcSet, IntervalClass, OctavePartition};
+pub use crate::note_collections::{NoteSet, PcShape, PcContent, AsPcSlice, IntervalClass, OctavePartition};
 pub use crate::note_collections::voicing::{Voicing, StackedIntervals};
 
 // Spelling / transposition traits. These are almost always needed to call
@@ -46,4 +46,4 @@ pub use crate::fretboard::{STD_6STR_GTR, DROP_D, DADGAD, OPEN_G, STANDARD_7, BAS
 pub use crate::error::MusicSemanticsError;
 
 // Macros. #[macro_export] puts these at the crate root, so re-export from there.
-pub use crate::{pc, pcs, pitch, voicing, validated_pcs};
+pub use crate::{pc, pc_shape, content, pitch, voicing};

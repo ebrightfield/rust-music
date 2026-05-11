@@ -134,7 +134,7 @@ pub fn run(args: SpellArgs) -> Result<()> {
         }
     };
 
-    let pcs: Vec<Pc> = chord.pc_set.iter().copied().collect();
+    let pcs: Vec<Pc> = chord.pc_shape.iter().copied().collect();
     let notes = spell_from_root(root, &pcs);
     let root_val = u8::from(&Pc::from(&root));
 
@@ -206,7 +206,7 @@ mod tests {
             TonalSpecification::RootPosition(r) => *r,
             _ => panic!("expected root position"),
         };
-        let pcs: Vec<Pc> = chord.pc_set.iter().copied().collect();
+        let pcs: Vec<Pc> = chord.pc_shape.iter().copied().collect();
         let notes = spell_from_root(root, &pcs);
         // Cmaj7 = C E G B — four notes, root is C
         assert_eq!(notes.len(), 4);
@@ -221,7 +221,7 @@ mod tests {
             _ => panic!("expected root position"),
         };
         assert_eq!(root, Note::D);
-        let pcs: Vec<Pc> = chord.pc_set.iter().copied().collect();
+        let pcs: Vec<Pc> = chord.pc_shape.iter().copied().collect();
         let notes = spell_from_root(root, &pcs);
         // Dm7 = D F A C — four notes
         assert_eq!(notes.len(), 4);

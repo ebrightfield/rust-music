@@ -6,7 +6,7 @@
 //! - Interval matrices showing relationships between pitch classes
 
 use crate::note_collections::geometry::IntervalMatrix;
-use crate::note_collections::PcSet;
+use crate::note_collections::pc_set::PcShape;
 use crate::svg::theme::SvgTheme;
 use crate::svg::util::SvgBuilder;
 use crate::Pc;
@@ -79,9 +79,9 @@ impl IntervalBuilder {
         self
     }
 
-    /// Create from a PcSet.
-    pub fn from_pc_set(mut self, pc_set: &PcSet) -> Self {
-        self.pitch_set = pc_set.iter().copied().collect();
+    /// Create from a PcShape.
+    pub fn from_pc_shape(mut self, pc_shape: &PcShape) -> Self {
+        self.pitch_set = pc_shape.iter().copied().collect();
         self
     }
 
@@ -115,8 +115,8 @@ impl IntervalBuilder {
     /// Shows a bar chart of interval class counts (ic 1-6 for reduced,
     /// or ic 0-11 for full).
     pub fn build_vector(self) -> String {
-        let pc_set = PcSet::new(self.pitch_set);
-        let matrix = IntervalMatrix::new(&pc_set);
+        let pc_shape = PcShape::new(self.pitch_set);
+        let matrix = IntervalMatrix::new(&pc_shape);
         let vector = matrix.reduced_interval_vector();
 
         build_interval_vector_svg(&vector, &self.config)
@@ -124,8 +124,8 @@ impl IntervalBuilder {
 
     /// Build a full interval vector bar chart (0-11 semitones).
     pub fn build_full_vector(self) -> String {
-        let pc_set = PcSet::new(self.pitch_set);
-        let matrix = IntervalMatrix::new(&pc_set);
+        let pc_shape = PcShape::new(self.pitch_set);
+        let matrix = IntervalMatrix::new(&pc_shape);
         let vector = matrix.interval_vector();
 
         build_full_interval_vector_svg(&vector, &self.config)
@@ -136,8 +136,8 @@ impl IntervalBuilder {
     /// Shows a grid where each cell contains the interval between
     /// the row and column pitch classes.
     pub fn build_matrix(self) -> String {
-        let pc_set = PcSet::new(self.pitch_set);
-        let matrix = IntervalMatrix::new(&pc_set);
+        let pc_shape = PcShape::new(self.pitch_set);
+        let matrix = IntervalMatrix::new(&pc_shape);
 
         build_interval_matrix_svg(&matrix, &self.config)
     }
@@ -527,9 +527,9 @@ mod tests {
 
     #[test]
     fn test_from_pc_set() {
-        let pc_set = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
+        let pc_set = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
         let svg = IntervalBuilder::new()
-            .from_pc_set(&pc_set)
+            .from_pc_shape(&pc_set)
             .build_vector();
 
         assert!(svg.starts_with("<svg"));

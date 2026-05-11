@@ -17,7 +17,7 @@ use music::fretboard::STD_6STR_GTR;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
 use music::note::pitch_class::Pc;
-use music::note_collections::PcSet;
+use music::note_collections::pc_set::PcShape;
 
 /// (string, fret) positions for a single shape.
 type PositionSet = HashSet<(u8, u8)>;
@@ -153,7 +153,7 @@ const ROOTS: &[(u8, Note)] = &[
     (11, Note::B),
 ];
 
-/// Major-scale intervals from root (zeroed pitch-class representation). PcSet
+/// Major-scale intervals from root (zeroed pitch-class representation). PcShape
 /// stores pitch classes relative to the root, and `try_spell` interprets them
 /// as intervals above the given root — so the set is the same for every key.
 const MAJOR_INTERVALS: &[Pc] = &[
@@ -197,7 +197,7 @@ fn assert_shape_present(
 fn all_caged_shapes_present_for_major_scales() {
     let fretboard = &*STD_6STR_GTR;
     let mut failures: Vec<String> = vec![];
-    let pc_set = PcSet::new(MAJOR_INTERVALS.to_vec());
+    let pc_set = PcShape::new(MAJOR_INTERVALS.to_vec());
 
     for (root_pc, root_note) in ROOTS {
         let spelled = match pc_set.try_spell(root_note) {
@@ -245,7 +245,7 @@ fn all_caged_shapes_present_for_major_scales() {
 fn all_caged_shapes_present_for_major_pentatonic_scales() {
     let fretboard = &*STD_6STR_GTR;
     let mut failures: Vec<String> = vec![];
-    let pc_set = PcSet::new(MAJOR_PENTATONIC_INTERVALS.to_vec());
+    let pc_set = PcShape::new(MAJOR_PENTATONIC_INTERVALS.to_vec());
 
     for (root_pc, root_note) in ROOTS {
         let spelled = match pc_set.try_spell(root_note) {

@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use crate::note_collections::pc_set::PcSet;
+use crate::note_collections::pc_set::PcShape;
 use crate::note::pitch_class::Pc;
 use crate::error::MusicSemanticsError;
 use crate::note_collections::interval_class::IntervalClass;
@@ -8,7 +8,7 @@ use crate::note_collections::interval_class::IntervalClass;
 /// An instance of this type represents one way of "cutting" the octave
 /// into (not necessarily equal) pieces.
 ///
-/// This representation of pitch content is intrinsically tied to the [PcSet],
+/// This representation of pitch content is intrinsically tied to the [PcShape],
 /// in that one entails the other.
 ///
 /// One common practical example of thinking in terms of an [OctavePartition] is
@@ -54,22 +54,24 @@ impl<'a> IntoIterator for &'a OctavePartition {
     }
 }
 
+/// CD4 item (ii): body uses `PcShape::new`.
 impl From<&[Pc]> for OctavePartition {
     fn from(pcs: &[Pc]) -> Self {
-        OctavePartition::from(PcSet::new(pcs.to_vec()))
+        OctavePartition::from(PcShape::new(pcs.to_vec()))
     }
 }
 
-impl From<&PcSet> for OctavePartition {
-    fn from(pc_set: &PcSet) -> Self {
-        if pc_set.is_empty() {
+/// CD4 item (iii): `From<&PcShape> for OctavePartition`.
+impl From<&PcShape> for OctavePartition {
+    fn from(pc_shape: &PcShape) -> Self {
+        if pc_shape.is_empty() {
             return Self(vec![IntervalClass::Ic0]);
         }
-        let vals = pc_set.iter().map(|pc| i32::from(pc));
-        let next_vals = pc_set.iter().skip(1).map(|pc| i32::from(pc));
+        let vals = pc_shape.iter().map(|pc| i32::from(pc));
+        let next_vals = pc_shape.iter().skip(1).map(|pc| i32::from(pc));
 
         let mut diffs: Vec<i32> = vals.zip(next_vals).map(|(cur, next)| next - cur).collect();
-        diffs.push(i32::from(pc_set.first().unwrap()) - i32::from(pc_set.last().unwrap()));
+        diffs.push(i32::from(pc_shape.first().unwrap()) - i32::from(pc_shape.last().unwrap()));
         let diffs = diffs
             .iter()
             .map(|i| IntervalClass::from(i))
@@ -78,13 +80,15 @@ impl From<&PcSet> for OctavePartition {
     }
 }
 
-impl From<PcSet> for OctavePartition {
-    fn from(pc_set: PcSet) -> Self {
-        OctavePartition::from(&pc_set)
+/// CD4 item (iv): `From<PcShape> for OctavePartition`.
+impl From<PcShape> for OctavePartition {
+    fn from(pc_shape: PcShape) -> Self {
+        OctavePartition::from(&pc_shape)
     }
 }
 
-impl From<&OctavePartition> for PcSet {
+/// CD4 item (i): `From<&OctavePartition> for PcShape`.
+impl From<&OctavePartition> for PcShape {
     fn from(value: &OctavePartition) -> Self {
         let mut i: u8 = 0;
         let mut pcs = vec![];
@@ -93,7 +97,7 @@ impl From<&OctavePartition> for PcSet {
             i += distance;
             pcs.push(i);
         }
-        PcSet::new(pcs.iter().map(|pc| pc.into()).collect())
+        PcShape::new(pcs.iter().map(|pc| pc.into()).collect())
     }
 }
 
@@ -103,11 +107,11 @@ mod tests {
     use crate::note::pitch_class::Pc;
 
     #[test]
-    fn test_from_pc_set() {
+    fn test_from_pc_shape() {
         assert_eq!(
             {
-                let pc_set = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
-                OctavePartition::from(pc_set)
+                let pc_shape = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
+                OctavePartition::from(pc_shape)
             },
             OctavePartition::try_new(vec![
                 IntervalClass::Ic4,

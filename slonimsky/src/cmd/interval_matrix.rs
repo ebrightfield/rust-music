@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use music::note_collections::geometry::IntervalMatrix;
-use music::note_collections::PcSet;
+use music::note_collections::pc_set::{PcContent, PcShape};
 use music::svg::IntervalBuilder;
 use std::fs;
 use std::io::{self, Write};
@@ -19,7 +19,7 @@ pub struct IntervalMatrixArgs {
 
 pub fn run(args: IntervalMatrixArgs) -> Result<()> {
     let pcs = parse_input_to_pcs(&args.input)?;
-    let pc_set = PcSet::from_unzeroed(pcs);
+    let pc_set = PcContent::new(pcs);
 
     let output_is_svg = args
         .output
@@ -42,10 +42,11 @@ pub fn run(args: IntervalMatrixArgs) -> Result<()> {
     }
 }
 
-fn write_svg(pc_set: &PcSet, args: &IntervalMatrixArgs) -> Result<()> {
+fn write_svg(pc_set: &PcContent, args: &IntervalMatrixArgs) -> Result<()> {
     let theme = resolve_theme(args.theme.as_deref())?;
 
-    let mut builder = IntervalBuilder::new().from_pc_set(pc_set).theme(theme);
+    let pc_shape: PcShape = pc_set.to_shape();
+    let mut builder = IntervalBuilder::new().from_pc_shape(&pc_shape).theme(theme);
 
     if let Some(ref t) = args.title {
         builder = builder.title(t.as_str());
@@ -68,8 +69,9 @@ fn write_svg(pc_set: &PcSet, args: &IntervalMatrixArgs) -> Result<()> {
     Ok(())
 }
 
-fn write_text(pc_set: &PcSet, args: &IntervalMatrixArgs) -> Result<()> {
-    let matrix = IntervalMatrix::new(pc_set);
+fn write_text(pc_set: &PcContent, args: &IntervalMatrixArgs) -> Result<()> {
+    let pc_shape: PcShape = pc_set.to_shape();
+    let matrix = IntervalMatrix::new(&pc_shape);
     let dim = matrix.dimension();
     let pcs_display: Vec<String> = pc_set
         .iter()
@@ -236,8 +238,9 @@ mod tests {
     #[test]
     fn matrix_dimensions_match_input() {
         let pcs = vec![Pc::Pc0, Pc::Pc4, Pc::Pc7];
-        let pc_set = PcSet::from_unzeroed(pcs);
-        let matrix = IntervalMatrix::new(&pc_set);
+        let pc_set = PcContent::new(pcs);
+        let pc_shape = pc_set.to_shape();
+        let matrix = IntervalMatrix::new(&pc_shape);
         assert_eq!(matrix.dimension(), 3);
         // Diagonal should be 0 (unison)
         let v0: u8 = matrix.get(0, 0).unwrap().into();

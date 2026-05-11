@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use music::note_collections::PcSet;
+use music::note_collections::pc_set::PcContent;
 use music::svg::PitchCircleBuilder;
 use std::fs;
 use std::io::{self, Write};
@@ -25,7 +25,7 @@ pub fn run(args: PitchCircleArgs) -> Result<()> {
         None => Some(pcs[0]),
     };
 
-    let pc_set = PcSet::from_unzeroed(pcs.clone());
+    let pc_set = PcContent::new(pcs.clone());
     let theme = resolve_theme(args.theme.as_deref())?;
 
     if args.verbose {
@@ -33,7 +33,7 @@ pub fn run(args: PitchCircleArgs) -> Result<()> {
     }
 
     let mut builder = PitchCircleBuilder::new()
-        .from_pc_set(&pc_set)
+        .pitches(pc_set.iter().cloned())
         .show_intervals(args.show_intervals)
         .theme(theme);
 

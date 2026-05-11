@@ -3,7 +3,7 @@ use music::note::pitch_class::Pc;
 use music::note_collections::chord_name::naming_heuristics::infer_chord_quality;
 use music::note_collections::chord_name::{ChordNameDisplayConfig, MajNotation};
 use music::note_collections::geometry::sets::get_subchords;
-use music::note_collections::PcSet;
+use music::note_collections::pc_set::PcShape;
 use std::collections::HashSet;
 
 use super::input::{parse_input_to_pcs, pc_label};
@@ -48,7 +48,7 @@ fn try_name_subset(pcs: &[Pc]) -> Option<String> {
 
 pub fn run(args: SubchordsArgs) -> Result<()> {
     let pcs = parse_input_to_pcs(&args.input)?;
-    let pc_set = PcSet::new(pcs.clone());
+    let pc_set = PcShape::new(pcs.clone());
 
     anyhow::ensure!(
         args.size >= 3,

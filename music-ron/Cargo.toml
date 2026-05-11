@@ -1,0 +1,14 @@
+[package]
+name = "music-ron"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+music = { path = "../music", features = ["serde"] }
+ron = "0.12"
+serde = { version = "1.0.181", features = ["derive"] }
+thiserror = "1.0.37"
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"

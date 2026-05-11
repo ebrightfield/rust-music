@@ -1,0 +1,5 @@
+// Happy-path PitchCircle fixture (REQ-O36, O27).
+(
+  kind: "PitchCircle",
+  pcs: [0, 4, 7],
+)

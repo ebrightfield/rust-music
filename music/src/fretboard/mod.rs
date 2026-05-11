@@ -20,6 +20,7 @@ use crate::error::MusicSemanticsError;
 /// - Some systems use 1-indexed from the lowest string
 ///
 /// This enum provides a way to convert between these conventions.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StringConvention {
     /// Internal representation: 0 = lowest pitch string (thickest on guitar).

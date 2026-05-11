@@ -58,10 +58,10 @@ impl<'a> ConvertCtx<'a> {
         Ok(Self { ppq, tempo, velocity, meter, instrument_lookup })
     }
 
-    /// Rescale a `music` internal tick count to MIDI ticks at the current PPQ.
-    ///
-    /// The `music` crate uses 128 internal ticks per whole note (32 per quarter).
-    /// At PPQ=480, one quarter note is 32 internal ticks → 480 MIDI ticks.
+    // Rescale a `music` internal tick count to MIDI ticks at the current PPQ.
+    //
+    // The `music` crate uses 128 internal ticks per whole note (32 per quarter).
+    // At PPQ=480, one quarter note is 32 internal ticks → 480 MIDI ticks.
     #[inline]
     pub(crate) fn rescale_ticks(&self, music_ticks: u32) -> u64 {
         (music_ticks as u64) * (self.ppq as u64) / 32

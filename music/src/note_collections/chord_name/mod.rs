@@ -2,7 +2,7 @@ pub mod quality;
 pub mod naming_heuristics;
 pub mod parsing;
 
-use crate::note_collections::pc_set::PcSet;
+use crate::note_collections::pc_set::{PcShape, PcContent};
 use crate::note::note::Note;
 use crate::note::pitch_class::Pc;
 
@@ -79,7 +79,7 @@ pub struct ChordNameDisplayConfig {
     pub maj_notation: MajNotation,
 }
 
-/// Describes a [PcSet] using the chord lexicon fleshed out in [ChordQuality].
+/// Describes a [PcShape] using the chord lexicon fleshed out in [ChordQuality].
 /// The [TonalSpecification] provides optional means of specifying a particular
 /// root note, and/or bass note, and can also specify "no root".
 #[derive(Debug, Clone)]
@@ -89,14 +89,15 @@ pub struct ChordName {
     pub tonality: TonalSpecification,
     /// Combination of tonal "flavors" asserted to be in the chord.
     pub quality: ChordQuality,
-    /// Underlying set of pitch classes on which the name is being asserted.
-    pub pc_set: PcSet,
+    /// Underlying intervallic shape (zero-anchored) on which the name is being asserted.
+    /// REQ-O21: renamed from pc_set; type narrowed to PcShape.
+    pub pc_shape: PcShape,
 }
 
 impl ChordName {
     /// Construct a [`ChordName`] directly from its parts.
-    pub fn new(tonality: TonalSpecification, quality: ChordQuality, pc_set: PcSet) -> Self {
-        Self { tonality, quality, pc_set }
+    pub fn new(tonality: TonalSpecification, quality: ChordQuality, pc_shape: PcShape) -> Self {
+        Self { tonality, quality, pc_shape }
     }
 
     /// Parse a chord symbol string (e.g. `"Cmaj7"`, `"F#m7b5"`) into a
@@ -111,11 +112,11 @@ impl ChordName {
     /// use music::prelude::*;
     ///
     /// let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
-    /// assert_eq!(cmaj7.pc_set.len(), 4);
+    /// assert_eq!(cmaj7.pc_shape.len(), 4);
     /// ```
     pub fn from_symbol(symbol: &str) -> Result<Self, crate::error::MusicSemanticsError> {
-        let (root, pc_set) = parsing::parse_chord_name(symbol)?;
-        let pcs_hashset: std::collections::HashSet<Pc> = pc_set.iter().copied().collect();
+        let (root, pc_shape) = parsing::parse_chord_name(symbol)?;
+        let pcs_hashset: std::collections::HashSet<Pc> = pc_shape.iter().copied().collect();
         let quality = naming_heuristics::infer_chord_quality(&pcs_hashset)
             .and_then(|(_, q)| q)
             .ok_or_else(|| crate::error::MusicSemanticsError::InvalidChordQuality(
@@ -124,8 +125,36 @@ impl ChordName {
         Ok(Self {
             tonality: TonalSpecification::RootPosition(root),
             quality,
-            pc_set,
+            pc_shape,
         })
+    }
+
+    /// Returns the absolute sounding [`PcContent`] of this chord at its stored
+    /// root, or `None` if the chord is rootless.
+    ///
+    /// Delegates to [`TonalSpecification::root_pc`] to extract the root pitch
+    /// class, then calls [`PcShape::at_root`] to transpose the interval template.
+    ///
+    /// # Returns
+    /// - `Some(content)` — the sorted, deduplicated set of absolute sounding
+    ///   pitch classes at this chord's root.
+    /// - `None` — if [`TonalSpecification::None`] (rootless chord or unrooted
+    ///   set).
+    ///
+    /// # Example
+    /// ```
+    /// use music::prelude::*;
+    ///
+    /// let fsm7b5 = ChordName::from_symbol("F#m7b5").unwrap();
+    /// // F# root (Pc6) + shape [0,3,6,10] → sounding [0,4,6,9]
+    /// assert_eq!(
+    ///     fsm7b5.sounding_content(),
+    ///     Some(PcContent::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc6, Pc::Pc9]))
+    /// );
+    /// ```
+    // REQ-O27
+    pub fn sounding_content(&self) -> Option<PcContent> {
+        self.tonality.root_pc().map(|root| self.pc_shape.at_root(root))
     }
 
     pub fn to_string(&self, cfg: Option<&ChordNameDisplayConfig>) -> String {
@@ -150,6 +179,30 @@ pub enum TonalSpecification {
     /// No tonal specification. The `Option<Pc>` specifies any possible bass note.
     /// The relevant bass note must be an element in the `Vec<Pc>` being named.
     None(Option<Pc>)
+}
+
+impl TonalSpecification {
+    /// Returns the pitch class that governs shape-to-content transposition
+    /// for this chord.
+    ///
+    /// - [`RootPosition(note)`][TonalSpecification::RootPosition] returns
+    ///   `Some(Pc::from(&note))`.
+    /// - [`SlashChord { root, .. }`][TonalSpecification::SlashChord] returns
+    ///   the **root's** pitch class — NOT the bass's. The bass is a voicing
+    ///   concern and does not affect the intervallic shape's anchor point.
+    /// - [`None(_)`][TonalSpecification::None] returns `None`: rootless chords
+    ///   have no sounding transposition to compute.
+    // REQ-O26, REQ-O39
+    pub fn root_pc(&self) -> Option<Pc> {
+        match self {
+            // REQ-O26: RootPosition → Some(root pc)
+            TonalSpecification::RootPosition(note) => Some(Pc::from(note)),
+            // REQ-O26: SlashChord → root (NOT bass)
+            TonalSpecification::SlashChord { root, .. } => Some(Pc::from(root)),
+            // REQ-O26: None(_) → None (rootless)
+            TonalSpecification::None(_) => None,
+        }
+    }
 }
 
 /// Configuration for chord naming heuristics.
@@ -270,12 +323,12 @@ impl NamingConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pcs;
+    use crate::note::pitch_class::Pc::*;
 
     #[test]
     fn chord_name_from_symbol_major7() {
         let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
-        assert_eq!(cmaj7.pc_set, pcs!(0, 4, 7, 11));
+        assert_eq!(cmaj7.pc_shape, PcShape::new(vec![Pc0, Pc4, Pc7, Pc11]));
         assert!(matches!(cmaj7.tonality, TonalSpecification::RootPosition(Note::C)));
         // Quality inference should find a Major-family quality, not fall back to SingleNote.
         assert!(matches!(cmaj7.quality, ChordQuality::Major(_)));
@@ -284,11 +337,10 @@ mod tests {
     #[test]
     fn chord_name_from_symbol_sharp_root() {
         let fsm7b5 = ChordName::from_symbol("F#m7b5").unwrap();
-        // F#m7b5 = {F#, A, C, E} = {Pc6, Pc9, Pc0, Pc4}. After PcSet::new sorts and
-        // zeros from the lowest PC (Pc0), we get [Pc0, Pc4, Pc6, Pc9] — not the
-        // root-relative m7b5 pattern [0, 3, 6, 10]. The root is preserved in
-        // `tonality` and must be consulted for root-relative analysis.
-        assert_eq!(fsm7b5.pc_set, pcs!(0, 4, 6, 9));
+        // F#m7b5 interval template: root-relative intervals [0, 3, 6, 10]
+        // (minor third, diminished fifth, minor seventh).
+        // REQ-O23: parser emits interval template, not zeroed-absolute sounding pcs.
+        assert_eq!(fsm7b5.pc_shape, PcShape::new(vec![Pc0, Pc3, Pc6, Pc10]));
         assert!(matches!(fsm7b5.tonality, TonalSpecification::RootPosition(Note::Fis)));
     }
 
@@ -302,11 +354,73 @@ mod tests {
     fn chord_name_new_preserves_parts() {
         let quality = ChordQuality::SingleNote;
         let tonality = TonalSpecification::RootPosition(Note::D);
-        let pc_set = pcs!(2);
-        let chord = ChordName::new(tonality.clone(), quality.clone(), pc_set.clone());
-        assert_eq!(chord.pc_set, pc_set);
+        let pc_shape = PcShape::new(vec![Pc2]);
+        let chord = ChordName::new(tonality.clone(), quality.clone(), pc_shape.clone());
+        assert_eq!(chord.pc_shape, pc_shape);
         assert_eq!(chord.quality, quality);
         assert!(matches!(chord.tonality, TonalSpecification::RootPosition(Note::D)));
+    }
+
+    #[test]
+    fn root_pc_of_root_position() {
+        let t = TonalSpecification::RootPosition(Note::Fis);
+        assert_eq!(t.root_pc(), Some(Pc::Pc6));
+    }
+
+    #[test]
+    fn root_pc_of_slash_chord_is_root_not_bass() {
+        let t = TonalSpecification::SlashChord { bass: Note::C, root: Note::Fis };
+        assert_eq!(t.root_pc(), Some(Pc::Pc6));  // NOT Pc0
+    }
+
+    #[test]
+    fn root_pc_of_none_is_none() {
+        let t = TonalSpecification::None(None);
+        assert_eq!(t.root_pc(), None);
+        let t = TonalSpecification::None(Some(Pc::Pc4));
+        assert_eq!(t.root_pc(), None);
+    }
+
+    #[test]
+    fn fsm7b5_pc_shape_is_interval_template() {
+        let c = ChordName::from_symbol("F#m7b5").unwrap();
+        assert_eq!(c.pc_shape, PcShape::new(vec![Pc0, Pc3, Pc6, Pc10]));
+    }
+
+    #[test]
+    fn cmaj7_pc_shape_is_interval_template() {
+        let c = ChordName::from_symbol("Cmaj7").unwrap();
+        assert_eq!(c.pc_shape, PcShape::new(vec![Pc0, Pc4, Pc7, Pc11]));
+    }
+
+    #[test]
+    fn fmaj7_and_cmaj7_share_shape() {
+        let c = ChordName::from_symbol("Cmaj7").unwrap();
+        let f = ChordName::from_symbol("Fmaj7").unwrap();
+        assert_eq!(c.pc_shape, f.pc_shape);
+    }
+
+    #[test]
+    fn fsm7b5_sounding_content() {
+        let c = ChordName::from_symbol("F#m7b5").unwrap();
+        // F# root (Pc6) + shape [0,3,6,10] = [6,9,0,4] sorted = [0,4,6,9]
+        assert_eq!(c.sounding_content(), Some(PcContent::new(vec![Pc0, Pc4, Pc6, Pc9])));
+    }
+
+    #[test]
+    fn cmaj7_sounding_content() {
+        let c = ChordName::from_symbol("Cmaj7").unwrap();
+        assert_eq!(c.sounding_content(), Some(PcContent::new(vec![Pc0, Pc4, Pc7, Pc11])));
+    }
+
+    #[test]
+    fn rootless_chord_has_no_sounding_content() {
+        let c = ChordName::new(
+            TonalSpecification::None(None),
+            ChordQuality::SingleNote,
+            PcShape::new(vec![Pc0, Pc4, Pc7]),
+        );
+        assert_eq!(c.sounding_content(), None);
     }
 
     #[test]

@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::note::pitch_class::{Pc, PcIter};
-use crate::note_collections::PcSet;
+use crate::note_collections::pc_set::PcShape;
 use crate::svg::theme::SvgTheme;
 use crate::svg::util::{pc_to_coords, SvgBuilder};
 
@@ -116,9 +116,9 @@ impl PitchCircleBuilder {
         self
     }
 
-    /// Set the pitch classes from a PcSet.
-    pub fn from_pc_set(mut self, pc_set: &PcSet) -> Self {
-        self.pitch_set = pc_set.iter().cloned().collect();
+    /// Set the pitch classes from a PcShape.
+    pub fn from_pc_shape(mut self, pc_shape: &PcShape) -> Self {
+        self.pitch_set = pc_shape.iter().cloned().collect();
         self
     }
 
@@ -304,8 +304,8 @@ mod tests {
 
     #[test]
     fn test_pitch_circle_from_pc_set() {
-        let pc_set = PcSet::new(vec![Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11]);
-        let svg = PitchCircleBuilder::new().from_pc_set(&pc_set).build();
+        let pc_set = PcShape::new(vec![Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11]);
+        let svg = PitchCircleBuilder::new().from_pc_shape(&pc_set).build();
 
         assert!(svg.starts_with("<svg"));
         // 7 notes should be highlighted

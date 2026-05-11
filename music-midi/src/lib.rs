@@ -17,7 +17,7 @@
 //! use music::note::{Note, pitch::Pitch};
 //!
 //! // Middle C, octave 4
-//! let c4 = Pitch::new(Note::C, 4).unwrap();
+//! let c4 = Pitch::try_new(Note::C, 4).unwrap();
 //! let smf_bytes = pitch_to_smf_bytes(&c4, 120.0, 480).unwrap();
 //! assert_eq!(&smf_bytes[..4], b"MThd");
 //! ```
@@ -55,9 +55,9 @@ pub use tempo::{TempoSource, StaticTempoMap, BoxedTempoSource};
 pub use dynamics::{Dynamic, VelocityPolicy};
 pub use convert::{ToMidiEvents, ConvertCtx};
 
-// Task 3g: top-level SMF helper functions.
+// REQ-O1: OwnedSmf + top-level SMF helper functions.
 #[cfg(feature = "smf")]
-pub use smf::{pitch_to_smf_bytes, melody_to_smf_bytes, emit_time_signature_into_conductor};
+pub use smf::{OwnedSmf, pitch_to_smf_bytes, melody_to_smf_bytes};
 
 #[cfg(feature = "smf")]
 #[cfg(feature = "score")]

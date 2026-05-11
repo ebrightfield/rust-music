@@ -1,8 +1,7 @@
 // REQ-O1: Pitch -> one NoteOn/NoteOff pair
 
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError,
-            dynamics::VelocityPolicy};
+use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
 use music::note::pitch::Pitch;
 use music::fretboard::fretted_note::SoundedNote;
 
@@ -11,15 +10,6 @@ use music::fretboard::fretted_note::SoundedNote;
 /// quarter at the ctx's PPQ.
 fn default_gate_ticks(ctx: &ConvertCtx<'_>) -> u64 {
     ctx.ppq as u64     // one quarter note
-}
-
-fn velocity_for(ctx: &ConvertCtx<'_>) -> u8 {
-    // REQ-O12, P1
-    match &ctx.velocity {
-        VelocityPolicy::Fixed(v) => *v,
-        VelocityPolicy::FromDynamic(d) => d.velocity(),
-        VelocityPolicy::PerEvent(_) => 80,  // no RhythmicNotatedEvent in scope
-    }
 }
 
 impl ToMidiEvents for Pitch {
@@ -36,7 +26,7 @@ impl ToMidiEvents for Pitch {
             return Err(MidiConversionError::PitchOutOfRange(self.midi_note));
         }
         let key = self.midi_note;
-        let vel = velocity_for(ctx);
+        let vel = ctx.velocity.velocity_no_event();
         let gate = default_gate_ticks(ctx);
         out.push(MidiEvent { time: base_tick, channel,
             message: MidiMessage::NoteOn { key, velocity: vel } });

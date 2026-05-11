@@ -79,24 +79,25 @@ fn more_than_16_tracks_errors() {
     );
 }
 
-/// REQ-O5: `emit_time_signature_into_conductor` appends a `TimeSignature` meta
-/// event that survives the midly round-trip.
+/// REQ-O5, O16: SmfBuilder::meter() splices a TimeSignature meta into the
+/// conductor track that survives the midly round-trip.
 #[test]
 fn time_signature_meta_reaches_conductor() {
-    use midly::{Format, Header, MetaMessage, Smf, Timing, TrackEvent, TrackEventKind, num::{u15, u28}};
-    // Build a minimal conductor track by hand and invoke the helper.
-    let mut conductor: Vec<TrackEvent<'static>> = Vec::new();
-    music_midi::emit_time_signature_into_conductor(&mut conductor, 7, 3); // 7/8
-    conductor.push(TrackEvent {
-        delta: u28::from(0u32),
-        kind: TrackEventKind::Meta(MetaMessage::EndOfTrack),
-    });
-    let smf = Smf {
-        header: Header { format: Format::Parallel, timing: Timing::Metrical(u15::new(480)) },
-        tracks: vec![conductor],
-    };
+    use music::notation::rhythm::meter::{Meter, MeterDenominator};
+    use midly::{MetaMessage, TrackEvent, TrackEventKind};
+    // 7/8 time signature via builder
+    let p = Pitch::from_midi(60).unwrap();
+    let meter = Meter::new(7, MeterDenominator::Eight, None);
+    let owned = SmfBuilder::new()
+        .ppq(480)
+        .tempo(StaticTempoMap::constant(120.0))
+        .meter(meter)
+        .add_track("m", 0, &p)
+        .unwrap()
+        .build()
+        .unwrap();
     let mut bytes = Vec::new();
-    smf.write(&mut bytes).unwrap();
+    owned.write(&mut bytes).unwrap();
     let parsed = midly::Smf::parse(&bytes).unwrap();
     let ts = parsed.tracks[0].iter().find(|e| matches!(
         e.kind, TrackEventKind::Meta(MetaMessage::TimeSignature(..))
@@ -104,11 +105,80 @@ fn time_signature_meta_reaches_conductor() {
     match ts {
         Some(TrackEvent { kind: TrackEventKind::Meta(MetaMessage::TimeSignature(n, d, c, s)), .. }) => {
             assert_eq!(*n, 7);
-            assert_eq!(*d, 3);
+            assert_eq!(*d, 3);  // log2(8) = 3
             assert_eq!(*c, 24);
             assert_eq!(*s, 8);
         }
         _ => panic!("expected TimeSignature meta in conductor track, got {:?}", ts),
+    }
+}
+
+/// REQ-O16: builder.meter() auto-wires TimeSignature meta in conductor.
+#[test]
+fn builder_meter_emits_time_signature() {
+    use music::notation::rhythm::meter::{Meter, MeterDenominator};
+
+    let c4 = Pitch::from_midi(60).unwrap();
+    let owned = SmfBuilder::new()
+        .ppq(480)
+        .tempo(StaticTempoMap::constant(120.0))
+        .meter(Meter::new(4, MeterDenominator::Four, None))
+        .add_track("piano", 0, &c4).unwrap()
+        .build().unwrap();
+
+    let smf = owned.as_smf();
+    let conductor = &smf.tracks[0];
+    let found = conductor.iter().any(|ev| matches!(
+        &ev.kind,
+        midly::TrackEventKind::Meta(midly::MetaMessage::TimeSignature(4, 2, 24, 8))
+    ));
+    assert!(found, "conductor must contain TimeSignature(4, 2, 24, 8) when meter() is called");
+}
+
+/// REQ-O15 negative: no TimeSignature meta when meter() is not called.
+#[test]
+fn builder_no_meter_omits_time_signature() {
+    let c4 = Pitch::from_midi(60).unwrap();
+    let owned = SmfBuilder::new()
+        .ppq(480)
+        .tempo(StaticTempoMap::constant(120.0))
+        .add_track("piano", 0, &c4).unwrap()
+        .build().unwrap();
+    let smf = owned.as_smf();
+    let has_ts = smf.tracks[0].iter().any(|ev| matches!(
+        &ev.kind,
+        midly::TrackEventKind::Meta(midly::MetaMessage::TimeSignature(..))
+    ));
+    assert!(!has_ts, "no TimeSignature should appear when meter() is not called");
+}
+
+/// W8: tempo change points whose tick delta exceeds the SMF u28 maximum
+/// (0x0FFF_FFFF) must surface a MidiConversionError::Smf rather than silently
+/// truncating the delta or panicking inside midly.
+#[test]
+fn oversize_tempo_tick_delta_errors_not_panics() {
+    let p = Pitch::from_midi(60).unwrap();
+    let mut tempo = StaticTempoMap::constant(120.0);
+    // 0x1000_0000 = 268_435_456, one past u28::max_value() = 0x0FFF_FFFF.
+    tempo.push(0x1000_0000, 180.0);
+    let result = SmfBuilder::new()
+        .ppq(480)
+        .tempo(tempo)
+        .add_track("m", 0, &p)
+        .unwrap()
+        .build();
+    match result {
+        Err(MidiConversionError::Smf(msg)) => {
+            assert!(
+                msg.contains("u28") || msg.contains("268435455"),
+                "expected Smf error to mention u28 overflow, got: {}",
+                msg
+            );
+        }
+        other => panic!(
+            "expected MidiConversionError::Smf for oversize tick delta, got: {:?}",
+            other
+        ),
     }
 }
 

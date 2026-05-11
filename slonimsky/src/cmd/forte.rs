@@ -274,7 +274,7 @@ fn format_pc_set(pcs: &[music::note::pitch_class::Pc]) -> String {
 
 pub fn run(args: ForteArgs) -> Result<()> {
     let pcs = parse_input_to_pcs(&args.input)?;
-    let pc_set = music::note_collections::pc_set::PcSet::from_unzeroed(pcs);
+    let pc_set = music::note_collections::pc_set::PcContent::new(pcs);
     let pf = prime_form(&pc_set);
 
     println!("PcSet:      {}", format_pc_set(&pc_set));
@@ -295,13 +295,14 @@ pub fn run(args: ForteArgs) -> Result<()> {
         // to avoid duplicating the header lines
         let pf_pcs: Vec<music::note::pitch_class::Pc> =
             pf.iter().map(|&n| music::note::pitch_class::Pc::from(n)).collect();
-        let pf_set = music::note_collections::pc_set::PcSet::from_unzeroed(pf_pcs);
-        let matrix = music::geometry::IntervalMatrix::new(&pf_set);
+        let pf_shape = music::note_collections::pc_set::PcShape::new(pf_pcs);
+        let matrix = music::geometry::IntervalMatrix::new(&pf_shape);
         let iv = matrix.reduced_interval_vector();
         let iv_str: Vec<String> = iv.iter().map(|n: &usize| n.to_string()).collect();
         println!("IV:         <{}>", iv_str.join(", "));
 
-        let sym = pc_set.transpositional_symmetry();
+        let pc_shape = pc_set.to_shape();
+        let sym = pc_shape.transpositional_symmetry();
         if sym.is_empty() {
             println!("T-symmetry: none (only T0)");
         } else {
@@ -319,7 +320,7 @@ pub fn run(args: ForteArgs) -> Result<()> {
         }
 
         use music::geometry::symmetry::intervallic::IntervallicSymmetry;
-        if pc_set.is_inversionally_symmetric() {
+        if pc_shape.is_inversionally_symmetric() {
             println!("I-symmetry: yes (palindromic intervals)");
         } else {
             println!("I-symmetry: no");

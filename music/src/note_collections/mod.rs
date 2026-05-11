@@ -12,7 +12,7 @@ pub mod voicing;
 pub mod geometry;
 pub mod interval_class;
 
-pub use pc_set::PcSet;
+pub use pc_set::{PcShape, PcContent, AsPcSlice};
 pub use interval_class::IntervalClass;
 pub use octave_partition::OctavePartition;
 pub use voicing::{StackedIntervals, Voicing};
@@ -21,9 +21,9 @@ use crate::note_collections::geometry::symmetry::transpositional::Transpositiona
 
 /// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
 ///
-/// It entails all the same intervallic information as a [PcSet], but also
+/// It entails all the same intervallic information as a [PcShape], but also
 /// conveys note spelling information.
-/// So you can think of it as "a [PcSet] with a defined note spelling."
+/// So you can think of it as "a [PcShape] with a defined note spelling."
 /// It's the minimal required information to talk about e.g. "a C major chord"
 /// in the abstract.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +93,8 @@ impl NoteSet {
     /// [crate::note_collections::geometry::symmetry::find_transpositional_symmetries].
     /// See that function's docs for more details.
     pub fn find_transpositional_symmetries(&self) -> TranspositionalSymmetryMap {
-        let pcs = PcSet::from(self);
+        let content = PcContent::from(self);
+        let pcs = content.to_shape();
         let mut symmetries = pcs.transpositional_symmetry();
         let mut indexed_by_note = HashMap::new();
         for (i, note) in self.iter().enumerate() {
@@ -151,7 +152,8 @@ impl NoteSet {
             (new_pos_raw - len + 1) / len
         };
 
-        let new_octave = (from.octave as i32 + octave_change) as u8;
+        let new_octave = i8::try_from(from.octave as i32 + octave_change)
+            .map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
         Pitch::try_new(new_note.clone(), new_octave)
     }
 

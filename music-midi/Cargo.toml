@@ -16,6 +16,13 @@ smf      = ["dep:midly", "score"]
 playback = ["dep:midir"]
 render   = ["dep:oxisynth", "dep:hound", "dep:ureq", "dep:dirs", "dep:sha2"]
 full     = ["smf", "playback", "render"]
+# Dev-feature: enables SF2-cache-dependent integration tests. OFF by default.
+# CI enables this after SF2 prefetch so cfg-gated tests run automatically.
+#
+# Known Limitations (Tier C debt — D11)
+# This Cargo-feature approach is a placeholder for a future build-script probe.
+# See `docs/spec-music-midi-debt.md` §4 R29-R31 and §6 D11 for context.
+sf2-cache-available = []
 
 [dependencies]
 # [AMEND-A] No default features here; the `score` feature on `music-midi` forwards
