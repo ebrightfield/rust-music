@@ -3,8 +3,9 @@ use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::notation::clef::Clef;
 use crate::note::Note;
-use crate::note_collections::pc_set::PcSet;
-use crate::note_collections::spelling::{HasSpelling, spell_pc_set};
+use crate::note::pitch_class::Pc;
+use crate::note_collections::pc_set::PcContent;
+use crate::note_collections::spelling::{HasSpelling, spell_content};
 use crate::note::pitch::Pitch;
 use crate::note_collections::geometry::symmetry::transpositional::TryTranspose;
 use crate::NoteSet;
@@ -89,8 +90,8 @@ impl Voicing {
     /// Given a [Pitch], we can infer the others using a [StackedIntervals] instance.
     pub fn from_intervals(root: &Pitch, intervals: &StackedIntervals) -> Result<Self, MusicSemanticsError> {
         let midi_notes = stack_midi_from_intervals(root, intervals);
-        let pc_set = PcSet::from(&midi_notes);
-        let spelling = spell_pc_set(&root.note, &pc_set)?;
+        let pc_content = PcContent::new(midi_notes.iter().map(|m| Pc::from(&(m % 12))).collect());
+        let spelling = spell_content(&root.note, &pc_content)?;
         let mut pitches = midi_notes.iter()
             .map(|m| Pitch::from_midi_spelled_as(*m, &spelling).unwrap())
             .collect::<Vec<_>>();
@@ -377,5 +378,16 @@ mod tests {
         let (min, _max) = normalized.span().unwrap();
         // Should be moved much lower for bass clef
         assert!(min.midi_note < 60, "Expected note below C4 for bass clef, got {:?}", min);
+    }
+
+    #[test]
+    fn voicing_from_intervals_unchanged_for_cmaj7() {
+        let root = Pitch::from_midi_spelled_as(60 /*C4*/, &vec![Note::C]).unwrap();
+        let voicing = Voicing::from_intervals(&root, &StackedIntervals(vec![4, 3, 4])).unwrap();
+        assert_eq!(voicing.len(), 4);
+        assert_eq!(voicing[0].note, Note::C);
+        assert_eq!(voicing[1].note, Note::E);
+        assert_eq!(voicing[2].note, Note::G);
+        assert_eq!(voicing[3].note, Note::B);
     }
 }

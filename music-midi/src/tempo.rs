@@ -51,9 +51,11 @@ pub struct StaticTempoMap {
 impl StaticTempoMap {
     /// Create a tempo map with a single constant tempo starting at tick 0.
     ///
-    /// Panics if `bpm` is not finite or is ≤ 0.
+    /// Invalid BPM values (non-finite or non-positive) are coerced to 120.0
+    /// rather than panicking, so consumer-supplied values never crash the
+    /// library.
     pub fn constant(bpm: f32) -> Self {
-        assert!(bpm.is_finite() && bpm > 0.0, "bpm must be finite and positive");
+        let bpm = if bpm.is_finite() && bpm > 0.0 { bpm } else { 120.0 };
         Self { entries: vec![(0, bpm)], ppq: crate::DEFAULT_PPQ }  // REQ-O10
     }
 
@@ -62,9 +64,11 @@ impl StaticTempoMap {
     /// If an entry already exists at or after `tick`, all such entries are
     /// removed before the new entry is added, so the map always stays sorted.
     ///
-    /// Panics if `bpm` is not finite or is ≤ 0.
+    /// Invalid BPM values (non-finite or non-positive) are coerced to 120.0
+    /// rather than panicking, so consumer-supplied values never crash the
+    /// library.
     pub fn push(&mut self, tick: AbsoluteTicks, bpm: f32) {
-        assert!(bpm.is_finite() && bpm > 0.0);
+        let bpm = if bpm.is_finite() && bpm > 0.0 { bpm } else { 120.0 };
         match self.entries.last() {
             Some((last, _)) if *last >= tick => {
                 self.entries.retain(|(t, _)| *t < tick);

@@ -7,7 +7,6 @@
 //! at the requested sample rate; a 1-second tail is appended to let notes decay.
 // REQ-O8, O11, O13: AudioRenderer — drives oxisynth block-by-block, writes WAV via hound.
 // Phase 5 (5e, 5f, 5g)
-#![cfg(feature = "render")]
 
 use crate::{
     error::MidiConversionError,
@@ -31,6 +30,7 @@ use std::path::Path;
 pub struct AudioRenderer {
     sf_bytes: Vec<u8>,
     sample_rate: u32,
+    tail_seconds: f32,
 }
 
 impl AudioRenderer {
@@ -39,12 +39,28 @@ impl AudioRenderer {
         Ok(Self {
             sf_bytes: sf.bytes,
             sample_rate: 48_000,
+            tail_seconds: 1.0,
         })
     }
 
     /// Override the output sample rate (default: 48 000 Hz).
     pub fn sample_rate(mut self, hz: u32) -> Self {
         self.sample_rate = hz;
+        self
+    }
+
+    /// Override the tail duration appended after the last MIDI event (default: 1.0 s).
+    ///
+    /// The tail allows envelope releases to decay without clipping. Pass `0.0`
+    /// for a hard stop; pass a larger value for long reverb tails.
+    ///
+    /// # Known Limitations (Tier C debt — D5)
+    /// The tail is applied uniformly; there is no per-note envelope modeling.
+    /// Values < 0.0 are clamped to 0.0 and NaN is treated as 0.0; no error is
+    /// returned for invalid input. See `docs/spec-music-midi-debt.md` §4 R20-R22
+    /// and §6 D5 for context.
+    pub fn tail_seconds(mut self, secs: f32) -> Self {
+        self.tail_seconds = secs;
         self
     }
 
@@ -60,7 +76,7 @@ impl AudioRenderer {
         let path = path.as_ref();
         let synth = OxiSynthAdapter::new(&self.sf_bytes, self.sample_rate as f32)?;
         let wav = HoundWav::create(path, self.sample_rate)?;
-        let result = render_smf(smf, synth, wav, self.sample_rate);
+        let result = render_smf(smf, synth, wav, self.sample_rate, self.tail_seconds);
         if result.is_err() {
             let _ = std::fs::remove_file(path);
         }
@@ -153,7 +169,9 @@ fn build_tempo_map(events: &[AbsEvent], ppq: u16) -> StaticTempoMap {
     let mut map = StaticTempoMap { entries: vec![(0, 120.0)], ppq };
     for ev in events {
         if let FlatKind::Tempo { micros_per_beat } = ev.kind {
-            let bpm = 60_000_000.0 / micros_per_beat as f32;
+            // Malformed SMFs may declare 0 µs/beat; clamp to 1 to avoid +inf BPM.
+            let us = micros_per_beat.max(1);
+            let bpm = 60_000_000.0 / us as f32;
             map.push(ev.tick, bpm);
         }
     }
@@ -166,10 +184,11 @@ fn render_smf<S: Synthesizer, W: WavSink>(
     mut synth: S,
     wav: W,
     sample_rate: u32,
+    tail_seconds: f32,
 ) -> Result<(), MidiConversionError> {
     // Determine PPQ from the SMF header.
     let ppq = match smf.header.timing {
-        midly::Timing::Metrical(t) => t.as_int() as u16,
+        midly::Timing::Metrical(t) => t.as_int(),
         midly::Timing::Timecode(_, _) => DEFAULT_PPQ,
     };
 
@@ -192,7 +211,7 @@ fn render_smf<S: Synthesizer, W: WavSink>(
             let t0 = tempo_map.ticks_to_seconds(current_tick);
             let t1 = tempo_map.ticks_to_seconds(next_tick);
             let frames_needed = ((t1 - t0) * sample_rate as f64).round() as usize;
-            render_frames(&mut synth, wav.as_mut(), &mut buf, frames_needed, BLOCK_FRAMES);
+            render_frames(&mut synth, wav.as_mut(), &mut buf, frames_needed, BLOCK_FRAMES)?;
             current_tick = next_tick;
         }
 
@@ -232,13 +251,13 @@ fn render_smf<S: Synthesizer, W: WavSink>(
         }
     }
 
-    // Render a short tail after the last event (1 second) to let notes decay.
-    const TAIL_SECONDS: f64 = 1.0;
-    let tail_frames = (TAIL_SECONDS * sample_rate as f64).round() as usize;
-    render_frames(&mut synth, wav.as_mut(), &mut buf, tail_frames, BLOCK_FRAMES);
+    // Render a tail after the last event to let notes decay.
+    // Clamp negative/NaN to zero — no error, just a hard stop.
+    let clamped = if tail_seconds.is_nan() || tail_seconds < 0.0 { 0.0 } else { tail_seconds as f64 };
+    let tail_frames = (clamped * sample_rate as f64).round() as usize;
+    render_frames(&mut synth, wav.as_mut(), &mut buf, tail_frames, BLOCK_FRAMES)?;
 
-    wav.finalize();
-    Ok(())
+    wav.finalize()
 }
 
 /// Render exactly `total_frames` interleaved stereo f32 frames into `wav`,
@@ -249,7 +268,7 @@ fn render_frames<S: Synthesizer + ?Sized, W: WavSink + ?Sized>(
     buf: &mut Vec<f32>,
     total_frames: usize,
     block: usize,
-) {
+) -> Result<(), MidiConversionError> {
     let mut remaining = total_frames;
     while remaining > 0 {
         let n = remaining.min(block);
@@ -267,10 +286,11 @@ fn render_frames<S: Synthesizer + ?Sized, W: WavSink + ?Sized>(
             let r_f = buf[i * 2 + 1].clamp(-1.0, 1.0);
             let l = (l_f * i16::MAX as f32) as i16;
             let r = (r_f * i16::MAX as f32) as i16;
-            wav.write_frame(l, r);
+            wav.write_frame(l, r)?;
         }
         remaining -= n;
     }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -287,12 +307,25 @@ pub fn render_smf_with_seams<S: Synthesizer, W: WavSink>(
     wav: W,
     sample_rate: u32,
 ) -> Result<(), MidiConversionError> {
-    render_smf(smf, synth, wav, sample_rate)
+    render_smf(smf, synth, wav, sample_rate, 1.0)
+}
+
+/// Like [`render_smf_with_seams`] but with an explicit tail duration.
+pub fn render_smf_with_seams_tail<S: Synthesizer, W: WavSink>(
+    smf: &midly::Smf,
+    synth: S,
+    wav: W,
+    sample_rate: u32,
+    tail_seconds: f32,
+) -> Result<(), MidiConversionError> {
+    render_smf(smf, synth, wav, sample_rate, tail_seconds)
 }
 
 /// Build a minimal SMF in memory containing a single-channel C-major triad
 /// held for half a second at 120 BPM, 480 PPQ. Useful in tests and examples.
-pub fn c_triad_smf_bytes() -> Vec<u8> {
+///
+/// Returns [`MidiConversionError::Smf`] if the underlying `midly` writer fails.
+pub fn c_triad_smf_bytes() -> Result<Vec<u8>, MidiConversionError> {
     use midly::{Format, Header, MidiMessage, Smf, Timing, TrackEvent, TrackEventKind};
     use std::io::Cursor;
 
@@ -342,6 +375,7 @@ pub fn c_triad_smf_bytes() -> Vec<u8> {
         tracks: vec![track],
     };
     let mut out = Vec::new();
-    smf.write_std(Cursor::new(&mut out)).expect("smf write failed");
-    out
+    smf.write_std(Cursor::new(&mut out))
+        .map_err(|e| MidiConversionError::Smf(e.to_string()))?;
+    Ok(out)
 }

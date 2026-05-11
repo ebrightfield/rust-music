@@ -6,6 +6,7 @@ use crate::error::MusicSemanticsError;
 use crate::error::MusicSemanticsError::InvalidNoteLetter;
 
 /// Nothing more extreme than a double-accidental is represented here.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Accidental {
     Natural,
@@ -71,6 +72,7 @@ impl Display for Accidental {
 }
 
 /// Chromatic musical letter, irrespective of octaves or attached accidentals.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Letter {
     A,
@@ -162,6 +164,7 @@ impl Display for Letter {
 }
 
 /// A combination of letter and accidental information.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Spelling {
     pub letter: Letter,

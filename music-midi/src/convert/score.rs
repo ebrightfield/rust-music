@@ -48,7 +48,7 @@ impl<'a> ToMidiEvents for LilypondScore<'a> {
         let mut end_tick: AbsoluteTicks = 0;
         for fe in &flat_events {
             let global_idx = voice_map.iter().position(|&p| p == (fe.staff, fe.voice))
-                .expect("pair must be in map");
+                .unwrap_or_else(|| unreachable!("voice_map invariant: pair must be in map"));
             let ch = derive_channel(global_idx);
             let tick_end = fe.event.append_midi(fe.tick, ch, ctx, out)?;
             if tick_end > end_tick {

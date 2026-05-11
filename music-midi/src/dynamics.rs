@@ -55,3 +55,30 @@ pub enum VelocityPolicy {
     /// The closure receives the event being converted and returns a velocity 0–127.
     PerEvent(Box<dyn Fn(&RhythmicNotatedEvent<'_>) -> u8 + Send + Sync>),
 }
+
+/// Default velocity used by call sites that evaluate [`VelocityPolicy`] outside
+/// a [`RhythmicNotatedEvent`] context (matches the PerEvent fallback).
+pub const DEFAULT_VELOCITY: u8 = 80;
+
+impl VelocityPolicy {
+    /// Resolve a velocity without a [`RhythmicNotatedEvent`] in scope.
+    ///
+    /// `PerEvent` policies fall back to [`DEFAULT_VELOCITY`] since there is no
+    /// event to pass to the closure.
+    pub fn velocity_no_event(&self) -> u8 {
+        match self {
+            VelocityPolicy::Fixed(v) => *v,
+            VelocityPolicy::FromDynamic(d) => d.velocity(),
+            VelocityPolicy::PerEvent(_) => DEFAULT_VELOCITY,
+        }
+    }
+
+    /// Resolve a velocity with a [`RhythmicNotatedEvent`] in scope.
+    pub fn velocity_for(&self, rne: &RhythmicNotatedEvent<'_>) -> u8 {
+        match self {
+            VelocityPolicy::Fixed(v) => *v,
+            VelocityPolicy::FromDynamic(d) => d.velocity(),
+            VelocityPolicy::PerEvent(f) => f(rne),
+        }
+    }
+}

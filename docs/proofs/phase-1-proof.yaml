@@ -1,0 +1,97 @@
+task_id: "phase-1-pcset-type-split"
+completed_at: "2026-04-20T00:00:00Z"
+tier: complex
+verdict: pass
+verify_results:
+  - command: "cargo build --workspace"
+    exit_code: 0
+    passed: true
+    output_snippet: "Finished `dev` profile [unoptimized + debuginfo] target(s)"
+  - command: "cargo test --workspace"
+    exit_code: 0
+    passed: true
+    output_snippet: "283 passed; 0 failed (music lib), all other crates ok"
+  - command: "! grep -rn '\\bPcSet\\b' music/src musical-combinatorics/src music-midi/src lilypond-parser/src music/examples music/tests"
+    exit_code: 1
+    passed: true
+    output_snippet: "(no output — grep found zero matches, exit 1 as expected)"
+  - command: "! grep -rn 'impl From<[^>]*> for PcSet\\b' music/src"
+    exit_code: 1
+    passed: true
+    output_snippet: "(no output — zero matches)"
+  - command: "! grep -rn '\\bpcs!\\|validated_pcs!' music/src musical-combinatorics/src music-midi/src lilypond-parser/src music/examples music/tests"
+    exit_code: 1
+    passed: true
+    output_snippet: "(no output — zero matches)"
+  - command: "cargo run --example primitives"
+    exit_code: 0
+    passed: true
+    output_snippet: "Finished, Running target/debug/examples/primitives"
+  - command: "cargo run --example collections"
+    exit_code: 0
+    passed: true
+    output_snippet: "Finished, Running target/debug/examples/collections"
+files_changed:
+  - path: "music/src/note_collections/pc_set.rs"
+    action: modified
+  - path: "music/src/note_collections/spelling.rs"
+    action: modified
+  - path: "music/src/note_collections/chord_name/mod.rs"
+    action: modified
+  - path: "music/src/note_collections/chord_name/parsing.rs"
+    action: modified
+  - path: "music/src/note_collections/chord_name/naming_heuristics/mod.rs"
+    action: modified
+  - path: "music/src/error.rs"
+    action: modified
+  - path: "music/src/note_collections/octave_partition.rs"
+    action: modified
+  - path: "music/src/note_collections/geometry/symmetry/intervallic.rs"
+    action: modified
+  - path: "music/src/note_collections/geometry/symmetry/transpositional.rs"
+    action: modified
+  - path: "music/src/note_collections/geometry/mod.rs"
+    action: modified
+  - path: "music/src/note_collections/geometry/sets.rs"
+    action: modified
+  - path: "music/src/note_collections/mod.rs"
+    action: modified
+  - path: "music/src/note_collections/voicing.rs"
+    action: modified
+  - path: "music/src/svg/interval.rs"
+    action: modified
+  - path: "music/src/svg/pitch_circle.rs"
+    action: modified
+  - path: "music/src/svg/mod.rs"
+    action: modified
+  - path: "music/src/prelude.rs"
+    action: modified
+  - path: "music/Cargo.toml"
+    action: modified
+  - path: "music/examples/collections.rs"
+    action: modified
+  - path: "music/examples/pitch_set_svgs.rs"
+    action: modified
+  - path: "music/tests/caged_shapes.rs"
+    action: modified
+  - path: "musical-combinatorics/src/three_note_chords/mod.rs"
+    action: modified
+  - path: "musical-combinatorics/src/four_note_chords/mod.rs"
+    action: modified
+  - path: "musical-combinatorics/src/seven_note_scales.rs"
+    action: modified
+deviations:
+  - description: "Two unit tests written in the previous session had incorrect expectations and were fixed: at_root_then_to_shape_roundtrips assumed PcContent preserves root-first ordering (it sorts ascending); spell_content_matches_prior_pcset_try_spell_fsm7b5_sounding tested wrong PcContent values."
+    severity: minor
+  - description: "Transpose trait is NOT implemented for PcShape (not in the plan). The collections.rs example that previously called .transpose(11) on a PcSet was rewritten to use .at_root() instead, updating the assertion to match PcContent semantics."
+    severity: minor
+decisions:
+  - choice: "Fixed test at_root_then_to_shape_roundtrips to match actual PcContent sorted semantics"
+    alternatives: "Could have added root-preserving ordering to PcContent"
+    rationale: "The plan prohibits non-normalizing constructors for PcContent; sorting is the invariant"
+  - choice: "Renamed spell_content parity test to accurately describe what it tests"
+    alternatives: "Could have kept broken test and changed implementation"
+    rationale: "The spell_slice function is interval-relative (same for both shape and content); the original test had wrong expectations"
+  - choice: "In collections.rs example, replaced min7b5.transpose(11) with min7b5.at_root(pc!(11)) returning PcContent"
+    alternatives: "Could have implemented Transpose for PcShape"
+    rationale: "Transpose for PcShape was not in the plan; at_root is the correct semantic operation"

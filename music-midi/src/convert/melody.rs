@@ -1,7 +1,6 @@
 // REQ-O1, O3: MelodicEvent stream uses its Duration directly
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError,
-            dynamics::VelocityPolicy};
+use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
 use music::melody::sequencer::MelodicEvent;
 
 impl ToMidiEvents for [MelodicEvent] {
@@ -23,11 +22,7 @@ impl ToMidiEvents for [MelodicEvent] {
             if cur.pitch.midi_note > 127 {
                 return Err(MidiConversionError::PitchOutOfRange(cur.pitch.midi_note));
             }
-            let vel = match &ctx.velocity {
-                VelocityPolicy::Fixed(v) => *v,
-                VelocityPolicy::FromDynamic(d) => d.velocity(),
-                VelocityPolicy::PerEvent(_) => 80,
-            };
+            let vel = ctx.velocity.velocity_no_event();
             out.push(MidiEvent { time: base_tick, channel,
                 message: MidiMessage::NoteOn { key: cur.pitch.midi_note, velocity: vel } });
             out.push(MidiEvent { time: base_tick + dur_ticks, channel,

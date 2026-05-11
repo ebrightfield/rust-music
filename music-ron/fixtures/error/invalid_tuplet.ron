@@ -1,0 +1,12 @@
+// Error fixture: InvalidTuplet (REQ-O18, O37).
+// Tuplet 3:2 with only 2 children — events duration won't match.
+(
+  kind: "Snippet",
+  clef: "treble",
+  events: [
+    Tuplet(numerator: 3, denominator: 2, base: "Eighth", children: [
+      Note(pitch: "c4", duration: "8"),
+      Note(pitch: "e4", duration: "8"),
+    ]),
+  ],
+)

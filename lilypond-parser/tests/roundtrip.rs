@@ -13,7 +13,7 @@ fn render_pitch(p: &Pitch, d: &Duration) -> String {
 #[test]
 fn pitch_duration_roundtrip_across_octaves() {
     for note in [Note::C, Note::Cis, Note::Des, Note::E, Note::Fis, Note::B] {
-        for octave in 1u8..=6u8 {
+        for octave in 1i8..=6i8 {
             let pitch = Pitch::new(note, octave);
             let dur = Duration::new(DurationKind::Qtr, 0);
             let src = render_pitch(&pitch, &dur);
@@ -33,7 +33,7 @@ fn pitch_duration_roundtrip_across_octaves() {
 #[test]
 fn ces_bis_roundtrip() {
     let mut cases = Vec::new();
-    for oct in 0u8..=8u8 {
+    for oct in 0i8..=8i8 {
         cases.push((Note::Ces, oct));
         cases.push((Note::Bis, oct));
     }

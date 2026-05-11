@@ -72,6 +72,7 @@ impl Iterator for PcIter {
 ///
 /// Additionally, when mapping a [Pc] to an alphabetical note,
 /// there is no way to determine a preferred enharmonic spelling.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Pc {
     Pc0,

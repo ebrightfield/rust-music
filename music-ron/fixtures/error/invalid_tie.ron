@@ -1,0 +1,10 @@
+// Error fixture: InvalidTie (REQ-O19, O37).
+// Tie at end of events with no following pitched event.
+(
+  kind: "Snippet",
+  clef: "treble",
+  events: [
+    Note(pitch: "c4", duration: "4"),
+    Tie,
+  ],
+)

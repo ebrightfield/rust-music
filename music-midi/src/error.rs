@@ -14,7 +14,7 @@ pub enum MidiConversionError {
     #[error("music-midi: pitch {0} is above MIDI range (max 127), clip or transpose before conversion")]
     PitchOutOfRange(u8),                                                 // REQ-O1
 
-    #[error("music-midi: ppq {0} must be a multiple of 32, got {0}, use 480 or 960")]
+    #[error("music-midi: ppq {0} must be a multiple of 32, use 480 or 960")]
     InvalidPpq(u16),                                                     // REQ-O9, REQ-X7
 
     #[error("music-midi: tuplet {num}:{den} cannot be represented at ppq={ppq} without rounding, \

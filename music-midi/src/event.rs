@@ -38,6 +38,15 @@ pub enum MidiMessage {
     /// Program / instrument change (0–127).
     ProgramChange(u8),
     /// General-purpose control change (controller 0–127, value 0–127).
+    ///
+    /// # Emission policy
+    /// This variant's emission path is kept in place intentionally, even though
+    /// the current `music-midi` converters never produce `ControlChange` events.
+    /// Future converters (e.g. expression envelopes, modulation, sustain) can
+    /// route through this path without an additional enum-match arm in
+    /// `SmfBuilder::build` or `AudioRenderer::render_smf`.
+    ///
+    /// See `docs/spec-music-midi-debt.md` §4 R19 and §3 non-goal "D12 enum narrowing".
     ControlChange { controller: u8, value: u8 },
     /// Internal: tempo change in beats-per-minute. Converted to a MIDI
     /// `Tempo` meta event (µs/beat) in the `SmfBuilder` conductor track.

@@ -1,10 +1,10 @@
 use itertools::Itertools;
 use crate::error::MusicSemanticsError;
 use crate::note::Pc;
-use crate::note_collections::PcSet;
+use crate::note_collections::pc_set::PcShape;
 use crate::note_collections::geometry::symmetry::transpositional::Modes;
 
-pub fn get_subchords(pcs: &PcSet, size: u8) -> Result<Vec<Vec<Pc>>, MusicSemanticsError> {
+pub fn get_subchords(pcs: &PcShape, size: u8) -> Result<Vec<Vec<Pc>>, MusicSemanticsError> {
     if size < 3 {
         return Err(MusicSemanticsError::SizeTooSmallForChords(size as usize));
     }
@@ -18,7 +18,7 @@ pub fn get_subchords(pcs: &PcSet, size: u8) -> Result<Vec<Vec<Pc>>, MusicSemanti
     )
 }
 
-impl PcSet {
+impl PcShape {
     /// Check if `other` is a subchord of any mode of self.
     /// This is useful for checking if a chord is "contained within" a scale
     /// regardless of which mode we're considering.
@@ -26,17 +26,17 @@ impl PcSet {
     /// # Example
     /// ```
     /// use music::note::pitch_class::Pc::*;
-    /// use music::note_collections::PcSet;
+    /// use music::note_collections::pc_set::PcShape;
     /// use music::note_collections::geometry::sets::*;
     ///
     /// // C major scale
-    /// let c_major = PcSet::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
+    /// let c_major = PcShape::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
     /// // A minor triad (mode 6 of C major)
-    /// let a_minor = PcSet::new(vec![Pc0, Pc3, Pc7]);  // Zeroed from A=9
+    /// let a_minor = PcShape::new(vec![Pc0, Pc3, Pc7]);  // Zeroed from A=9
     ///
     /// assert!(c_major.contains_subchord(&a_minor));
     /// ```
-    pub fn contains_subchord(&self, other: &PcSet) -> bool {
+    pub fn contains_subchord(&self, other: &PcShape) -> bool {
         // Get all modes of self
         let modes = self.modes();
 
@@ -58,17 +58,17 @@ impl PcSet {
     /// # Example
     /// ```
     /// use music::note::pitch_class::Pc::*;
-    /// use music::note_collections::PcSet;
+    /// use music::note_collections::pc_set::PcShape;
     /// use music::note_collections::geometry::sets::*;
     ///
-    /// let major_scale = PcSet::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
-    /// let major_triad = PcSet::new(vec![Pc0, Pc4, Pc7]);
+    /// let major_scale = PcShape::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
+    /// let major_triad = PcShape::new(vec![Pc0, Pc4, Pc7]);
     ///
     /// let modes = major_scale.modes_containing(&major_triad);
     /// // Major triads appear in modes 0 (Ionian), 3 (Lydian), and 4 (Mixolydian)
     /// assert!(modes.iter().any(|(idx, _)| *idx == 0));  // Ionian
     /// ```
-    pub fn modes_containing(&self, subchord: &PcSet) -> Vec<(usize, PcSet)> {
+    pub fn modes_containing(&self, subchord: &PcShape) -> Vec<(usize, PcShape)> {
         self.modes()
             .into_iter()
             .enumerate()
@@ -87,32 +87,32 @@ mod tests {
     #[test]
     fn test_contains_subchord() {
         // C major scale: C D E F G A B = 0 2 4 5 7 9 11
-        let c_major = PcSet::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
+        let c_major = PcShape::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
 
         // C major triad (zeroed): 0 4 7
-        let c_maj_triad = PcSet::new(vec![Pc0, Pc4, Pc7]);
+        let c_maj_triad = PcShape::new(vec![Pc0, Pc4, Pc7]);
         assert!(c_major.contains_subchord(&c_maj_triad));
 
         // D minor triad in C major (D F A = 2 5 9, zeroed: 0 3 7)
-        let d_min_triad = PcSet::new(vec![Pc0, Pc3, Pc7]);
+        let d_min_triad = PcShape::new(vec![Pc0, Pc3, Pc7]);
         assert!(c_major.contains_subchord(&d_min_triad));
 
         // B diminished in C major (B D F = 11 2 5, zeroed: 0 3 6)
-        let b_dim = PcSet::new(vec![Pc0, Pc3, Pc6]);
+        let b_dim = PcShape::new(vec![Pc0, Pc3, Pc6]);
         assert!(c_major.contains_subchord(&b_dim));
 
         // Augmented triad (0 4 8) - not in major scale
-        let aug_triad = PcSet::new(vec![Pc0, Pc4, Pc8]);
+        let aug_triad = PcShape::new(vec![Pc0, Pc4, Pc8]);
         assert!(!c_major.contains_subchord(&aug_triad));
     }
 
     #[test]
     fn test_modes_containing() {
         // Major scale
-        let major_scale = PcSet::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
+        let major_scale = PcShape::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
 
         // Major triad (0 4 7)
-        let major_triad = PcSet::new(vec![Pc0, Pc4, Pc7]);
+        let major_triad = PcShape::new(vec![Pc0, Pc4, Pc7]);
 
         let modes = major_scale.modes_containing(&major_triad);
 
@@ -131,10 +131,10 @@ mod tests {
 
     #[test]
     fn test_modes_containing_minor_triad() {
-        let major_scale = PcSet::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
+        let major_scale = PcShape::new(vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11]);
 
         // Minor triad (0 3 7)
-        let minor_triad = PcSet::new(vec![Pc0, Pc3, Pc7]);
+        let minor_triad = PcShape::new(vec![Pc0, Pc3, Pc7]);
 
         let modes = major_scale.modes_containing(&minor_triad);
 

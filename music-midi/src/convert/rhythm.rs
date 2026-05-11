@@ -1,30 +1,8 @@
 // REQ-O3, O4, O17: RhythmicNotatedEvent incl. ties + tuplets + Fretted/FrettedMany/Rest coverage
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError,
-            dynamics::VelocityPolicy};
+use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
 use music::notation::rhythm::{RhythmicNotatedEvent, NotatedEvent, SingleEvent, Tuplet};
 use music::notation::rhythm::duration::Duration;
-
-/// REQ-O17: returns rescaled tuplet child duration or TupletInexact.
-/// (retained for reference; the compound variant is used in practice)
-#[allow(dead_code)]
-fn tuplet_child_ticks(base_music_ticks: u32, num: usize, den: usize, ppq: u16)
-    -> Result<u64, MidiConversionError>
-{
-    // base_music_ticks is at internal 128-per-whole; already includes child duration.
-    // Apply ratio den/num and rescale to MIDI ticks.
-    let n = num as u128;
-    let d = den as u128;
-    let midi = (base_music_ticks as u128) * (ppq as u128) * d / (32 * n);
-    // Detect loss: check integer exactness.
-    let remainder = ((base_music_ticks as u128) * (ppq as u128) * d) % (32 * n);
-    if remainder != 0 {
-        return Err(MidiConversionError::TupletInexact {
-            num: num as u32, den: den as u32, ppq,
-        });
-    }
-    Ok(midi as u64)
-}
 
 fn single_event_pitches<'a>(s: &'a SingleEvent<'a>) -> Vec<u8> {
     match s {
@@ -33,14 +11,6 @@ fn single_event_pitches<'a>(s: &'a SingleEvent<'a>) -> Vec<u8> {
         SingleEvent::Fretted(sn) => vec![sn.pitch.midi_note],
         SingleEvent::FrettedMany(v) => v.iter().map(|sn| sn.pitch.midi_note).collect(),
         SingleEvent::Rest => vec![],
-    }
-}
-
-fn velocity_for(ctx: &ConvertCtx<'_>, rne: &RhythmicNotatedEvent<'_>) -> u8 {
-    match &ctx.velocity {
-        VelocityPolicy::Fixed(v) => *v,
-        VelocityPolicy::FromDynamic(d) => d.velocity(),
-        VelocityPolicy::PerEvent(f) => f(rne),
     }
 }
 
@@ -67,7 +37,7 @@ fn emit_single(
     for k in &keys {
         if *k > 127 { return Err(MidiConversionError::PitchOutOfRange(*k)); }
     }
-    let vel = velocity_for(ctx, rne);
+    let vel = ctx.velocity.velocity_for(rne);
     for k in &keys {
         out.push(MidiEvent { time: base_tick, channel,
             message: MidiMessage::NoteOn { key: *k, velocity: vel } });
@@ -124,7 +94,7 @@ fn emit_tuplet_scaled<'a>(
             NotatedEvent::SingleEvent(s, _) => {
                 let keys = single_event_pitches(s);
                 if !keys.is_empty() {
-                    let vel = velocity_for(ctx, child);
+                    let vel = ctx.velocity.velocity_for(child);
                     for k in &keys { out.push(MidiEvent { time: tick, channel,
                         message: MidiMessage::NoteOn { key: *k, velocity: vel } }); }
                     for k in &keys { out.push(MidiEvent { time: tick + scaled, channel,
@@ -180,8 +150,8 @@ impl<'a> ToMidiEvents for [RhythmicNotatedEvent<'a>] {
             // Sum durations from i..j into a synthetic emission.
             // [AMEND-E] explicit `as u32`.
             let mut merged_ticks: u64 = 0;
-            for k in i..j {
-                let mt: u32 = match &self[k].event {
+            for ev in &self[i..j] {
+                let mt: u32 = match &ev.event {
                     NotatedEvent::SingleEvent(_, d) => d.ticks() as u32,
                     NotatedEvent::Tuplet(t) => t.real_duration() as u32,
                 };
@@ -199,7 +169,7 @@ impl<'a> ToMidiEvents for [RhythmicNotatedEvent<'a>] {
                 }
             };
             if !keys.is_empty() {
-                let vel = velocity_for(ctx, &self[i]);
+                let vel = ctx.velocity.velocity_for(&self[i]);
                 for k in &keys { out.push(MidiEvent { time: base_tick, channel,
                     message: MidiMessage::NoteOn { key: *k, velocity: vel } }); }
                 for k in &keys { out.push(MidiEvent { time: base_tick + merged_ticks, channel,

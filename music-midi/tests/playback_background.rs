@@ -100,3 +100,51 @@ fn play_background_stop_can_be_called_after_natural_finish() {
     // stop() on an already-finished player should not panic or deadlock.
     handle.stop();
 }
+
+#[test]
+fn play_background_stop_is_deterministic() {
+    use midly::{Format, Header, Smf, TrackEvent, TrackEventKind, Timing};
+
+    // Construct a LONG SMF: many events spaced 10 seconds apart at 480 PPQ.
+    // If the test ever waits for natural completion, this would hang for minutes.
+    let ppq = 480u16;
+    let mut track: Vec<TrackEvent> = Vec::new();
+    // Tempo: 120 BPM → 1 quarter = 500 ms; 10s per event = 20 quarters = 9600 ticks
+    track.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(midly::MetaMessage::Tempo(500_000u32.into())),
+    });
+    for _ in 0..100 {
+        track.push(TrackEvent {
+            delta: 9600u32.into(),
+            kind: TrackEventKind::Midi {
+                channel: 0.into(),
+                message: midly::MidiMessage::NoteOn {
+                    key: 60.into(),
+                    vel: 80u8.into(),
+                },
+            },
+        });
+    }
+    track.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(midly::MetaMessage::EndOfTrack),
+    });
+    let smf = Smf {
+        header: Header::new(Format::SingleTrack, Timing::Metrical(ppq.into())),
+        tracks: vec![track],
+    };
+
+    let cap = CapturingSink::default();
+    let player = MidiPlayer::from_sink(Box::new(cap.clone()), Box::new(FakeClock::new()));
+    let handle = player.play_background(&smf).expect("background play ok");
+    // REQ-O7: send on stop channel; REQ-O8: assert handle.stop() returns.
+    handle.stop();
+    // The assertion is that handle.stop() returned (meaning the thread joined
+    // cleanly). No wall-clock, no Instant::elapsed, no sleep-based polling.
+    let sent = cap.0.lock().unwrap();
+    assert!(
+        sent.iter().any(|b| b.len() == 3 && b[1] == 123),
+        "AllNotesOff must have been sent (CC 123 on any channel) after stop"
+    );
+}

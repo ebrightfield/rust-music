@@ -1,0 +1,7 @@
+error[E0080]: evaluation panicked: Pitch class must be 0-11
+ --> tests/compile_fail/pc_shape_macro_out_of_range.rs:8:13
+  |
+8 |     let _ = pc_shape!(0, 4, 15);   // must NOT compile: 15 >= 12
+  |             ^^^^^^^^^^^^^^^^^^^ evaluation of `main::_` failed here
+  |
+  = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `pc_shape` (in Nightly builds, run with -Z macro-backtrace for more info)

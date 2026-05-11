@@ -1,5 +1,5 @@
 use music::note_collections::octave_partition::OctavePartition;
-use music::note_collections::pc_set::PcSet;
+use music::note_collections::pc_set::{PcShape, AsPcSlice};
 use music::note::pitch_class::Pc;
 use music::note::pitch_class::Pc::*;
 use anyhow::anyhow;
@@ -34,7 +34,7 @@ pub enum ThreeNoteChordQuality {
 }
 
 impl ThreeNoteChordQuality {
-    pub fn identify(pcs: &PcSet) -> anyhow::Result<(usize, ThreeNoteChordQuality)> {
+    pub fn identify(pcs: &PcShape) -> anyhow::Result<(usize, ThreeNoteChordQuality)> {
         if pcs.len() != 3 {
             return Err(anyhow!("wrong size for three note chord: {:?}", pcs));
         }
@@ -111,14 +111,14 @@ impl From<ThreeNoteChordQuality> for OctavePartition {
     }
 }
 
-impl TryFrom<&PcSet> for ThreeNoteChordQuality {
+impl TryFrom<&PcShape> for ThreeNoteChordQuality {
     type Error = anyhow::Error;
 
-    fn try_from(value: &PcSet) -> Result<Self, Self::Error> {
+    fn try_from(value: &PcShape) -> Result<Self, Self::Error> {
         if value.len() != 3 {
             return Err(anyhow!("wrong size for three note chord: {:?}", value));
         }
-        let pitches = value.as_slice();
+        let pitches = value.as_pc_slice();
         match pitches {
             MAJOR_PCS => Ok(ThreeNoteChordQuality::Major),
             MINOR_PCS => Ok(ThreeNoteChordQuality::Minor),
@@ -185,8 +185,8 @@ mod tests {
     // Convert to and from intervallically descriptive types.
     fn test_quality(quality: ThreeNoteChordQuality) {
         let partition = OctavePartition::from(&quality);
-        let pc_set = PcSet::from(&partition);
-        assert_eq!(quality, ThreeNoteChordQuality::try_from(&pc_set).unwrap())
+        let pc_shape = PcShape::from(&partition);
+        assert_eq!(quality, ThreeNoteChordQuality::try_from(&pc_shape).unwrap())
     }
 
     #[test]

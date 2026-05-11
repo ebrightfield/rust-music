@@ -475,7 +475,6 @@ pub fn infer_scale_quality(pcs: &HashSet<Pc>) -> Option<(ScaleHeuristic, Option<
 #[cfg(test)]
 mod tests {
     use crate::note_collections::chord_name::quality::chord::{Alt, Extension, MajorSubtype};
-    use crate::note_collections::PcSet;
     use super::*;
 
     /// Lock the enum-dispatch order to the trait-object list. If
@@ -504,7 +503,7 @@ mod tests {
     #[test]
     fn chord_names() {
         let notes = vec![Pc0, Pc4, Pc5, Pc7, Pc11];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_chord_quality(&notes);
         let quality = quality.unwrap();
         let quality = quality.1.unwrap();
@@ -516,7 +515,7 @@ mod tests {
             ))
         );
         let notes = vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert_eq!(quality.unwrap().1,
             Some(
@@ -525,25 +524,25 @@ mod tests {
         );
         // Lydian scale with b2 (0,1,4,5,7,9,11)
         let notes = vec![Pc0, Pc1, Pc4, Pc5, Pc7, Pc9, Pc11];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify Lydian b2 scale");
 
         // Altered scale / Superlocrian (0,1,3,4,6,8,10)
         let notes = vec![Pc0, Pc1, Pc4, Pc6, Pc7, Pc8, Pc10];
-        let notes: HashSet<Pc> = PcSet::from(&notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify altered/superlocrian variant");
 
         // Locrian scale (0,1,3,5,6,8,10)
         let notes = vec![Pc0, Pc1, Pc3, Pc5, Pc6, Pc8, Pc10];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify Locrian scale");
 
         // Diminished whole-half scale variant (0,2,3,5,6,8,10)
         let notes = vec![Pc0, Pc2, Pc3, Pc5, Pc6, Pc8, Pc10];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify dim WH scale variant");
     }
@@ -552,28 +551,28 @@ mod tests {
     fn pentatonic_scales() {
         // Major pentatonic: 1 2 3 5 6 -> Pc0, Pc2, Pc4, Pc7, Pc9
         let notes = vec![Pc0, Pc2, Pc4, Pc7, Pc9];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify major pentatonic");
         assert_eq!(quality.unwrap().1, Some(ScaleQuality::MajorPentatonic));
 
         // Minor pentatonic: 1 b3 4 5 b7 -> Pc0, Pc3, Pc5, Pc7, Pc10
         let notes = vec![Pc0, Pc3, Pc5, Pc7, Pc10];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify minor pentatonic");
         assert_eq!(quality.unwrap().1, Some(ScaleQuality::MinorPentatonic));
 
         // Blues major: 1 2 b3 3 5 6 -> Pc0, Pc2, Pc3, Pc4, Pc7, Pc9
         let notes = vec![Pc0, Pc2, Pc3, Pc4, Pc7, Pc9];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify blues major");
         assert_eq!(quality.unwrap().1, Some(ScaleQuality::BluesMajor));
 
         // Blues minor: 1 b3 4 b5 5 b7 -> Pc0, Pc3, Pc5, Pc6, Pc7, Pc10
         let notes = vec![Pc0, Pc3, Pc5, Pc6, Pc7, Pc10];
-        let notes: HashSet<Pc> = PcSet::from(notes).into();
+        let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
         assert!(quality.is_some(), "Should identify blues minor");
         assert_eq!(quality.unwrap().1, Some(ScaleQuality::BluesMinor));

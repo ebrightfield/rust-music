@@ -6,6 +6,8 @@ use crate::note::pitch::Pitch;
 ///
 /// We use this type to assist in normalizing the octave register
 /// of pitch content.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Clef {
     Treble,
     Treble8va,

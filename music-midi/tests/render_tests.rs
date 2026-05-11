@@ -52,12 +52,14 @@ impl CapturingWav {
 }
 
 impl WavSink for CapturingWav {
-    fn write_frame(&mut self, l: i16, r: i16) {
+    fn write_frame(&mut self, l: i16, r: i16) -> Result<(), MidiConversionError> {
         self.frames.push((l, r));
+        Ok(())
     }
 
-    fn finalize(mut self: Box<Self>) {
+    fn finalize(mut self: Box<Self>) -> Result<(), MidiConversionError> {
         self.finalized = true;
+        Ok(())
     }
 }
 
@@ -79,11 +81,13 @@ impl SharedCapturingWav {
 }
 
 impl WavSink for SharedCapturingWav {
-    fn write_frame(&mut self, l: i16, r: i16) {
+    fn write_frame(&mut self, l: i16, r: i16) -> Result<(), MidiConversionError> {
         self.0.lock().unwrap().frames.push((l, r));
+        Ok(())
     }
-    fn finalize(self: Box<Self>) {
+    fn finalize(self: Box<Self>) -> Result<(), MidiConversionError> {
         self.0.lock().unwrap().finalized = true;
+        Ok(())
     }
 }
 
@@ -133,6 +137,21 @@ fn tempo_event(delta: u32, micros_per_beat: u32) -> TrackEvent<'static> {
         delta: delta.into(),
         kind: TrackEventKind::Meta(MetaMessage::Tempo(micros_per_beat.into())),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Private test helpers (W4 scaffolding — NOT public API)
+// ---------------------------------------------------------------------------
+
+/// Count frames rendered by a SilentSynth + SharedCapturingWav at the given
+/// tail duration and sample rate.
+fn render_and_count_frames(smf: &midly::Smf, tail: f32, sample_rate: u32) -> usize {
+    let synth = SilentSynth::new();
+    let (wav, shared) = SharedCapturingWav::new();
+    music_midi::render::render_smf_with_seams_tail(smf, synth, wav, sample_rate, tail)
+        .expect("render must not error");
+    let count = shared.lock().unwrap().frames.len();
+    count
 }
 
 // ---------------------------------------------------------------------------
@@ -228,13 +247,8 @@ fn tempo_change_duration() {
             ],
         );
         let smf = Smf::parse(&smf_bytes).expect("parse failed");
-        let synth = SilentSynth::new();
-        let (wav, shared) = SharedCapturingWav::new();
-        // Use 100 Hz sample rate to keep counts small and ratio clear.
-        music_midi::render::render_smf_with_seams(&smf, synth, wav, 100)
-            .expect("render must not error");
-        let count = shared.lock().unwrap().frames.len();
-        count
+        // REQ-O21: pin explicit tail_seconds(1.0) so frame math is deterministic.
+        render_and_count_frames(&smf, 1.0, 100)
     }
 
     // 60 BPM: 480 ticks = 1 beat = 1 s → 100 note frames + 100 tail = 200
@@ -301,13 +315,8 @@ fn mid_file_tempo_change_integrates_piecewise() {
     );
     let smf = Smf::parse(&smf_bytes).expect("parse failed");
 
-    let synth = SilentSynth::new();
-    let (wav, shared) = SharedCapturingWav::new();
-    // 100 Hz sample rate → frame counts small and easy to reason about.
-    music_midi::render::render_smf_with_seams(&smf, synth, wav, 100)
-        .expect("render must succeed");
-
-    let frames = shared.lock().unwrap().frames.len();
+    // 100 Hz sample rate, explicit 1.0s tail → frame counts small and easy to reason about.
+    let frames = render_and_count_frames(&smf, 1.0, 100);
 
     // Expected with correct integration: 100 (slow beat) + 25 (fast beat) + 100 (tail) = 225.
     // If only first tempo is honored: 100 + 100 (fast beat rendered as slow) + 100 (tail) = 300.
@@ -462,21 +471,44 @@ fn seam_render_writes_wav_to_disk() {
     assert!(metadata.len() > 44, "WAV file must be larger than the 44-byte header");
 }
 
-/// Opt-in integration test: requires a real GeneralUser GS SF2 in the cache.
-/// Ignored by default; run with:
-///   cargo test -p music-midi --features render c_triad_half_second_wav_has_audible_frames -- --ignored
-///
-/// The `MIDI_SF2_CACHED` env var is documented in Phase 5 as the opt-in signal;
-/// `option_env!` is compile-time so we use `#[ignore]` with a clear message.
+/// REQ-O22: tail_seconds at 0.0 and a high value produce frame counts
+/// consistent with audio_seconds + tail, within 1 frame per 48000 tolerance.
 #[test]
-#[ignore = "requires cached GeneralUser GS SF2; set MIDI_SF2_CACHED=1 and re-run with -- --ignored"]
+fn tail_seconds_zero_and_high_frame_tolerance() {
+    let smf_bytes = music_midi::render::c_triad_smf_bytes().expect("c_triad_smf_bytes");
+    let smf = midly::Smf::parse(&smf_bytes).unwrap();
+
+    const SAMPLE_RATE: u32 = 48_000;
+
+    // c_triad_smf_bytes: 120 BPM, 480 PPQ, note span = 240 ticks = 0.25s
+    // at 48 kHz → 12000 audio frames.
+    const AUDIO_FRAMES: i64 = 12_000;
+
+    for tail in [0.0f32, 2.5] {
+        let frames = render_and_count_frames(&smf, tail, SAMPLE_RATE);
+        let expected = AUDIO_FRAMES + (tail as f64 * SAMPLE_RATE as f64).round() as i64;
+        let diff = (frames as i64 - expected).abs();
+        // REQ-O22: tolerance = 1 frame per 48000 frames rendered.
+        let tol = (frames as i64 / SAMPLE_RATE as i64) + 1;
+        assert!(
+            diff <= tol,
+            "tail={tail}: expected ~{expected} frames ±{tol}, got {frames}"
+        );
+    }
+}
+
+/// Integration test: requires a real GeneralUser GS SF2 in the cache.
+/// Gated behind `sf2-cache-available` feature; run with:
+///   cargo test -p music-midi --features render,sf2-cache-available c_triad_half_second_wav_has_audible_frames
+#[cfg(feature = "sf2-cache-available")]
+#[test]
 fn c_triad_half_second_wav_has_audible_frames() {
     use music_midi::{render::AudioRenderer, soundfont::SoundFont};
 
     let sf = SoundFont::general_user_gs_offline()
         .expect("GeneralUser GS must be cached when running this test");
 
-    let smf_bytes = music_midi::render::c_triad_smf_bytes();
+    let smf_bytes = music_midi::render::c_triad_smf_bytes().expect("c_triad_smf_bytes");
     let smf = Smf::parse(&smf_bytes).expect("c_triad smf parse");
 
     let tmp = TempDir::new().unwrap();
