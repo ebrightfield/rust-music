@@ -52,6 +52,7 @@ pub mod system;
 pub mod tempo;
 pub mod tie;
 pub mod tremolo;
+pub mod trill_bracket;
 pub mod trill_extension;
 pub mod time_signature;
 pub mod tuplet;
@@ -148,6 +149,10 @@ pub use volta::{
     layout_volta_bracket, VoltaAnnotation, VoltaBracketLayout, VoltaHooks, VOLTA_ABOVE_STAFF_SS,
 };
 pub use tremolo::{layout_tremolo, TremoloCount, TremoloLayout};
+pub use trill_bracket::{
+    layout_trill_bracket_hook, layout_trill_bracket_hooks, HookDirection,
+    TrillBracketHookLayout, TrillBracketSide,
+};
 pub use trill_extension::{
     layout_trill_extension, trill_extension_right_edge, TrillExtensionLayout,
 };
