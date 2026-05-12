@@ -743,14 +743,23 @@ const TRILL_EXTENSION_GLYPH_GAP_SS: f64 = 0.15;
 /// Distance (in staff spaces) before the next notehead where the wiggle ends.
 /// Leaves visual breathing room so the wiggle doesn't crash into the notehead.
 const TRILL_EXTENSION_NOTE_GAP_SS: f64 = 0.30;
+/// Distance (in staff spaces) before the system's right edge where a
+/// cross-system wiggle terminates. Conventionally the wavy line stops just
+/// short of the final barline so the two marks remain visually distinct.
+/// Tuned slightly larger than the inter-note gap because the barline carries
+/// more visual weight than a notehead.
+const TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS: f64 = 0.5;
 
 /// Draw trill wavy-line extensions for notes marked with `trill_extension`.
 ///
 /// The wiggle starts just past the "tr" glyph (so the two read as one
-/// continuous mark) and ends just short of the next note. Notes whose
-/// extension would have no room (single-segment minimum span) silently
-/// render no wiggle — the trill is still indicated by the "tr" glyph
-/// alone, which is conventional for short trills.
+/// continuous mark) and ends just short of the next note. When the trilled
+/// note is the last note in its system, the wiggle extends instead to the
+/// right edge of the system (with a small gap before the final barline) —
+/// the convention is that a sustained trill at the end of a system continues
+/// visually to the system break. Notes whose extension would have no room
+/// (single-segment minimum span) silently render no wiggle — the trill is
+/// still indicated by the "tr" glyph alone.
 fn draw_system_trill_extensions(
     svg: &mut SvgWriter,
     font: &MusicFont,
@@ -768,13 +777,6 @@ fn draw_system_trill_extensions(
             continue;
         }
 
-        // The wiggle continues until the next note in the system; if there
-        // is none (last note in system), skip. Cross-system trills are a
-        // deferred enhancement — see open issues.
-        let Some(target) = notes.get(i + 1) else {
-            continue;
-        };
-
         // The "tr" glyph is positioned by layout_ornament; mirror its math
         // so the wiggle's y matches the trill glyph's baseline.
         let ornament_layout = layout_ornament(
@@ -787,7 +789,16 @@ fn draw_system_trill_extensions(
         let staff_space = staff.staff_space;
         let trill_x = ornament_layout.x;
         let start_x = trill_x + trill_advance + TRILL_EXTENSION_GLYPH_GAP_SS * staff_space;
-        let end_x = system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space;
+
+        // End at the next note's left edge — or, if this is the last note
+        // in the system, at the system's right edge (just inside the final
+        // barline). This is the cross-system convention: a trilled note at
+        // the end of a system extends its wiggle to the system break.
+        let end_x = match notes.get(i + 1) {
+            Some(target) => system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space,
+            None => system_x + system.staff_width
+                - TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS * staff_space,
+        };
 
         if let Some(layout) =
             layout_trill_extension(start_x, end_x, ornament_layout.y, wiggle_advance)

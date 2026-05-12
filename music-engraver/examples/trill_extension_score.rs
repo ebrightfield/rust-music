@@ -49,7 +49,9 @@ fn main() {
         )
         .trill_with_extension()
         .end_barline()
-        // M5: terminating note (final note in the system gets no wiggle)
+        // M5: terminating note. The chord trill at the end of M4 (last note
+        // of the preceding system) extends its wiggle to the right edge of
+        // that system per the cross-system convention.
         .note(p(Note::F, 4), Duration::WHOLE)
         .end_barline()
         .render_svg();

@@ -1995,10 +1995,11 @@ fn no_trill_extension_without_flag() {
 }
 
 #[test]
-fn last_note_in_system_with_trill_extension_renders_no_wiggle() {
-    // The wiggle requires a following note. A trill on the final note of
-    // the system has no target, so the wiggle should be silently skipped
-    // (only the "tr" glyph remains). Cross-system trills are deferred.
+fn last_note_in_system_with_trill_extension_extends_to_system_edge() {
+    // A trill on the final note of the system has no following note, so
+    // the wiggle extends to (just inside) the system's right edge. This
+    // is the cross-system convention: a sustained trill at the end of a
+    // system continues visually to the system break.
     let (font, config, mcfg) = setup();
     let measures = vec![MeasureContent {
         events: vec![quarter_note(4), trill_ext_note(6)],
@@ -2012,8 +2013,8 @@ fn last_note_in_system_with_trill_extension_renders_no_wiggle() {
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let with_ext = svg.to_svg();
 
-    // Identical score but without the extension flag — should produce the
-    // same path count (no wiggle either way).
+    // Identical score but without the extension flag — produces a "tr"
+    // glyph but no wiggle. The with-ext version must have more paths.
     let measures2 = vec![MeasureContent {
         events: vec![quarter_note(4), trill_no_ext_note(6)],
         barline: BarlineStyle::Single,
@@ -2025,11 +2026,149 @@ fn last_note_in_system_with_trill_extension_renders_no_wiggle() {
     draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
     let without_ext = svg2.to_svg();
 
-    assert_eq!(
-        with_ext.matches("<path").count(),
-        without_ext.matches("<path").count(),
-        "trill at end of system should not add a wiggle"
+    let with_paths = with_ext.matches("<path").count();
+    let without_paths = without_ext.matches("<path").count();
+    assert!(
+        with_paths > without_paths,
+        "trill at end of system should still draw a wiggle to the system edge: \
+         with={with_paths}, without={without_paths}"
     );
+}
+
+#[test]
+fn last_note_trill_extension_wiggle_stays_inside_system_edge() {
+    // The cross-system wiggle must end strictly inside the system's right
+    // edge — the final barline lives at x = system.staff_width, and the
+    // wiggle leaves a small gap before it so the two marks read distinctly.
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    // Recompute exactly what draw_system_trill_extensions computes for the
+    // end_x so the assertion is grounded in the production geometry.
+    use crate::layout::staff::StaffLayout;
+    use crate::layout::trill_extension::{layout_trill_extension, trill_extension_right_edge};
+    use crate::render::system_renderer::collect_trill_extension_note_info;
+    use smufl::Glyph;
+
+    let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
+    let info = collect_trill_extension_note_info(&system);
+    let trill_idx = info
+        .iter()
+        .position(|n| n.has_trill_extension)
+        .expect("trill extension present");
+    let note = &info[trill_idx];
+
+    let trill_advance = font.glyph_advance(Glyph::OrnamentTrill).unwrap() as f64;
+    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill).unwrap() as f64;
+    let ornament =
+        crate::layout::ornament::layout_ornament(Ornament::Trill, note.x, note.staff_position, &staff);
+
+    let staff_space = staff.staff_space;
+    let start_x = ornament.x + trill_advance + 0.15 * staff_space;
+    let end_x = system.staff_width - 0.5 * staff_space;
+
+    let layout = layout_trill_extension(start_x, end_x, ornament.y, wiggle_advance)
+        .expect("there should be enough room for at least one wiggle segment");
+    let right_edge = trill_extension_right_edge(&layout);
+
+    assert!(
+        right_edge < system.staff_width,
+        "wiggle right edge {right_edge} must be inside system right edge {}",
+        system.staff_width
+    );
+    assert!(
+        system.staff_width - right_edge >= 0.5 * staff_space - 1e-6,
+        "wiggle must leave at least 0.5 staff_space before the final barline; \
+         right={right_edge}, staff_width={}",
+        system.staff_width
+    );
+}
+
+#[test]
+fn last_note_trill_extension_wiggle_shares_trill_glyph_y() {
+    // The cross-system wiggle shares the trill glyph's y — same convention
+    // as the inter-note variant, so the two marks read as a continuous line.
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    use crate::layout::ornament::layout_ornament;
+    use crate::layout::staff::StaffLayout;
+    let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
+    let info = collect_trill_extension_note_info(&system);
+    let first = info.iter().find(|n| n.has_trill_extension).expect("trill present");
+    let layout = layout_ornament(Ornament::Trill, first.x, first.staff_position, &staff);
+
+    let hits = count_paths_with_translate_y(&output, layout.y);
+    assert!(
+        hits >= 2,
+        "expected the 'tr' glyph plus at least one wiggle segment at y={}, got {hits}",
+        layout.y
+    );
+}
+
+#[test]
+fn last_note_trill_extension_silently_skips_when_no_room() {
+    // If the trilled note sits too close to the system's right edge to fit
+    // even a single wiggle segment, the layout function returns None and
+    // the renderer silently skips — the trill is still indicated by the
+    // "tr" glyph alone. This is the same fail-safe used for the inter-note
+    // variant when notes are tightly packed.
+    let (font, config, mcfg) = setup();
+    // Single very-short measure: trill on a quarter at staff_position 4.
+    // The natural width is just enough for the clef + a single quarter,
+    // leaving little room for a wiggle past the "tr" glyph.
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_note(4)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    // Force a tiny target width so end_x lands left of start_x.
+    let trill_advance = font.glyph_advance(Glyph::OrnamentTrill).unwrap() as f64;
+    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill).unwrap() as f64;
+
+    // Recompute end_x with a deliberately too-small staff_width: simulate
+    // the case where the trilled note is the last in a system that's been
+    // squeezed so tight that no segment fits.
+    use crate::layout::staff::StaffLayout;
+    use crate::layout::trill_extension::layout_trill_extension;
+    let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
+    let info = collect_trill_extension_note_info(&system);
+    let note = info.iter().find(|n| n.has_trill_extension).unwrap();
+    let ornament =
+        crate::layout::ornament::layout_ornament(Ornament::Trill, note.x, note.staff_position, &staff);
+    let start_x = ornament.x + trill_advance + 0.15 * staff.staff_space;
+    // Set end_x equal to start_x so no segment fits.
+    let bad_end = start_x;
+    assert!(
+        layout_trill_extension(start_x, bad_end, ornament.y, wiggle_advance).is_none(),
+        "zero-width span must produce no wiggle"
+    );
+
+    // Smoke check the live draw path doesn't error: real system has room
+    // and should draw at least one wiggle, but the layout-level fail-safe
+    // is the production-critical guarantee.
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let _ = svg.to_svg();
 }
 
 #[test]
