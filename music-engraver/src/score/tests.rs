@@ -5083,3 +5083,162 @@
             "count number should be bold-weighted text",
         );
     }
+
+    // ── Church-rest style (small-count multi-measure rest) ──────────────────
+
+    /// `multi_measure_rest_church(2)` swaps the H-bar's three rects for a
+    /// single breve-rest glyph (`<path>`), and the count number stays.
+    #[test]
+    fn church_rest_count_2_uses_path_not_rects() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest_church(2)
+            .end_barline()
+            .render_svg();
+
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest(2)
+            .end_barline()
+            .render_svg();
+
+        // The H-bar emits 3 extra <rect> elements relative to a plain score.
+        // The church-rest version emits 1 <path> for the breve rest glyph and
+        // ZERO H-bar rects, so it must have strictly fewer rects than the
+        // H-bar baseline. (Staff lines and time-sig are <line>/<path>, not
+        // rects, so this is a clean delta.)
+        let church_rects = svg.matches("<rect").count();
+        let hbar_rects = baseline.matches("<rect").count();
+        assert!(
+            church_rects + 3 == hbar_rects,
+            "church rest should have exactly 3 fewer <rect> than H-bar; \
+             church={church_rects}, hbar={hbar_rects}"
+        );
+        // The count number "2" must appear in both
+        assert!(svg.contains(">2</text>"));
+        assert!(baseline.contains(">2</text>"));
+        // The two renderings must differ
+        assert_ne!(svg, baseline);
+    }
+
+    /// `multi_measure_rest_church(3)` draws breve + whole = two rest paths.
+    #[test]
+    fn church_rest_count_3_draws_two_extra_paths() {
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let church = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest_church(3)
+            .end_barline()
+            .render_svg();
+
+        let plain_paths = plain.matches("<path ").count();
+        let church_paths = church.matches("<path ").count();
+        // Both have clef + time-sig + 1 rest. The plain version has 1 whole-
+        // rest path; the church version has 2 (breve + whole). Difference
+        // is exactly 1 extra path.
+        assert_eq!(
+            church_paths - plain_paths,
+            1,
+            "count=3 church rest should add exactly 1 path vs single-whole-rest \
+             baseline (breve+whole = 2 instead of 1); church={church_paths}, plain={plain_paths}",
+        );
+        // Count text must show "3"
+        assert!(church.contains(">3</text>"));
+        // Plain version must NOT show a count text "3"
+        assert!(!plain.contains(">3</text>"));
+    }
+
+    /// `multi_measure_rest_church(4)` draws two breve rests.
+    #[test]
+    fn church_rest_count_4_distinct_from_count_3() {
+        let svg3 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .multi_measure_rest_church(3)
+            .end_barline()
+            .render_svg();
+        let svg4 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .multi_measure_rest_church(4)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg3, svg4, "counts 3 and 4 must render different SVG");
+        assert!(svg3.contains(">3</text>"));
+        assert!(svg4.contains(">4</text>"));
+        // Both have 2 rest paths (breve+whole and breve+breve respectively).
+        // Compare path counts vs a plain score.
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let plain_paths = plain.matches("<path ").count();
+        assert_eq!(svg3.matches("<path ").count() - plain_paths, 1);
+        assert_eq!(svg4.matches("<path ").count() - plain_paths, 1);
+    }
+
+    /// For counts above the church-rest maximum the renderer falls back to
+    /// the H-bar form even when the user asked for the church style.
+    #[test]
+    fn church_rest_falls_back_to_hbar_for_large_counts() {
+        let church = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .multi_measure_rest_church(8)
+            .end_barline()
+            .render_svg();
+        let hbar = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .multi_measure_rest(8)
+            .end_barline()
+            .render_svg();
+        // Fallback means church output equals plain H-bar output for count=8.
+        assert_eq!(
+            church, hbar,
+            "count=8 church-rest should fall back to H-bar form (identical SVG)"
+        );
+    }
+
+    /// Distinct small counts must produce distinct church-rest SVGs.
+    #[test]
+    fn church_rest_distinct_small_counts_differ() {
+        let mut renderings: Vec<String> = Vec::new();
+        for n in 1..=4u32 {
+            let svg = ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .multi_measure_rest_church(n)
+                .end_barline()
+                .render_svg();
+            renderings.push(svg);
+        }
+        for i in 0..renderings.len() {
+            for j in (i + 1)..renderings.len() {
+                assert_ne!(
+                    renderings[i], renderings[j],
+                    "church counts {} and {} must differ",
+                    i + 1,
+                    j + 1
+                );
+            }
+        }
+    }
+
+    /// Church-rest style preserves the bold-count text convention.
+    #[test]
+    fn church_rest_count_is_bold() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .multi_measure_rest_church(2)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("font-weight=\"bold\""),
+            "church-rest count must be bold-weighted text",
+        );
+    }

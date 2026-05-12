@@ -92,7 +92,7 @@ fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
         MeasureEvent::BeamGroup(bg) => bg.stem_direction = Some(dir),
         MeasureEvent::TupletGroup(tg) => tg.beam_group.stem_direction = Some(dir),
         // Multi-measure rests and ordinary rests have no stem to flip.
-        MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest(_) => {}
+        MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => {}
     }
 }
 
@@ -676,8 +676,40 @@ impl ScoreBuilder {
     /// label simply reads "0", which is meaningless but harmless. Callers
     /// should pass `count >= 1`.
     pub fn multi_measure_rest(mut self, count: u32) -> Self {
-        self.current_events
-            .push((self.current_voice, ScoreEvent::MultiMeasureRest { count }));
+        self.current_events.push((
+            self.current_voice,
+            ScoreEvent::MultiMeasureRest {
+                count,
+                style: crate::layout::multi_measure_rest::MultiMeasureRestStyle::HBar,
+            },
+        ));
+        self
+    }
+
+    /// Add a multi-measure rest in the older "church-rest" style.
+    ///
+    /// For small counts (1–4) the renderer draws combinations of SMuFL whole
+    /// and breve rest glyphs on the staff instead of the modern H-bar:
+    /// - **1**: a single whole rest hanging from the 4th line.
+    /// - **2**: a single breve (double-whole) rest sitting on the 3rd line.
+    /// - **3**: a breve + whole rest, side by side.
+    /// - **4**: two breve rests side by side.
+    ///
+    /// A bold count number is drawn above the staff (matching the H-bar
+    /// convention) so a reader can scan the count without distinguishing
+    /// styles.
+    ///
+    /// For counts greater than [`CHURCH_REST_MAX_COUNT`](crate::layout::multi_measure_rest::CHURCH_REST_MAX_COUNT)
+    /// the renderer silently falls back to the H-bar style — the church-rest
+    /// cluster would otherwise span too wide and become ambiguous.
+    pub fn multi_measure_rest_church(mut self, count: u32) -> Self {
+        self.current_events.push((
+            self.current_voice,
+            ScoreEvent::MultiMeasureRest {
+                count,
+                style: crate::layout::multi_measure_rest::MultiMeasureRestStyle::Church,
+            },
+        ));
         self
     }
 

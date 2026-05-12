@@ -20,8 +20,11 @@ use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::expression_renderer::draw_expression;
 use crate::render::flag_renderer::draw_flag;
 use crate::render::lyric_renderer::draw_lyric;
+use crate::render::church_rest_renderer::draw_church_rest;
 use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
-use crate::layout::multi_measure_rest::layout_multi_measure_rest;
+use crate::layout::multi_measure_rest::{
+    church_rest_supported, layout_church_rest, layout_multi_measure_rest, MultiMeasureRestStyle,
+};
 use crate::layout::lyric::layout_lyric;
 use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::layout::expression::layout_expression;
@@ -102,17 +105,34 @@ pub fn draw_measure(
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
             }
-            MeasureElement::MultiMeasureRest(count) => {
-                // The H-bar spans the rhythmic width allocated to the rest. The
-                // measure barlines sit just outside this span, so the bar fills
-                // the same horizontal region a whole note would occupy.
-                let layout = layout_multi_measure_rest(
-                    elem_x,
-                    elem_x + positioned.width,
-                    *count,
-                    staff,
-                );
-                draw_multi_measure_rest(svg, &layout);
+            MeasureElement::MultiMeasureRest { count, style } => {
+                // The rest fills the rhythmic width allocated by layout — the
+                // measure barlines sit just outside this span, so the cluster
+                // (or H-bar) takes the same region a whole note would occupy.
+                // Church-rest is only meaningful for small counts; for larger
+                // counts the renderer transparently falls back to the H-bar
+                // form rather than producing a sparse pair of rest glyphs in
+                // a wide measure.
+                match style {
+                    MultiMeasureRestStyle::Church if church_rest_supported(*count) => {
+                        let layout = layout_church_rest(
+                            elem_x,
+                            elem_x + positioned.width,
+                            *count,
+                            staff,
+                        );
+                        draw_church_rest(svg, font, &layout)?;
+                    }
+                    _ => {
+                        let layout = layout_multi_measure_rest(
+                            elem_x,
+                            elem_x + positioned.width,
+                            *count,
+                            staff,
+                        );
+                        draw_multi_measure_rest(svg, &layout);
+                    }
+                }
             }
             MeasureElement::Barline(style) => {
                 draw_barline(svg, staff, font, elem_x, *style)?;
@@ -179,7 +199,7 @@ pub fn draw_additional_voices(
                 MeasureElement::Clef(_)
                 | MeasureElement::KeySignature(_)
                 | MeasureElement::TimeSignature(_)
-                | MeasureElement::MultiMeasureRest(_)
+                | MeasureElement::MultiMeasureRest { .. }
                 | MeasureElement::Barline(_) => {}
 
                 MeasureElement::Note(note) => {

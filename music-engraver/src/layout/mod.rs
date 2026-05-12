@@ -85,9 +85,11 @@ pub use tie::{
     TieLayout,
 };
 pub use multi_measure_rest::{
-    layout_multi_measure_rest, MultiMeasureRestLayout, COUNT_ABOVE_HBAR_SS,
-    COUNT_FONT_SIZE_SS, HBAR_BAR_THICKNESS_SS, HBAR_HALF_HEIGHT_SS, HBAR_HORIZONTAL_PADDING_SS,
-    HBAR_SERIF_THICKNESS_SS,
+    church_rest_supported, layout_church_rest, layout_multi_measure_rest, ChurchRestGlyph,
+    ChurchRestLayout, MultiMeasureRestLayout, MultiMeasureRestStyle,
+    CHURCH_REST_COUNT_ABOVE_STAFF_SS, CHURCH_REST_GLYPH_SPACING_SS, CHURCH_REST_MAX_COUNT,
+    COUNT_ABOVE_HBAR_SS, COUNT_FONT_SIZE_SS, HBAR_BAR_THICKNESS_SS, HBAR_HALF_HEIGHT_SS,
+    HBAR_HORIZONTAL_PADDING_SS, HBAR_SERIF_THICKNESS_SS,
 };
 pub use multi_staff::{
     layout_multi_staff, staff_layouts_from_multi, BraceLayout, BracketLayout, ConnectorKind,

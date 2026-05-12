@@ -164,7 +164,10 @@ fn measure_with_rest() {
 fn measure_with_multi_measure_rest_draws_hbar_and_count() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
-    let elements = vec![MeasureElement::MultiMeasureRest(8)];
+    let elements = vec![MeasureElement::MultiMeasureRest {
+        count: 8,
+        style: crate::layout::multi_measure_rest::MultiMeasureRestStyle::HBar,
+    }];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -190,7 +193,10 @@ fn measure_with_multi_measure_rest_draws_hbar_and_count() {
 fn measure_with_multi_measure_rest_x_offset_shifts_hbar() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
-    let elements = vec![MeasureElement::MultiMeasureRest(4)];
+    let elements = vec![MeasureElement::MultiMeasureRest {
+        count: 4,
+        style: crate::layout::multi_measure_rest::MultiMeasureRestStyle::HBar,
+    }];
     let layout = layout_measure(&elements, &cfg);
 
     let mut svg_a = make_svg();

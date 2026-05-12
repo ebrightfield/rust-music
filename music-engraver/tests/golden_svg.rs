@@ -2118,6 +2118,277 @@ fn golden_multi_measure_rest() {
     assert_golden("multi_measure_rest", &svg);
 }
 
+fn build_church_rest() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4)
+        // Bar 1: opening melody so the part doesn't start on a rest.
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .barline()
+        // Bar 2: church rest of 1 (whole rest hanging from line 4).
+        .multi_measure_rest_church(1)
+        .barline()
+        // Bar 3: church rest of 2 (breve sitting on line 3).
+        .multi_measure_rest_church(2)
+        .barline()
+        // Bar 4: church rest of 3 (breve + whole).
+        .multi_measure_rest_church(3)
+        .barline()
+        // Bar 5: church rest of 4 (two breves).
+        .multi_measure_rest_church(4)
+        .barline()
+        // Bar 6: closing melodic figure.
+        .note(p("G", 5), Duration::HALF)
+        .note(p("E", 5), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_church_rest() {
+    let svg = build_church_rest();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Every supported count (1–4) must appear as bold count text above
+    // the staff.
+    for n in &["1", "2", "3", "4"] {
+        let needle = format!(">{n}</text>");
+        assert!(
+            svg.contains(&needle),
+            "expected count text {needle:?} in SVG",
+        );
+    }
+
+    // Compare against an H-bar version of the same counts — the church-rest
+    // form draws rest glyph <path>s instead of H-bar <rect>s, so the path
+    // count must be strictly greater than the H-bar version's path count
+    // for these measures.
+    let hbar_version = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .barline()
+        .multi_measure_rest(1)
+        .barline()
+        .multi_measure_rest(2)
+        .barline()
+        .multi_measure_rest(3)
+        .barline()
+        .multi_measure_rest(4)
+        .barline()
+        .note(p("G", 5), Duration::HALF)
+        .note(p("E", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+
+    // Church-rest measures collectively draw 6 rest glyph paths:
+    //   count 1 → 1 (whole)
+    //   count 2 → 1 (breve)
+    //   count 3 → 2 (breve + whole)
+    //   count 4 → 2 (breve + breve)
+    let church_paths = svg.matches("<path ").count();
+    let hbar_paths = hbar_version.matches("<path ").count();
+    assert_eq!(
+        church_paths - hbar_paths,
+        6,
+        "church-rest must add 6 extra rest glyph paths vs H-bar form; \
+         church={church_paths}, hbar={hbar_paths}",
+    );
+
+    // The H-bar version has 4 × 3 = 12 rects (one per multi-measure rest
+    // measure); the church version draws no rects (no other notation in this
+    // score emits <rect>).
+    let church_rects = svg.matches("<rect").count();
+    let hbar_rects = hbar_version.matches("<rect").count();
+    assert_eq!(
+        hbar_rects - church_rects,
+        12,
+        "H-bar version must have 12 more rects than church version (4 mmrs × 3 rects); \
+         church={church_rects}, hbar={hbar_rects}",
+    );
+
+    // Count text must be bold (matches the H-bar convention so a reader
+    // doesn't see two different count-text weights in the same part).
+    assert!(
+        svg.contains("font-weight=\"bold\""),
+        "church-rest count text should be bold",
+    );
+
+    // The two renderings must differ.
+    assert_ne!(svg, hbar_version, "church-rest and H-bar must render differently");
+
+    assert_golden("church_rest", &svg);
+}
+
+/// Score where each of the two voices independently carries ties, slurs,
+/// and a hairpin. Exercises the cross-voice span machinery: span endpoints
+/// must be resolved against notes in their own voice, not the primary one.
+fn build_cross_voice_spans() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // m1: voice 0 tie (E5–E5), voice 1 slur (C4–E4–G4–C5)
+        .note(p("E", 5), Duration::HALF)
+        .tie()
+        .note(p("E", 5), Duration::HALF)
+        .voice(1)
+        .note(p("C", 4), Duration::QTR)
+        .slur_start()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .slur_end()
+        .voice(0)
+        .barline()
+        // m2: voice 0 slur (G5–F5–E5–D5), voice 1 tie (C4–C4)
+        .note(p("G", 5), Duration::QTR)
+        .slur_start()
+        .note(p("F", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .slur_end()
+        .voice(1)
+        .note(p("C", 4), Duration::HALF)
+        .tie()
+        .note(p("C", 4), Duration::HALF)
+        .voice(0)
+        .barline()
+        // m3: voice 0 crescendo, voice 1 decrescendo (simultaneous, opposing)
+        .note(p("E", 5), Duration::QTR)
+        .hairpin_start(HairpinType::Crescendo)
+        .note(p("F", 5), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .note(p("A", 5), Duration::QTR)
+        .hairpin_end()
+        .voice(1)
+        .note(p("C", 5), Duration::QTR)
+        .hairpin_start(HairpinType::Decrescendo)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .hairpin_end()
+        .voice(0)
+        .barline()
+        // m4: voice 0 tie (G5–G5), voice 1 slur (C4–D4–E4–F4)
+        .note(p("G", 5), Duration::HALF)
+        .tie()
+        .note(p("G", 5), Duration::HALF)
+        .voice(1)
+        .note(p("C", 4), Duration::QTR)
+        .slur_start()
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .slur_end()
+        .voice(0)
+        .end_barline()
+        .render_svg()
+}
+
+/// Parallel score with identical pitches and rhythms but no span markers.
+/// Used for delta assertions — every span in `build_cross_voice_spans`
+/// should be an element this baseline doesn't have.
+fn build_cross_voice_spans_baseline() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // m1
+        .note(p("E", 5), Duration::HALF)
+        .note(p("E", 5), Duration::HALF)
+        .voice(1)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .voice(0)
+        .barline()
+        // m2
+        .note(p("G", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .voice(1)
+        .note(p("C", 4), Duration::HALF)
+        .note(p("C", 4), Duration::HALF)
+        .voice(0)
+        .barline()
+        // m3
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .note(p("A", 5), Duration::QTR)
+        .voice(1)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .voice(0)
+        .barline()
+        // m4
+        .note(p("G", 5), Duration::HALF)
+        .note(p("G", 5), Duration::HALF)
+        .voice(1)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .voice(0)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_cross_voice_spans() {
+    let svg = build_cross_voice_spans();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    let baseline = build_cross_voice_spans_baseline();
+
+    // 3 ties + 3 slurs are each filled paths with stroke="none".
+    let fills_with = svg.matches(r#"stroke="none""#).count();
+    let fills_base = baseline.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        fills_with - fills_base,
+        6,
+        "expected exactly 6 extra filled curves (3 ties + 3 slurs); \
+         with={fills_with}, base={fills_base}",
+    );
+
+    // 2 hairpins (one per voice) contribute exactly 4 lines (2 sides each).
+    let lines_with = svg.matches("<line ").count();
+    let lines_base = baseline.matches("<line ").count();
+    assert_eq!(
+        lines_with - lines_base,
+        4,
+        "expected exactly 4 extra lines from 2 hairpins; \
+         with={lines_with}, base={lines_base}",
+    );
+
+    // The whole rendering must differ from the no-spans version.
+    assert_ne!(svg, baseline, "cross-voice spans must change the output");
+
+    // Sanity: must have stems in both directions (multi-voice forces them).
+    assert!(svg.contains("<line "), "should have stem lines");
+
+    assert_golden("cross_voice_spans", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -2169,6 +2440,8 @@ fn golden_baselines_are_valid_svgs() {
         "voices",
         "voice_collision",
         "multi_measure_rest",
+        "church_rest",
+        "cross_voice_spans",
     ];
 
     for name in &names {

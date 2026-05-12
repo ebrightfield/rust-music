@@ -153,9 +153,15 @@ pub enum MeasureElement {
     BeamGroup(BeamGroupEvent),
     /// A tuplet group: a beam group with a tuplet bracket and number overlay.
     TupletGroup(TupletGroupEvent),
-    /// Multi-measure rest: H-bar spanning the measure width with a count number.
-    /// The `u32` is the number of measures of rest.
-    MultiMeasureRest(u32),
+    /// Multi-measure rest: H-bar (default) or church-rest cluster spanning
+    /// the measure width with a count number. `count` is the number of
+    /// measures of rest; `style` controls the visual depiction.
+    MultiMeasureRest {
+        /// Number of consecutive measures of rest.
+        count: u32,
+        /// Visual style (H-bar or church-rest).
+        style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
+    },
     /// Barline at the end of the measure.
     Barline(BarlineStyle),
 }
@@ -366,10 +372,11 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     .sum();
                 total
             }
-            MeasureElement::MultiMeasureRest(_) => {
+            MeasureElement::MultiMeasureRest { .. } => {
                 // Multi-measure rest occupies the full rhythmic width of the measure.
                 // Use whole-note spacing as the base allocation; the renderer draws
-                // the H-bar spanning from the preceding element to the barline.
+                // the H-bar (or church-rest cluster) spanning from the preceding
+                // element to the barline.
                 let factor =
                     duration_spacing_factor(0, shortest_log2, config.spacing_ratio);
                 config.min_note_spacing * factor
