@@ -2575,6 +2575,117 @@
         }
     }
 
+    #[test]
+    fn grace_note_slur_adds_filled_path_vs_plain_grace() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let no_slur = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        let with_slur = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .grace_note_slur(p("D", 4), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        // Exactly one extra filled (stroke="none") path: the slur crescent.
+        let stroke_none_without = no_slur.matches(r#"stroke="none""#).count();
+        let stroke_none_with = with_slur.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            stroke_none_with,
+            stroke_none_without + 1,
+            "grace_note_slur should add exactly one filled path: {stroke_none_without} → {stroke_none_with}"
+        );
+
+        // Both still contain the grace glyph (scale 0.6).
+        assert!(with_slur.contains("scale(0.6"));
+        assert!(no_slur.contains("scale(0.6"));
+
+        // Differ structurally.
+        assert_ne!(no_slur, with_slur);
+    }
+
+    #[test]
+    fn grace_note_slur_on_rest_is_noop() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .grace_note_slur(p("C", 4), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(without, with, "grace_note_slur on rest should be no-op");
+    }
+
+    #[test]
+    fn grace_note_slur_on_chord_adds_filled_path() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::HALF)
+            .grace_note(p("B", 3), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        let slurred = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::HALF)
+            .grace_note_slur(p("B", 3), GraceNoteKind::Acciaccatura)
+            .end_barline()
+            .render_svg();
+
+        let plain_filled = plain.matches(r#"stroke="none""#).count();
+        let slurred_filled = slurred.matches(r#"stroke="none""#).count();
+        assert_eq!(
+            slurred_filled,
+            plain_filled + 1,
+            "chord grace_note_slur should add exactly one filled path"
+        );
+    }
+
+    #[test]
+    fn grace_note_slur_persists_grace_note_field() {
+        use crate::layout::grace::GraceNoteKind;
+
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("F", 4), Duration::HALF)
+            .grace_note_slur(p("E", 4), GraceNoteKind::Appoggiatura)
+            .end_barline()
+            .render_svg();
+
+        // Grace glyph (scale 0.6) and the slur (stroke="none") must both be present.
+        assert!(
+            svg.contains("scale(0.6"),
+            "grace_note_slur must still emit the grace glyph"
+        );
+        assert!(
+            svg.contains(r#"stroke="none""#),
+            "grace_note_slur must emit a filled slur path"
+        );
+    }
+
     // ---- Lyric tests ----
 
     #[test]

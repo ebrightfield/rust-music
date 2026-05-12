@@ -1514,6 +1514,162 @@ fn grace_note_has_scale_transform() {
 }
 
 #[test]
+fn grace_note_slur_adds_filled_crescent_path() {
+    use crate::layout::grace::GraceNoteKind;
+
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Identical note layouts — one with slur flag, one without.
+    let make_event = |slur: bool| {
+        MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                grace_note: Some((2, GraceNoteKind::Acciaccatura)),
+                grace_note_slur: slur,
+                ..Default::default()
+            },
+        })
+    };
+
+    let layout_without = layout_measure(&[make_event(false)], &cfg);
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    let output_without = svg_without.to_svg();
+
+    let layout_with = layout_measure(&[make_event(true)], &cfg);
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let output_with = svg_with.to_svg();
+
+    // Slurs are emitted as <path d="..." fill="black" stroke="none"/>.
+    // The notehead/grace glyph paths are emitted via add_path, which sets a
+    // stroke and produces stroke="..." rather than stroke="none". So
+    // counting stroke="none" reliably isolates the slur path.
+    let slur_paths_without = output_without.matches(r#"stroke="none""#).count();
+    let slur_paths_with = output_with.matches(r#"stroke="none""#).count();
+    assert_eq!(
+        slur_paths_with,
+        slur_paths_without + 1,
+        "enabling grace_note_slur should add exactly one stroke=none path: {slur_paths_without} → {slur_paths_with}"
+    );
+
+    // The slur path must contain a cubic Bézier (`C`) command — confirms the
+    // crescent shape was actually built.
+    assert!(
+        output_with.contains(r#"fill="black" stroke="none""#),
+        "slur path must use fill=black stroke=none"
+    );
+}
+
+#[test]
+fn grace_note_slur_no_slur_flag_no_extra_path() {
+    use crate::layout::grace::GraceNoteKind;
+
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            grace_note: Some((2, GraceNoteKind::Acciaccatura)),
+            grace_note_slur: false,
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+
+    // No slur means no stroke="none" filled paths. (Note: filled tuplet
+    // brackets, ties etc. also use add_filled_path, but none are present here.)
+    assert_eq!(
+        output.matches(r#"stroke="none""#).count(),
+        0,
+        "without slur flag there should be no stroke=none paths"
+    );
+}
+
+#[test]
+fn grace_note_slur_no_grace_means_no_slur() {
+    // Defensive: grace_note_slur without a grace_note must not emit a slur.
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let elements = vec![MeasureElement::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            grace_note: None,
+            grace_note_slur: true,
+            ..Default::default()
+        },
+    })];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+    assert_eq!(
+        output.matches(r#"stroke="none""#).count(),
+        0,
+        "grace_note_slur with no grace_note must be a no-op"
+    );
+}
+
+#[test]
+fn chord_with_grace_note_slur_emits_slur_path() {
+    use crate::layout::grace::GraceNoteKind;
+
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // C major triad with an acciaccatura B3 → C4 grace-and-slur. The slur
+    // should attach to the closest chord member (the bottom C at staff_pos 0).
+    let make_event = |slur: bool| {
+        MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![0, 2, 4],
+            duration_log2: 1,
+            dots: 0,
+            accidentals: vec![None, None, None],
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                grace_note: Some((-1, GraceNoteKind::Acciaccatura)),
+                grace_note_slur: slur,
+                ..Default::default()
+            },
+        })
+    };
+
+    let layout_without = layout_measure(&[make_event(false)], &cfg);
+    let mut svg_without = make_svg();
+    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    let paths_without = svg_without.to_svg().matches(r#"stroke="none""#).count();
+
+    let layout_with = layout_measure(&[make_event(true)], &cfg);
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    let paths_with = svg_with.to_svg().matches(r#"stroke="none""#).count();
+
+    assert_eq!(
+        paths_with,
+        paths_without + 1,
+        "chord grace+slur should add exactly one stroke=none path"
+    );
+}
+
+#[test]
 fn note_with_lyric_adds_text_element() {
     use crate::layout::lyric::LyricSyllable;
     let (font, config, staff) = setup();

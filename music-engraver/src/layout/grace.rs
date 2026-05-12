@@ -1,5 +1,7 @@
 use smufl::Glyph;
 
+use crate::font::EngravingConfig;
+use crate::layout::slur::{layout_slur, slur_direction_from_stem, SlurLayout};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::StemDirection;
 
@@ -106,6 +108,50 @@ pub fn grace_note_x_reservation(staff: &StaffLayout) -> f64 {
     let approx_width = staff.staff_space * GRACE_NOTE_SCALE;
     let spacing = GRACE_NOTE_SPACING_SS * staff.staff_space;
     approx_width + spacing
+}
+
+/// Compute the connecting slur from a grace note to its principal note.
+///
+/// The slur direction follows the principal note's stem (slurs curve away
+/// from stems — stem-up → under, stem-down → over). This matches the
+/// standard "slur opposite stems" rule applied to a one-note span.
+///
+/// Endpoints attach near the noteheads:
+/// - `x_start` is just to the right of the grace notehead.
+/// - `x_end` is just to the left of the principal notehead.
+/// - `y_start` is the grace notehead y; `y_end` is the principal notehead y.
+///
+/// `layout_slur` applies the conventional [`SLUR_ENDPOINT_OFFSET_SS`] offset
+/// away from the noteheads on top of these values.
+///
+/// Returns `None` when the horizontal distance is degenerate (e.g. the grace
+/// note has been placed at or past the principal x) — callers should skip
+/// rendering rather than emit a zero-width slur.
+pub fn layout_grace_note_slur(
+    grace: &GraceNoteLayout,
+    principal_x: f64,
+    principal_staff_position: i8,
+    principal_stem_dir: StemDirection,
+    staff: &StaffLayout,
+    config: &EngravingConfig,
+) -> Option<SlurLayout> {
+    // Right edge of the scaled grace notehead. A standard Bravura notehead
+    // has advance ~1.18 staff spaces; half-width ~0.59 ss. The grace glyph is
+    // drawn at GRACE_NOTE_SCALE, so the scaled half-width is ~0.35 ss.
+    let grace_half = 0.59 * staff.staff_space * GRACE_NOTE_SCALE;
+    let x_start = grace.x + grace_half;
+    let x_end = principal_x - 0.05 * staff.staff_space;
+
+    // Degenerate / inverted span — caller should skip.
+    if x_end - x_start < 0.1 * staff.staff_space {
+        return None;
+    }
+
+    let y_start = grace.y;
+    let y_end = staff.y_of(principal_staff_position);
+    let direction = slur_direction_from_stem(principal_stem_dir);
+
+    Some(layout_slur(x_start, x_end, y_start, y_end, direction, config))
 }
 
 #[cfg(test)]
@@ -330,6 +376,249 @@ mod tests {
             "1000 shift in principal should shift grace by 1000: {} vs {}",
             layout1.x,
             layout2.x
+        );
+    }
+
+    fn test_config() -> crate::font::EngravingConfig {
+        let metadata: smufl::Metadata =
+            serde_json::from_slice(crate::font::BRAVURA_METADATA).unwrap();
+        crate::font::EngravingConfig::from_smufl(&metadata.engraving_defaults, 1000)
+    }
+
+    #[test]
+    fn slur_spans_grace_to_principal_horizontally() {
+        let staff = test_staff();
+        let cfg = test_config();
+        let principal_x = 1000.0;
+        let grace = layout_grace_note(
+            principal_x,
+            4,
+            GraceNoteKind::Acciaccatura,
+            StemDirection::Up,
+            &staff,
+        );
+        let slur = layout_grace_note_slur(
+            &grace,
+            principal_x,
+            4,
+            StemDirection::Up,
+            &staff,
+            &cfg,
+        )
+        .expect("non-degenerate slur");
+
+        // Slur start should be to the right of the grace glyph origin.
+        assert!(
+            slur.x_start > grace.x,
+            "slur x_start {} should be right of grace origin {}",
+            slur.x_start,
+            grace.x
+        );
+        // Slur end should be to the left of the principal x.
+        assert!(
+            slur.x_end < principal_x,
+            "slur x_end {} should be left of principal {}",
+            slur.x_end,
+            principal_x
+        );
+        // Endpoints must form a positive span.
+        assert!(slur.x_end > slur.x_start, "x_end must exceed x_start");
+    }
+
+    #[test]
+    fn slur_under_for_stem_up_principal() {
+        // Stem-up principal → slur arcs *under* the notes (away from stems).
+        // y_outer_apex must be *below* the endpoint y in SVG coords (greater y).
+        let staff = test_staff();
+        let cfg = test_config();
+        let principal_x = 1000.0;
+        let grace_pos = 4;
+        let principal_pos = 4;
+        let grace = layout_grace_note(
+            principal_x,
+            grace_pos,
+            GraceNoteKind::Acciaccatura,
+            StemDirection::Up,
+            &staff,
+        );
+        let slur = layout_grace_note_slur(
+            &grace,
+            principal_x,
+            principal_pos,
+            StemDirection::Up,
+            &staff,
+            &cfg,
+        )
+        .expect("non-degenerate slur");
+
+        let endpoint_y = staff.y_of(principal_pos);
+        assert!(
+            slur.y_outer_apex > endpoint_y,
+            "under-slur apex {} should be below (larger y than) endpoint {}",
+            slur.y_outer_apex,
+            endpoint_y
+        );
+    }
+
+    #[test]
+    fn slur_over_for_stem_down_principal() {
+        // Stem-down principal → slur arcs over the notes.
+        let staff = test_staff();
+        let cfg = test_config();
+        let principal_x = 1000.0;
+        let grace_pos = 6;
+        let principal_pos = 6;
+        let grace = layout_grace_note(
+            principal_x,
+            grace_pos,
+            GraceNoteKind::Appoggiatura,
+            StemDirection::Down,
+            &staff,
+        );
+        let slur = layout_grace_note_slur(
+            &grace,
+            principal_x,
+            principal_pos,
+            StemDirection::Down,
+            &staff,
+            &cfg,
+        )
+        .expect("non-degenerate slur");
+
+        let endpoint_y = staff.y_of(principal_pos);
+        assert!(
+            slur.y_outer_apex < endpoint_y,
+            "over-slur apex {} should be above (smaller y than) endpoint {}",
+            slur.y_outer_apex,
+            endpoint_y
+        );
+    }
+
+    #[test]
+    fn slur_endpoints_differ_for_different_pitches() {
+        // Asymmetric pitches: grace below, principal above.
+        let staff = test_staff();
+        let cfg = test_config();
+        let principal_x = 1000.0;
+        let grace_pos = 2;
+        let principal_pos = 6;
+        let grace = layout_grace_note(
+            principal_x,
+            grace_pos,
+            GraceNoteKind::Acciaccatura,
+            StemDirection::Up,
+            &staff,
+        );
+        let slur = layout_grace_note_slur(
+            &grace,
+            principal_x,
+            principal_pos,
+            StemDirection::Up,
+            &staff,
+            &cfg,
+        )
+        .expect("non-degenerate slur");
+
+        // y_start corresponds to grace position (lower on staff → larger y in SVG)
+        // y_end corresponds to principal position (higher on staff → smaller y).
+        // After the SLUR_ENDPOINT_OFFSET_SS shift (under-slur shifts both endpoints
+        // down equally), the relative order is preserved.
+        assert!(
+            slur.y_start > slur.y_end,
+            "lower grace (pos {grace_pos}) should yield larger y than higher principal (pos {principal_pos}): {} vs {}",
+            slur.y_start,
+            slur.y_end
+        );
+    }
+
+    #[test]
+    fn slur_returns_none_for_degenerate_span() {
+        // If the grace note is placed *past* the principal (defensive guard).
+        let staff = test_staff();
+        let cfg = test_config();
+
+        // Manually construct a degenerate GraceNoteLayout where the grace
+        // origin is essentially at the principal x.
+        let degenerate = GraceNoteLayout {
+            x: 1000.0,
+            y: staff.y_of(4),
+            glyph: Glyph::GraceNoteAcciaccaturaStemUp,
+            scale: GRACE_NOTE_SCALE,
+            staff_position: 4,
+        };
+        let slur = layout_grace_note_slur(
+            &degenerate,
+            1000.0,
+            4,
+            StemDirection::Up,
+            &staff,
+            &cfg,
+        );
+        assert!(slur.is_none(), "degenerate span should return None");
+    }
+
+    #[test]
+    fn slur_x_start_within_grace_glyph_bounds() {
+        // The slur start should fall at or beyond the right half of the
+        // scaled grace notehead — not at the glyph origin itself.
+        let staff = test_staff();
+        let cfg = test_config();
+        let principal_x = 1500.0;
+        let grace = layout_grace_note(
+            principal_x,
+            4,
+            GraceNoteKind::Acciaccatura,
+            StemDirection::Up,
+            &staff,
+        );
+        let slur = layout_grace_note_slur(
+            &grace,
+            principal_x,
+            4,
+            StemDirection::Up,
+            &staff,
+            &cfg,
+        )
+        .expect("non-degenerate slur");
+
+        // Expected start ≈ grace.x + 0.59 * staff_space * GRACE_NOTE_SCALE.
+        let expected = grace.x + 0.59 * staff.staff_space * GRACE_NOTE_SCALE;
+        assert!(
+            (slur.x_start - expected).abs() < 0.01,
+            "slur x_start {} should match expected {}",
+            slur.x_start,
+            expected
+        );
+    }
+
+    #[test]
+    fn slur_x_end_just_left_of_principal() {
+        let staff = test_staff();
+        let cfg = test_config();
+        let principal_x = 1500.0;
+        let grace = layout_grace_note(
+            principal_x,
+            4,
+            GraceNoteKind::Acciaccatura,
+            StemDirection::Up,
+            &staff,
+        );
+        let slur = layout_grace_note_slur(
+            &grace,
+            principal_x,
+            4,
+            StemDirection::Up,
+            &staff,
+            &cfg,
+        )
+        .expect("non-degenerate slur");
+
+        let expected_end = principal_x - 0.05 * staff.staff_space;
+        assert!(
+            (slur.x_end - expected_end).abs() < 0.01,
+            "slur x_end {} should match expected {}",
+            slur.x_end,
+            expected_end
         );
     }
 }

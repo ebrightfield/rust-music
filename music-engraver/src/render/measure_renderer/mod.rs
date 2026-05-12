@@ -281,6 +281,20 @@ fn draw_note_event(
             .unwrap_or_else(|| auto_stem_direction(position));
         let grace_layout = layout_grace_note(x, grace_pos, grace_kind, stem_dir, staff);
         draw_grace_note(svg, font, &grace_layout)?;
+
+        // Connecting slur from grace to principal (canonical for acciaccatura)
+        if note.annotations.grace_note_slur {
+            if let Some(slur) = crate::layout::grace::layout_grace_note_slur(
+                &grace_layout,
+                x,
+                position,
+                stem_dir,
+                staff,
+                config,
+            ) {
+                crate::render::slur_renderer::draw_slur(svg, &slur);
+            }
+        }
     }
 
     // Draw accidental (pre-resolved glyph) to the left of notehead
@@ -472,6 +486,27 @@ fn draw_chord_event(
     if let Some((grace_pos, grace_kind)) = chord.annotations.grace_note {
         let grace_layout = layout_grace_note(x, grace_pos, grace_kind, direction, staff);
         draw_grace_note(svg, font, &grace_layout)?;
+
+        // Connecting slur from grace to nearest chord note (canonical for
+        // acciaccatura — attach to the chord member closest in pitch).
+        if chord.annotations.grace_note_slur {
+            let nearest = chord
+                .staff_positions
+                .iter()
+                .copied()
+                .min_by_key(|&p| (p as i32 - grace_pos as i32).abs())
+                .unwrap_or(grace_pos);
+            if let Some(slur) = crate::layout::grace::layout_grace_note_slur(
+                &grace_layout,
+                x,
+                nearest,
+                direction,
+                staff,
+                config,
+            ) {
+                crate::render::slur_renderer::draw_slur(svg, &slur);
+            }
+        }
     }
 
     // Build ChordNote list for layout

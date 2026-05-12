@@ -576,6 +576,28 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a grace note to the most recently added note or chord, drawing a
+    /// connecting slur from the grace to the principal note.
+    ///
+    /// This is the canonical engraving for acciaccatura and is also common
+    /// for appoggiatura. The slur arcs away from the principal note's stem
+    /// (stem-up → slur under, stem-down → slur over).
+    ///
+    /// No-op if the last event is a rest (grace notes attach to pitched events).
+    pub fn grace_note_slur(mut self, pitch: Pitch, kind: GraceNoteKind) -> Self {
+        use crate::layout::note_placement::pitch_to_staff_position;
+        let clef = self.clef.to_clef();
+        let staff_pos = pitch_to_staff_position(&pitch, &clef);
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.grace_note = Some((staff_pos, kind));
+            annotations.grace_note_slur = true;
+        }
+        self
+    }
+
     /// Attach a chord symbol above the staff at the most recently added note
     /// or chord (e.g. "Cmaj7", "Am", "G7", "F#dim").
     ///

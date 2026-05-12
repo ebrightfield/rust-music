@@ -57,6 +57,11 @@ pub struct NoteAnnotations {
     /// Optional grace note preceding the principal note.
     /// Tuple of (grace note staff position, grace note kind).
     pub grace_note: Option<(i8, GraceNoteKind)>,
+    /// Whether to draw a connecting slur from the grace note to the principal note.
+    /// Has no effect when `grace_note` is `None`. The slur arcs away from the
+    /// principal note's stem in the conventional direction. This is the canonical
+    /// engraving for acciaccatura and is also common for appoggiatura.
+    pub grace_note_slur: bool,
     /// Optional lyric syllable displayed below the staff under this note/chord.
     pub lyric: Option<LyricSyllable>,
     /// Optional chord symbol displayed above the staff (e.g. "Cmaj7", "Am").
