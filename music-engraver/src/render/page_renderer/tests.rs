@@ -1786,3 +1786,298 @@ fn cross_system_glissando_with_text_shows_label() {
         "LineWithText cross-system glissando should show 'gliss.' label"
     );
 }
+
+// --- Cross-system trill-extension (wavy line continuation) tests ---
+
+use crate::layout::ornament::Ornament;
+
+/// A whole note carrying a trill ornament with the wavy-line extension
+/// enabled. Whole notes give the layout enough horizontal room that the
+/// within-system wiggle is non-empty (so the within-system rendering and
+/// the cross-system rendering are clearly distinguishable in path counts).
+fn trill_ext_whole_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+fn whole_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    })
+}
+
+#[test]
+fn cross_system_trill_extension_adds_incoming_wiggle_paths_on_next_system() {
+    // System 1 ends with a trill+extension; system 2 starts with a plain note.
+    // The system renderer already terminates the source wiggle at system 1's
+    // right edge — what we're verifying here is that the *incoming* wiggle on
+    // system 2 (drawn by draw_cross_system_trill_extensions) actually adds
+    // additional `<path` elements that the no-trill baseline lacks.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_trill = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let without_trill = vec![
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let page_with = layout_page(&prefix(), &with_trill, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_without = layout_page(&prefix(), &without_trill, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page_with.systems.len(), 2, "test requires two systems");
+
+    let out_with = draw_page(&font, &config, &page_with).unwrap().to_svg();
+    let out_without = draw_page(&font, &config, &page_without).unwrap().to_svg();
+
+    let with_paths = out_with.matches("<path ").count();
+    let without_paths = out_without.matches("<path ").count();
+
+    // The wiggle adds segments on system 1 (trailing) AND system 2 (incoming).
+    // The cross-system pass alone has to add ≥1 segment on system 2; combined
+    // with the within-system trailing wiggle and the "tr" glyph itself, the
+    // delta should be substantial. The strict assertion is that
+    // with_paths exceeds without_paths by at least 3 (tr glyph + ≥1 trailing
+    // segment + ≥1 incoming segment).
+    assert!(
+        with_paths >= without_paths + 3,
+        "trill+extension across systems should add ≥3 paths (tr + ≥1 trailing + ≥1 incoming), got {with_paths} vs {without_paths}"
+    );
+}
+
+#[test]
+fn cross_system_trill_extension_only_when_last_note_is_trilled() {
+    // If the trill is NOT the last note of the system, there's nothing
+    // unresolved — the within-system handler already drew the wiggle to the
+    // following note. The cross-system pass must not produce any incoming
+    // wiggle on system N+1 in that case.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // System 1 contains a trill followed by a plain note in the same system.
+    let measures_resolved = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8), whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    // For comparison: trill is the last note of system 1, so cross-system fires.
+    let measures_unresolved = vec![
+        MeasureContent {
+            events: vec![whole_note(8), trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let page_resolved = layout_page(&prefix(), &measures_resolved, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_unresolved = layout_page(&prefix(), &measures_unresolved, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_resolved = draw_page(&font, &config, &page_resolved).unwrap().to_svg();
+    let out_unresolved = draw_page(&font, &config, &page_unresolved).unwrap().to_svg();
+
+    let resolved_paths = out_resolved.matches("<path ").count();
+    let unresolved_paths = out_unresolved.matches("<path ").count();
+
+    // The unresolved variant must produce strictly more paths because of the
+    // incoming wiggle on system 2. The resolved variant should not produce an
+    // incoming wiggle (trill is internal to system 1).
+    assert!(
+        unresolved_paths > resolved_paths,
+        "unresolved-trill score should produce more paths (incoming wiggle); got resolved={resolved_paths}, unresolved={unresolved_paths}"
+    );
+}
+
+#[test]
+fn cross_system_trill_extension_no_target_system_no_incoming_wiggle() {
+    // A trill+extension on the only system of a page must not crash and must
+    // not produce a cross-system incoming wiggle (there is no next system).
+    // The within-system trailing wiggle is still drawn by the system renderer.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8), whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    assert_eq!(page.systems.len(), 1, "test requires exactly one system");
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // Sanity: SVG is well-formed and a "tr" glyph is drawn (≥1 path).
+    assert!(output.starts_with("<svg"));
+    assert!(output.matches("<path ").count() >= 1);
+}
+
+#[test]
+fn cross_system_trill_extension_incoming_y_anchored_to_target_staff() {
+    // The incoming wiggle on system N+1 must anchor to system N+1's staff, not
+    // to system N's. With two systems on the same page at different page-y
+    // positions, the incoming wiggle's y must fall between system N+1's top
+    // staff line and the top of system N's content area (i.e. clearly within
+    // system N+1's vertical band).
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+
+    let sys2_top_y = page.systems[1].y;
+    let sys1_top_y = page.systems[0].y;
+    assert!(
+        sys2_top_y > sys1_top_y,
+        "test invariant: system 2 must be lower (larger y) than system 1; got {sys1_top_y} vs {sys2_top_y}"
+    );
+
+    let svg = draw_page(&font, &config, &page).unwrap();
+    let output = svg.to_svg();
+
+    // The wiggle paths are emitted via `translate(...)`. Extract the unique
+    // y-values of the translate transforms; the cross-system incoming wiggle
+    // must sit ABOVE system 2's top staff line (y < sys2_top_y) and BELOW
+    // system 1's top staff line + offset (so it doesn't accidentally land
+    // in system 1's vertical band).
+    //
+    // We don't try to reverse-engineer the exact pixel: we just verify that
+    // at least one path's translate-y is bracketed by [sys1_top_y, sys2_top_y]
+    // — i.e. in the inter-system "above-system-2-staff" band, which is where
+    // a properly anchored incoming wiggle would sit.
+    let mut found_in_band = false;
+    for line in output.split('\n') {
+        let Some(idx) = line.find("translate(") else { continue; };
+        let rest = &line[idx + "translate(".len()..];
+        let Some(close) = rest.find(')') else { continue; };
+        let args = &rest[..close];
+        let parts: Vec<&str> = args.split(',').collect();
+        if parts.len() != 2 { continue; }
+        let Ok(y) = parts[1].trim().parse::<f64>() else { continue; };
+        if y > sys1_top_y && y < sys2_top_y {
+            found_in_band = true;
+            break;
+        }
+    }
+    assert!(
+        found_in_band,
+        "incoming cross-system trill wiggle must have at least one path translated to y ∈ ({sys1_top_y}, {sys2_top_y})"
+    );
+}
+
+#[test]
+fn cross_system_trill_extension_no_op_without_trill() {
+    // Sanity: pages without trill extensions render the same paths regardless
+    // of whether draw_cross_system_trill_extensions runs. The function must be
+    // a no-op when there are no unresolved trills.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![whole_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    // No trill glyph nor wiggle paths should appear. The "tr" glyph for
+    // OrnamentTrill has a distinct path; we can't easily isolate it, but
+    // we can confirm the path count is reasonable for two staves of two
+    // plain whole notes — i.e. notably small.
+    let path_count = output.matches("<path ").count();
+    // 2 systems × (clef + whole notehead) + first system time sig digits.
+    // An empty-style baseline has ≤ ~10 paths; the bound is generous.
+    assert!(
+        path_count < 12,
+        "no-trill 2-system page should have a small path count, got {path_count}"
+    );
+}

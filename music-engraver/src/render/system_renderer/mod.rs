@@ -553,6 +553,13 @@ pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteI
 
 /// Draw ottava brackets (8va/8vb/15ma/15mb) between notes marked with
 /// `ottava_start` and `ottava_end`.
+///
+/// Only handles brackets that resolve within a single system. The
+/// cross-system case (unresolved `ottava_start` in this system + matching
+/// `ottava_end` in a later system, or no matching `ottava_end` at all on
+/// the page) is owned by `page_renderer::draw_cross_system_ottava_brackets`,
+/// which has the page-wide system list needed to draw the trailing
+/// half-bracket on system N and the incoming half-bracket on system N+1.
 fn draw_system_ottava_brackets(
     svg: &mut SvgWriter,
     font: &MusicFont,
@@ -742,7 +749,9 @@ pub(crate) fn collect_trill_extension_note_info(
 const TRILL_EXTENSION_GLYPH_GAP_SS: f64 = 0.15;
 /// Distance (in staff spaces) before the next notehead where the wiggle ends.
 /// Leaves visual breathing room so the wiggle doesn't crash into the notehead.
-const TRILL_EXTENSION_NOTE_GAP_SS: f64 = 0.30;
+/// Shared with `page_renderer::draw_cross_system_trill_extensions` so the
+/// incoming wiggle on system N+1 terminates with the same visual gap.
+pub(crate) const TRILL_EXTENSION_NOTE_GAP_SS: f64 = 0.30;
 /// Distance (in staff spaces) before the system's right edge where a
 /// cross-system wiggle terminates. Conventionally the wavy line stops just
 /// short of the final barline so the two marks remain visually distinct.

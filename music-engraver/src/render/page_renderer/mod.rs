@@ -2,6 +2,7 @@ use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::glissando::{layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle};
 use crate::layout::hairpin::layout_hairpin;
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS};
+use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::page::{PageLayout, PageSystem};
 use crate::layout::slur::{layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem};
@@ -10,15 +11,22 @@ use crate::layout::stem::auto_stem_direction;
 use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
+use crate::layout::trill_extension::layout_trill_extension;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::draw_lyric_extender;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
-use crate::render::system_renderer::{collect_glissando_note_info, collect_hairpin_note_info, collect_lyric_note_info, collect_note_positions, collect_ottava_note_info, collect_slur_note_info, draw_system};
+use crate::render::system_renderer::{
+    collect_glissando_note_info, collect_hairpin_note_info, collect_lyric_note_info,
+    collect_note_positions, collect_ottava_note_info, collect_slur_note_info,
+    collect_trill_extension_note_info, draw_system, TRILL_EXTENSION_NOTE_GAP_SS,
+};
 use crate::render::tie_renderer::draw_tie;
+use crate::render::trill_extension_renderer::draw_trill_extension;
 use crate::render::{SvgWriter, TextStyle};
+use smufl::Glyph;
 
 /// A note at the end of a system that has an unresolved `tie_forward`.
 struct UnresolvedTie {
@@ -109,6 +117,9 @@ pub fn draw_page(
 
     // Draw cross-system glissando lines between adjacent systems
     draw_cross_system_glissandos(&mut svg, font, config, &page.systems)?;
+
+    // Draw cross-system trill wavy-line extensions between adjacent systems
+    draw_cross_system_trill_extensions(&mut svg, font, config, &page.systems)?;
 
     Ok(svg)
 }
@@ -865,6 +876,13 @@ fn find_incoming_ottava_targets(
 /// trailing half-bracket (no end hook) to the right edge of system N.
 /// If system N+1 has a matching `ottava_end`, draws an incoming
 /// half-bracket (with end hook, no label) from the left edge of system N+1.
+///
+/// An unresolved `ottava_start` on the **last** system of the page is also
+/// drawn as a trailing half-bracket (no end hook) to the system's right
+/// edge — Gould's convention reads this as "ottava continues beyond what's
+/// notated here," matching how mid-page cross-system trailing brackets
+/// terminate. Without this handling, an ottava that starts but never ends
+/// before the page break would silently disappear.
 pub(crate) fn draw_cross_system_ottava_brackets(
     svg: &mut SvgWriter,
     font: &MusicFont,
@@ -930,6 +948,33 @@ pub(crate) fn draw_cross_system_ottava_brackets(
                 );
                 draw_ottava_bracket(svg, &incoming_layout);
             }
+        }
+    }
+
+    // Final-system case: an ottava_start with no matching ottava_end anywhere
+    // on the page (in particular, on the last system itself with no later
+    // system to spill into) still needs its trailing half-bracket drawn so
+    // the reader sees "ottava began here." This mirrors the cross-system
+    // trailing case above — no end hook, dashed line to the system's right
+    // edge — and matches the trill-extension cross-system convention.
+    if let Some(last) = systems.last() {
+        let unresolved = find_unresolved_ottavas(font, last)?;
+        let last_staff = StaffLayout::new(
+            last.x,
+            last.y,
+            last.system.staff_width,
+            config.staff_space,
+        );
+        for ott_src in &unresolved {
+            let trailing_layout = layout_ottava_bracket(
+                ott_src.kind,
+                ott_src.x_start,
+                ott_src.staff_right,
+                &last_staff,
+                config.staff_space,
+                false, // no end hook — bracket "continues beyond the page"
+            );
+            draw_ottava_bracket(svg, &trailing_layout);
         }
     }
 
@@ -1073,6 +1118,152 @@ pub(crate) fn draw_cross_system_glissandos(
                     draw_glissando(svg, &left_layout);
                 }
             }
+        }
+    }
+
+    Ok(())
+}
+
+/// A trill-with-extension on the **last note** of a system whose wavy line
+/// needs to resume on the following system.
+///
+/// `system_renderer::draw_system_trill_extensions` already terminates the
+/// source-system wiggle at the system's right edge (independent of the next
+/// system); this struct only carries the geometry the page renderer needs
+/// to draw the *incoming* wiggle on system N+1.
+struct UnresolvedTrillExtension {
+    /// Y-coordinate of the trill "tr" glyph on the source system, expressed
+    /// as an offset from the **top staff line** (`y_of(8)`) of that system.
+    ///
+    /// Stored as an offset (not an absolute y) so the incoming wiggle on
+    /// system N+1 — which sits at a different page y — can re-anchor to its
+    /// own staff and land at the same height-above-the-staff as the source
+    /// trill. Without this, two stacked systems on the same page would
+    /// produce wiggles drifting visually relative to their staves.
+    y_above_top_line: f64,
+}
+
+/// The first note on the target system (system N+1) that an incoming
+/// cross-system wiggle terminates at.
+struct IncomingTrillExtensionTarget {
+    /// Absolute x of the target note's notehead left edge.
+    x: f64,
+    /// Absolute x of the start of the target system's note content area
+    /// (after the system prefix: clef, key sig, time sig). The incoming
+    /// wiggle starts here.
+    staff_left: f64,
+}
+
+/// Find a trill-with-extension on the last note of a system whose wavy line
+/// should continue into the next system.
+///
+/// Returns at most one entry per system because the wiggle model is "one
+/// trill extends until the next note." A trill whose immediately following
+/// note exists within the same system has already been resolved by
+/// `draw_system_trill_extensions` and contributes nothing here.
+fn find_unresolved_trill_extension(
+    page_system: &PageSystem,
+    staff_space: f64,
+) -> Option<UnresolvedTrillExtension> {
+    let system = &page_system.system;
+    let notes = collect_trill_extension_note_info(system);
+    let last = notes.last()?;
+    if !last.has_trill_extension {
+        return None;
+    }
+    // Recompute the source ornament y the same way system_renderer does,
+    // then strip the staff's absolute y so the offset is portable across
+    // systems on the same page.
+    let src_staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        system.staff_width,
+        staff_space,
+    );
+    let ornament = layout_ornament(
+        Ornament::Trill,
+        page_system.x + last.x,
+        last.staff_position,
+        &src_staff,
+    );
+    Some(UnresolvedTrillExtension {
+        y_above_top_line: ornament.y - src_staff.y_of(8),
+    })
+}
+
+/// Find the first note on a system that an incoming cross-system trill
+/// extension should terminate at.
+fn find_incoming_trill_extension_target(
+    page_system: &PageSystem,
+) -> Option<IncomingTrillExtensionTarget> {
+    let system = &page_system.system;
+    let notes = collect_trill_extension_note_info(system);
+    let first = notes.first()?;
+
+    let staff_left = system
+        .measures
+        .first()
+        .map(|m| page_system.x + m.x_offset)
+        .unwrap_or(page_system.x);
+
+    Some(IncomingTrillExtensionTarget {
+        x: page_system.x + first.x,
+        staff_left,
+    })
+}
+
+/// Draw the incoming half of a cross-system trill wavy line on system N+1.
+///
+/// When a trill-with-extension lands on the last note of system N, the
+/// system renderer already extends the wiggle to system N's right edge.
+/// This pass adds the matching incoming wiggle on system N+1: starting at
+/// the staff's note-content left edge (after clef/key/time prefix) and
+/// terminating just short of the system's first notehead.
+///
+/// The incoming wiggle is anchored to the target staff's top line at the
+/// same height-above-the-staff as the source trill glyph, so the wavy line
+/// reads as a continuation regardless of the inter-system gap.
+///
+/// If system N+1 has no notes (an empty system), no incoming wiggle is
+/// drawn — there's nothing for it to lead up to. If the available span
+/// (staff_left → first note) is smaller than a single wiggle segment,
+/// `layout_trill_extension` returns `None` and the renderer silently
+/// skips, matching the within-system fail-safe.
+pub(crate) fn draw_cross_system_trill_extensions(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    systems: &[PageSystem],
+) -> Result<(), FontError> {
+    if systems.len() < 2 {
+        return Ok(());
+    }
+
+    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill)? as f64;
+    let staff_space = config.staff_space;
+
+    for i in 0..systems.len() - 1 {
+        let Some(src) = find_unresolved_trill_extension(&systems[i], staff_space) else {
+            continue;
+        };
+        let Some(tgt) = find_incoming_trill_extension_target(&systems[i + 1]) else {
+            continue;
+        };
+
+        let tgt_system = &systems[i + 1];
+        let tgt_staff = StaffLayout::new(
+            tgt_system.x,
+            tgt_system.y,
+            tgt_system.system.staff_width,
+            staff_space,
+        );
+
+        let y = tgt_staff.y_of(8) + src.y_above_top_line;
+        let start_x = tgt.staff_left;
+        let end_x = tgt.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space;
+
+        if let Some(layout) = layout_trill_extension(start_x, end_x, y, wiggle_advance) {
+            draw_trill_extension(svg, font, &layout)?;
         }
     }
 
