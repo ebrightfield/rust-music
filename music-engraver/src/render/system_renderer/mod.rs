@@ -10,6 +10,9 @@ use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, StemDirection};
 use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
+use crate::layout::trill_bracket::{
+    layout_trill_bracket_hook, layout_trill_bracket_hooks, HookDirection, TrillBracketSide,
+};
 use crate::layout::trill_extension::layout_trill_extension;
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
@@ -21,6 +24,7 @@ use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
 use crate::render::ottava_renderer::draw_ottava_bracket;
+use crate::render::trill_bracket_renderer::draw_trill_bracket_hooks;
 use crate::render::trill_extension_renderer::draw_trill_extension;
 use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
@@ -144,7 +148,7 @@ pub fn draw_system(
     // trill_extension. A "tr" glyph (the actual ornament) is already drawn by
     // the measure renderer via draw_ornament; this pass only adds the trailing
     // wiggle.
-    draw_system_trill_extensions(svg, font, system, &staff, x)?;
+    draw_system_trill_extensions(svg, font, config, system, &staff, x)?;
 
     Ok(())
 }
@@ -703,6 +707,11 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// Already filtered to "trill + extension" — the collector skips other
     /// ornaments and skips notes whose `trill_extension` flag is false.
     pub has_trill_extension: bool,
+    /// Optional bracket form for this trill extension. Filtered the same way
+    /// as `has_trill_extension`: only carries through when the underlying
+    /// note actually has both `Trill + extension`. A bracket request on a
+    /// non-trilled note is silently inert.
+    pub bracket: Option<TrillBracketSide>,
 }
 
 /// Collect notes relevant to trill-extension rendering. Includes a `None`-like
@@ -719,10 +728,12 @@ pub(crate) fn collect_trill_extension_note_info(
                 MeasureElement::Note(n) => {
                     let has_ext = n.annotations.trill_extension
                         && matches!(n.annotations.ornament, Some(Ornament::Trill));
+                    let bracket = if has_ext { n.annotations.trill_bracket } else { None };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: n.staff_position,
                         has_trill_extension: has_ext,
+                        bracket,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -732,10 +743,12 @@ pub(crate) fn collect_trill_extension_note_info(
                     let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
                     let has_ext = c.annotations.trill_extension
                         && matches!(c.annotations.ornament, Some(Ornament::Trill));
+                    let bracket = if has_ext { c.annotations.trill_bracket } else { None };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: top_pos,
                         has_trill_extension: has_ext,
+                        bracket,
                     });
                 }
                 _ => {}
@@ -758,6 +771,11 @@ pub(crate) const TRILL_EXTENSION_NOTE_GAP_SS: f64 = 0.30;
 /// Tuned slightly larger than the inter-note gap because the barline carries
 /// more visual weight than a notehead.
 const TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS: f64 = 0.5;
+/// Length of a trill bracket hook in staff spaces. Behind Bars: "the wavy line
+/// is bracketed at one or both ends" — the hook is short, conventionally
+/// around three-quarters of a staff space, just long enough to read as a
+/// vertical terminator rather than a barline.
+pub(crate) const TRILL_BRACKET_HOOK_LENGTH_SS: f64 = 0.75;
 
 /// Draw trill wavy-line extensions for notes marked with `trill_extension`.
 ///
@@ -772,6 +790,7 @@ const TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS: f64 = 0.5;
 fn draw_system_trill_extensions(
     svg: &mut SvgWriter,
     font: &MusicFont,
+    config: &EngravingConfig,
     system: &SystemLayout,
     staff: &StaffLayout,
     system_x: f64,
@@ -780,6 +799,8 @@ fn draw_system_trill_extensions(
 
     let trill_advance = font.glyph_advance(Glyph::OrnamentTrill)? as f64;
     let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill)? as f64;
+    let hook_stroke = config.thin_barline_thickness_fu();
+    let hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff.staff_space;
 
     for (i, note) in notes.iter().enumerate() {
         if !note.has_trill_extension {
@@ -803,6 +824,7 @@ fn draw_system_trill_extensions(
         // in the system, at the system's right edge (just inside the final
         // barline). This is the cross-system convention: a trilled note at
         // the end of a system extends its wiggle to the system break.
+        let cross_system = notes.get(i + 1).is_none();
         let end_x = match notes.get(i + 1) {
             Some(target) => system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space,
             None => system_x + system.staff_width
@@ -813,10 +835,66 @@ fn draw_system_trill_extensions(
             layout_trill_extension(start_x, end_x, ornament_layout.y, wiggle_advance)
         {
             draw_trill_extension(svg, font, &layout)?;
+
+            // Bracket hooks: cap the wiggle's start and/or end with a short
+            // vertical line. For cross-system trills, the End hook is
+            // suppressed here and drawn instead on system N+1 at the
+            // terminus of the incoming wiggle (so the bracket frames the
+            // trill's semantic range, not the per-system wiggle fragment).
+            if let Some(side) = note.bracket {
+                let render_side = bracket_side_for_system_pass(side, cross_system);
+                if let Some(side) = render_side {
+                    let hooks = layout_trill_bracket_hooks(
+                        &layout,
+                        side,
+                        hook_length,
+                        HookDirection::Down,
+                        hook_stroke,
+                    );
+                    draw_trill_bracket_hooks(svg, &hooks);
+                }
+            }
         }
     }
 
     Ok(())
+}
+
+/// Filter a user-requested bracket side down to what should be rendered on
+/// the current system pass. When the wiggle continues into the next system
+/// (`cross_system = true`), the End hook is dropped here so it can be drawn
+/// by the page renderer on system N+1 at the incoming wiggle's terminus.
+///
+/// - Within-system: render exactly what the user asked for.
+/// - Cross-system Start: render the Start hook only.
+/// - Cross-system End: render nothing on this system (page renderer handles
+///   the End hook).
+/// - Cross-system Both: render the Start hook only (page renderer handles
+///   the End hook).
+pub(crate) fn bracket_side_for_system_pass(
+    requested: TrillBracketSide,
+    cross_system: bool,
+) -> Option<TrillBracketSide> {
+    if !cross_system {
+        return Some(requested);
+    }
+    match requested {
+        TrillBracketSide::Start => Some(TrillBracketSide::Start),
+        TrillBracketSide::End => None,
+        TrillBracketSide::Both => Some(TrillBracketSide::Start),
+    }
+}
+
+/// Layout a single bracket end-hook at an arbitrary x. Used by the page
+/// renderer to draw the End hook of a cross-system trill on system N+1.
+/// Returns a hook whose stroke and direction match the within-system rendering.
+pub(crate) fn layout_trill_end_hook(
+    x: f64,
+    baseline_y: f64,
+    hook_length: f64,
+    stroke_width: f64,
+) -> crate::layout::trill_bracket::TrillBracketHookLayout {
+    layout_trill_bracket_hook(x, baseline_y, hook_length, HookDirection::Down, stroke_width)
 }
 
 #[cfg(test)]

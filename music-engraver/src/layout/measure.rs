@@ -17,6 +17,7 @@ use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
 use crate::layout::tremolo::TremoloCount;
+use crate::layout::trill_bracket::TrillBracketSide;
 use crate::layout::time_signature::TimeSignatureKind;
 
 /// Articulation and expression annotations attached to a note or chord event.
@@ -96,6 +97,16 @@ pub struct NoteAnnotations {
     /// laid out, tiling the SMuFL `wiggleTrill` segment between the trill
     /// glyph and the next note.
     pub trill_extension: bool,
+    /// Optional bracket form for the trill extension: a vertical hook capping
+    /// the start, end, or both ends of the wavy line. Has no effect unless
+    /// both `ornament == Some(Ornament::Trill)` and `trill_extension == true`
+    /// — a bracket without a wiggle to bracket is silently dropped. For
+    /// cross-system trills, a `Both` bracket places the start hook on the
+    /// source system (with the outgoing wiggle) and the end hook on the
+    /// target system (with the incoming wiggle), so the bracket frames the
+    /// trill's true semantic range rather than the per-system wiggle
+    /// fragments.
+    pub trill_bracket: Option<TrillBracketSide>,
 }
 
 /// A group of notes to be beamed together.

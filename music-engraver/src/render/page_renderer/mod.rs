@@ -11,7 +11,9 @@ use crate::layout::stem::auto_stem_direction;
 use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
-use crate::layout::trill_extension::layout_trill_extension;
+use crate::layout::trill_bracket::TrillBracketSide;
+use crate::layout::trill_extension::{layout_trill_extension, trill_extension_right_edge};
+use crate::render::trill_bracket_renderer::draw_trill_bracket_hook;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
@@ -21,7 +23,8 @@ use crate::render::slur_renderer::draw_slur;
 use crate::render::system_renderer::{
     collect_glissando_note_info, collect_hairpin_note_info, collect_lyric_note_info,
     collect_note_positions, collect_ottava_note_info, collect_slur_note_info,
-    collect_trill_extension_note_info, draw_system, TRILL_EXTENSION_NOTE_GAP_SS,
+    collect_trill_extension_note_info, draw_system, layout_trill_end_hook,
+    TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
 };
 use crate::render::tie_renderer::draw_tie;
 use crate::render::trill_extension_renderer::draw_trill_extension;
@@ -1141,6 +1144,12 @@ struct UnresolvedTrillExtension {
     /// trill. Without this, two stacked systems on the same page would
     /// produce wiggles drifting visually relative to their staves.
     y_above_top_line: f64,
+    /// Optional bracket side requested by the user on the source trill note.
+    /// The page renderer uses this to decide whether to cap the incoming
+    /// wiggle on system N+1 with an End hook: `Some(End | Both)` → yes;
+    /// `Some(Start)` or `None` → no. The Start hook (if requested) was
+    /// already drawn on the source system by `draw_system_trill_extensions`.
+    bracket: Option<TrillBracketSide>,
 }
 
 /// The first note on the target system (system N+1) that an incoming
@@ -1188,6 +1197,7 @@ fn find_unresolved_trill_extension(
     );
     Some(UnresolvedTrillExtension {
         y_above_top_line: ornament.y - src_staff.y_of(8),
+        bracket: last.bracket,
     })
 }
 
@@ -1264,6 +1274,22 @@ pub(crate) fn draw_cross_system_trill_extensions(
 
         if let Some(layout) = layout_trill_extension(start_x, end_x, y, wiggle_advance) {
             draw_trill_extension(svg, font, &layout)?;
+
+            // End hook (cross-system continuation): if the user asked for an
+            // End or Both bracket on the source trill, cap the incoming
+            // wiggle on system N+1 with a vertical hook at its right edge.
+            // The Start hook (if any) was already drawn on system N. We
+            // place the hook flush with the wiggle's *visible* terminus
+            // (the right edge of the final whole-segment tile) — the same
+            // anchor used by `layout_trill_bracket_hooks`, so within-system
+            // and cross-system End hooks land identically.
+            if matches!(src.bracket, Some(TrillBracketSide::End | TrillBracketSide::Both)) {
+                let hook_stroke = config.thin_barline_thickness_fu();
+                let hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff_space;
+                let hook_x = trill_extension_right_edge(&layout);
+                let hook = layout_trill_end_hook(hook_x, y, hook_length, hook_stroke);
+                draw_trill_bracket_hook(svg, &hook);
+            }
         }
     }
 

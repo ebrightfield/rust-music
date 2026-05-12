@@ -5515,3 +5515,179 @@
             "church-rest count must be bold-weighted text",
         );
     }
+
+    // --- trill_with_extension_bracketed (ScoreBuilder) ---
+
+    #[test]
+    fn trill_with_extension_bracketed_both_adds_hooks_vs_plain_extension() {
+        use crate::layout::trill_bracket::TrillBracketSide;
+
+        // Bracketed both ends should add 2 hook <line> elements compared to
+        // the same score using only trill_with_extension.
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::Both)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let plain_lines = plain.matches("<line ").count();
+        let bracketed_lines = bracketed.matches("<line ").count();
+        assert_eq!(
+            bracketed_lines - plain_lines,
+            2,
+            "Both bracket via ScoreBuilder must add exactly 2 hook <line> elements: \
+             plain={plain_lines}, bracketed={bracketed_lines}"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_start_adds_one_hook() {
+        use crate::layout::trill_bracket::TrillBracketSide;
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::Start)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let delta = bracketed.matches("<line ").count() - plain.matches("<line ").count();
+        assert_eq!(delta, 1, "Start bracket must add exactly 1 hook (got {delta})");
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_end_adds_one_hook() {
+        use crate::layout::trill_bracket::TrillBracketSide;
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::End)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let delta = bracketed.matches("<line ").count() - plain.matches("<line ").count();
+        assert_eq!(delta, 1, "End bracket within-system must add exactly 1 hook (got {delta})");
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_on_rest_is_noop() {
+        use crate::layout::trill_bracket::TrillBracketSide;
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with_bracket = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::Both)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, with_bracket,
+            "trill_with_extension_bracketed on rest must be a complete no-op"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_sets_all_three_annotation_fields() {
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::TrillBracketSide;
+
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::WHOLE,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_bracket: Some(TrillBracketSide::Both),
+                ..NoteAnnotations::default()
+            },
+        };
+        let result = convert_event(&event, &Clef::Treble, &KeySignature::Open, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.ornament, Some(Ornament::Trill));
+                assert!(ne.annotations.trill_extension);
+                assert_eq!(ne.annotations.trill_bracket, Some(TrillBracketSide::Both));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_on_chord_adds_hooks() {
+        use crate::layout::trill_bracket::TrillBracketSide;
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::Both)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let delta = bracketed.matches("<line ").count() - plain.matches("<line ").count();
+        assert_eq!(
+            delta, 2,
+            "Both bracket on chord trill must add exactly 2 hooks (got {delta})"
+        );
+    }

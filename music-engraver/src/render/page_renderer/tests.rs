@@ -2081,3 +2081,185 @@ fn cross_system_trill_extension_no_op_without_trill() {
         "no-trill 2-system page should have a small path count, got {path_count}"
     );
 }
+
+// --- Cross-system trill bracket tests ---
+
+use crate::layout::trill_bracket::TrillBracketSide;
+
+/// A whole note carrying a trill+extension AND a bracket request. The
+/// bracket side is parameterized so each test can target Start / End / Both
+/// independently.
+fn trill_ext_bracketed_whole_note(pos: i8, side: TrillBracketSide) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_bracket: Some(side),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_trill_bracket_end_adds_one_hook_on_target_system() {
+    // End bracket on the last note of system N: the system pass on N draws
+    // NO hook (suppressed), and the page renderer draws exactly ONE hook
+    // at the right edge of the incoming wiggle on system N+1.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_end_bracket = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_whole_note(8, TrillBracketSide::End)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p1 = layout_page(&prefix(), &with_end_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(p1.systems.len(), 2);
+    assert_eq!(p2.systems.len(), 2);
+
+    let out_with = draw_page(&font, &config, &p1).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
+
+    let delta = out_with.matches("<line ").count() - out_plain.matches("<line ").count();
+    assert_eq!(
+        delta, 1,
+        "End bracket on cross-system trill must add exactly 1 hook on N+1 (got delta={delta})"
+    );
+}
+
+#[test]
+fn cross_system_trill_bracket_both_adds_start_on_n_and_end_on_n_plus_1() {
+    // Both bracket on the last note of system N: Start hook is drawn by the
+    // system pass on N; End hook is drawn by the page renderer on N+1. The
+    // two combined must add exactly 2 hook <line> elements vs the plain
+    // (no-bracket) cross-system trill baseline.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_both = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_whole_note(8, TrillBracketSide::Both)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p1 = layout_page(&prefix(), &with_both, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_with = draw_page(&font, &config, &p1).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
+
+    let delta = out_with.matches("<line ").count() - out_plain.matches("<line ").count();
+    assert_eq!(
+        delta, 2,
+        "Both bracket on cross-system trill must add exactly 2 hooks total (got delta={delta})"
+    );
+}
+
+#[test]
+fn cross_system_trill_bracket_start_adds_only_one_hook_on_source_system() {
+    // Start bracket on the last note of system N: Start hook drawn by the
+    // system pass on N; nothing extra on N+1 (the page renderer skips End
+    // when the user only asked for Start). Total delta vs plain: 1.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_start = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_whole_note(8, TrillBracketSide::Start)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p1 = layout_page(&prefix(), &with_start, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_with = draw_page(&font, &config, &p1).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
+
+    let delta = out_with.matches("<line ").count() - out_plain.matches("<line ").count();
+    assert_eq!(
+        delta, 1,
+        "Start-only bracket on cross-system trill must add exactly 1 hook on N (got delta={delta})"
+    );
+}

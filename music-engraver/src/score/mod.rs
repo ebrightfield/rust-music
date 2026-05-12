@@ -447,6 +447,38 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a bracket-form trill (trill + wavy-line extension + vertical
+    /// hook(s) at the start, end, or both ends of the wiggle) to the most
+    /// recently added note or chord. The bracket form makes the precise range
+    /// of a sustained trill unambiguous — Behind Bars: "where the duration of
+    /// a trill must be precisely defined, the wavy line is bracketed at one
+    /// or both ends."
+    ///
+    /// Equivalent to `.trill_with_extension()` plus a `trill_bracket`
+    /// annotation. No-op if the last event was a rest. The three flags
+    /// (`ornament == Trill`, `trill_extension == true`, `trill_bracket ==
+    /// Some(...)`) are coupled at the API surface so users can't request a
+    /// bracket on something that isn't a trill-with-extension.
+    ///
+    /// For cross-system trills, a `Both` bracket places the start hook on
+    /// the source system (with the outgoing wiggle) and the end hook on the
+    /// target system (with the incoming wiggle), so the bracket frames the
+    /// trill's semantic range rather than the per-system wiggle fragments.
+    pub fn trill_with_extension_bracketed(
+        mut self,
+        side: crate::layout::trill_bracket::TrillBracketSide,
+    ) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_bracket = Some(side);
+        }
+        self
+    }
+
     /// Attach a navigation sign (segno, coda) to the most recently added note
     /// or chord. The sign glyph is placed above the staff, centered on the note.
     ///

@@ -2200,3 +2200,355 @@ fn trill_extension_on_chord_uses_top_note_position() {
         "chord trill extension should anchor to top note (max staff pos)"
     );
 }
+
+// --- trill bracket wiring ---
+
+use crate::layout::trill_bracket::TrillBracketSide;
+use crate::render::system_renderer::bracket_side_for_system_pass;
+
+fn trill_ext_bracketed_note(pos: i8, side: TrillBracketSide) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_bracket: Some(side),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn bracket_side_for_system_pass_within_system_passes_through() {
+    assert_eq!(
+        bracket_side_for_system_pass(TrillBracketSide::Start, false),
+        Some(TrillBracketSide::Start)
+    );
+    assert_eq!(
+        bracket_side_for_system_pass(TrillBracketSide::End, false),
+        Some(TrillBracketSide::End)
+    );
+    assert_eq!(
+        bracket_side_for_system_pass(TrillBracketSide::Both, false),
+        Some(TrillBracketSide::Both)
+    );
+}
+
+#[test]
+fn bracket_side_for_system_pass_cross_system_filters_end() {
+    // Cross-system: End hook is suppressed (page renderer draws it on N+1).
+    assert_eq!(
+        bracket_side_for_system_pass(TrillBracketSide::Start, true),
+        Some(TrillBracketSide::Start)
+    );
+    assert_eq!(
+        bracket_side_for_system_pass(TrillBracketSide::End, true),
+        None,
+        "End hook on cross-system trill must NOT be drawn on source system"
+    );
+    assert_eq!(
+        bracket_side_for_system_pass(TrillBracketSide::Both, true),
+        Some(TrillBracketSide::Start),
+        "Both reduces to Start on the source system; End drawn on target"
+    );
+}
+
+#[test]
+fn trill_bracket_collector_propagates_bracket_when_extension_active() {
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_note(4, TrillBracketSide::Both),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(info[0].bracket, Some(TrillBracketSide::Both));
+    // Note without bracket has None.
+    assert_eq!(info[1].bracket, None);
+}
+
+#[test]
+fn trill_bracket_collector_drops_bracket_when_no_extension() {
+    // A user request for a bracket on a note that has trill_extension=false
+    // (e.g. set the bracket but never set the extension flag) must NOT
+    // produce a bracket annotation downstream — bracketing implies an
+    // extension to bracket.
+    let bad = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: false,
+            trill_bracket: Some(TrillBracketSide::Both),
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![bad, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(
+        info[0].bracket, None,
+        "bracket without extension must be silently dropped"
+    );
+}
+
+#[test]
+fn trill_bracket_both_within_system_renders_two_hooks_more_than_no_bracket() {
+    // Within-system Both bracket renders 2 hooks (Start + End), so the
+    // SVG must contain at least 2 more <line> elements than the same score
+    // without a bracket.
+    let (font, config, mcfg) = setup();
+    let measures_bracketed = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_note(4, TrillBracketSide::Both),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures_bracketed, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_bracket = svg.to_svg();
+
+    let measures_plain = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_bracket = svg2.to_svg();
+
+    let with_lines = with_bracket.matches("<line ").count();
+    let without_lines = without_bracket.matches("<line ").count();
+    assert_eq!(
+        with_lines - without_lines,
+        2,
+        "Both bracket should add exactly 2 hook <line> elements: with={with_lines}, without={without_lines}"
+    );
+}
+
+#[test]
+fn trill_bracket_start_only_renders_one_hook_more() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_note(4, TrillBracketSide::Start),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_bracket = svg.to_svg();
+
+    let measures_plain = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_bracket = svg2.to_svg();
+
+    let with_lines = with_bracket.matches("<line ").count();
+    let without_lines = without_bracket.matches("<line ").count();
+    assert_eq!(
+        with_lines - without_lines,
+        1,
+        "Start-only bracket should add exactly 1 hook"
+    );
+}
+
+#[test]
+fn trill_bracket_end_only_within_system_renders_one_hook_more() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_note(4, TrillBracketSide::End),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_bracket = svg.to_svg();
+
+    let measures_plain = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_bracket = svg2.to_svg();
+
+    let with_lines = with_bracket.matches("<line ").count();
+    let without_lines = without_bracket.matches("<line ").count();
+    assert_eq!(
+        with_lines - without_lines,
+        1,
+        "End-only bracket within-system should add exactly 1 hook"
+    );
+}
+
+#[test]
+fn trill_bracket_no_bracket_renders_zero_extra_hooks() {
+    let (font, config, mcfg) = setup();
+    // Identical scores: one with trill+extension, one without; neither
+    // requests a bracket. The line count should match exactly.
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let plain = svg.to_svg();
+
+    // No bracket annotation present → no hook lines added on top of the
+    // standard score chrome. This is a regression guard: future changes
+    // must not introduce stray hooks when no bracket was requested.
+    let line_count = plain.matches("<line ").count();
+
+    // A note with bracket=None must produce the same <line> count.
+    let measures2 = vec![MeasureContent {
+        events: vec![
+            MeasureEvent::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 0,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations {
+                    ornament: Some(Ornament::Trill),
+                    trill_extension: true,
+                    trill_bracket: None,
+                    ..NoteAnnotations::default()
+                },
+            }),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let none = svg2.to_svg();
+    assert_eq!(none.matches("<line ").count(), line_count);
+}
+
+#[test]
+fn trill_bracket_end_hook_for_last_note_in_system_is_suppressed_in_system_pass() {
+    // When the trilled note is the LAST in its system, the cross-system
+    // suppression rule applies: an End-only bracket emits NO hook on this
+    // system (the page renderer will emit it on N+1 if/when there's a next
+    // system; if there isn't, nothing is drawn — see the open issue in
+    // the progress log).
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            quarter_note(4),
+            trill_ext_bracketed_note(6, TrillBracketSide::End),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_bracket = svg.to_svg();
+
+    let measures_plain = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_bracket = svg2.to_svg();
+
+    let with_lines = with_bracket.matches("<line ").count();
+    let without_lines = without_bracket.matches("<line ").count();
+    assert_eq!(
+        with_lines, without_lines,
+        "End hook on last note of system must be suppressed on the source system pass"
+    );
+}
+
+#[test]
+fn trill_bracket_both_on_last_note_in_system_emits_only_start_hook() {
+    // Both bracket on the system's last trilled note → only Start hook on
+    // this system; End hook deferred to the page renderer for system N+1.
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            quarter_note(4),
+            trill_ext_bracketed_note(6, TrillBracketSide::Both),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_bracket = svg.to_svg();
+
+    let measures_plain = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_bracket = svg2.to_svg();
+
+    let delta = with_bracket.matches("<line ").count() - without_bracket.matches("<line ").count();
+    assert_eq!(
+        delta, 1,
+        "Both bracket on last note in system should add exactly 1 hook (Start only); \
+         End is deferred to page renderer"
+    );
+}

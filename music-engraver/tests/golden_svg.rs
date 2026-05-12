@@ -2501,6 +2501,125 @@ fn golden_trill_extension() {
     assert_golden("trill_extension", &svg);
 }
 
+/// Build a short score exercising all three bracket forms (Start/End/Both)
+/// plus a chord-trill bracket. Uses 2 measures per system so each measure
+/// is wide enough for the wiggle to tile.
+fn build_trill_bracket() -> String {
+    use music_engraver::layout::trill_bracket::TrillBracketSide;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Both bracket on whole note — frames the trill's full range.
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed(TrillBracketSide::Both)
+        .barline()
+        // Note the bracketed trill resolves to in M2.
+        .note(p("A", 4), Duration::WHOLE)
+        .barline()
+        // Start bracket only on whole note — marks unambiguous start.
+        .note(p("E", 5), Duration::WHOLE)
+        .trill_with_extension_bracketed(TrillBracketSide::Start)
+        .barline()
+        .note(p("D", 5), Duration::WHOLE)
+        .barline()
+        // End bracket only on whole note — marks unambiguous end.
+        .note(p("C", 5), Duration::WHOLE)
+        .trill_with_extension_bracketed(TrillBracketSide::End)
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .barline()
+        // Both bracket on chord (top note 7).
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+        .trill_with_extension_bracketed(TrillBracketSide::Both)
+        .end_barline()
+        .note(p("F", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_bracket() {
+    use music_engraver::layout::trill_bracket::TrillBracketSide;
+    let svg = build_trill_bracket();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Build a no-bracket baseline using only trill_with_extension. The
+    // bracketed version must add hook <line> elements: 2 (M1 Both) +
+    // 1 (M3 Start) + 1 (M5 End) + 2 (M7 chord Both) = 6.
+    let baseline = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .barline()
+        .note(p("E", 5), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("D", 5), Duration::WHOLE)
+        .barline()
+        .note(p("C", 5), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .barline()
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+        .trill_with_extension()
+        .end_barline()
+        .note(p("F", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg();
+
+    let bracket_lines = svg.matches("<line ").count();
+    let plain_lines = baseline.matches("<line ").count();
+    let delta = bracket_lines - plain_lines;
+    assert_eq!(
+        delta, 6,
+        "expected exactly 6 hook lines (Both:2 + Start:1 + End:1 + chord Both:2). \
+         Got delta={delta} (bracketed={bracket_lines}, plain={plain_lines})"
+    );
+
+    // Verify a single-side bracket adds only 1 hook (a regression guard
+    // against accidentally double-rendering hooks).
+    let only_start = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed(TrillBracketSide::Start)
+        .end_barline()
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    let only_start_plain = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .end_barline()
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    assert_eq!(
+        only_start.matches("<line ").count() - only_start_plain.matches("<line ").count(),
+        1,
+        "Start-only bracket must add exactly 1 hook line"
+    );
+
+    // SVG must differ from no-bracket baseline byte-for-byte.
+    assert_ne!(svg, baseline, "brackets must change the rendered SVG");
+
+    assert_golden("trill_bracket", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -2556,6 +2675,7 @@ fn golden_baselines_are_valid_svgs() {
         "church_rest",
         "cross_voice_spans",
         "trill_extension",
+        "trill_bracket",
     ];
 
     for name in &names {
