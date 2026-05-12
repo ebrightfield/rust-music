@@ -37,6 +37,9 @@ pub enum MeasureEvent {
     BeamGroup(BeamGroupEvent),
     /// A tuplet group: beamed notes with a tuplet bracket and number.
     TupletGroup(TupletGroupEvent),
+    /// Multi-measure rest: the entire measure shows an H-bar with a count
+    /// number indicating how many consecutive measures of rest.
+    MultiMeasureRest(u32),
 }
 
 /// Describes the frontmatter (clef, key, time sig) that appears at the start of a system.
@@ -265,6 +268,7 @@ pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
         MeasureEvent::Chord(c) => MeasureElement::Chord(c.clone()),
         MeasureEvent::BeamGroup(bg) => MeasureElement::BeamGroup(bg.clone()),
         MeasureEvent::TupletGroup(tg) => MeasureElement::TupletGroup(tg.clone()),
+        MeasureEvent::MultiMeasureRest(count) => MeasureElement::MultiMeasureRest(*count),
     }
 }
 

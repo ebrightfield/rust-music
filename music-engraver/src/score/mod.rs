@@ -91,7 +91,8 @@ fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
         MeasureEvent::Chord(c) => c.stem_direction = Some(dir),
         MeasureEvent::BeamGroup(bg) => bg.stem_direction = Some(dir),
         MeasureEvent::TupletGroup(tg) => tg.beam_group.stem_direction = Some(dir),
-        MeasureEvent::Rest(_) => {} // rests have no stem
+        // Multi-measure rests and ordinary rests have no stem to flip.
+        MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest(_) => {}
     }
 }
 
@@ -656,6 +657,27 @@ impl ScoreBuilder {
     /// Add a rest to the current measure.
     pub fn rest(mut self, duration: Duration) -> Self {
         self.current_events.push((self.current_voice, ScoreEvent::Rest { duration }));
+        self
+    }
+
+    /// Add a multi-measure rest filling the current measure.
+    ///
+    /// Renders as a single measure-shaped frame containing an H-bar (thick
+    /// horizontal bar with vertical serifs at each end, centered on the middle
+    /// staff line) and a count number above it. `count` is the number of
+    /// consecutive measures of rest this frame represents — engraved parts use
+    /// this convention to compress empty passages.
+    ///
+    /// Conventionally a multi-measure rest is the only event in its measure;
+    /// adding notes or other rests alongside it produces undefined visual
+    /// output. Call `.barline()` (or `.end_barline()`) immediately after.
+    ///
+    /// A count of `0` is treated identically to `1` by the renderer — the
+    /// label simply reads "0", which is meaningless but harmless. Callers
+    /// should pass `count >= 1`.
+    pub fn multi_measure_rest(mut self, count: u32) -> Self {
+        self.current_events
+            .push((self.current_voice, ScoreEvent::MultiMeasureRest { count }));
         self
     }
 

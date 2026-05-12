@@ -161,6 +161,58 @@ fn measure_with_rest() {
 }
 
 #[test]
+fn measure_with_multi_measure_rest_draws_hbar_and_count() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::MultiMeasureRest(8)];
+    let layout = layout_measure(&elements, &cfg);
+    let mut svg = make_svg();
+    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let output = svg.to_svg();
+
+    // H-bar = 2 vertical serifs + 1 crossbar = 3 filled rects
+    assert_eq!(
+        output.matches("<rect").count(),
+        3,
+        "H-bar should produce exactly 3 rects (two serifs + crossbar)",
+    );
+    // Count number appears as a <text> node
+    assert!(
+        output.contains(">8</text>"),
+        "count number 8 should appear in a <text> element",
+    );
+    // No glyph paths or staff/stem lines for the H-bar itself
+    assert_eq!(output.matches("<path ").count(), 0, "H-bar uses rects, not paths");
+    assert_eq!(output.matches("<line ").count(), 0, "H-bar has no <line> elements");
+}
+
+#[test]
+fn measure_with_multi_measure_rest_x_offset_shifts_hbar() {
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+    let elements = vec![MeasureElement::MultiMeasureRest(4)];
+    let layout = layout_measure(&elements, &cfg);
+
+    let mut svg_a = make_svg();
+    draw_measure(&mut svg_a, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    let out_a = svg_a.to_svg();
+
+    let mut svg_b = make_svg();
+    draw_measure(&mut svg_b, &staff, &font, &config, &layout, 1500.0, &Clef::Treble).unwrap();
+    let out_b = svg_b.to_svg();
+
+    assert_ne!(
+        out_a, out_b,
+        "x_offset must shift the H-bar rects/text coordinates",
+    );
+    // Both must still emit exactly 3 rects and the count text
+    assert_eq!(out_a.matches("<rect").count(), 3);
+    assert_eq!(out_b.matches("<rect").count(), 3);
+    assert!(out_a.contains(">4</text>"));
+    assert!(out_b.contains(">4</text>"));
+}
+
+#[test]
 fn measure_with_barline() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);

@@ -25,6 +25,7 @@ pub mod hairpin;
 pub mod lyric;
 pub mod key_signature;
 pub mod measure;
+pub mod multi_measure_rest;
 pub mod multi_staff;
 pub mod navigation;
 pub mod note_placement;
@@ -82,6 +83,11 @@ pub use system::{
 pub use tie::{
     layout_half_tie_left, layout_half_tie_right, layout_tie, tie_direction_from_stem, TieDirection,
     TieLayout,
+};
+pub use multi_measure_rest::{
+    layout_multi_measure_rest, MultiMeasureRestLayout, COUNT_ABOVE_HBAR_SS,
+    COUNT_FONT_SIZE_SS, HBAR_BAR_THICKNESS_SS, HBAR_HALF_HEIGHT_SS, HBAR_HORIZONTAL_PADDING_SS,
+    HBAR_SERIF_THICKNESS_SS,
 };
 pub use multi_staff::{
     layout_multi_staff, staff_layouts_from_multi, BraceLayout, BracketLayout, ConnectorKind,

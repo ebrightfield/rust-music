@@ -4963,3 +4963,123 @@
             "hairpin in voice 1 should add 2 lines (wedge); hp={}, plain={}", hp_lines, plain_lines
         );
     }
+
+    // --- multi-measure rest (ScoreBuilder integration) ---
+
+    /// A multi-measure rest renders an H-bar made of three filled rectangles
+    /// (two vertical serifs + horizontal crossbar) plus a count number text.
+    /// Compared to a single whole-rest measure, that adds at least 3 rects and
+    /// 1 text — none of which the equivalent rest measure produces.
+    #[test]
+    fn multi_measure_rest_adds_hbar_rects_and_count_text() {
+        let svg_mmr = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest(8)
+            .end_barline()
+            .render_svg();
+
+        let svg_rest = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        let mmr_rects = svg_mmr.matches("<rect").count();
+        let rest_rects = svg_rest.matches("<rect").count();
+        assert!(
+            mmr_rects >= rest_rects + 3,
+            "multi-measure rest should add >= 3 rects (2 serifs + crossbar); mmr={mmr_rects}, rest={rest_rects}",
+        );
+
+        // The count number must appear as a text node containing the digit(s)
+        assert!(
+            svg_mmr.contains(">8</text>"),
+            "multi-measure rest count '8' should appear in a <text> element",
+        );
+        // And it must not appear in the plain rest version
+        assert!(
+            !svg_rest.contains(">8</text>"),
+            "plain rest version should not contain count text",
+        );
+    }
+
+    /// Different counts must yield different SVG output (the digit changes).
+    #[test]
+    fn multi_measure_rest_distinct_counts_differ() {
+        let svg_4 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest(4)
+            .end_barline()
+            .render_svg();
+
+        let svg_16 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest(16)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg_4.contains(">4</text>"), "count 4 should appear");
+        assert!(svg_16.contains(">16</text>"), "count 16 should appear");
+        assert_ne!(svg_4, svg_16, "different counts must produce different SVGs");
+    }
+
+    /// A multi-measure rest mid-score must coexist with surrounding notated
+    /// measures: clef, time sig, a note measure, the rest measure, another
+    /// note measure — all in one system. The H-bar count must appear, the
+    /// noteheads must remain, and barlines must separate the measures.
+    #[test]
+    fn multi_measure_rest_between_notated_measures() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .measures_per_system(4)
+            .note(p("C", 4), Duration::WHOLE)
+            .barline()
+            .multi_measure_rest(7)
+            .barline()
+            .note(p("G", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.contains(">7</text>"), "count should be present");
+        // 5 staff lines + at least 3 barlines (after each measure) = 8 lines minimum
+        let line_count = svg.matches("<line").count();
+        assert!(
+            line_count >= 8,
+            "should have at least 8 lines (staff + barlines), got {line_count}",
+        );
+        // The two whole notes still produce noteheads in addition to the H-bar
+        // crossbar; <path> count must exceed a score with only the rest measure.
+        let svg_only_mmr = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .multi_measure_rest(7)
+            .end_barline()
+            .render_svg();
+        let paths_with_notes = svg.matches("<path").count();
+        let paths_only_mmr = svg_only_mmr.matches("<path").count();
+        assert!(
+            paths_with_notes > paths_only_mmr,
+            "embedding notes around the rest must add more glyph paths; \
+             with_notes={paths_with_notes}, only_mmr={paths_only_mmr}",
+        );
+    }
+
+    /// The H-bar count text must be styled `font-weight="bold"` per engraving
+    /// convention (and per the renderer's `TextStyle::bold` choice).
+    #[test]
+    fn multi_measure_rest_count_is_bold() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .multi_measure_rest(3)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains("font-weight=\"bold\""),
+            "count number should be bold-weighted text",
+        );
+    }

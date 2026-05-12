@@ -40,6 +40,13 @@ pub(crate) enum ScoreEvent {
         notes: Vec<(Pitch, Duration)>,
         tuplet_number: u32,
     },
+    /// Multi-measure rest: the rendered measure consists of an H-bar with a
+    /// count number indicating how many consecutive measures of rest this
+    /// single measure-shaped frame represents (engraved convention for empty
+    /// passages in parts).
+    MultiMeasureRest {
+        count: u32,
+    },
 }
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
@@ -332,5 +339,6 @@ pub(crate) fn convert_event(
                 tuplet_number: *tuplet_number,
             })
         }
+        ScoreEvent::MultiMeasureRest { count } => MeasureEvent::MultiMeasureRest(*count),
     }
 }

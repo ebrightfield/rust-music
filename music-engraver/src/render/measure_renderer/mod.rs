@@ -20,6 +20,8 @@ use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::expression_renderer::draw_expression;
 use crate::render::flag_renderer::draw_flag;
 use crate::render::lyric_renderer::draw_lyric;
+use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
+use crate::layout::multi_measure_rest::layout_multi_measure_rest;
 use crate::layout::lyric::layout_lyric;
 use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::layout::expression::layout_expression;
@@ -100,6 +102,18 @@ pub fn draw_measure(
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
             }
+            MeasureElement::MultiMeasureRest(count) => {
+                // The H-bar spans the rhythmic width allocated to the rest. The
+                // measure barlines sit just outside this span, so the bar fills
+                // the same horizontal region a whole note would occupy.
+                let layout = layout_multi_measure_rest(
+                    elem_x,
+                    elem_x + positioned.width,
+                    *count,
+                    staff,
+                );
+                draw_multi_measure_rest(svg, &layout);
+            }
             MeasureElement::Barline(style) => {
                 draw_barline(svg, staff, font, elem_x, *style)?;
             }
@@ -158,10 +172,14 @@ pub fn draw_additional_voices(
             let elem_x = x_offset + positioned.x + collision_shift;
 
             match &positioned.element {
-                // Skip non-rhythmic elements — the primary voice already drew them
+                // Skip non-rhythmic elements — the primary voice already drew them.
+                // Multi-measure rests are a whole-measure property and only render
+                // from the primary voice; an additional voice sitting on top of one
+                // would just produce a duplicate H-bar.
                 MeasureElement::Clef(_)
                 | MeasureElement::KeySignature(_)
                 | MeasureElement::TimeSignature(_)
+                | MeasureElement::MultiMeasureRest(_)
                 | MeasureElement::Barline(_) => {}
 
                 MeasureElement::Note(note) => {

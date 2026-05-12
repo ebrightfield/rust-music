@@ -2041,6 +2041,83 @@ fn golden_voice_collision() {
     assert_golden("voice_collision", &svg);
 }
 
+fn build_multi_measure_rest() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4)
+        // Measure 1: notated opening
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .barline()
+        // Multi-measure rest representing 8 measures of tacet
+        .multi_measure_rest(8)
+        .barline()
+        // Notated re-entry
+        .note(p("G", 5), Duration::HALF)
+        .note(p("E", 5), Duration::HALF)
+        .barline()
+        // Multi-measure rest representing 16 measures of tacet
+        .multi_measure_rest(16)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_multi_measure_rest() {
+    let svg = build_multi_measure_rest();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Both count numbers must be present
+    assert!(svg.contains(">8</text>"), "should contain count '8'");
+    assert!(svg.contains(">16</text>"), "should contain count '16'");
+
+    // Two H-bars = 2 × (2 serifs + crossbar) = 6 rects minimum.
+    // No other element in this score uses <rect>.
+    let rect_count = svg.matches("<rect").count();
+    assert_eq!(
+        rect_count, 6,
+        "expected exactly 6 rects (2 H-bars × 3 components), got {rect_count}",
+    );
+
+    // Count text is bold
+    assert!(
+        svg.contains("font-weight=\"bold\""),
+        "H-bar count text should be bold",
+    );
+
+    // Compare against a score with the same notated measures but no
+    // multi-measure rests — the H-bar version must add elements.
+    let without_mmr = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4)
+        .note(p("C", 5), Duration::QTR)
+        .note(p("D", 5), Duration::QTR)
+        .note(p("E", 5), Duration::QTR)
+        .note(p("F", 5), Duration::QTR)
+        .barline()
+        .note(p("G", 5), Duration::HALF)
+        .note(p("E", 5), Duration::HALF)
+        .end_barline()
+        .render_svg();
+
+    let without_rects = without_mmr.matches("<rect").count();
+    assert!(
+        rect_count > without_rects,
+        "MMR version must have more rects than plain notated version: \
+         with={rect_count}, without={without_rects}",
+    );
+
+    assert_golden("multi_measure_rest", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -2091,6 +2168,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_system_glissandos",
         "voices",
         "voice_collision",
+        "multi_measure_rest",
     ];
 
     for name in &names {
