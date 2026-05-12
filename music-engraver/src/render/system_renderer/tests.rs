@@ -1797,3 +1797,267 @@ fn collect_note_positions_without_additional_voices_unchanged() {
     assert_eq!(positions[0].1, 4);
     assert_eq!(positions[1].1, 6);
 }
+
+// --- trill extension ---
+
+use crate::layout::ornament::Ornament;
+
+fn trill_ext_note(pos: i8) -> MeasureEvent {
+    // Use a long duration (whole note) so there's enough horizontal room
+    // for the wiggle to fit at least one tile in the test SVG window.
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+fn trill_no_ext_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: false,
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+/// Count the number of `<path` elements in an SVG fragment whose `translate(...)`
+/// transform has a y-coordinate equal to `y_needle`. Used to verify that the
+/// wiggle segments share the trill glyph's baseline.
+fn count_paths_with_translate_y(svg: &str, y_needle: f64) -> usize {
+    let needle = format!(",{y_needle})");
+    svg.matches(&needle).count()
+}
+
+#[test]
+fn trill_extension_collector_flags_only_marked_notes() {
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_note(4),
+            trill_no_ext_note(6),
+            quarter_note(8),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(info.len(), 3, "should collect one entry per note");
+    assert!(info[0].has_trill_extension, "first note has extension");
+    assert!(!info[1].has_trill_extension, "second has trill but no extension");
+    assert!(!info[2].has_trill_extension, "third has no trill");
+}
+
+#[test]
+fn trill_extension_collector_requires_trill_ornament() {
+    // Even if trill_extension=true, no extension if the ornament isn't Trill.
+    let bad = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Mordent),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![bad, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(
+        !info[0].has_trill_extension,
+        "mordent with trill_extension=true must not be flagged as a trill extension"
+    );
+}
+
+#[test]
+fn trill_extension_renders_at_least_one_wiggle_path() {
+    let (font, config, mcfg) = setup();
+    // Two whole notes side-by-side give a wide span between them.
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_ext = svg.to_svg();
+
+    // Compare against the identical score without trill_extension:
+    // the difference is exactly the wiggle paths we added.
+    let measures2 = vec![MeasureContent {
+        events: vec![trill_no_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_ext = svg2.to_svg();
+
+    let with_paths = with_ext.matches("<path").count();
+    let without_paths = without_ext.matches("<path").count();
+    assert!(
+        with_paths > without_paths,
+        "trill_extension must add at least one path: with={with_paths}, without={without_paths}"
+    );
+}
+
+#[test]
+fn trill_extension_wiggle_shares_trill_glyph_y() {
+    use crate::layout::ornament::layout_ornament;
+    use crate::layout::staff::StaffLayout;
+
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Recompute the ornament y the same way draw_system_trill_extensions does
+    let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
+    let info = collect_trill_extension_note_info(&system);
+    let first = info.iter().find(|n| n.has_trill_extension).expect("trill present");
+    let layout = layout_ornament(Ornament::Trill, first.x, first.staff_position, &staff);
+
+    // At least one path must translate to the computed wiggle y. The exact
+    // string match guards against drift in the y math.
+    let hits = count_paths_with_translate_y(&output, layout.y);
+    assert!(
+        hits >= 1,
+        "expected at least one wiggle segment at y={}, got {hits}",
+        layout.y
+    );
+}
+
+#[test]
+fn no_trill_extension_without_flag() {
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![trill_no_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let output = svg.to_svg();
+
+    // Compute the trill-glyph y and verify nothing else translates to it
+    // beyond the "tr" glyph itself (1 path).
+    use crate::layout::ornament::layout_ornament;
+    use crate::layout::staff::StaffLayout;
+    let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
+    let first = collect_trill_extension_note_info(&system)[0].x;
+    let layout = layout_ornament(Ornament::Trill, first, 4, &staff);
+    let hits = count_paths_with_translate_y(&output, layout.y);
+    assert_eq!(
+        hits, 1,
+        "without extension, only the 'tr' glyph itself should sit at y={}",
+        layout.y
+    );
+}
+
+#[test]
+fn last_note_in_system_with_trill_extension_renders_no_wiggle() {
+    // The wiggle requires a following note. A trill on the final note of
+    // the system has no target, so the wiggle should be silently skipped
+    // (only the "tr" glyph remains). Cross-system trills are deferred.
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_ext = svg.to_svg();
+
+    // Identical score but without the extension flag — should produce the
+    // same path count (no wiggle either way).
+    let measures2 = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_no_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let without_ext = svg2.to_svg();
+
+    assert_eq!(
+        with_ext.matches("<path").count(),
+        without_ext.matches("<path").count(),
+        "trill at end of system should not add a wiggle"
+    );
+}
+
+#[test]
+fn trill_extension_on_chord_uses_top_note_position() {
+    let chord_event = MeasureEvent::Chord(crate::layout::measure::ChordEvent {
+        staff_positions: vec![2, 4, 7], // top note is 7
+        duration_log2: 0,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![chord_event, quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(info[0].has_trill_extension, "chord trill extension flagged");
+    assert_eq!(
+        info[0].staff_position, 7,
+        "chord trill extension should anchor to top note (max staff pos)"
+    );
+}

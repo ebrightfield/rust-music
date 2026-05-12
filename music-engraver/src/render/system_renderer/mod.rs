@@ -1,6 +1,7 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::glissando::{layout_glissando, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
+use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS};
 use crate::layout::measure::{MeasureElement, PositionedElement};
@@ -9,6 +10,7 @@ use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, StemDirection};
 use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
+use crate::layout::trill_extension::layout_trill_extension;
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
 use crate::render::note_renderer::NoteheadKind;
@@ -19,8 +21,10 @@ use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
 use crate::render::ottava_renderer::draw_ottava_bracket;
+use crate::render::trill_extension_renderer::draw_trill_extension;
 use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
+use smufl::Glyph;
 
 /// Iterate over all positioned elements in a measure, including both the
 /// primary voice and any additional voices. Each element is yielded with
@@ -135,6 +139,12 @@ pub fn draw_system(
 
     // Draw glissando lines between notes marked with glissando_start
     draw_system_glissandos(svg, config, system, &staff, x);
+
+    // Draw trill wavy-line extensions to the next note for notes marked with
+    // trill_extension. A "tr" glyph (the actual ornament) is already drawn by
+    // the measure renderer via draw_ornament; this pass only adds the trailing
+    // wiggle.
+    draw_system_trill_extensions(svg, font, system, &staff, x)?;
 
     Ok(())
 }
@@ -670,6 +680,123 @@ fn draw_system_glissandos(
             draw_glissando(svg, &layout);
         }
     }
+}
+
+/// Info about a note's trill-extension state for second-pass rendering.
+pub(crate) struct TrillExtensionNoteInfo {
+    /// X-coordinate of the note's notehead within the system layout space
+    /// (i.e. without `system_x` added — same convention as the other
+    /// `collect_*_note_info` functions).
+    pub x: f64,
+    /// Staff position; used by the system renderer to call `layout_ornament`
+    /// in exactly the same way the measure renderer did, so the wiggle
+    /// shares a baseline with the "tr" glyph.
+    pub staff_position: i8,
+    /// Whether the note has a trill ornament whose extension is enabled.
+    /// Already filtered to "trill + extension" — the collector skips other
+    /// ornaments and skips notes whose `trill_extension` flag is false.
+    pub has_trill_extension: bool,
+}
+
+/// Collect notes relevant to trill-extension rendering. Includes a `None`-like
+/// entry (via `has_trill_extension = false`) for every note so the draw pass
+/// can find the immediately following note regardless of whether it also has
+/// a trill — exactly the same shape as `collect_glissando_note_info`.
+pub(crate) fn collect_trill_extension_note_info(
+    system: &SystemLayout,
+) -> Vec<TrillExtensionNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for (elem_x, elem) in all_measure_elements(measure) {
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    let has_ext = n.annotations.trill_extension
+                        && matches!(n.annotations.ornament, Some(Ornament::Trill));
+                    notes.push(TrillExtensionNoteInfo {
+                        x: elem_x,
+                        staff_position: n.staff_position,
+                        has_trill_extension: has_ext,
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    // Anchor the extension to the highest note of the chord,
+                    // matching how the trill glyph is positioned by the
+                    // measure renderer.
+                    let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
+                    let has_ext = c.annotations.trill_extension
+                        && matches!(c.annotations.ornament, Some(Ornament::Trill));
+                    notes.push(TrillExtensionNoteInfo {
+                        x: elem_x,
+                        staff_position: top_pos,
+                        has_trill_extension: has_ext,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+/// Distance (in staff spaces) past the "tr" glyph where the wiggle starts.
+const TRILL_EXTENSION_GLYPH_GAP_SS: f64 = 0.15;
+/// Distance (in staff spaces) before the next notehead where the wiggle ends.
+/// Leaves visual breathing room so the wiggle doesn't crash into the notehead.
+const TRILL_EXTENSION_NOTE_GAP_SS: f64 = 0.30;
+
+/// Draw trill wavy-line extensions for notes marked with `trill_extension`.
+///
+/// The wiggle starts just past the "tr" glyph (so the two read as one
+/// continuous mark) and ends just short of the next note. Notes whose
+/// extension would have no room (single-segment minimum span) silently
+/// render no wiggle — the trill is still indicated by the "tr" glyph
+/// alone, which is conventional for short trills.
+fn draw_system_trill_extensions(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) -> Result<(), FontError> {
+    let notes = collect_trill_extension_note_info(system);
+
+    let trill_advance = font.glyph_advance(Glyph::OrnamentTrill)? as f64;
+    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill)? as f64;
+
+    for (i, note) in notes.iter().enumerate() {
+        if !note.has_trill_extension {
+            continue;
+        }
+
+        // The wiggle continues until the next note in the system; if there
+        // is none (last note in system), skip. Cross-system trills are a
+        // deferred enhancement — see open issues.
+        let Some(target) = notes.get(i + 1) else {
+            continue;
+        };
+
+        // The "tr" glyph is positioned by layout_ornament; mirror its math
+        // so the wiggle's y matches the trill glyph's baseline.
+        let ornament_layout = layout_ornament(
+            Ornament::Trill,
+            system_x + note.x,
+            note.staff_position,
+            staff,
+        );
+
+        let staff_space = staff.staff_space;
+        let trill_x = ornament_layout.x;
+        let start_x = trill_x + trill_advance + TRILL_EXTENSION_GLYPH_GAP_SS * staff_space;
+        let end_x = system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space;
+
+        if let Some(layout) =
+            layout_trill_extension(start_x, end_x, ornament_layout.y, wiggle_advance)
+        {
+            draw_trill_extension(svg, font, &layout)?;
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

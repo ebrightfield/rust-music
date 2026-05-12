@@ -89,6 +89,13 @@ pub struct NoteAnnotations {
     /// The diagonal line is drawn by the system renderer after all measures
     /// are laid out.
     pub glissando_start: Option<GlissandoStyle>,
+    /// Whether this trill ornament has a wavy-line extension that continues
+    /// to the next note. Has no effect unless `ornament` is `Some(Ornament::Trill)`;
+    /// the renderer skips the extension cleanly when the ornament isn't a trill.
+    /// The wavy line is drawn by the system renderer after all measures are
+    /// laid out, tiling the SMuFL `wiggleTrill` segment between the trill
+    /// glyph and the next note.
+    pub trill_extension: bool,
 }
 
 /// A group of notes to be beamed together.

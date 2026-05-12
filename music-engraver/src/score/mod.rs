@@ -426,6 +426,27 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a trill ornament with a wavy-line extension to the most recently
+    /// added note or chord. The wiggle continues from the "tr" glyph to the
+    /// next note in the system, indicating a sustained trill across the
+    /// originating note's full duration.
+    ///
+    /// Equivalent to `.ornament(Ornament::Trill)` plus the `trill_extension`
+    /// annotation flag. No-op if the last event was a rest. If there is no
+    /// following note in the same system, only the "tr" glyph is drawn (the
+    /// extension silently disappears — convention is that the trill simply
+    /// ends with the note).
+    pub fn trill_with_extension(mut self) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+        }
+        self
+    }
+
     /// Attach a navigation sign (segno, coda) to the most recently added note
     /// or chord. The sign glyph is placed above the staff, centered on the note.
     ///

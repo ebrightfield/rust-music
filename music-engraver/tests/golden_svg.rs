@@ -2426,6 +2426,81 @@ fn golden_cross_voice_spans() {
     assert_golden("cross_voice_spans", &svg);
 }
 
+/// A short score that exercises trill_with_extension on long-duration notes
+/// (whole + dotted-half + chord) so the wavy line has room to tile.
+fn build_trill_extension() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("G", 4), Duration::HALF)
+        .trill_with_extension()
+        .note(p("A", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .barline()
+        .note(p("E", 5), Duration::new(DurationKind::Half, 1))
+        .trill_with_extension()
+        .note(p("D", 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// The same score as `build_trill_extension` but with plain `.ornament(Trill)`
+/// instead — used to compare path counts and confirm the extension adds
+/// tangible wiggle content.
+fn build_trill_no_extension() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("G", 4), Duration::HALF)
+        .ornament(Ornament::Trill)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .barline()
+        .note(p("E", 5), Duration::new(DurationKind::Half, 1))
+        .ornament(Ornament::Trill)
+        .note(p("D", 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_extension() {
+    let svg = build_trill_extension();
+    let baseline = build_trill_no_extension();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // The extension must add wiggle paths. Both scores have two "tr" glyphs;
+    // only the extension version has any tiled wiggle segments.
+    let ext_paths = svg.matches("<path").count();
+    let base_paths = baseline.matches("<path").count();
+    assert!(
+        ext_paths > base_paths,
+        "trill_with_extension must add wiggle paths beyond plain trill: \
+         ext={ext_paths}, base={base_paths}"
+    );
+
+    // The extra paths are wiggle segments. Each tile shares its translate y
+    // with the trill glyph. We at least expect more than 2 extra paths since
+    // any reasonable wiggle should tile several segments across a half note
+    // span, even at conservative measure widths.
+    let delta = ext_paths - base_paths;
+    assert!(
+        delta >= 2,
+        "expected at least 2 wiggle segments added by extension, got {delta}"
+    );
+
+    // The two scores must not be byte-identical.
+    assert_ne!(svg, baseline, "extension must change the rendered SVG");
+
+    assert_golden("trill_extension", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -2480,6 +2555,7 @@ fn golden_baselines_are_valid_svgs() {
         "multi_measure_rest",
         "church_rest",
         "cross_voice_spans",
+        "trill_extension",
     ];
 
     for name in &names {
