@@ -12,7 +12,9 @@ use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
 use crate::layout::trill_bracket::TrillBracketSide;
-use crate::layout::trill_extension::{layout_trill_extension, trill_extension_right_edge};
+use crate::layout::trill_extension::{
+    layout_trill_extension_with_glyph, trill_extension_right_edge, TrillWiggleSpeed,
+};
 use crate::render::trill_bracket_renderer::draw_trill_bracket_hook;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
@@ -29,7 +31,6 @@ use crate::render::system_renderer::{
 use crate::render::tie_renderer::draw_tie;
 use crate::render::trill_extension_renderer::draw_trill_extension;
 use crate::render::{SvgWriter, TextStyle};
-use smufl::Glyph;
 
 /// A note at the end of a system that has an unresolved `tie_forward`.
 struct UnresolvedTie {
@@ -1150,6 +1151,11 @@ struct UnresolvedTrillExtension {
     /// `Some(Start)` or `None` → no. The Start hook (if requested) was
     /// already drawn on the source system by `draw_system_trill_extensions`.
     bracket: Option<TrillBracketSide>,
+    /// Speed variant for the wavy-line glyph. The incoming wiggle on system
+    /// N+1 must tile the same glyph as the trailing wiggle on system N so a
+    /// reader sees one continuous wavy line of consistent density across the
+    /// line break. `None` selects the standard wiggle.
+    wiggle_speed: Option<TrillWiggleSpeed>,
 }
 
 /// The first note on the target system (system N+1) that an incoming
@@ -1198,6 +1204,7 @@ fn find_unresolved_trill_extension(
     Some(UnresolvedTrillExtension {
         y_above_top_line: ornament.y - src_staff.y_of(8),
         bracket: last.bracket,
+        wiggle_speed: last.wiggle_speed,
     })
 }
 
@@ -1249,7 +1256,6 @@ pub(crate) fn draw_cross_system_trill_extensions(
         return Ok(());
     }
 
-    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill)? as f64;
     let staff_space = config.staff_space;
 
     for i in 0..systems.len() - 1 {
@@ -1272,7 +1278,15 @@ pub(crate) fn draw_cross_system_trill_extensions(
         let start_x = tgt.staff_left;
         let end_x = tgt.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space;
 
-        if let Some(layout) = layout_trill_extension(start_x, end_x, y, wiggle_advance) {
+        // Tile the incoming wiggle with the same speed glyph as the source
+        // wiggle so a sustained trill reads as one continuous wavy line of
+        // consistent density across the line break.
+        let wiggle_glyph = src.wiggle_speed.unwrap_or_default().to_glyph();
+        let wiggle_advance = font.glyph_advance(wiggle_glyph)? as f64;
+
+        if let Some(layout) =
+            layout_trill_extension_with_glyph(start_x, end_x, y, wiggle_glyph, wiggle_advance)
+        {
             draw_trill_extension(svg, font, &layout)?;
 
             // End hook (cross-system continuation): if the user asked for an

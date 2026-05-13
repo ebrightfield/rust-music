@@ -15,6 +15,77 @@
 
 use smufl::Glyph;
 
+/// Speed/density variant for the trill wavy-line extension.
+///
+/// SMuFL defines a family of `wiggleTrill*` glyphs at progressively shorter
+/// (faster, denser) and longer (slower, sparser) repeat offsets. Selecting a
+/// speed visually communicates how rapidly the trill should be played without
+/// changing the glyph's overall meaning. `Standard` is the conventional
+/// neutral wiggle that most published engravings use.
+///
+/// The numeric ordering of variants matches SMuFL's progression from fastest
+/// (densest tiles) to slowest (sparsest tiles).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrillWiggleSpeed {
+    /// `wiggleTrillFastest` — the densest wiggle.
+    Fastest,
+    /// `wiggleTrillFasterStill`.
+    FasterStill,
+    /// `wiggleTrillFaster`.
+    Faster,
+    /// `wiggleTrillFast`.
+    Fast,
+    /// `wiggleTrill` — the neutral, default wiggle.
+    Standard,
+    /// `wiggleTrillSlow`.
+    Slow,
+    /// `wiggleTrillSlower`.
+    Slower,
+    /// `wiggleTrillSlowerStill`.
+    SlowerStill,
+    /// `wiggleTrillSlowest` — the sparsest wiggle.
+    Slowest,
+}
+
+impl TrillWiggleSpeed {
+    /// Map this speed to its SMuFL `Glyph`.
+    pub fn to_glyph(self) -> Glyph {
+        match self {
+            Self::Fastest => Glyph::WiggleTrillFastest,
+            Self::FasterStill => Glyph::WiggleTrillFasterStill,
+            Self::Faster => Glyph::WiggleTrillFaster,
+            Self::Fast => Glyph::WiggleTrillFast,
+            Self::Standard => Glyph::WiggleTrill,
+            Self::Slow => Glyph::WiggleTrillSlow,
+            Self::Slower => Glyph::WiggleTrillSlower,
+            Self::SlowerStill => Glyph::WiggleTrillSlowerStill,
+            Self::Slowest => Glyph::WiggleTrillSlowest,
+        }
+    }
+
+    /// Canonical ordering from fastest (densest) to slowest (sparsest).
+    pub const ALL: [TrillWiggleSpeed; 9] = [
+        Self::Fastest,
+        Self::FasterStill,
+        Self::Faster,
+        Self::Fast,
+        Self::Standard,
+        Self::Slow,
+        Self::Slower,
+        Self::SlowerStill,
+        Self::Slowest,
+    ];
+}
+
+// The default cannot be derived: the desired default is `Standard`, which is
+// not the first variant. (Derived `Default` would pick `Fastest`.)
+#[allow(clippy::derivable_impls)]
+impl Default for TrillWiggleSpeed {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
 /// Computed positions for a tiled trill wavy-line extension.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrillExtensionLayout {
@@ -55,6 +126,29 @@ pub fn layout_trill_extension(
     y: f64,
     segment_advance_fu: f64,
 ) -> Option<TrillExtensionLayout> {
+    layout_trill_extension_with_glyph(start_x, end_x, y, Glyph::WiggleTrill, segment_advance_fu)
+}
+
+/// Lay out a trill wavy-line extension using a caller-chosen wiggle glyph.
+///
+/// Identical to [`layout_trill_extension`] except the tile glyph is specified
+/// explicitly. Use this when rendering a speed-variant wiggle
+/// (`Glyph::WiggleTrillFast`, `WiggleTrillSlow`, etc.) — the caller is
+/// responsible for querying that glyph's advance width from the active font
+/// and passing it as `segment_advance_fu`. The two values must agree: passing
+/// `WiggleTrillFast` with the standard wiggle's advance would tile gaps or
+/// overlaps between segments.
+///
+/// Returns `None` under the same conditions as [`layout_trill_extension`]:
+/// non-positive advance, zero span, negative span, or span smaller than one
+/// segment.
+pub fn layout_trill_extension_with_glyph(
+    start_x: f64,
+    end_x: f64,
+    y: f64,
+    glyph: Glyph,
+    segment_advance_fu: f64,
+) -> Option<TrillExtensionLayout> {
     if segment_advance_fu <= 0.0 {
         return None;
     }
@@ -75,7 +169,7 @@ pub fn layout_trill_extension(
     Some(TrillExtensionLayout {
         segment_xs,
         y,
-        glyph: Glyph::WiggleTrill,
+        glyph,
         segment_advance: segment_advance_fu,
     })
 }
@@ -207,5 +301,94 @@ mod tests {
         // floor(100 / 33.333) = 3 segments
         assert_eq!(layout.segment_xs.len(), 3);
         assert!((layout.segment_xs[1] - 33.333).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wiggle_speed_to_glyph_distinct() {
+        // Every speed must map to a unique SMuFL glyph — without this,
+        // selecting a speed wouldn't actually produce a different wiggle.
+        let glyphs: Vec<Glyph> = TrillWiggleSpeed::ALL.iter().map(|s| s.to_glyph()).collect();
+        let mut sorted = glyphs.clone();
+        sorted.sort_by_key(|g| format!("{g:?}"));
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            TrillWiggleSpeed::ALL.len(),
+            "speeds must map to distinct glyphs"
+        );
+    }
+
+    #[test]
+    fn wiggle_speed_standard_is_wiggle_trill() {
+        // Standard must be the default neutral glyph so existing callers
+        // (which select `Standard` via `Default`) keep their current output.
+        assert_eq!(TrillWiggleSpeed::Standard.to_glyph(), Glyph::WiggleTrill);
+    }
+
+    #[test]
+    fn wiggle_speed_default_is_standard() {
+        assert_eq!(TrillWiggleSpeed::default(), TrillWiggleSpeed::Standard);
+    }
+
+    #[test]
+    fn wiggle_speed_all_contains_nine_variants() {
+        assert_eq!(TrillWiggleSpeed::ALL.len(), 9);
+    }
+
+    #[test]
+    fn wiggle_speed_all_includes_every_variant() {
+        // Pattern-match every variant so a new addition to the enum must
+        // also be added to ALL — preventing accidental drift.
+        for speed in TrillWiggleSpeed::ALL {
+            let _ok = match speed {
+                TrillWiggleSpeed::Fastest
+                | TrillWiggleSpeed::FasterStill
+                | TrillWiggleSpeed::Faster
+                | TrillWiggleSpeed::Fast
+                | TrillWiggleSpeed::Standard
+                | TrillWiggleSpeed::Slow
+                | TrillWiggleSpeed::Slower
+                | TrillWiggleSpeed::SlowerStill
+                | TrillWiggleSpeed::Slowest => true,
+            };
+        }
+    }
+
+    #[test]
+    fn layout_with_glyph_uses_provided_glyph() {
+        let layout =
+            layout_trill_extension_with_glyph(0.0, 200.0, 50.0, Glyph::WiggleTrillFast, 50.0)
+                .expect("non-empty span fits");
+        assert_eq!(layout.glyph, Glyph::WiggleTrillFast);
+        assert_eq!(layout.segment_xs.len(), 4);
+    }
+
+    #[test]
+    fn layout_with_glyph_handles_slow_variant() {
+        let layout =
+            layout_trill_extension_with_glyph(0.0, 600.0, 0.0, Glyph::WiggleTrillSlowest, 200.0)
+                .expect("non-empty span fits");
+        assert_eq!(layout.glyph, Glyph::WiggleTrillSlowest);
+        assert_eq!(layout.segment_xs.len(), 3);
+        assert_eq!(layout.segment_advance, 200.0);
+    }
+
+    #[test]
+    fn layout_with_glyph_returns_none_for_zero_advance() {
+        // Same fail-safe as the non-glyph version.
+        assert!(
+            layout_trill_extension_with_glyph(0.0, 100.0, 0.0, Glyph::WiggleTrillFast, 0.0)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn layout_trill_extension_delegates_to_with_glyph_using_standard() {
+        // The convenience function MUST use Standard (`WiggleTrill`) so old
+        // call sites unchanged by this chunk keep their pixel-perfect output.
+        let a = layout_trill_extension(0.0, 300.0, 25.0, 100.0).unwrap();
+        let b =
+            layout_trill_extension_with_glyph(0.0, 300.0, 25.0, Glyph::WiggleTrill, 100.0).unwrap();
+        assert_eq!(a, b);
     }
 }

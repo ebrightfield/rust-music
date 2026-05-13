@@ -13,7 +13,7 @@ use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::layout::trill_bracket::{
     layout_trill_bracket_hook, layout_trill_bracket_hooks, HookDirection, TrillBracketSide,
 };
-use crate::layout::trill_extension::layout_trill_extension;
+use crate::layout::trill_extension::{layout_trill_extension_with_glyph, TrillWiggleSpeed};
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
 use crate::render::note_renderer::NoteheadKind;
@@ -712,6 +712,10 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// note actually has both `Trill + extension`. A bracket request on a
     /// non-trilled note is silently inert.
     pub bracket: Option<TrillBracketSide>,
+    /// Speed variant for the wavy-line glyph. Filtered the same way as
+    /// `bracket`: only meaningful when `has_trill_extension == true`.
+    /// `None` selects the standard wiggle.
+    pub wiggle_speed: Option<TrillWiggleSpeed>,
 }
 
 /// Collect notes relevant to trill-extension rendering. Includes a `None`-like
@@ -729,11 +733,17 @@ pub(crate) fn collect_trill_extension_note_info(
                     let has_ext = n.annotations.trill_extension
                         && matches!(n.annotations.ornament, Some(Ornament::Trill));
                     let bracket = if has_ext { n.annotations.trill_bracket } else { None };
+                    let wiggle_speed = if has_ext {
+                        n.annotations.trill_wiggle_speed
+                    } else {
+                        None
+                    };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: n.staff_position,
                         has_trill_extension: has_ext,
                         bracket,
+                        wiggle_speed,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -744,11 +754,17 @@ pub(crate) fn collect_trill_extension_note_info(
                     let has_ext = c.annotations.trill_extension
                         && matches!(c.annotations.ornament, Some(Ornament::Trill));
                     let bracket = if has_ext { c.annotations.trill_bracket } else { None };
+                    let wiggle_speed = if has_ext {
+                        c.annotations.trill_wiggle_speed
+                    } else {
+                        None
+                    };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: top_pos,
                         has_trill_extension: has_ext,
                         bracket,
+                        wiggle_speed,
                     });
                 }
                 _ => {}
@@ -798,7 +814,6 @@ fn draw_system_trill_extensions(
     let notes = collect_trill_extension_note_info(system);
 
     let trill_advance = font.glyph_advance(Glyph::OrnamentTrill)? as f64;
-    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill)? as f64;
     let hook_stroke = config.thin_barline_thickness_fu();
     let hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff.staff_space;
 
@@ -831,9 +846,19 @@ fn draw_system_trill_extensions(
                 - TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS * staff_space,
         };
 
-        if let Some(layout) =
-            layout_trill_extension(start_x, end_x, ornament_layout.y, wiggle_advance)
-        {
+        // Look up the wiggle glyph + advance for this note's chosen speed.
+        // Each wiggleTrill* variant has its own advance, so the lookup must
+        // travel with the glyph choice.
+        let wiggle_glyph = note.wiggle_speed.unwrap_or_default().to_glyph();
+        let wiggle_advance = font.glyph_advance(wiggle_glyph)? as f64;
+
+        if let Some(layout) = layout_trill_extension_with_glyph(
+            start_x,
+            end_x,
+            ornament_layout.y,
+            wiggle_glyph,
+            wiggle_advance,
+        ) {
             draw_trill_extension(svg, font, &layout)?;
 
             // Bracket hooks: cap the wiggle's start and/or end with a short

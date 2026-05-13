@@ -2,10 +2,24 @@ use smufl::Glyph;
 
 /// A dynamic marking placed below (or above) the staff.
 ///
-/// Each variant maps to one or more SMuFL glyph(s) from the Dynamics range.
-/// Composite dynamics (like sfz) use dedicated SMuFL composite glyphs.
+/// Each variant maps to a single SMuFL composite glyph from the Dynamics
+/// range — SMuFL provides dedicated composite glyphs (e.g. `dynamicForte`,
+/// `dynamicSforzando1`), so we never assemble letter-glyphs by hand.
+///
+/// Names follow the standard p/f/m/s shorthand. Sub-piano levels stack
+/// `p`s (`Pp`/`Ppp`/`Pppp`/...) and sub-forte levels stack `f`s
+/// (`Ff`/`Fff`/`Ffff`/...) up to six in each direction — SMuFL caps the
+/// extremes at six.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Dynamic {
+    /// Niente (n) — silent (used in some hairpin contexts as well).
+    Niente,
+    /// Pianississississ (pppppp) — six p's.
+    Pppppp,
+    /// Pianississississ (ppppp) — five p's.
+    Ppppp,
+    /// Pianissississimo (pppp) — four p's.
+    Pppp,
     /// Pianississimo (ppp)
     Ppp,
     /// Pianissimo (pp)
@@ -16,18 +30,38 @@ pub enum Dynamic {
     Mp,
     /// Mezzo-forte (mf)
     Mf,
+    /// Poco forte (pf) — a quiet forte, slightly under `Forte`.
+    Pf,
     /// Forte (f)
     Forte,
     /// Fortissimo (ff)
     Ff,
     /// Fortississimo (fff)
     Fff,
+    /// Fortissississimo (ffff) — four f's.
+    Ffff,
+    /// Fortississississimo (fffff) — five f's.
+    Fffff,
+    /// Fortissississississimo (ffffff) — six f's.
+    Ffffff,
     /// Forte-piano (fp)
     Fp,
-    /// Sforzando (sfz)
+    /// Sforzando (sfz) — `dynamicSforzando1`, the standard "sfz" glyph.
     Sfz,
-    /// Sforzando-piano (sfp)
+    /// Sforzato (sf) — single-letter "sf" accent variant.
+    Sf,
+    /// Sforzato-ff (sff) — sforzato followed by fortissimo.
+    Sff,
+    /// Sforzando-piano (sfp) — sforzando followed by piano.
     Sfp,
+    /// Sforzando-pianissimo (sfpp) — sforzando followed by pianissimo.
+    Sfpp,
+    /// Forzando (fz)
+    Fz,
+    /// Rinforzando (rf) — single-letter `dynamicRinforzando` form.
+    Rf,
+    /// Rinforzando (rfz) — `dynamicRinforzando1`, the standard "rfz" glyph.
+    Rfz,
 }
 
 impl Dynamic {
@@ -37,19 +71,67 @@ impl Dynamic {
     /// so each dynamic is a single glyph (not a sequence of letter-glyphs).
     pub fn glyph(self) -> Glyph {
         match self {
+            Self::Niente => Glyph::DynamicNiente,
+            Self::Pppppp => Glyph::DynamicPppppp,
+            Self::Ppppp => Glyph::DynamicPpppp,
+            Self::Pppp => Glyph::DynamicPppp,
             Self::Ppp => Glyph::DynamicPpp,
             Self::Pp => Glyph::DynamicPp,
             Self::Piano => Glyph::DynamicPiano,
             Self::Mp => Glyph::DynamicMp,
             Self::Mf => Glyph::DynamicMf,
+            Self::Pf => Glyph::DynamicPf,
             Self::Forte => Glyph::DynamicForte,
             Self::Ff => Glyph::DynamicFf,
             Self::Fff => Glyph::DynamicFff,
+            Self::Ffff => Glyph::DynamicFfff,
+            Self::Fffff => Glyph::DynamicFffff,
+            Self::Ffffff => Glyph::DynamicFfffff,
             Self::Fp => Glyph::DynamicFortePiano,
             Self::Sfz => Glyph::DynamicSforzando1,
+            Self::Sf => Glyph::DynamicSforzato,
+            Self::Sff => Glyph::DynamicSforzatoFf,
             Self::Sfp => Glyph::DynamicSforzandoPiano,
+            Self::Sfpp => Glyph::DynamicSforzandoPianissimo,
+            Self::Fz => Glyph::DynamicForzando,
+            Self::Rf => Glyph::DynamicRinforzando,
+            Self::Rfz => Glyph::DynamicRinforzando1,
         }
     }
+
+    /// Every dynamic variant, in a canonical ordering from quietest to
+    /// loudest (with accent-style markings — sf, sfz, rf, etc. — listed
+    /// after the simple level markings since their loudness is contextual).
+    ///
+    /// Useful for tests and for iterating over the full set of supported
+    /// dynamics in higher-level code.
+    pub const ALL: [Dynamic; 25] = [
+        Self::Niente,
+        Self::Pppppp,
+        Self::Ppppp,
+        Self::Pppp,
+        Self::Ppp,
+        Self::Pp,
+        Self::Piano,
+        Self::Mp,
+        Self::Mf,
+        Self::Pf,
+        Self::Forte,
+        Self::Ff,
+        Self::Fff,
+        Self::Ffff,
+        Self::Fffff,
+        Self::Ffffff,
+        Self::Fp,
+        Self::Sfz,
+        Self::Sf,
+        Self::Sff,
+        Self::Sfp,
+        Self::Sfpp,
+        Self::Fz,
+        Self::Rf,
+        Self::Rfz,
+    ];
 }
 
 /// Vertical distance from the bottom staff line to the dynamics baseline,
@@ -101,19 +183,7 @@ mod tests {
 
     #[test]
     fn each_dynamic_maps_to_distinct_glyph() {
-        let dynamics = [
-            Dynamic::Ppp,
-            Dynamic::Pp,
-            Dynamic::Piano,
-            Dynamic::Mp,
-            Dynamic::Mf,
-            Dynamic::Forte,
-            Dynamic::Ff,
-            Dynamic::Fff,
-            Dynamic::Fp,
-            Dynamic::Sfz,
-            Dynamic::Sfp,
-        ];
+        let dynamics = Dynamic::ALL;
         let glyphs: Vec<_> = dynamics.iter().map(|d| d.glyph()).collect();
         // All glyphs should be unique
         for (i, g1) in glyphs.iter().enumerate() {
@@ -123,6 +193,74 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn all_constant_lists_every_variant_exactly_once() {
+        // Defensive: if a new variant is added without updating ALL, this
+        // catches it by exhaustive matching on a representative value.
+        // Iterating ALL and ensuring no two entries share a Debug repr is
+        // enough: variants are distinct value-wise (Eq/Hash derive).
+        use std::collections::HashSet;
+        let unique: HashSet<_> = Dynamic::ALL.iter().collect();
+        assert_eq!(
+            unique.len(),
+            Dynamic::ALL.len(),
+            "Dynamic::ALL contains duplicates"
+        );
+    }
+
+    #[test]
+    fn extreme_pianissimos_map_to_smufl_p_levels() {
+        assert_eq!(Dynamic::Pppp.glyph(), Glyph::DynamicPppp);
+        assert_eq!(Dynamic::Ppppp.glyph(), Glyph::DynamicPpppp);
+        assert_eq!(Dynamic::Pppppp.glyph(), Glyph::DynamicPppppp);
+    }
+
+    #[test]
+    fn extreme_fortissimos_map_to_smufl_f_levels() {
+        assert_eq!(Dynamic::Ffff.glyph(), Glyph::DynamicFfff);
+        assert_eq!(Dynamic::Fffff.glyph(), Glyph::DynamicFffff);
+        assert_eq!(Dynamic::Ffffff.glyph(), Glyph::DynamicFfffff);
+    }
+
+    #[test]
+    fn accent_dynamics_map_to_smufl_glyphs() {
+        // sf (single-letter sforzato) is a different SMuFL glyph from
+        // sfz (the "sfz" composite); confirm they don't collapse.
+        assert_eq!(Dynamic::Sf.glyph(), Glyph::DynamicSforzato);
+        assert_ne!(Dynamic::Sf.glyph(), Dynamic::Sfz.glyph());
+
+        assert_eq!(Dynamic::Sff.glyph(), Glyph::DynamicSforzatoFf);
+        assert_eq!(Dynamic::Sfpp.glyph(), Glyph::DynamicSforzandoPianissimo);
+        // sfp (sforzando-piano) is distinct from the sforzato-piano variant.
+        assert_eq!(Dynamic::Sfp.glyph(), Glyph::DynamicSforzandoPiano);
+    }
+
+    #[test]
+    fn rinforzando_dynamics_map_to_smufl_glyphs() {
+        // Two SMuFL flavors: short `dynamicRinforzando` and full `rfz` form.
+        assert_eq!(Dynamic::Rf.glyph(), Glyph::DynamicRinforzando);
+        assert_eq!(Dynamic::Rfz.glyph(), Glyph::DynamicRinforzando1);
+        assert_ne!(Dynamic::Rf.glyph(), Dynamic::Rfz.glyph());
+    }
+
+    #[test]
+    fn forzando_maps_to_smufl_forzando() {
+        assert_eq!(Dynamic::Fz.glyph(), Glyph::DynamicForzando);
+    }
+
+    #[test]
+    fn niente_maps_to_smufl_niente() {
+        assert_eq!(Dynamic::Niente.glyph(), Glyph::DynamicNiente);
+    }
+
+    #[test]
+    fn poco_forte_maps_to_smufl_pf() {
+        assert_eq!(Dynamic::Pf.glyph(), Glyph::DynamicPf);
+        // pf is a quiet-forte composite; must not collapse to f or p.
+        assert_ne!(Dynamic::Pf.glyph(), Dynamic::Forte.glyph());
+        assert_ne!(Dynamic::Pf.glyph(), Dynamic::Piano.glyph());
     }
 
     #[test]

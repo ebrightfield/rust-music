@@ -18,6 +18,7 @@ use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_bracket::TrillBracketSide;
+use crate::layout::trill_extension::TrillWiggleSpeed;
 use crate::layout::time_signature::TimeSignatureKind;
 
 /// Articulation and expression annotations attached to a note or chord event.
@@ -107,6 +108,12 @@ pub struct NoteAnnotations {
     /// trill's true semantic range rather than the per-system wiggle
     /// fragments.
     pub trill_bracket: Option<TrillBracketSide>,
+    /// Optional speed/density variant for the trill wavy-line extension.
+    /// Has no effect unless `trill_extension == true`. `None` selects the
+    /// neutral `Standard` wiggle (Bravura's `wiggleTrill` glyph). Choosing
+    /// a faster or slower variant communicates trill speed visually while
+    /// keeping the gesture's meaning unchanged.
+    pub trill_wiggle_speed: Option<TrillWiggleSpeed>,
 }
 
 /// A group of notes to be beamed together.

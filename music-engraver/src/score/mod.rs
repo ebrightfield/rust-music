@@ -58,6 +58,7 @@ use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::tempo::TempoMark;
 use crate::layout::tremolo::TremoloCount;
+use crate::layout::trill_extension::TrillWiggleSpeed;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
@@ -475,6 +476,35 @@ impl ScoreBuilder {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_bracket = Some(side);
+        }
+        self
+    }
+
+    /// Attach a trill ornament with a speed-variant wavy-line extension to
+    /// the most recently added note or chord. The wiggle is tiled with the
+    /// chosen SMuFL `wiggleTrill*` glyph: faster variants pack the wiggle
+    /// more densely (visually communicating a faster trill), slower variants
+    /// spread it out.
+    ///
+    /// Equivalent to `.trill_with_extension()` but using
+    /// `speed.to_glyph()` instead of the default `wiggleTrill`. The three
+    /// flags (`ornament == Trill`, `trill_extension == true`,
+    /// `trill_wiggle_speed == Some(speed)`) are coupled at the API surface so
+    /// users can't request a speed on something that isn't a
+    /// trill-with-extension. No-op if the last event was a rest.
+    ///
+    /// For cross-system trills, the same speed glyph is used on both the
+    /// trailing wiggle (system N) and the incoming wiggle (system N+1) so
+    /// the wavy line reads as one continuous mark of consistent density
+    /// across the line break.
+    pub fn trill_with_extension_speed(mut self, speed: TrillWiggleSpeed) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_wiggle_speed = Some(speed);
         }
         self
     }

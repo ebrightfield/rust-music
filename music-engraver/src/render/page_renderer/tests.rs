@@ -2263,3 +2263,183 @@ fn cross_system_trill_bracket_start_adds_only_one_hook_on_source_system() {
         "Start-only bracket on cross-system trill must add exactly 1 hook on N (got delta={delta})"
     );
 }
+
+// --- Cross-system trill wiggle speed continuity ---
+
+use crate::layout::trill_extension::TrillWiggleSpeed;
+
+fn trill_ext_speed_whole_note(pos: i8, speed: TrillWiggleSpeed) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_wiggle_speed: Some(speed),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_trill_extension_fast_speed_adds_more_incoming_paths_than_slow() {
+    // The incoming wiggle on system N+1 must respect the source note's
+    // speed choice: a faster (denser) wiggle tiles more segments across the
+    // same incoming span than a slower one. Without this, the cross-system
+    // pass would drop the user's speed back to the default mid-trill —
+    // visually breaking the continuity it's meant to provide.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    fn measures(speed: TrillWiggleSpeed) -> Vec<MeasureContent> {
+        vec![
+            MeasureContent {
+                events: vec![trill_ext_speed_whole_note(8, speed)],
+                barline: BarlineStyle::Single,
+                volta: None,
+                additional_voices: vec![],
+            },
+            MeasureContent {
+                events: vec![whole_note(8)],
+                barline: BarlineStyle::Final,
+                volta: None,
+                additional_voices: vec![],
+            },
+        ]
+    }
+
+    let fast_pg = layout_page(
+        &prefix(),
+        &measures(TrillWiggleSpeed::Fastest),
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let slow_pg = layout_page(
+        &prefix(),
+        &measures(TrillWiggleSpeed::Slowest),
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    assert_eq!(fast_pg.systems.len(), 2, "test requires two systems");
+    assert_eq!(slow_pg.systems.len(), 2, "test requires two systems");
+
+    let fast = draw_page(&font, &config, &fast_pg).unwrap().to_svg();
+    let slow = draw_page(&font, &config, &slow_pg).unwrap().to_svg();
+
+    let fast_paths = fast.matches("<path ").count();
+    let slow_paths = slow.matches("<path ").count();
+    assert!(
+        fast_paths > slow_paths,
+        "Fastest cross-system wiggle must tile more total segments than Slowest: \
+         fast={fast_paths}, slow={slow_paths}",
+    );
+}
+
+#[test]
+fn cross_system_trill_extension_speed_changes_svg_byte_for_byte() {
+    // A speed choice must propagate through the cross-system path so the
+    // incoming wiggle on N+1 also reflects the speed. Two distinct speeds
+    // must produce distinct SVGs end-to-end.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let fast_measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_speed_whole_note(8, TrillWiggleSpeed::Fast)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let slow_measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_speed_whole_note(8, TrillWiggleSpeed::Slow)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p1 = layout_page(&prefix(), &fast_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p2 = layout_page(&prefix(), &slow_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_fast = draw_page(&font, &config, &p1).unwrap().to_svg();
+    let out_slow = draw_page(&font, &config, &p2).unwrap().to_svg();
+
+    assert_ne!(
+        out_fast, out_slow,
+        "Distinct cross-system wiggle speeds must render byte-distinct SVGs",
+    );
+}
+
+#[test]
+fn cross_system_trill_extension_standard_speed_matches_unset_speed() {
+    // Asking for Standard explicitly must produce byte-identical output to
+    // not setting a speed at all. This is the cross-system counterpart of
+    // the within-system canary test.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let standard = vec![
+        MeasureContent {
+            events: vec![trill_ext_speed_whole_note(8, TrillWiggleSpeed::Standard)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let unset = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p1 = layout_page(&prefix(), &standard, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p2 = layout_page(&prefix(), &unset, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_std = draw_page(&font, &config, &p1).unwrap().to_svg();
+    let out_unset = draw_page(&font, &config, &p2).unwrap().to_svg();
+
+    assert_eq!(
+        out_std, out_unset,
+        "explicit Standard speed and unset speed must produce identical SVG"
+    );
+}

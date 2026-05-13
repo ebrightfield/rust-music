@@ -108,20 +108,7 @@ mod tests {
     #[test]
     fn all_dynamics_render_without_error() {
         let (font, staff) = setup();
-        let dynamics = [
-            Dynamic::Ppp,
-            Dynamic::Pp,
-            Dynamic::Piano,
-            Dynamic::Mp,
-            Dynamic::Mf,
-            Dynamic::Forte,
-            Dynamic::Ff,
-            Dynamic::Fff,
-            Dynamic::Fp,
-            Dynamic::Sfz,
-            Dynamic::Sfp,
-        ];
-        for dyn_mark in &dynamics {
+        for dyn_mark in &Dynamic::ALL {
             let mut svg = SvgWriter::new(800.0, 300.0, -500.0, -200.0, 6000.0, 2000.0);
             let result = draw_dynamic(&mut svg, &staff, &font, *dyn_mark, 500.0);
             assert!(result.is_ok(), "{:?} failed to render", dyn_mark);
@@ -131,6 +118,47 @@ mod tests {
                 "{:?} should produce exactly 1 path",
                 dyn_mark
             );
+        }
+    }
+
+    #[test]
+    fn all_dynamics_produce_distinct_svg_output() {
+        // Each variant must produce a visually distinct SVG (different
+        // glyph path data). If two variants accidentally collapsed to the
+        // same glyph this catches it at the render layer too.
+        let (font, staff) = setup();
+        let mut seen: Vec<String> = Vec::new();
+        for dyn_mark in &Dynamic::ALL {
+            let mut svg = SvgWriter::new(800.0, 300.0, -500.0, -200.0, 6000.0, 2000.0);
+            draw_dynamic(&mut svg, &staff, &font, *dyn_mark, 500.0).unwrap();
+            let output = svg.to_svg();
+            assert!(
+                !seen.contains(&output),
+                "{:?} produced SVG identical to a prior variant",
+                dyn_mark
+            );
+            seen.push(output);
+        }
+        assert_eq!(seen.len(), Dynamic::ALL.len());
+    }
+
+    #[test]
+    fn extreme_dynamics_render_via_smufl_advance() {
+        // Bravura includes glyphs for all six p/f levels. If any of these
+        // lookups fail, the font is missing a glyph we claim to support.
+        let (font, _) = setup();
+        for g in [
+            Glyph::DynamicPppppp,
+            Glyph::DynamicPpppp,
+            Glyph::DynamicPppp,
+            Glyph::DynamicFfff,
+            Glyph::DynamicFffff,
+            Glyph::DynamicFfffff,
+        ] {
+            let adv = font
+                .glyph_advance(g)
+                .unwrap_or_else(|_| panic!("Bravura missing glyph {:?}", g));
+            assert!(adv > 0, "{:?} should have nonzero advance width", g);
         }
     }
 

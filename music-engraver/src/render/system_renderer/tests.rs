@@ -2552,3 +2552,199 @@ fn trill_bracket_both_on_last_note_in_system_emits_only_start_hook() {
          End is deferred to page renderer"
     );
 }
+
+// --- trill wiggle speed wiring ---
+
+use crate::layout::trill_extension::TrillWiggleSpeed;
+
+fn trill_ext_speed_note(pos: i8, speed: TrillWiggleSpeed) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_wiggle_speed: Some(speed),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn trill_wiggle_speed_collector_propagates_speed_when_extension_active() {
+    // The collector must carry the user-selected speed through to the draw
+    // pass — without this, every wiggle would tile the default `WiggleTrill`
+    // glyph regardless of what the user asked for.
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_speed_note(4, TrillWiggleSpeed::Fast),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(
+        info[0].wiggle_speed,
+        Some(TrillWiggleSpeed::Fast),
+        "collector must surface the user's chosen speed",
+    );
+    assert_eq!(
+        info[1].wiggle_speed, None,
+        "plain note (no extension) must carry no speed",
+    );
+}
+
+#[test]
+fn trill_wiggle_speed_collector_drops_speed_when_no_extension() {
+    // Speed without an extension flag is silently inert downstream: the
+    // wiggle requires both the trill ornament AND the extension flag.
+    let bad = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: false,
+            trill_wiggle_speed: Some(TrillWiggleSpeed::Slowest),
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![bad, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(
+        info[0].wiggle_speed, None,
+        "speed without extension must be silently dropped",
+    );
+}
+
+#[test]
+fn trill_wiggle_speed_fast_tiles_more_segments_than_slow() {
+    // The whole point of choosing a speed: a faster (denser) wiggle tile is
+    // shorter, so a fixed-width span fits more tiles. Verify the inequality
+    // holds in real rendered output — the strict guarantee against any
+    // future regression that wires the speed but ignores its advance width.
+    let (font, config, mcfg) = setup();
+
+    let measures_fast = vec![MeasureContent {
+        events: vec![
+            trill_ext_speed_note(4, TrillWiggleSpeed::Fastest),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let measures_slow = vec![MeasureContent {
+        events: vec![
+            trill_ext_speed_note(4, TrillWiggleSpeed::Slowest),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+
+    let system_fast = layout_system(&treble_prefix(), &measures_fast, &mcfg, None);
+    let system_slow = layout_system(&treble_prefix(), &measures_slow, &mcfg, None);
+
+    let mut svg_fast = make_svg();
+    draw_system(&mut svg_fast, &font, &config, &system_fast, 0.0, 0.0).unwrap();
+    let fast = svg_fast.to_svg();
+
+    let mut svg_slow = make_svg();
+    draw_system(&mut svg_slow, &font, &config, &system_slow, 0.0, 0.0).unwrap();
+    let slow = svg_slow.to_svg();
+
+    let fast_paths = fast.matches("<path").count();
+    let slow_paths = slow.matches("<path").count();
+    assert!(
+        fast_paths > slow_paths,
+        "Fastest wiggle must tile more segments than Slowest in the same span: \
+         fast={fast_paths}, slow={slow_paths}",
+    );
+}
+
+#[test]
+fn trill_wiggle_speed_each_variant_uses_its_own_glyph_advance() {
+    // Sanity check that the speeds actually map to different SMuFL glyphs
+    // with different advance widths in Bravura. If two speeds shared an
+    // advance, the "fast > slow tile count" guarantee would silently fail
+    // for that pair.
+    let (font, _config, _mcfg) = setup();
+    let mut advances: Vec<f64> = TrillWiggleSpeed::ALL
+        .iter()
+        .map(|s| font.glyph_advance(s.to_glyph()).expect("glyph present") as f64)
+        .collect();
+    advances.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // All 9 speeds must yield non-zero advances (so the layout loop terminates).
+    for a in &advances {
+        assert!(*a > 0.0, "speed glyph advance must be positive, got {a}");
+    }
+
+    // Bravura's wiggleTrill family progresses monotonically: every pair of
+    // adjacent advances must differ, otherwise the speed choice would be a
+    // no-op for that pair.
+    for pair in advances.windows(2) {
+        assert!(
+            pair[1] - pair[0] > 1.0,
+            "adjacent wiggle speed advances must differ by >1 font unit, got {pair:?}",
+        );
+    }
+}
+
+#[test]
+fn trill_wiggle_speed_none_uses_default_glyph() {
+    // When `wiggle_speed` is None on the collector info, the draw pass must
+    // tile `Glyph::WiggleTrill` (the Default for TrillWiggleSpeed). Compare
+    // against an explicit Standard request: outputs must be byte-identical.
+    let (font, config, mcfg) = setup();
+
+    let measures_none = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let measures_standard = vec![MeasureContent {
+        events: vec![
+            trill_ext_speed_note(4, TrillWiggleSpeed::Standard),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+
+    let s_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
+    let s_std = layout_system(&treble_prefix(), &measures_standard, &mcfg, None);
+
+    let mut svg_none = make_svg();
+    draw_system(&mut svg_none, &font, &config, &s_none, 0.0, 0.0).unwrap();
+    let none_out = svg_none.to_svg();
+
+    let mut svg_std = make_svg();
+    draw_system(&mut svg_std, &font, &config, &s_std, 0.0, 0.0).unwrap();
+    let std_out = svg_std.to_svg();
+
+    assert_eq!(
+        none_out, std_out,
+        "wiggle_speed=None and wiggle_speed=Standard must produce identical SVG"
+    );
+}

@@ -5691,3 +5691,182 @@
             "Both bracket on chord trill must add exactly 2 hooks (got {delta})"
         );
     }
+
+    // --- trill_with_extension_speed (ScoreBuilder) ---
+
+    #[test]
+    fn trill_with_extension_speed_sets_all_three_annotation_fields() {
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+
+        // Use `convert_event` directly (mirroring the bracketed test) so the
+        // wiring is verified independently of the system renderer.
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::WHOLE,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_wiggle_speed: Some(TrillWiggleSpeed::Fast),
+                ..NoteAnnotations::default()
+            },
+        };
+        let result = convert_event(&event, &Clef::Treble, &KeySignature::Open, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.ornament, Some(Ornament::Trill));
+                assert!(ne.annotations.trill_extension);
+                assert_eq!(
+                    ne.annotations.trill_wiggle_speed,
+                    Some(TrillWiggleSpeed::Fast)
+                );
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn trill_with_extension_speed_on_rest_is_noop() {
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+
+        // Builder method must silently no-op when the most recent event was a
+        // rest, just like the other annotation builders. We compare the SVG
+        // against the same builder chain without the speed call: byte-equal.
+        let with_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Fastest)
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            with_speed, without,
+            "trill_with_extension_speed on a rest must be a no-op"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_speed_renders_wiggle_paths() {
+        // A speed variant must still produce wiggle paths: it's the same
+        // gesture as trill_with_extension(), just a different tile glyph.
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+
+        let with_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Standard)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let no_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(
+            with_speed.matches("<path").count() > no_ext.matches("<path").count(),
+            "speed-variant trill extension must add wiggle paths beyond plain note"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_speed_standard_matches_default_extension() {
+        // The `Standard` speed *must* produce the same SVG as the plain
+        // `trill_with_extension()` call so existing callers see no change
+        // when they upgrade to the new method using the default speed.
+        // This is the canary that protects all 4 ScoreBuilder methods that
+        // funnel into the same wiggle layout path.
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let standard = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Standard)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            plain, standard,
+            "Standard speed must produce byte-identical SVG to trill_with_extension()"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_speed_different_speeds_produce_different_svg() {
+        // Two distinct wiggle speeds must produce visually distinct SVG —
+        // otherwise the user's choice of speed has no effect on the output.
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+
+        let fast = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Fast)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let slow = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Slow)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_ne!(
+            fast, slow,
+            "Fast and Slow wiggle variants must produce different SVG output"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_speed_on_chord_adds_wiggle() {
+        // Chord trills must also pick up the speed annotation.
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+
+        let plain_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let chord_with_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Fastest)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(
+            chord_with_speed.matches("<path").count() > plain_chord.matches("<path").count(),
+            "speed-variant chord trill must add tr glyph + wiggle paths"
+        );
+    }

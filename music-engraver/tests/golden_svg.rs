@@ -2620,6 +2620,122 @@ fn golden_trill_bracket() {
     assert_golden("trill_bracket", &svg);
 }
 
+/// Build a short score exercising all 9 SMuFL wiggleTrill* speed variants
+/// through `.trill_with_extension_speed`. Each measure picks a different
+/// speed; the wide whole-note spans give every wiggle enough room for
+/// several tiles so density differences are visible.
+fn build_trill_wiggle_speed() -> String {
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+
+    // Walk through every variant in canonical order. The terminating
+    // quarter is added at the end so the last whole-note trill has a
+    // following note to anchor its within-system wiggle.
+    let pitches = [
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+    ];
+    for (i, speed) in TrillWiggleSpeed::ALL.iter().enumerate() {
+        let (n, oct) = pitches[i];
+        b = b
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed(*speed)
+            .barline();
+    }
+    b.note(p("B", 5), Duration::QTR).end_barline().render_svg()
+}
+
+#[test]
+fn golden_trill_wiggle_speed() {
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    let svg = build_trill_wiggle_speed();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Every measure has exactly one "tr" glyph + tiled wiggle. The total
+    // path count must dominate the same score where every wiggle is at
+    // Slowest (the sparsest density) — confirming individual speed choices
+    // actually affect tile counts in the final SVG.
+    let mut all_slowest = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+    let pitches = [
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+    ];
+    for (n, oct) in pitches {
+        all_slowest = all_slowest
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Slowest)
+            .barline();
+    }
+    let baseline = all_slowest
+        .note(p("B", 5), Duration::QTR)
+        .end_barline()
+        .render_svg();
+
+    let mixed_paths = svg.matches("<path").count();
+    let slowest_paths = baseline.matches("<path").count();
+    assert!(
+        mixed_paths > slowest_paths,
+        "Mixed-speed score must have more tile paths than all-Slowest baseline: \
+         mixed={mixed_paths}, slowest={slowest_paths}"
+    );
+
+    // A score with all-Fastest must in turn produce strictly more paths than
+    // mixed (and even more than all-Slowest). This sandwiches the mixed
+    // value between the two extremes — a structural guard that none of the
+    // 9 speeds are silently treated as a single glyph.
+    let mut all_fastest = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+    for (n, oct) in pitches {
+        all_fastest = all_fastest
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Fastest)
+            .barline();
+    }
+    let fastest = all_fastest
+        .note(p("B", 5), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    let fastest_paths = fastest.matches("<path").count();
+    assert!(
+        fastest_paths > mixed_paths && fastest_paths > slowest_paths,
+        "All-Fastest must produce the most tile paths: \
+         fastest={fastest_paths}, mixed={mixed_paths}, slowest={slowest_paths}"
+    );
+
+    // SVG must not be byte-equal to either bookend.
+    assert_ne!(svg, baseline, "mixed-speed must differ from all-Slowest");
+    assert_ne!(svg, fastest, "mixed-speed must differ from all-Fastest");
+
+    assert_golden("trill_wiggle_speed", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -2676,6 +2792,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_voice_spans",
         "trill_extension",
         "trill_bracket",
+        "trill_wiggle_speed",
     ];
 
     for name in &names {

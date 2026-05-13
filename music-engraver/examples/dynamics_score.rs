@@ -46,14 +46,16 @@ fn main() {
         .dynamic(Dynamic::Fff)
         .rest(Duration::HALF)
         .barline()
-        // Measure 4: mixed — sfz accent, then pp subito
+        // Measure 4: accents and rinforzando family — exercise the
+        // newly-added composite glyphs (sf, sfp, rfz, fz, niente).
         .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
-        .dynamic(Dynamic::Sfz)
+        .dynamic(Dynamic::Sf)
         .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
-        .dynamic(Dynamic::Pp)
+        .dynamic(Dynamic::Rfz)
         .note(Pitch::new(Note::Ees, 4).unwrap(), Duration::QTR)
+        .dynamic(Dynamic::Fz)
         .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
-        .dynamic(Dynamic::Ppp)
+        .dynamic(Dynamic::Niente)
         .end_barline()
         .render_svg();
 
