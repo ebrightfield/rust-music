@@ -11,7 +11,7 @@ use crate::layout::stem::auto_stem_direction;
 use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
-use crate::layout::trill_bracket::TrillBracketSide;
+use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
 use crate::layout::trill_extension::{
     layout_trill_extension_with_glyph, trill_extension_right_edge, TrillWiggleSpeed,
 };
@@ -1151,6 +1151,13 @@ struct UnresolvedTrillExtension {
     /// `Some(Start)` or `None` → no. The Start hook (if requested) was
     /// already drawn on the source system by `draw_system_trill_extensions`.
     bracket: Option<TrillBracketSide>,
+    /// Optional override for the bracket hook direction. Only meaningful when
+    /// `bracket` is `Some(End | Both)`. `None` selects `HookDirection::Down`.
+    bracket_direction: Option<HookDirection>,
+    /// Optional override for the bracket hook length, in staff spaces. Only
+    /// meaningful when `bracket` is `Some(End | Both)`. `None` selects the
+    /// default `TRILL_BRACKET_HOOK_LENGTH_SS`.
+    bracket_length_ss: Option<f64>,
     /// Speed variant for the wavy-line glyph. The incoming wiggle on system
     /// N+1 must tile the same glyph as the trailing wiggle on system N so a
     /// reader sees one continuous wavy line of consistent density across the
@@ -1204,6 +1211,8 @@ fn find_unresolved_trill_extension(
     Some(UnresolvedTrillExtension {
         y_above_top_line: ornament.y - src_staff.y_of(8),
         bracket: last.bracket,
+        bracket_direction: last.bracket_direction,
+        bracket_length_ss: last.bracket_length_ss,
         wiggle_speed: last.wiggle_speed,
     })
 }
@@ -1299,9 +1308,13 @@ pub(crate) fn draw_cross_system_trill_extensions(
             // and cross-system End hooks land identically.
             if matches!(src.bracket, Some(TrillBracketSide::End | TrillBracketSide::Both)) {
                 let hook_stroke = config.thin_barline_thickness_fu();
-                let hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff_space;
+                let hook_length = src
+                    .bracket_length_ss
+                    .map(|ss| ss * staff_space)
+                    .unwrap_or(TRILL_BRACKET_HOOK_LENGTH_SS * staff_space);
+                let direction = src.bracket_direction.unwrap_or(HookDirection::Down);
                 let hook_x = trill_extension_right_edge(&layout);
-                let hook = layout_trill_end_hook(hook_x, y, hook_length, hook_stroke);
+                let hook = layout_trill_end_hook(hook_x, y, hook_length, direction, hook_stroke);
                 draw_trill_bracket_hook(svg, &hook);
             }
         }

@@ -2553,6 +2553,219 @@ fn trill_bracket_both_on_last_note_in_system_emits_only_start_hook() {
     );
 }
 
+// --- trill bracket custom direction / length wiring ---
+
+use crate::layout::trill_bracket::HookDirection;
+
+fn trill_ext_bracketed_custom_note(
+    pos: i8,
+    side: TrillBracketSide,
+    direction: HookDirection,
+    length_ss: f64,
+) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_bracket: Some(side),
+            trill_bracket_direction: Some(direction),
+            trill_bracket_length_ss: Some(length_ss),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn trill_bracket_custom_collector_propagates_direction_and_length() {
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_custom_note(4, TrillBracketSide::Both, HookDirection::Up, 1.25),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(info[0].bracket, Some(TrillBracketSide::Both));
+    assert_eq!(
+        info[0].bracket_direction,
+        Some(HookDirection::Up),
+        "collector must propagate the user's chosen hook direction"
+    );
+    assert_eq!(
+        info[0].bracket_length_ss,
+        Some(1.25),
+        "collector must propagate the user's chosen hook length"
+    );
+    // Note without bracket has both fields None.
+    assert_eq!(info[1].bracket_direction, None);
+    assert_eq!(info[1].bracket_length_ss, None);
+}
+
+#[test]
+fn trill_bracket_custom_collector_drops_direction_and_length_without_bracket() {
+    // A user that sets direction/length but no bracket side must NOT see those
+    // overrides leak through — the bracket fields are coupled at the
+    // annotation surface but the collector enforces the coupling defensively.
+    let bad = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_bracket: None,
+            trill_bracket_direction: Some(HookDirection::Up),
+            trill_bracket_length_ss: Some(2.0),
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![bad, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(
+        info[0].bracket_direction, None,
+        "direction must be silently dropped when bracket is None"
+    );
+    assert_eq!(
+        info[0].bracket_length_ss, None,
+        "length must be silently dropped when bracket is None"
+    );
+}
+
+#[test]
+fn trill_bracket_custom_length_changes_hook_line_geometry() {
+    // A longer hook must produce a visibly different SVG than the default.
+    // The number of <line> elements should be unchanged — only y-coordinate
+    // values differ.
+    let (font, config, mcfg) = setup();
+    let measures_short = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_custom_note(4, TrillBracketSide::Both, HookDirection::Down, 0.5),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures_short, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let short_svg = svg.to_svg();
+
+    let measures_long = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_custom_note(4, TrillBracketSide::Both, HookDirection::Down, 1.5),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system_long = layout_system(&treble_prefix(), &measures_long, &mcfg, None);
+    let mut svg_long = make_svg();
+    draw_system(&mut svg_long, &font, &config, &system_long, 0.0, 0.0).unwrap();
+    let long_svg = svg_long.to_svg();
+
+    assert_eq!(
+        short_svg.matches("<line ").count(),
+        long_svg.matches("<line ").count(),
+        "Length change must NOT add/remove <line> elements"
+    );
+    assert_ne!(
+        short_svg, long_svg,
+        "Length change must change the SVG output"
+    );
+}
+
+#[test]
+fn trill_bracket_custom_direction_up_flips_hook_y_extents() {
+    // Down vs Up direction at the same length: the SVG must differ in the
+    // y-extent of the last hook line, with both having the same span but
+    // opposite anchoring relative to the wiggle baseline.
+    let (font, config, mcfg) = setup();
+    let make_svg_for = |direction: HookDirection| -> String {
+        let measures = vec![MeasureContent {
+            events: vec![
+                trill_ext_bracketed_custom_note(4, TrillBracketSide::Start, direction, 1.0),
+                quarter_note(6),
+            ],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        svg.to_svg()
+    };
+    let down = make_svg_for(HookDirection::Down);
+    let up = make_svg_for(HookDirection::Up);
+    assert_ne!(down, up, "Direction flip must change the SVG output");
+    // Same number of hook lines in both cases.
+    assert_eq!(
+        down.matches("<line ").count(),
+        up.matches("<line ").count(),
+        "Direction flip must NOT add/remove <line> elements"
+    );
+}
+
+#[test]
+fn trill_bracket_custom_defaults_match_plain_bracketed() {
+    // The custom code path with `direction=Down, length=0.75ss` must produce
+    // byte-identical SVG to the non-custom path. This is the regression canary
+    // that protects existing users from any drift.
+    let (font, config, mcfg) = setup();
+    let measures_custom = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_custom_note(4, TrillBracketSide::Both, HookDirection::Down, 0.75),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures_custom, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let custom_svg = svg.to_svg();
+
+    let measures_plain = vec![MeasureContent {
+        events: vec![
+            trill_ext_bracketed_note(4, TrillBracketSide::Both),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system_plain = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
+    let mut svg_plain = make_svg();
+    draw_system(&mut svg_plain, &font, &config, &system_plain, 0.0, 0.0).unwrap();
+    let plain_svg = svg_plain.to_svg();
+
+    assert_eq!(
+        custom_svg, plain_svg,
+        "custom(Down, 0.75ss) must render byte-identically to the plain bracketed API"
+    );
+}
+
 // --- trill wiggle speed wiring ---
 
 use crate::layout::trill_extension::TrillWiggleSpeed;

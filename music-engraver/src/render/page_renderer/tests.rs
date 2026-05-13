@@ -2264,6 +2264,197 @@ fn cross_system_trill_bracket_start_adds_only_one_hook_on_source_system() {
     );
 }
 
+// --- Cross-system trill bracket custom direction / length ---
+
+use crate::layout::trill_bracket::HookDirection;
+
+fn trill_ext_bracketed_custom_whole_note(
+    pos: i8,
+    side: TrillBracketSide,
+    direction: HookDirection,
+    length_ss: f64,
+) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_bracket: Some(side),
+            trill_bracket_direction: Some(direction),
+            trill_bracket_length_ss: Some(length_ss),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_trill_bracket_custom_length_changes_n_plus_1_hook() {
+    // The End hook drawn on system N+1 must honor the user's custom length.
+    // We can't easily isolate the hook's y-extent across the whole page, but
+    // we *can* assert that two different lengths produce different page-level
+    // SVG with the same number of <line> elements (only geometry differs).
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let short = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_custom_whole_note(
+                8,
+                TrillBracketSide::End,
+                HookDirection::Down,
+                0.5,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let long = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_custom_whole_note(
+                8,
+                TrillBracketSide::End,
+                HookDirection::Down,
+                1.5,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_short = layout_page(&prefix(), &short, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_long = layout_page(&prefix(), &long, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_short = draw_page(&font, &config, &p_short).unwrap().to_svg();
+    let out_long = draw_page(&font, &config, &p_long).unwrap().to_svg();
+
+    assert_eq!(
+        out_short.matches("<line ").count(),
+        out_long.matches("<line ").count(),
+        "Length change must NOT add/remove <line> elements on the page"
+    );
+    assert_ne!(out_short, out_long, "Length change must change the SVG");
+}
+
+#[test]
+fn cross_system_trill_bracket_custom_direction_changes_n_plus_1_hook() {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let mk = |direction: HookDirection| {
+        vec![
+            MeasureContent {
+                events: vec![trill_ext_bracketed_custom_whole_note(
+                    8,
+                    TrillBracketSide::End,
+                    direction,
+                    0.75,
+                )],
+                barline: BarlineStyle::Single,
+                volta: None,
+                additional_voices: vec![],
+            },
+            MeasureContent {
+                events: vec![whole_note(8)],
+                barline: BarlineStyle::Final,
+                volta: None,
+                additional_voices: vec![],
+            },
+        ]
+    };
+    let p_down = layout_page(&prefix(), &mk(HookDirection::Down), &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_up = layout_page(&prefix(), &mk(HookDirection::Up), &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_down = draw_page(&font, &config, &p_down).unwrap().to_svg();
+    let out_up = draw_page(&font, &config, &p_up).unwrap().to_svg();
+
+    assert_eq!(
+        out_down.matches("<line ").count(),
+        out_up.matches("<line ").count(),
+        "Direction change must NOT add/remove <line> elements on the page"
+    );
+    assert_ne!(
+        out_down, out_up,
+        "Down vs Up direction must change the SVG output"
+    );
+}
+
+#[test]
+fn cross_system_trill_bracket_custom_defaults_match_plain_bracketed() {
+    // The custom-API code path with `direction=Down, length=0.75ss` must
+    // produce byte-identical SVG to the plain bracketed API. Cross-system
+    // canary protecting existing users from drift introduced by the wiring.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let custom = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_custom_whole_note(
+                8,
+                TrillBracketSide::Both,
+                HookDirection::Down,
+                0.75,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_bracketed_whole_note(8, TrillBracketSide::Both)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p1 = layout_page(&prefix(), &custom, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let out_custom = draw_page(&font, &config, &p1).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
+
+    assert_eq!(
+        out_custom, out_plain,
+        "custom(Down, 0.75ss) cross-system must render byte-identically to the plain bracketed API"
+    );
+}
+
 // --- Cross-system trill wiggle speed continuity ---
 
 use crate::layout::trill_extension::TrillWiggleSpeed;

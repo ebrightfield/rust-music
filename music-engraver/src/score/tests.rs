@@ -5965,3 +5965,281 @@
             "speed-variant chord trill must add tr glyph + wiggle paths"
         );
     }
+
+    // --- trill_with_extension_bracketed_custom (ScoreBuilder) ---
+
+    #[test]
+    fn trill_with_extension_bracketed_custom_sets_all_five_annotation_fields() {
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::WHOLE,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_bracket: Some(TrillBracketSide::Both),
+                trill_bracket_direction: Some(HookDirection::Up),
+                trill_bracket_length_ss: Some(0.5),
+                ..NoteAnnotations::default()
+            },
+        };
+        let result = convert_event(&event, &Clef::Treble, &KeySignature::Open, None);
+        match result {
+            MeasureEvent::Note(ne) => {
+                assert_eq!(ne.annotations.ornament, Some(Ornament::Trill));
+                assert!(ne.annotations.trill_extension);
+                assert_eq!(ne.annotations.trill_bracket, Some(TrillBracketSide::Both));
+                assert_eq!(
+                    ne.annotations.trill_bracket_direction,
+                    Some(HookDirection::Up)
+                );
+                assert_eq!(ne.annotations.trill_bracket_length_ss, Some(0.5));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_custom_default_args_matches_plain_bracketed() {
+        // Custom with Down direction and the default 0.75 length must produce
+        // byte-identical SVG to the existing `trill_with_extension_bracketed`
+        // call. This is the regression canary that protects the existing API.
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::Both)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let custom = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Down,
+                0.75,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, custom,
+            "Custom(Down, 0.75) must render identically to the default bracketed API"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_custom_length_changes_svg() {
+        // A longer hook must produce a measurably different SVG than the default.
+        // Specifically, the hook <line>'s vertical extent must encode the new
+        // length — we don't assert exact coordinates here, just that the SVG
+        // is not byte-identical (a length change must propagate to render).
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+
+        let default_len = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Down,
+                0.75,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let long = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Down,
+                1.5,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_ne!(
+            default_len, long,
+            "Longer hook must produce different SVG than the default length"
+        );
+        // Same number of <line> elements — only their geometry differs.
+        assert_eq!(
+            default_len.matches("<line ").count(),
+            long.matches("<line ").count(),
+            "Length change must NOT add or remove <line> elements"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_custom_direction_changes_svg() {
+        // Direction flip (Down -> Up) must produce a measurably different SVG.
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+
+        let down = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Down,
+                0.75,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let up = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Up,
+                0.75,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_ne!(
+            down, up,
+            "Down vs Up hook direction must produce different SVG"
+        );
+        assert_eq!(
+            down.matches("<line ").count(),
+            up.matches("<line ").count(),
+            "Direction flip must NOT add or remove <line> elements"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_custom_on_rest_is_noop() {
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with_bracket = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Up,
+                1.0,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            plain, with_bracket,
+            "Custom bracketed on rest must be a complete no-op"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_bracketed_custom_hook_up_y_coordinates() {
+        // The Up-direction hook's <line> must have y1 < y2 with the smaller y
+        // (further above the staff) being the hook's tip and the larger y
+        // being the wiggle baseline. With the default Down direction, the
+        // larger y is the tip. Compare the y-extent direction between the two.
+        //
+        // SvgWriter emits hook lines via stroke <line ... y1="..." y2="..."/>;
+        // we parse the first hook line out of each SVG (the Start hook on the
+        // single trill in each score) and compare midpoint orderings.
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+
+        let down = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Start,
+                HookDirection::Down,
+                1.0,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let up = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Start,
+                HookDirection::Up,
+                1.0,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // Extract last <line ...> from each (the hook is appended after the
+        // wiggle segments, so it's the last <line> emitted by the trill pass;
+        // the wiggle is emitted as <path>, so the only <line> here is the hook
+        // itself plus any staff/barlines drawn earlier in the system).
+        let extract_last_hook_y_range = |svg: &str| -> (f64, f64) {
+            // Find the last <line tag and pull y1 and y2 attribute values.
+            let last_line_start = svg.rfind("<line ").expect("at least one <line>");
+            let tag_end = svg[last_line_start..]
+                .find('>')
+                .expect("malformed <line> tag");
+            let tag = &svg[last_line_start..last_line_start + tag_end];
+            let find_attr = |name: &str| -> f64 {
+                let key = format!("{name}=\"");
+                let start = tag.find(&key).unwrap_or_else(|| panic!("missing {name}"))
+                    + key.len();
+                let end = tag[start..].find('"').expect("unterminated attr") + start;
+                tag[start..end].parse().expect("numeric attr")
+            };
+            (find_attr("y1"), find_attr("y2"))
+        };
+
+        let (down_y1, down_y2) = extract_last_hook_y_range(&down);
+        let (up_y1, up_y2) = extract_last_hook_y_range(&up);
+
+        // For the Down hook, the baseline (smaller y) is at the wiggle and
+        // the tip is below it (larger y). For the Up hook, the baseline
+        // (larger y) is at the wiggle and the tip is above it (smaller y).
+        //
+        // The SVG writer emits the line in (x, y_top, y_bottom) order:
+        // y1 == y_top (smaller), y2 == y_bottom (larger). So the *span* (y2-y1)
+        // is positive in both cases. What flips is the relationship to the
+        // baseline: for Down, y1 ≈ baseline; for Up, y2 ≈ baseline. We can
+        // detect this by comparing y1 to y1 and y2 to y2: the Down hook's y1
+        // should equal the Up hook's y2 (they share the wiggle baseline).
+        let span_down = down_y2 - down_y1;
+        let span_up = up_y2 - up_y1;
+        assert!(span_down > 0.0, "down hook span must be positive");
+        assert!(span_up > 0.0, "up hook span must be positive");
+        assert!(
+            (span_down - span_up).abs() < 1e-6,
+            "Spans must be equal: down={span_down}, up={span_up}"
+        );
+        assert!(
+            (down_y1 - up_y2).abs() < 1e-6,
+            "Down's y_top must equal Up's y_bottom (shared wiggle baseline): \
+             down_y1={down_y1}, up_y2={up_y2}"
+        );
+    }

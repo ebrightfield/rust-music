@@ -482,6 +482,39 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a bracket-form trill with explicit hook direction and length.
+    ///
+    /// Same effect as [`trill_with_extension_bracketed`](Self::trill_with_extension_bracketed)
+    /// plus user-specified overrides for the hook's vertical direction and
+    /// length. `direction = HookDirection::Down` is the conventional default
+    /// (hook points back toward the staff); pass `HookDirection::Up` when the
+    /// trill is rendered below the staff. `length_ss` is the hook length in
+    /// staff spaces and replaces the default ~0.75ss; reasonable values are
+    /// 0.5..=1.0.
+    ///
+    /// No-op if the last event was a rest. Sets all four coupled annotations:
+    /// `ornament == Trill`, `trill_extension == true`, `trill_bracket == Some(side)`,
+    /// `trill_bracket_direction == Some(direction)`, `trill_bracket_length_ss
+    /// == Some(length_ss)`.
+    pub fn trill_with_extension_bracketed_custom(
+        mut self,
+        side: crate::layout::trill_bracket::TrillBracketSide,
+        direction: crate::layout::trill_bracket::HookDirection,
+        length_ss: f64,
+    ) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_bracket = Some(side);
+            annotations.trill_bracket_direction = Some(direction);
+            annotations.trill_bracket_length_ss = Some(length_ss);
+        }
+        self
+    }
+
     /// Attach a trill ornament with a speed-variant wavy-line extension to
     /// the most recently added note or chord. The wiggle is tiled with the
     /// chosen SMuFL `wiggleTrill*` glyph: faster variants pack the wiggle

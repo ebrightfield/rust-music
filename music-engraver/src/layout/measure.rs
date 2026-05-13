@@ -17,7 +17,7 @@ use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
 use crate::layout::tremolo::TremoloCount;
-use crate::layout::trill_bracket::TrillBracketSide;
+use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
 use crate::layout::trill_extension::TrillWiggleSpeed;
 use crate::layout::time_signature::TimeSignatureKind;
 
@@ -108,6 +108,21 @@ pub struct NoteAnnotations {
     /// trill's true semantic range rather than the per-system wiggle
     /// fragments.
     pub trill_bracket: Option<TrillBracketSide>,
+    /// Optional override for the direction in which trill bracket hooks
+    /// extend from the wiggle baseline. Has no effect unless `trill_bracket`
+    /// is `Some`. `None` selects the conventional `Down` direction (hook
+    /// points back toward the staff for trills sitting above the staff).
+    /// Set to `Some(HookDirection::Up)` for the rare case of a trill rendered
+    /// below the staff where the hook should still point back toward the
+    /// affected notes.
+    pub trill_bracket_direction: Option<HookDirection>,
+    /// Optional override for trill bracket hook length, in staff spaces.
+    /// Has no effect unless `trill_bracket` is `Some`. `None` selects the
+    /// default of ~0.75 staff spaces. Behind Bars shows hooks ranging from
+    /// roughly 0.5 to 1.0 staff spaces depending on the surrounding density;
+    /// callers can opt into a thinner or chunkier hook here without changing
+    /// the engraving config globally.
+    pub trill_bracket_length_ss: Option<f64>,
     /// Optional speed/density variant for the trill wavy-line extension.
     /// Has no effect unless `trill_extension == true`. `None` selects the
     /// neutral `Standard` wiggle (Bravura's `wiggleTrill` glyph). Choosing

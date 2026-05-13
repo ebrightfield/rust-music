@@ -2726,6 +2726,156 @@ fn golden_trill_bracket() {
     assert_golden("trill_bracket", &svg);
 }
 
+/// Build a score exercising the custom-options bracket API with non-default
+/// directions and lengths. Validates the wiring of `HookDirection::Up` and
+/// arbitrary length-in-staff-spaces through the system + page renderers.
+fn build_trill_bracket_custom() -> String {
+    use music_engraver::layout::trill_bracket::{HookDirection, TrillBracketSide};
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // Both, Down direction, longer-than-default 1.2 ss hook.
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_custom(
+            TrillBracketSide::Both,
+            HookDirection::Down,
+            1.2,
+        )
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .barline()
+        // Start, Up direction, default-length 0.75 ss.
+        .note(p("E", 5), Duration::WHOLE)
+        .trill_with_extension_bracketed_custom(
+            TrillBracketSide::Start,
+            HookDirection::Up,
+            0.75,
+        )
+        .barline()
+        .note(p("D", 5), Duration::WHOLE)
+        .barline()
+        // End, Up direction, short 0.5 ss hook.
+        .note(p("C", 5), Duration::WHOLE)
+        .trill_with_extension_bracketed_custom(
+            TrillBracketSide::End,
+            HookDirection::Up,
+            0.5,
+        )
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .barline()
+        // Chord trill: Both, Up direction, 1.0 ss hook.
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+        .trill_with_extension_bracketed_custom(
+            TrillBracketSide::Both,
+            HookDirection::Up,
+            1.0,
+        )
+        .end_barline()
+        .note(p("F", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_bracket_custom() {
+    use music_engraver::layout::trill_bracket::{HookDirection, TrillBracketSide};
+    let svg = build_trill_bracket_custom();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Same hook-count delta as `golden_trill_bracket` — 6 hooks total
+    // (M1 Both:2 + M3 Start:1 + M5 End:1 + M7 chord Both:2) vs the plain
+    // no-bracket variant. The custom knobs only change geometry, not count.
+    let baseline = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .barline()
+        .note(p("E", 5), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("D", 5), Duration::WHOLE)
+        .barline()
+        .note(p("C", 5), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .barline()
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+        .trill_with_extension()
+        .end_barline()
+        .note(p("F", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg();
+
+    let bracket_lines = svg.matches("<line ").count();
+    let plain_lines = baseline.matches("<line ").count();
+    let delta = bracket_lines - plain_lines;
+    assert_eq!(
+        delta, 6,
+        "expected 6 hook lines for custom variant (same as default bracket variant). \
+         Got delta={delta} (bracketed={bracket_lines}, plain={plain_lines})"
+    );
+
+    // The custom variant must differ from the default-options variant
+    // (build_trill_bracket) — the user's overrides actually take effect.
+    let default_variant = build_trill_bracket();
+    assert_ne!(
+        svg, default_variant,
+        "custom overrides (length+direction) must produce different SVG than defaults"
+    );
+    // ...but the count of <line> elements must be the same — overrides only
+    // change geometry, never count.
+    assert_eq!(
+        svg.matches("<line ").count(),
+        default_variant.matches("<line ").count(),
+        "custom overrides must not add/remove <line> elements"
+    );
+
+    // Single-side custom: a Start-only bracket with Up direction must still
+    // add exactly 1 hook line vs the same score with no bracket.
+    let only_start_up = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_custom(
+            TrillBracketSide::Start,
+            HookDirection::Up,
+            0.9,
+        )
+        .end_barline()
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    let only_start_plain = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("E", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .end_barline()
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    assert_eq!(
+        only_start_up.matches("<line ").count() - only_start_plain.matches("<line ").count(),
+        1,
+        "Start+Up custom bracket must add exactly 1 hook line"
+    );
+
+    assert_golden("trill_bracket_custom", &svg);
+}
+
 /// Build a short score exercising all 9 SMuFL wiggleTrill* speed variants
 /// through `.trill_with_extension_speed`. Each measure picks a different
 /// speed; the wide whole-note spans give every wiggle enough room for
@@ -2899,6 +3049,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_voice_spans",
         "trill_extension",
         "trill_bracket",
+        "trill_bracket_custom",
         "trill_wiggle_speed",
     ];
 

@@ -712,6 +712,13 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// note actually has both `Trill + extension`. A bracket request on a
     /// non-trilled note is silently inert.
     pub bracket: Option<TrillBracketSide>,
+    /// Optional override for the bracket hook direction. Only meaningful when
+    /// `bracket` is also `Some`. `None` selects `HookDirection::Down`.
+    pub bracket_direction: Option<HookDirection>,
+    /// Optional override for the bracket hook length, in staff spaces. Only
+    /// meaningful when `bracket` is also `Some`. `None` selects the default
+    /// `TRILL_BRACKET_HOOK_LENGTH_SS`.
+    pub bracket_length_ss: Option<f64>,
     /// Speed variant for the wavy-line glyph. Filtered the same way as
     /// `bracket`: only meaningful when `has_trill_extension == true`.
     /// `None` selects the standard wiggle.
@@ -733,6 +740,16 @@ pub(crate) fn collect_trill_extension_note_info(
                     let has_ext = n.annotations.trill_extension
                         && matches!(n.annotations.ornament, Some(Ornament::Trill));
                     let bracket = if has_ext { n.annotations.trill_bracket } else { None };
+                    let bracket_direction = if bracket.is_some() {
+                        n.annotations.trill_bracket_direction
+                    } else {
+                        None
+                    };
+                    let bracket_length_ss = if bracket.is_some() {
+                        n.annotations.trill_bracket_length_ss
+                    } else {
+                        None
+                    };
                     let wiggle_speed = if has_ext {
                         n.annotations.trill_wiggle_speed
                     } else {
@@ -743,6 +760,8 @@ pub(crate) fn collect_trill_extension_note_info(
                         staff_position: n.staff_position,
                         has_trill_extension: has_ext,
                         bracket,
+                        bracket_direction,
+                        bracket_length_ss,
                         wiggle_speed,
                     });
                 }
@@ -754,6 +773,16 @@ pub(crate) fn collect_trill_extension_note_info(
                     let has_ext = c.annotations.trill_extension
                         && matches!(c.annotations.ornament, Some(Ornament::Trill));
                     let bracket = if has_ext { c.annotations.trill_bracket } else { None };
+                    let bracket_direction = if bracket.is_some() {
+                        c.annotations.trill_bracket_direction
+                    } else {
+                        None
+                    };
+                    let bracket_length_ss = if bracket.is_some() {
+                        c.annotations.trill_bracket_length_ss
+                    } else {
+                        None
+                    };
                     let wiggle_speed = if has_ext {
                         c.annotations.trill_wiggle_speed
                     } else {
@@ -764,6 +793,8 @@ pub(crate) fn collect_trill_extension_note_info(
                         staff_position: top_pos,
                         has_trill_extension: has_ext,
                         bracket,
+                        bracket_direction,
+                        bracket_length_ss,
                         wiggle_speed,
                     });
                 }
@@ -815,7 +846,7 @@ fn draw_system_trill_extensions(
 
     let trill_advance = font.glyph_advance(Glyph::OrnamentTrill)? as f64;
     let hook_stroke = config.thin_barline_thickness_fu();
-    let hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff.staff_space;
+    let default_hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff.staff_space;
 
     for (i, note) in notes.iter().enumerate() {
         if !note.has_trill_extension {
@@ -869,11 +900,16 @@ fn draw_system_trill_extensions(
             if let Some(side) = note.bracket {
                 let render_side = bracket_side_for_system_pass(side, cross_system);
                 if let Some(side) = render_side {
+                    let hook_length = note
+                        .bracket_length_ss
+                        .map(|ss| ss * staff.staff_space)
+                        .unwrap_or(default_hook_length);
+                    let direction = note.bracket_direction.unwrap_or(HookDirection::Down);
                     let hooks = layout_trill_bracket_hooks(
                         &layout,
                         side,
                         hook_length,
-                        HookDirection::Down,
+                        direction,
                         hook_stroke,
                     );
                     draw_trill_bracket_hooks(svg, &hooks);
@@ -912,14 +948,17 @@ pub(crate) fn bracket_side_for_system_pass(
 
 /// Layout a single bracket end-hook at an arbitrary x. Used by the page
 /// renderer to draw the End hook of a cross-system trill on system N+1.
-/// Returns a hook whose stroke and direction match the within-system rendering.
+/// `direction` defaults to `HookDirection::Down` for the conventional case
+/// of a trill rendered above the staff; callers pass `HookDirection::Up` to
+/// flip the hook for trills rendered below the staff.
 pub(crate) fn layout_trill_end_hook(
     x: f64,
     baseline_y: f64,
     hook_length: f64,
+    direction: HookDirection,
     stroke_width: f64,
 ) -> crate::layout::trill_bracket::TrillBracketHookLayout {
-    layout_trill_bracket_hook(x, baseline_y, hook_length, HookDirection::Down, stroke_width)
+    layout_trill_bracket_hook(x, baseline_y, hook_length, direction, stroke_width)
 }
 
 #[cfg(test)]
