@@ -193,4 +193,60 @@ mod tests {
         let layout = draw_dynamic(&mut svg, &staff, &font, Dynamic::Pp, 500.0).unwrap();
         assert_eq!(layout.glyph, Glyph::DynamicPp);
     }
+
+    /// Extract the first `d="..."` payload from an SVG string, panicking
+    /// if absent. Used by the per-variant distinct-path assertions.
+    fn first_path_d(svg: &str) -> String {
+        let start = svg.find("d=\"").expect("svg has no path d attribute") + 3;
+        let rest = &svg[start..];
+        let end = rest.find('"').expect("unterminated d attribute");
+        rest[..end].to_string()
+    }
+
+    #[test]
+    fn new_variants_render_distinct_path_data_in_bravura() {
+        // Render each of the three new variants and assert their path
+        // d-strings are pairwise distinct AND distinct from a representative
+        // neighbour glyph. Catches a hypothetical regression where one of
+        // the new variants silently picks up the same Bravura outline as
+        // an existing glyph (e.g. if a glyph mapping typo collapses
+        // SforzatoPiano onto SforzandoPiano).
+        let (font, staff) = setup();
+        let render = |dyn_mark: Dynamic| -> String {
+            let mut svg = SvgWriter::new(800.0, 300.0, -500.0, -200.0, 6000.0, 2000.0);
+            draw_dynamic(&mut svg, &staff, &font, dyn_mark, 500.0).unwrap();
+            first_path_d(&svg.to_svg())
+        };
+        let mezzo = render(Dynamic::Mezzo);
+        let z = render(Dynamic::Z);
+        let sforzato_piano = render(Dynamic::SforzatoPiano);
+        // Pairwise distinct among the new trio.
+        assert_ne!(mezzo, z);
+        assert_ne!(mezzo, sforzato_piano);
+        assert_ne!(z, sforzato_piano);
+        // Distinct from each new variant's closest existing neighbour.
+        assert_ne!(mezzo, render(Dynamic::Mp));
+        assert_ne!(mezzo, render(Dynamic::Mf));
+        assert_ne!(z, render(Dynamic::Sfz));
+        assert_ne!(z, render(Dynamic::Fz));
+        assert_ne!(sforzato_piano, render(Dynamic::Sfp));
+        assert_ne!(sforzato_piano, render(Dynamic::Sf));
+    }
+
+    #[test]
+    fn new_variants_have_nonzero_advance_in_bravura() {
+        // Guards against silent "glyph not in font" failures when a future
+        // SMuFL font swap omits one of these less-common glyphs.
+        let (font, _) = setup();
+        for g in [
+            Glyph::DynamicMezzo,
+            Glyph::DynamicZ,
+            Glyph::DynamicSforzatoPiano,
+        ] {
+            let adv = font
+                .glyph_advance(g)
+                .unwrap_or_else(|_| panic!("Bravura missing glyph {:?}", g));
+            assert!(adv > 0, "{:?} should have nonzero advance width", g);
+        }
+    }
 }

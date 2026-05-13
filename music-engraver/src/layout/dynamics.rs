@@ -26,6 +26,10 @@ pub enum Dynamic {
     Pp,
     /// Piano (p)
     Piano,
+    /// Mezzo (m) — the bare letter-glyph, used as a building block in some
+    /// contemporary notations and in older Italian text dynamics. Distinct
+    /// from `Mp`/`Mf`, which are dedicated composite glyphs.
+    Mezzo,
     /// Mezzo-piano (mp)
     Mp,
     /// Mezzo-forte (mf)
@@ -52,16 +56,25 @@ pub enum Dynamic {
     Sf,
     /// Sforzato-ff (sff) — sforzato followed by fortissimo.
     Sff,
-    /// Sforzando-piano (sfp) — sforzando followed by piano.
+    /// Sforzando-piano (sfp) — sforzando-prefixed piano. Uses the SMuFL
+    /// `dynamicSforzandoPiano` glyph; see `SforzatoPiano` for the visually
+    /// distinct sforzato-prefixed variant.
     Sfp,
     /// Sforzando-pianissimo (sfpp) — sforzando followed by pianissimo.
     Sfpp,
+    /// Sforzato-piano (sfp) — sforzato-prefixed piano. Visually similar to
+    /// `Sfp` but uses the SMuFL `dynamicSforzatoPiano` glyph (subtle "s"
+    /// letterform difference matching the sforzato family: `Sf`/`Sff`).
+    SforzatoPiano,
     /// Forzando (fz)
     Fz,
     /// Rinforzando (rf) — single-letter `dynamicRinforzando` form.
     Rf,
     /// Rinforzando (rfz) — `dynamicRinforzando1`, the standard "rfz" glyph.
     Rfz,
+    /// Z (z) — the rare single-letter `dynamicZ` mark, occasionally used
+    /// in 20th-century scores as a sudden-accent indication.
+    Z,
 }
 
 impl Dynamic {
@@ -78,6 +91,7 @@ impl Dynamic {
             Self::Ppp => Glyph::DynamicPpp,
             Self::Pp => Glyph::DynamicPp,
             Self::Piano => Glyph::DynamicPiano,
+            Self::Mezzo => Glyph::DynamicMezzo,
             Self::Mp => Glyph::DynamicMp,
             Self::Mf => Glyph::DynamicMf,
             Self::Pf => Glyph::DynamicPf,
@@ -93,9 +107,11 @@ impl Dynamic {
             Self::Sff => Glyph::DynamicSforzatoFf,
             Self::Sfp => Glyph::DynamicSforzandoPiano,
             Self::Sfpp => Glyph::DynamicSforzandoPianissimo,
+            Self::SforzatoPiano => Glyph::DynamicSforzatoPiano,
             Self::Fz => Glyph::DynamicForzando,
             Self::Rf => Glyph::DynamicRinforzando,
             Self::Rfz => Glyph::DynamicRinforzando1,
+            Self::Z => Glyph::DynamicZ,
         }
     }
 
@@ -105,7 +121,7 @@ impl Dynamic {
     ///
     /// Useful for tests and for iterating over the full set of supported
     /// dynamics in higher-level code.
-    pub const ALL: [Dynamic; 25] = [
+    pub const ALL: [Dynamic; 28] = [
         Self::Niente,
         Self::Pppppp,
         Self::Ppppp,
@@ -113,6 +129,7 @@ impl Dynamic {
         Self::Ppp,
         Self::Pp,
         Self::Piano,
+        Self::Mezzo,
         Self::Mp,
         Self::Mf,
         Self::Pf,
@@ -127,10 +144,12 @@ impl Dynamic {
         Self::Sf,
         Self::Sff,
         Self::Sfp,
+        Self::SforzatoPiano,
         Self::Sfpp,
         Self::Fz,
         Self::Rf,
         Self::Rfz,
+        Self::Z,
     ];
 }
 
@@ -253,6 +272,65 @@ mod tests {
     #[test]
     fn niente_maps_to_smufl_niente() {
         assert_eq!(Dynamic::Niente.glyph(), Glyph::DynamicNiente);
+    }
+
+    #[test]
+    fn mezzo_maps_to_smufl_mezzo() {
+        // The bare "m" letter glyph must be distinct from the composites
+        // mp and mf, which are dedicated SMuFL glyphs in their own right.
+        assert_eq!(Dynamic::Mezzo.glyph(), Glyph::DynamicMezzo);
+        assert_ne!(Dynamic::Mezzo.glyph(), Dynamic::Mp.glyph());
+        assert_ne!(Dynamic::Mezzo.glyph(), Dynamic::Mf.glyph());
+    }
+
+    #[test]
+    fn z_maps_to_smufl_dynamic_z() {
+        // Z is rare but visually distinctive — must not collapse to any
+        // other accent-style glyph (sf, sfz, fz, rfz, etc.).
+        assert_eq!(Dynamic::Z.glyph(), Glyph::DynamicZ);
+        assert_ne!(Dynamic::Z.glyph(), Dynamic::Sfz.glyph());
+        assert_ne!(Dynamic::Z.glyph(), Dynamic::Sf.glyph());
+        assert_ne!(Dynamic::Z.glyph(), Dynamic::Fz.glyph());
+        assert_ne!(Dynamic::Z.glyph(), Dynamic::Rfz.glyph());
+    }
+
+    #[test]
+    fn sforzato_piano_distinct_from_sforzando_piano() {
+        // Both spell "sfp" but use a different 's' letterform: `Sfp`
+        // is the sforzando-prefix glyph; `SforzatoPiano` is the
+        // sforzato-prefix glyph (matching the Sf/Sff letterform family).
+        assert_eq!(
+            Dynamic::SforzatoPiano.glyph(),
+            Glyph::DynamicSforzatoPiano
+        );
+        assert_eq!(Dynamic::Sfp.glyph(), Glyph::DynamicSforzandoPiano);
+        assert_ne!(Dynamic::SforzatoPiano.glyph(), Dynamic::Sfp.glyph());
+        // Also distinct from the bare sforzato (Sf) and Sfpp variants.
+        assert_ne!(Dynamic::SforzatoPiano.glyph(), Dynamic::Sf.glyph());
+        assert_ne!(Dynamic::SforzatoPiano.glyph(), Dynamic::Sfpp.glyph());
+    }
+
+    #[test]
+    fn all_constant_contains_each_new_variant_exactly_once() {
+        let count_mezzo = Dynamic::ALL.iter().filter(|d| matches!(d, Dynamic::Mezzo)).count();
+        let count_z = Dynamic::ALL.iter().filter(|d| matches!(d, Dynamic::Z)).count();
+        let count_sfp_alt = Dynamic::ALL
+            .iter()
+            .filter(|d| matches!(d, Dynamic::SforzatoPiano))
+            .count();
+        assert_eq!(count_mezzo, 1, "Mezzo must appear exactly once in ALL");
+        assert_eq!(count_z, 1, "Z must appear exactly once in ALL");
+        assert_eq!(
+            count_sfp_alt, 1,
+            "SforzatoPiano must appear exactly once in ALL"
+        );
+    }
+
+    #[test]
+    fn all_constant_has_expected_length() {
+        // Documents the current 28-variant total. Bump this assertion
+        // intentionally when a new variant is added.
+        assert_eq!(Dynamic::ALL.len(), 28);
     }
 
     #[test]
