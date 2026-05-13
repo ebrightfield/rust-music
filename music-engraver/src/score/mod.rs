@@ -580,6 +580,36 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a precomposed trill-with-mordent ornament + wavy-line extension
+    /// to the most recently added note or chord. The compound glyph
+    /// (`OrnamentPrecompTrillWithMordent`) reads as "trill, then a mordent
+    /// at the end"; with an extension the wiggle starts past the full
+    /// compound glyph (not just the "tr" prefix), so the mordent suffix
+    /// remains visually intact. Common in Baroque keyboard music.
+    ///
+    /// Sets both flags: `ornament == Some(Ornament::TrillWithMordent)` and
+    /// `trill_extension == true`. No-op if the last event was a rest. If
+    /// there is no following note in the same system, only the compound
+    /// glyph is drawn (the extension silently disappears — same convention
+    /// as `trill_with_extension`).
+    ///
+    /// Bracket and speed modifiers attached separately (`trill_bracket`,
+    /// `trill_wiggle_speed`) are honored on this ornament too — they are
+    /// properties of the wiggle, not the prefix glyph. The
+    /// `trill_with_extension*_bracketed*` builder methods themselves
+    /// hardcode `Ornament::Trill`; users wanting bracket-form trills
+    /// suffixed with a mordent must compose the annotations manually.
+    pub fn trill_with_mordent_with_extension(mut self) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::TrillWithMordent);
+            annotations.trill_extension = true;
+        }
+        self
+    }
+
     /// Attach a navigation sign (segno, coda) to the most recently added note
     /// or chord. The sign glyph is placed above the staff, centered on the note.
     ///

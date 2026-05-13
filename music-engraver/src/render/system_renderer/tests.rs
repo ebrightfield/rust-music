@@ -2054,7 +2054,6 @@ fn last_note_trill_extension_wiggle_stays_inside_system_edge() {
     use crate::layout::staff::StaffLayout;
     use crate::layout::trill_extension::{layout_trill_extension, trill_extension_right_edge};
     use crate::render::system_renderer::collect_trill_extension_note_info;
-    use smufl::Glyph;
 
     let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
     let info = collect_trill_extension_note_info(&system);
@@ -2064,8 +2063,8 @@ fn last_note_trill_extension_wiggle_stays_inside_system_edge() {
         .expect("trill extension present");
     let note = &info[trill_idx];
 
-    let trill_advance = font.glyph_advance(Glyph::OrnamentTrill).unwrap() as f64;
-    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill).unwrap() as f64;
+    let trill_advance = font.glyph_advance(smufl::Glyph::OrnamentTrill).unwrap() as f64;
+    let wiggle_advance = font.glyph_advance(smufl::Glyph::WiggleTrill).unwrap() as f64;
     let ornament =
         crate::layout::ornament::layout_ornament(Ornament::Trill, note.x, note.staff_position, &staff);
 
@@ -2142,8 +2141,8 @@ fn last_note_trill_extension_silently_skips_when_no_room() {
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
     // Force a tiny target width so end_x lands left of start_x.
-    let trill_advance = font.glyph_advance(Glyph::OrnamentTrill).unwrap() as f64;
-    let wiggle_advance = font.glyph_advance(Glyph::WiggleTrill).unwrap() as f64;
+    let trill_advance = font.glyph_advance(smufl::Glyph::OrnamentTrill).unwrap() as f64;
+    let wiggle_advance = font.glyph_advance(smufl::Glyph::WiggleTrill).unwrap() as f64;
 
     // Recompute end_x with a deliberately too-small staff_width: simulate
     // the case where the trilled note is the last in a system that's been
@@ -2959,5 +2958,232 @@ fn trill_wiggle_speed_none_uses_default_glyph() {
     assert_eq!(
         none_out, std_out,
         "wiggle_speed=None and wiggle_speed=Standard must produce identical SVG"
+    );
+}
+
+// --- trill-with-mordent extension (compound prefix glyph with wiggle) ---
+
+fn trill_with_mordent_ext_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::TrillWithMordent),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn trill_extension_collector_accepts_trill_with_mordent() {
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![trill_with_mordent_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(
+        info[0].has_trill_extension,
+        "TrillWithMordent + trill_extension flag must be recognized as an extension"
+    );
+    assert_eq!(
+        info[0].ornament,
+        Some(Ornament::TrillWithMordent),
+        "collector should propagate the actual ornament so the draw pass knows the glyph advance"
+    );
+}
+
+#[test]
+fn trill_extension_collector_drops_short_trill() {
+    // ShortTrill is by definition the wave-less form; even with the flag
+    // set, the collector should treat it as inert.
+    let bad = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::ShortTrill),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![bad, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(
+        !info[0].has_trill_extension,
+        "ShortTrill with trill_extension=true must NOT be flagged: the short-trill mark is wave-less by convention"
+    );
+    assert!(
+        info[0].ornament.is_none(),
+        "ornament field is None when has_trill_extension is false"
+    );
+}
+
+#[test]
+fn trill_extension_collector_drops_non_trill_ornament_field() {
+    // Confirms `ornament` field is None when the ornament is something
+    // that does not support extension (Mordent, Turn, etc.).
+    let bad = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Turn),
+            trill_extension: true,
+            ..NoteAnnotations::default()
+        },
+    });
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![bad, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(!info[0].has_trill_extension);
+    assert!(info[0].ornament.is_none());
+}
+
+#[test]
+fn trill_extension_collector_propagates_trill_variant() {
+    // Sanity check: for a plain `Trill`, the ornament field carries Trill.
+    let (_font, _config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert_eq!(info[0].ornament, Some(Ornament::Trill));
+}
+
+#[test]
+fn trill_with_mordent_extension_renders_wiggle_paths() {
+    // The compound `OrnamentPrecompTrillWithMordent` glyph is ~470 font-units
+    // wider than the bare "tr" (Bravura: 990 vs 521). To verify the wiggle
+    // still draws at least one segment for the compound case, we widen
+    // `min_note_spacing` directly so the inter-note gap exceeds the
+    // compound glyph's advance plus one wiggle segment with room to spare.
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 8.0 * config.staff_space;
+    let trill_compound_whole = trill_with_mordent_ext_note(4);
+    let plain_whole = MeasureEvent::Note(NoteEvent {
+        staff_position: 6,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    });
+
+    let measures = vec![MeasureContent {
+        events: vec![trill_compound_whole, plain_whole.clone()],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let with_compound = svg.to_svg();
+    let compound_paths = with_compound.matches("<path").count();
+
+    // Identical score but with `trill_extension = false` so no wiggle is
+    // drawn. The difference is exactly the wiggle's contribution.
+    let measures3 = vec![MeasureContent {
+        events: vec![
+            MeasureEvent::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 0,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations {
+                    ornament: Some(Ornament::TrillWithMordent),
+                    trill_extension: false, // <-- no extension
+                    ..NoteAnnotations::default()
+                },
+            }),
+            plain_whole.clone(),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system3 = layout_system(&treble_prefix(), &measures3, &mcfg, None);
+    let mut svg3 = make_svg();
+    draw_system(&mut svg3, &font, &config, &system3, 0.0, 0.0).unwrap();
+    let without_ext_paths = svg3.to_svg().matches("<path").count();
+
+    assert!(
+        compound_paths > without_ext_paths,
+        "TrillWithMordent + extension must add wiggle paths beyond plain TrillWithMordent: \
+         with_ext={compound_paths}, without_ext={without_ext_paths}"
+    );
+
+    // Cross-check: a `Trill` + extension at the same layout renders a
+    // different SVG than the compound version (different prefix glyph,
+    // different wiggle start). This is the canary that the collector +
+    // draw pass propagated the actual ornament rather than hardcoding
+    // `Trill` for the glyph-advance lookup.
+    let measures2 = vec![MeasureContent {
+        events: vec![trill_ext_note(4), plain_whole],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
+    let mut svg2 = make_svg();
+    draw_system(&mut svg2, &font, &config, &system2, 0.0, 0.0).unwrap();
+    let with_plain = svg2.to_svg();
+    assert_ne!(
+        with_compound, with_plain,
+        "compound and plain trill extensions must differ — different prefix glyph, different wiggle start"
+    );
+}
+
+#[test]
+fn trill_with_mordent_extension_uses_wider_glyph_advance() {
+    // The precomposed compound glyph is wider than the bare "tr". The
+    // wiggle therefore starts further right, leaving less span and fewer
+    // segments. This test enforces the relation as a regression canary —
+    // if a future change reverts to hardcoding `Glyph::OrnamentTrill` for
+    // the advance lookup, the compound and plain versions would have
+    // identical segment counts.
+    let font = bravura_font();
+    let trill_advance = font
+        .glyph_advance(smufl::Glyph::OrnamentTrill)
+        .unwrap() as f64;
+    let compound_advance = font
+        .glyph_advance(smufl::Glyph::OrnamentPrecompTrillWithMordent)
+        .unwrap() as f64;
+    assert!(
+        compound_advance > trill_advance,
+        "the precomposed trill-with-mordent compound glyph must be wider than \
+         the bare 'tr' glyph in Bravura — this is the geometric premise of \
+         the wiggle-start adjustment; advances: trill={trill_advance}, compound={compound_advance}"
     );
 }

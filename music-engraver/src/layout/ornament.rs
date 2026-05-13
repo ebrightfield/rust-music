@@ -109,6 +109,26 @@ impl Ornament {
     pub fn all() -> &'static [Ornament] {
         &Self::ALL
     }
+
+    /// Whether this ornament conventionally supports a trailing wavy-line
+    /// extension (a sustained-trill wiggle continuing to the next note).
+    ///
+    /// Returns `true` for [`Self::Trill`] — the canonical "tr" mark whose
+    /// wavy continuation is the standard notation for a sustained trill —
+    /// and for [`Self::TrillWithMordent`] — the precomposed compound whose
+    /// "tr" prefix functions identically to a plain trill, with a mordent
+    /// suffix tucked into the glyph. Engraving convention (Behind Bars,
+    /// Gould; also Couperin's tables): both forms accept a wavy-line tail
+    /// for trills of more than a couple of beats.
+    ///
+    /// Returns `false` for [`Self::ShortTrill`] (by definition, the
+    /// short-trill mark is the *no-wiggle* form: when an extension is
+    /// wanted, use [`Self::Trill`] instead), and for every other variant.
+    /// The wiggle would be visually meaningless attached to e.g. a turn or
+    /// a Schleifer, both of which are single-figure ornaments.
+    pub fn supports_trill_extension(self) -> bool {
+        matches!(self, Self::Trill | Self::TrillWithMordent)
+    }
 }
 
 /// Distance (in staff spaces) between the top staff line and the ornament
@@ -337,6 +357,52 @@ mod tests {
         let twm = Ornament::TrillWithMordent.glyph();
         assert_ne!(twm, Ornament::Trill.glyph());
         assert_ne!(twm, Ornament::Mordent.glyph());
+    }
+
+    #[test]
+    fn supports_trill_extension_is_true_for_trill() {
+        assert!(Ornament::Trill.supports_trill_extension());
+    }
+
+    #[test]
+    fn supports_trill_extension_is_true_for_trill_with_mordent() {
+        assert!(
+            Ornament::TrillWithMordent.supports_trill_extension(),
+            "TrillWithMordent's 'tr' prefix means the wiggle is musically meaningful"
+        );
+    }
+
+    #[test]
+    fn supports_trill_extension_is_false_for_short_trill() {
+        // ShortTrill is, by definition, the wave-less form of a trill —
+        // when an extension is wanted the user must select Ornament::Trill.
+        assert!(!Ornament::ShortTrill.supports_trill_extension());
+    }
+
+    #[test]
+    fn supports_trill_extension_is_false_for_non_trill_variants() {
+        // Every variant except Trill and TrillWithMordent must return false.
+        // Iterating ALL keeps this test honest as new variants are added.
+        for o in Ornament::ALL {
+            let expected = matches!(o, Ornament::Trill | Ornament::TrillWithMordent);
+            assert_eq!(
+                o.supports_trill_extension(),
+                expected,
+                "{o:?} supports_trill_extension mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn supports_trill_extension_count_is_two_across_all_variants() {
+        // Exactly two ornaments accept a wavy-line tail — guards against a
+        // future regression where the predicate quietly broadens (e.g. to
+        // include Tremblement) without updating the documented contract.
+        let count = Ornament::ALL
+            .iter()
+            .filter(|o| o.supports_trill_extension())
+            .count();
+        assert_eq!(count, 2);
     }
 
     #[test]

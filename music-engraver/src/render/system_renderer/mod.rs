@@ -28,7 +28,6 @@ use crate::render::trill_bracket_renderer::draw_trill_bracket_hooks;
 use crate::render::trill_extension_renderer::draw_trill_extension;
 use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
-use smufl::Glyph;
 
 /// Iterate over all positioned elements in a measure, including both the
 /// primary voice and any additional voices. Each element is yielded with
@@ -703,10 +702,20 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// in exactly the same way the measure renderer did, so the wiggle
     /// shares a baseline with the "tr" glyph.
     pub staff_position: i8,
-    /// Whether the note has a trill ornament whose extension is enabled.
-    /// Already filtered to "trill + extension" — the collector skips other
-    /// ornaments and skips notes whose `trill_extension` flag is false.
+    /// Whether the note has an extension-supporting trill ornament whose
+    /// extension is enabled. Already filtered by
+    /// [`Ornament::supports_trill_extension`] — the collector skips notes
+    /// whose ornament is not Trill or TrillWithMordent, and skips notes
+    /// whose `trill_extension` flag is false.
     pub has_trill_extension: bool,
+    /// The actual ornament variant on the note. Carried alongside
+    /// `has_trill_extension` so the draw pass can look up the *correct*
+    /// glyph advance to position the wiggle's start: `OrnamentTrill` and
+    /// `OrnamentPrecompTrillWithMordent` have different advances (the
+    /// precomposed compound includes the mordent suffix), and the wiggle
+    /// must start after the full glyph, not just the "tr" prefix. `None`
+    /// when `has_trill_extension == false`.
+    pub ornament: Option<Ornament>,
     /// Optional bracket form for this trill extension. Filtered the same way
     /// as `has_trill_extension`: only carries through when the underlying
     /// note actually has both `Trill + extension`. A bracket request on a
@@ -738,7 +747,11 @@ pub(crate) fn collect_trill_extension_note_info(
             match &elem.element {
                 MeasureElement::Note(n) => {
                     let has_ext = n.annotations.trill_extension
-                        && matches!(n.annotations.ornament, Some(Ornament::Trill));
+                        && n.annotations
+                            .ornament
+                            .map(|o| o.supports_trill_extension())
+                            .unwrap_or(false);
+                    let ornament = if has_ext { n.annotations.ornament } else { None };
                     let bracket = if has_ext { n.annotations.trill_bracket } else { None };
                     let bracket_direction = if bracket.is_some() {
                         n.annotations.trill_bracket_direction
@@ -759,6 +772,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         x: elem_x,
                         staff_position: n.staff_position,
                         has_trill_extension: has_ext,
+                        ornament,
                         bracket,
                         bracket_direction,
                         bracket_length_ss,
@@ -771,7 +785,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     // measure renderer.
                     let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
                     let has_ext = c.annotations.trill_extension
-                        && matches!(c.annotations.ornament, Some(Ornament::Trill));
+                        && c.annotations
+                            .ornament
+                            .map(|o| o.supports_trill_extension())
+                            .unwrap_or(false);
+                    let ornament = if has_ext { c.annotations.ornament } else { None };
                     let bracket = if has_ext { c.annotations.trill_bracket } else { None };
                     let bracket_direction = if bracket.is_some() {
                         c.annotations.trill_bracket_direction
@@ -792,6 +810,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         x: elem_x,
                         staff_position: top_pos,
                         has_trill_extension: has_ext,
+                        ornament,
                         bracket,
                         bracket_direction,
                         bracket_length_ss,
@@ -844,7 +863,6 @@ fn draw_system_trill_extensions(
 ) -> Result<(), FontError> {
     let notes = collect_trill_extension_note_info(system);
 
-    let trill_advance = font.glyph_advance(Glyph::OrnamentTrill)? as f64;
     let hook_stroke = config.thin_barline_thickness_fu();
     let default_hook_length = TRILL_BRACKET_HOOK_LENGTH_SS * staff.staff_space;
 
@@ -853,8 +871,14 @@ fn draw_system_trill_extensions(
             continue;
         }
 
-        // The "tr" glyph is positioned by layout_ornament; mirror its math
-        // so the wiggle's y matches the trill glyph's baseline.
+        // The ornament-glyph y is glyph-independent (layout_ornament only
+        // reads staff geometry), so any extension-supporting ornament gives
+        // the same baseline — passing `Trill` here is sufficient. The
+        // glyph *advance*, however, differs: a precomposed
+        // TrillWithMordent glyph extends further to the right than a bare
+        // "tr", and the wiggle must start past the full glyph extent so
+        // the mordent suffix isn't overdrawn.
+        let ornament_kind = note.ornament.unwrap_or(Ornament::Trill);
         let ornament_layout = layout_ornament(
             Ornament::Trill,
             system_x + note.x,
@@ -864,6 +888,7 @@ fn draw_system_trill_extensions(
 
         let staff_space = staff.staff_space;
         let trill_x = ornament_layout.x;
+        let trill_advance = font.glyph_advance(ornament_kind.glyph())? as f64;
         let start_x = trill_x + trill_advance + TRILL_EXTENSION_GLYPH_GAP_SS * staff_space;
 
         // End at the next note's left edge — or, if this is the last note

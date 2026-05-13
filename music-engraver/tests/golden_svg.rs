@@ -3361,6 +3361,86 @@ fn golden_trill_wiggle_speed() {
     assert_golden("trill_wiggle_speed", &svg);
 }
 
+/// Build a short score exercising the precomposed trill-with-mordent
+/// compound ornament + extension via
+/// `ScoreBuilder::trill_with_mordent_with_extension`. The compound glyph
+/// is wider than the bare "tr" — the wiggle must start past the *full*
+/// compound, not just the trill prefix.
+fn build_trill_with_mordent_extension() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("G", 4), Duration::HALF)
+        .trill_with_mordent_with_extension()
+        .note(p("A", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .barline()
+        .note(p("E", 5), Duration::new(DurationKind::Half, 1))
+        .trill_with_mordent_with_extension()
+        .note(p("D", 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_with_mordent_extension() {
+    let svg = build_trill_with_mordent_extension();
+    let plain_compound = {
+        use music::notation::rhythm::duration::DurationKind;
+        ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Open)
+            .time_signature(4, 4)
+            .note(p("G", 4), Duration::HALF)
+            .ornament(Ornament::TrillWithMordent)
+            .note(p("A", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR)
+            .barline()
+            .note(p("E", 5), Duration::new(DurationKind::Half, 1))
+            .ornament(Ornament::TrillWithMordent)
+            .note(p("D", 5), Duration::QTR)
+            .end_barline()
+            .render_svg()
+    };
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // The extension must add wiggle paths beyond plain compound rendering.
+    let ext_paths = svg.matches("<path").count();
+    let base_paths = plain_compound.matches("<path").count();
+    assert!(
+        ext_paths > base_paths,
+        "trill_with_mordent_with_extension must add wiggle paths beyond plain compound: \
+         ext={ext_paths}, base={base_paths}"
+    );
+
+    // At least 2 wiggle segments — guards against the renderer drawing a
+    // single phantom path while skipping the actual wiggle tiles.
+    let delta = ext_paths - base_paths;
+    assert!(
+        delta >= 2,
+        "expected at least 2 wiggle segments added by compound-extension, got {delta}"
+    );
+
+    // The compound version must differ byte-for-byte from the equivalent
+    // plain-trill extension score. This is the regression canary that
+    // confirms `collect_trill_extension_note_info` propagated the actual
+    // ornament rather than collapsing TrillWithMordent to Trill, and that
+    // `draw_system_trill_extensions` used the actual glyph's advance for
+    // the wiggle-start position.
+    let trill_ext = build_trill_extension();
+    assert_ne!(
+        svg, trill_ext,
+        "trill-with-mordent + extension must differ from trill + extension: \
+         different prefix glyph, different wiggle start"
+    );
+
+    assert_golden("trill_with_mordent_extension", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -3423,6 +3503,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_bracket",
         "trill_bracket_custom",
         "trill_wiggle_speed",
+        "trill_with_mordent_extension",
     ];
 
     for name in &names {

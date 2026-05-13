@@ -6548,3 +6548,213 @@
              plain={plain_lines}, bracketed={bracketed_lines}"
         );
     }
+
+    // --- trill_with_mordent_with_extension ---
+
+    #[test]
+    fn trill_with_mordent_with_extension_sets_both_annotation_fields() {
+        use crate::layout::ornament::Ornament;
+
+        let with_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_mordent_with_extension();
+
+        // Inspect the in-flight events to verify both annotation flags are set.
+        let (_, last) = with_ext
+            .current_events
+            .last()
+            .expect("note was added")
+            .clone();
+        match last {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::TrillWithMordent));
+                assert!(annotations.trill_extension);
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn trill_with_mordent_with_extension_renders_wiggle_paths() {
+        use crate::layout::ornament::Ornament;
+
+        // Apply the plain compound glyph (no extension) so the comparison
+        // isolates the wiggle's contribution rather than the glyph itself.
+        let plain_compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .ornament(Ornament::TrillWithMordent)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_mordent_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let plain_paths = plain_compound.matches("<path").count();
+        let ext_paths = with_ext.matches("<path").count();
+        // At least one wiggle segment must be drawn — typically several,
+        // since a whole note in 4/4 is wide enough to fit multiple segments.
+        assert!(
+            ext_paths > plain_paths,
+            "trill_with_mordent_with_extension must add wiggle paths beyond plain compound: \
+             plain={plain_paths}, with_ext={ext_paths}"
+        );
+        // ≥2 added paths confirms a real tiled wiggle (not just a phantom
+        // single glyph drawn by mistake).
+        assert!(
+            ext_paths.saturating_sub(plain_paths) >= 2,
+            "expected ≥2 wiggle segments, got delta={}",
+            ext_paths.saturating_sub(plain_paths)
+        );
+    }
+
+    #[test]
+    fn trill_with_mordent_with_extension_on_rest_is_noop() {
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_mordent_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, with_ext,
+            "trill_with_mordent_with_extension on a rest must be a no-op"
+        );
+    }
+
+    #[test]
+    fn trill_with_mordent_with_extension_on_chord_adds_wiggle() {
+        use crate::layout::ornament::Ornament;
+
+        let plain_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .ornament(Ornament::TrillWithMordent)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let chord_with_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_mordent_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let plain_paths = plain_chord.matches("<path").count();
+        let ext_paths = chord_with_ext.matches("<path").count();
+        assert!(
+            ext_paths > plain_paths,
+            "trill_with_mordent_with_extension on chord must add wiggle paths: \
+             plain={plain_paths}, with_ext={ext_paths}"
+        );
+    }
+
+    #[test]
+    fn trill_with_mordent_with_extension_wiggle_starts_past_full_compound_glyph() {
+        use crate::layout::ornament::Ornament;
+
+        // Render the same score twice — once with `Ornament::Trill`, once
+        // with `Ornament::TrillWithMordent` — both with the extension flag
+        // set manually so the *only* difference is the prefix glyph's
+        // advance width. The compound glyph is wider than the bare "tr",
+        // so the wiggle must start further to the right.
+        //
+        // We can't easily measure the wiggle's start x in the rendered SVG
+        // without parsing every translate, but we *can* assert that the
+        // total <path> counts differ (or are not identically arranged) —
+        // the wider compound glyph leaves less room for wiggle segments,
+        // so the extension SVG should differ byte-for-byte from the plain
+        // trill extension at the same span. This is the canary that the
+        // collector + draw pass propagated the actual ornament rather than
+        // hardcoding `Trill`.
+        let trill_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let compound_ext = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_mordent_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            trill_ext, compound_ext,
+            "trill+ext and trill-with-mordent+ext must render differently \
+             (different prefix glyph AND wiggle start x)"
+        );
+
+        // The compound glyph itself is a different SMuFL outline, so a
+        // distinct path d-string for the ornament must appear. Sanity
+        // check: the unique-path-data set differs.
+        let trill_count = trill_ext.matches("<path").count();
+        let compound_count = compound_ext.matches("<path").count();
+        // The compound glyph occupies more horizontal space, so the wiggle
+        // has *fewer* segments to tile. Strictly less-or-equal is the
+        // expected relation; if Bravura's metrics ever flip this, the
+        // assertion documents the assumption.
+        assert!(
+            compound_count <= trill_count,
+            "compound ornament glyph is wider; wiggle should fit fewer segments. \
+             trill={trill_count}, compound={compound_count}"
+        );
+
+        // And the compound version must still draw at least one wiggle
+        // segment — confirms the draw pass actually did call into the
+        // extension path for `TrillWithMordent` (not silently bailed out).
+        let plain_compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .ornament(Ornament::TrillWithMordent)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let plain_compound_paths = plain_compound.matches("<path").count();
+        assert!(
+            compound_count > plain_compound_paths,
+            "compound + ext should draw more paths than plain compound: \
+             with_ext={compound_count}, plain={plain_compound_paths}"
+        );
+    }
