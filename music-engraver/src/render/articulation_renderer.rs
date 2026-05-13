@@ -108,6 +108,83 @@ mod tests {
     }
 
     #[test]
+    fn all_fermata_duration_variants_render_distinct_paths() {
+        // Every fermata duration variant must produce a path that visually
+        // differs from the plain Fermata — otherwise the long/short/etc.
+        // distinction would collapse to a single glyph.
+        let font = test_font();
+        let staff = test_staff();
+        let variants = [
+            Articulation::FermataLong,
+            Articulation::FermataShort,
+            Articulation::FermataVeryLong,
+            Articulation::FermataVeryShort,
+            Articulation::FermataHenzeLong,
+            Articulation::FermataHenzeShort,
+        ];
+
+        let plain = layout_articulation(
+            Articulation::Fermata,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let mut plain_writer = test_writer();
+        draw_articulation(&mut plain_writer, &font, &plain).unwrap();
+        let plain_svg = plain_writer.to_svg();
+        let plain_d = path_d_data(&plain_svg);
+
+        let mut all_paths: Vec<String> = vec![plain_d.clone()];
+        for v in &variants {
+            let layout = layout_articulation(*v, 100.0, 4, StemDirection::Up, &staff);
+            let mut writer = test_writer();
+            draw_articulation(&mut writer, &font, &layout).unwrap();
+            let svg = writer.to_svg();
+            assert!(svg.contains("<path"), "{v:?} should produce a path");
+            let d = path_d_data(&svg);
+            assert!(
+                !d.is_empty(),
+                "{v:?} path d-data should be non-empty",
+            );
+            assert_ne!(
+                d, plain_d,
+                "{v:?} path d-data should differ from plain Fermata",
+            );
+            all_paths.push(d);
+        }
+
+        // All 7 variants (plain + 6 duration) must produce 7 distinct path
+        // d-strings — a regression here would mean two variants are mapping
+        // to the same SMuFL glyph.
+        for (i, a) in all_paths.iter().enumerate() {
+            for (j, b) in all_paths.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        a, b,
+                        "fermata variants {i} and {j} share path d-data",
+                    );
+                }
+            }
+        }
+    }
+
+    /// Extract the first `d="..."` payload from an SVG string. Returns ""
+    /// if there is no path. Used to compare glyph outlines independently of
+    /// the transform.
+    fn path_d_data(svg: &str) -> String {
+        let key = "d=\"";
+        let Some(start) = svg.find(key) else {
+            return String::new();
+        };
+        let after = &svg[start + key.len()..];
+        let Some(end) = after.find('"') else {
+            return String::new();
+        };
+        after[..end].to_string()
+    }
+
+    #[test]
     fn staccato_above_vs_below_produce_different_positions() {
         let font = test_font();
         let staff = test_staff();

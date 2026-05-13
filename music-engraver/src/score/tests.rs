@@ -2329,6 +2329,101 @@
     }
 
     #[test]
+    fn each_fermata_duration_variant_adds_a_path_and_differs_from_plain() {
+        // End-to-end regression: every fermata duration variant should add
+        // exactly one path to the score (just like the plain Fermata) AND
+        // produce a different SVG, so users can confirm they're getting the
+        // long/short/etc. glyph they asked for and not silently falling back
+        // to the standard fermata.
+        use crate::layout::articulation::Articulation;
+
+        let baseline_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("G", 4), Duration::WHOLE)
+            .articulation(Articulation::Fermata)
+            .end_barline()
+            .render_svg();
+        let baseline_no_fermata = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("G", 4), Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+        let baseline_paths = baseline_no_fermata.matches("<path").count();
+
+        let variants = [
+            Articulation::FermataLong,
+            Articulation::FermataShort,
+            Articulation::FermataVeryLong,
+            Articulation::FermataVeryShort,
+            Articulation::FermataHenzeLong,
+            Articulation::FermataHenzeShort,
+        ];
+        let mut svgs = Vec::new();
+        for v in &variants {
+            let with = ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .note(p("G", 4), Duration::WHOLE)
+                .articulation(*v)
+                .end_barline()
+                .render_svg();
+            let count_with = with.matches("<path").count();
+            assert_eq!(
+                count_with,
+                baseline_paths + 1,
+                "{v:?} should add exactly one extra path: baseline={}, with={}",
+                baseline_paths,
+                count_with,
+            );
+            assert_ne!(
+                with, baseline_plain,
+                "{v:?} should produce different SVG from plain Fermata",
+            );
+            svgs.push(with);
+        }
+        // No two duration variants should produce the same SVG either.
+        for (i, a) in svgs.iter().enumerate() {
+            for (j, b) in svgs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        a, b,
+                        "duration-variant scores {i} and {j} share SVG output",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stack_long_fermata_with_staccato_adds_two_paths() {
+        // Companion to `stacked_fermata_plus_staccato_adds_two_paths`: the
+        // stack splitter must treat FermataLong identically to plain Fermata
+        // (both always above, both stacked separately from the below
+        // staccato), so an end-to-end render adds the same two-path delta.
+        use crate::layout::articulation::Articulation;
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("E", 4), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .articulation(Articulation::FermataLong)
+            .end_barline()
+            .render_svg();
+        let count_without = without.matches("<path").count();
+        let count_with = with.matches("<path").count();
+        assert_eq!(
+            count_with,
+            count_without + 2,
+            "staccato + long-fermata should add two paths: without={}, with={}",
+            count_without,
+            count_with,
+        );
+    }
+
+    #[test]
     fn articulation_convert_event_preserves_field() {
         use crate::layout::articulation::Articulation;
         let key_sig = KeySignature::Open;

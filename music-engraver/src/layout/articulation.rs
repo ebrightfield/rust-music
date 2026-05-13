@@ -8,6 +8,14 @@ use crate::layout::stem::StemDirection;
 /// Articulations are placed either above or below the note depending on stem
 /// direction (opposite side from the stem, except fermata which is always above).
 /// Each variant maps to a pair of SMuFL glyphs (above/below variants).
+///
+/// The fermata family covers the standard semicircle plus the duration-coded
+/// variants common in 20th-century scores: long (square) and short (triangle)
+/// fermatas indicate longer/shorter pauses, "very long" and "very short" push
+/// even further, and the Henze pair (named after Hans Werner Henze) is a
+/// commonly-used alternative notation for long/short with bracket-style
+/// shapes. All fermata variants behave identically with respect to placement
+/// (always above) and stacking — they only differ in glyph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Articulation {
     /// Staccato — a dot, shortens the note to roughly half its value.
@@ -23,6 +31,24 @@ pub enum Articulation {
     /// Fermata — a pause; conventionally placed above the staff regardless
     /// of stem direction.
     Fermata,
+    /// Long fermata — square-shaped fermata indicating a held pause longer
+    /// than the standard fermata.
+    FermataLong,
+    /// Short fermata — triangle-shaped fermata indicating a held pause shorter
+    /// than the standard fermata.
+    FermataShort,
+    /// Very long fermata — even longer than the long fermata; rare but
+    /// occasionally used in 20th-century scores.
+    FermataVeryLong,
+    /// Very short fermata — even shorter than the short fermata; rare but
+    /// occasionally used in 20th-century scores.
+    FermataVeryShort,
+    /// Henze long fermata — bracket-style alternative to `FermataLong`,
+    /// named after Hans Werner Henze.
+    FermataHenzeLong,
+    /// Henze short fermata — bracket-style alternative to `FermataShort`,
+    /// named after Hans Werner Henze.
+    FermataHenzeShort,
 }
 
 /// Whether an articulation appears above or below the notehead.
@@ -52,15 +78,61 @@ impl Articulation {
             }
             (Self::Fermata, ArticulationPlacement::Above) => Glyph::FermataAbove,
             (Self::Fermata, ArticulationPlacement::Below) => Glyph::FermataBelow,
+            (Self::FermataLong, ArticulationPlacement::Above) => Glyph::FermataLongAbove,
+            (Self::FermataLong, ArticulationPlacement::Below) => Glyph::FermataLongBelow,
+            (Self::FermataShort, ArticulationPlacement::Above) => Glyph::FermataShortAbove,
+            (Self::FermataShort, ArticulationPlacement::Below) => Glyph::FermataShortBelow,
+            (Self::FermataVeryLong, ArticulationPlacement::Above) => {
+                Glyph::FermataVeryLongAbove
+            }
+            (Self::FermataVeryLong, ArticulationPlacement::Below) => {
+                Glyph::FermataVeryLongBelow
+            }
+            (Self::FermataVeryShort, ArticulationPlacement::Above) => {
+                Glyph::FermataVeryShortAbove
+            }
+            (Self::FermataVeryShort, ArticulationPlacement::Below) => {
+                Glyph::FermataVeryShortBelow
+            }
+            (Self::FermataHenzeLong, ArticulationPlacement::Above) => {
+                Glyph::FermataLongHenzeAbove
+            }
+            (Self::FermataHenzeLong, ArticulationPlacement::Below) => {
+                Glyph::FermataLongHenzeBelow
+            }
+            (Self::FermataHenzeShort, ArticulationPlacement::Above) => {
+                Glyph::FermataShortHenzeAbove
+            }
+            (Self::FermataHenzeShort, ArticulationPlacement::Below) => {
+                Glyph::FermataShortHenzeBelow
+            }
         }
+    }
+
+    /// Whether this articulation is a member of the fermata family. All
+    /// fermata variants share placement and stacking rules (always above,
+    /// always after normal articulations in a stack); this predicate keeps
+    /// those rules consistent across the codebase.
+    pub fn is_fermata(self) -> bool {
+        matches!(
+            self,
+            Self::Fermata
+                | Self::FermataLong
+                | Self::FermataShort
+                | Self::FermataVeryLong
+                | Self::FermataVeryShort
+                | Self::FermataHenzeLong
+                | Self::FermataHenzeShort
+        )
     }
 
     /// Default placement relative to stem direction.
     ///
     /// Convention: articulations go on the opposite side from the stem.
-    /// Fermata is an exception — it is always placed above.
+    /// Fermata (and all its duration variants) is an exception — it is
+    /// always placed above.
     pub fn default_placement(self, stem_dir: StemDirection) -> ArticulationPlacement {
-        if self == Self::Fermata {
+        if self.is_fermata() {
             return ArticulationPlacement::Above;
         }
         match stem_dir {
@@ -163,11 +235,13 @@ pub fn layout_articulation_stack(
         return Vec::new();
     }
 
-    // Separate fermata(s) from other articulations since fermata always goes above
+    // Separate fermata(s) from other articulations since fermata always goes
+    // above. All fermata variants (long, short, very-long, very-short, Henze
+    // long/short) share this rule — they only differ in glyph.
     let mut normal: Vec<Articulation> = Vec::new();
     let mut fermatas: Vec<Articulation> = Vec::new();
     for &a in articulations {
-        if a == Articulation::Fermata {
+        if a.is_fermata() {
             fermatas.push(a);
         } else {
             normal.push(a);
@@ -370,6 +444,263 @@ mod tests {
                 }
             }
         }
+    }
+
+    // --- Fermata duration-variant tests ---
+
+    /// Convenience: the 7 fermata variants in canonical order.
+    const FERMATA_VARIANTS: [Articulation; 7] = [
+        Articulation::Fermata,
+        Articulation::FermataLong,
+        Articulation::FermataShort,
+        Articulation::FermataVeryLong,
+        Articulation::FermataVeryShort,
+        Articulation::FermataHenzeLong,
+        Articulation::FermataHenzeShort,
+    ];
+
+    #[test]
+    fn fermata_long_glyph_pair() {
+        assert_eq!(
+            Articulation::FermataLong.glyph(ArticulationPlacement::Above),
+            Glyph::FermataLongAbove
+        );
+        assert_eq!(
+            Articulation::FermataLong.glyph(ArticulationPlacement::Below),
+            Glyph::FermataLongBelow
+        );
+    }
+
+    #[test]
+    fn fermata_short_glyph_pair() {
+        assert_eq!(
+            Articulation::FermataShort.glyph(ArticulationPlacement::Above),
+            Glyph::FermataShortAbove
+        );
+        assert_eq!(
+            Articulation::FermataShort.glyph(ArticulationPlacement::Below),
+            Glyph::FermataShortBelow
+        );
+    }
+
+    #[test]
+    fn fermata_very_long_glyph_pair() {
+        assert_eq!(
+            Articulation::FermataVeryLong.glyph(ArticulationPlacement::Above),
+            Glyph::FermataVeryLongAbove
+        );
+        assert_eq!(
+            Articulation::FermataVeryLong.glyph(ArticulationPlacement::Below),
+            Glyph::FermataVeryLongBelow
+        );
+    }
+
+    #[test]
+    fn fermata_very_short_glyph_pair() {
+        assert_eq!(
+            Articulation::FermataVeryShort.glyph(ArticulationPlacement::Above),
+            Glyph::FermataVeryShortAbove
+        );
+        assert_eq!(
+            Articulation::FermataVeryShort.glyph(ArticulationPlacement::Below),
+            Glyph::FermataVeryShortBelow
+        );
+    }
+
+    #[test]
+    fn fermata_henze_long_glyph_pair() {
+        assert_eq!(
+            Articulation::FermataHenzeLong.glyph(ArticulationPlacement::Above),
+            Glyph::FermataLongHenzeAbove
+        );
+        assert_eq!(
+            Articulation::FermataHenzeLong.glyph(ArticulationPlacement::Below),
+            Glyph::FermataLongHenzeBelow
+        );
+    }
+
+    #[test]
+    fn fermata_henze_short_glyph_pair() {
+        assert_eq!(
+            Articulation::FermataHenzeShort.glyph(ArticulationPlacement::Above),
+            Glyph::FermataShortHenzeAbove
+        );
+        assert_eq!(
+            Articulation::FermataHenzeShort.glyph(ArticulationPlacement::Below),
+            Glyph::FermataShortHenzeBelow
+        );
+    }
+
+    #[test]
+    fn all_fermata_variants_recognized_by_is_fermata() {
+        for &f in &FERMATA_VARIANTS {
+            assert!(f.is_fermata(), "{f:?} should be recognized as fermata");
+        }
+    }
+
+    #[test]
+    fn non_fermata_articulations_not_flagged_by_is_fermata() {
+        for &a in &[
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+        ] {
+            assert!(!a.is_fermata(), "{a:?} should not be flagged as fermata");
+        }
+    }
+
+    #[test]
+    fn all_fermata_variants_default_to_above() {
+        for &f in &FERMATA_VARIANTS {
+            assert_eq!(
+                f.default_placement(StemDirection::Up),
+                ArticulationPlacement::Above,
+                "{f:?} should default to Above (stem up)",
+            );
+            assert_eq!(
+                f.default_placement(StemDirection::Down),
+                ArticulationPlacement::Above,
+                "{f:?} should default to Above (stem down)",
+            );
+        }
+    }
+
+    #[test]
+    fn all_fermata_variants_produce_distinct_above_glyphs() {
+        // The whole point of the duration-coded family: each variant must
+        // render as a visibly distinct glyph, otherwise users can't
+        // distinguish long/short/very-long etc. from the plain fermata.
+        let glyphs: Vec<Glyph> = FERMATA_VARIANTS
+            .iter()
+            .map(|f| f.glyph(ArticulationPlacement::Above))
+            .collect();
+        for (i, g1) in glyphs.iter().enumerate() {
+            for (j, g2) in glyphs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        g1, g2,
+                        "fermata variants {i} and {j} share glyph: {g1:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_fermata_variants_produce_distinct_below_glyphs() {
+        let glyphs: Vec<Glyph> = FERMATA_VARIANTS
+            .iter()
+            .map(|f| f.glyph(ArticulationPlacement::Below))
+            .collect();
+        for (i, g1) in glyphs.iter().enumerate() {
+            for (j, g2) in glyphs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        g1, g2,
+                        "fermata variants {i} and {j} share below-glyph",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fermata_variants_above_below_differ_within_each() {
+        // Each fermata variant must have a distinct above- vs below-glyph
+        // pair — Bravura provides separate glyphs because they aren't
+        // mirror-images of each other.
+        for &f in &FERMATA_VARIANTS {
+            assert_ne!(
+                f.glyph(ArticulationPlacement::Above),
+                f.glyph(ArticulationPlacement::Below),
+                "{f:?} above and below glyphs should differ",
+            );
+        }
+    }
+
+    #[test]
+    fn fermata_variants_share_y_when_layout_alone() {
+        // All fermata variants share placement rules — only the glyph differs.
+        // Laying out each variant on the same note position should yield
+        // identical x/y/placement but distinct glyphs.
+        let staff = test_staff();
+        let layouts: Vec<ArticulationLayout> = FERMATA_VARIANTS
+            .iter()
+            .map(|&f| layout_articulation(f, 200.0, 4, StemDirection::Up, &staff))
+            .collect();
+        let first_y = layouts[0].y;
+        let first_x = layouts[0].x;
+        for (i, l) in layouts.iter().enumerate() {
+            assert!(
+                (l.y - first_y).abs() < 1e-9,
+                "variant {i} y={} differs from first y={first_y}",
+                l.y,
+            );
+            assert_eq!(l.x, first_x, "variant {i} x differs");
+            assert_eq!(l.placement, ArticulationPlacement::Above);
+        }
+        // Glyphs must still be distinct between variants.
+        for (i, a) in layouts.iter().enumerate() {
+            for (j, b) in layouts.iter().enumerate() {
+                if i != j {
+                    assert_ne!(a.glyph, b.glyph);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stack_long_fermata_with_staccato_separates_placement() {
+        // Regression: the stack splitter must recognize FermataLong (and the
+        // other variants) as "always above," same as the plain Fermata.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::FermataLong],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::FermataLongAbove);
+        // The fermata-long should sit higher (lower y) than the below
+        // articulation — i.e. on the opposite side of the staff.
+        assert!(stack[1].y < stack[0].y);
+    }
+
+    #[test]
+    fn stack_multiple_fermata_variants_all_above() {
+        // Stacking two different fermata variants should put both above,
+        // separated vertically by the standard stack spacing.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::FermataShort, Articulation::FermataLong],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        for l in &stack {
+            assert_eq!(l.placement, ArticulationPlacement::Above);
+        }
+        // Second fermata should stack further from the note (lower y for Above).
+        assert!(stack[1].y < stack[0].y);
+        // Spacing equals ARTICULATION_STACK_SPACING_SS × staff_space.
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let actual_gap = stack[0].y - stack[1].y;
+        assert!(
+            (actual_gap - expected_gap).abs() < 1e-6,
+            "fermata stack spacing {actual_gap} should match expected {expected_gap}",
+        );
+        // Glyphs preserved per variant.
+        assert_eq!(stack[0].glyph, Glyph::FermataShortAbove);
+        assert_eq!(stack[1].glyph, Glyph::FermataLongAbove);
     }
 
     #[test]
