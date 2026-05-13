@@ -6549,6 +6549,332 @@
         );
     }
 
+    // --- with_options ornament override (bracketed compound trills) ---
+
+    #[test]
+    fn with_options_ornament_unset_writes_plain_trill_to_annotation() {
+        // The default (None ornament) collapses to Ornament::Trill at the
+        // builder layer. Inspecting in-flight events guards against a future
+        // refactor that defers the collapse to the renderer (which would
+        // break the `supports_trill_extension` filter at the wrong layer).
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let b = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ));
+
+        let (_, last) = b.current_events.last().expect("note added").clone();
+        match last {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.ornament,
+                    Some(Ornament::Trill),
+                    "options-without-ornament must write Trill into the annotation"
+                );
+                assert!(annotations.trill_extension);
+                assert_eq!(annotations.trill_bracket, Some(TrillBracketSide::Both));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn with_options_ornament_writes_chosen_ornament_to_annotation() {
+        // Sanity: setting the ornament on the options actually lands in
+        // the annotation field downstream.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let b = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::TrillWithMordent),
+            );
+
+        let (_, last) = b.current_events.last().expect("note added").clone();
+        match last {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::TrillWithMordent));
+                assert!(annotations.trill_extension);
+                assert_eq!(annotations.trill_bracket, Some(TrillBracketSide::Both));
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn with_options_compound_ornament_renders_distinct_svg_from_plain_trill() {
+        // The whole point of the override: a bracketed compound trill must
+        // produce a visibly different SVG than a bracketed plain trill on
+        // the same span. The difference comes from (1) a different prefix
+        // glyph (the precomposed compound vs the bare "tr") and (2) a
+        // different wiggle start (the wider compound advance pushes the
+        // wiggle further right). At least one of those must change the
+        // output byte stream.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            plain, compound,
+            "Bracketed compound trill must differ from bracketed plain trill: \
+             different prefix glyph and wider wiggle start"
+        );
+    }
+
+    #[test]
+    fn with_options_compound_renders_same_hook_count_as_plain() {
+        // The ornament glyph dictates the prefix and shifts the wiggle's
+        // start, but the bracket geometry (one hook per requested side) is
+        // independent of the prefix glyph. So a Both-bracket on a compound
+        // ornament must emit exactly the same number of <line> elements as
+        // the plain Both-bracket variant.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain_lines = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg()
+            .matches("<line ")
+            .count();
+
+        let compound_lines = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg()
+            .matches("<line ")
+            .count();
+
+        assert_eq!(
+            plain_lines, compound_lines,
+            "Compound bracketed-trill must emit the same <line> count as plain bracketed-trill \
+             (the prefix glyph determines the wiggle start but not the hook count). \
+             plain={plain_lines}, compound={compound_lines}"
+        );
+    }
+
+    #[test]
+    fn with_options_compound_renders_wiggle_paths_beyond_plain_compound() {
+        // Apply the plain compound glyph (no extension) so the comparison
+        // isolates the wiggle's + bracket's contribution. The bracketed
+        // compound trill should add at least 2 path-or-line elements: at
+        // minimum one wiggle tile and two hook lines (Both bracket).
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain_compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .ornament(Ornament::TrillWithMordent)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed_compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let plain_paths = plain_compound.matches("<path").count();
+        let bracketed_paths = bracketed_compound.matches("<path").count();
+        let plain_lines = plain_compound.matches("<line ").count();
+        let bracketed_lines = bracketed_compound.matches("<line ").count();
+
+        assert!(
+            bracketed_paths > plain_paths,
+            "Bracketed compound must add wiggle paths over plain compound: \
+             plain={plain_paths}, bracketed={bracketed_paths}"
+        );
+        assert_eq!(
+            bracketed_lines.saturating_sub(plain_lines),
+            2,
+            "Bracketed (Both) compound must add exactly 2 hook <line>s vs plain compound"
+        );
+    }
+
+    #[test]
+    fn with_options_unsupported_ornament_silently_drops_extension_and_bracket() {
+        // Per the documented contract, an ornament that does not
+        // `supports_trill_extension()` makes the renderer drop the wiggle
+        // and the bracket. Only the bare ornament glyph remains. The
+        // bracketed variant must produce zero extra hook lines vs the
+        // non-bracket variant when ShortTrill is selected — this is the
+        // contract canary.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        // Sanity precondition: ShortTrill must remain unsupported. If a
+        // future change adds it to `supports_trill_extension()`, this test
+        // and its premise must be re-examined.
+        assert!(!Ornament::ShortTrill.supports_trill_extension());
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .ornament(Ornament::ShortTrill)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed_unsupported = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::ShortTrill),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain.matches("<line ").count(),
+            bracketed_unsupported.matches("<line ").count(),
+            "Unsupported ornament must drop the bracket — no hook <line>s added"
+        );
+    }
+
+    #[test]
+    fn with_options_compound_on_rest_is_noop() {
+        // The no-op-on-rest contract must extend to the new ornament
+        // override; an ornamented-bracket request on a rest must produce
+        // SVG byte-identical to the plain-rest baseline.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain_rest = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        let bracketed_rest = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain_rest, bracketed_rest,
+            "Options-with-ornament bracket on rest must be a no-op"
+        );
+    }
+
+    #[test]
+    fn with_options_compound_on_chord_renders_bracket_and_wiggle() {
+        // Chord targeting: the bracketed compound trill on a chord must
+        // (a) add exactly 2 hook <line>s vs the plain chord, AND
+        // (b) add wiggle paths beyond the plain chord. Guards against a
+        // regression where the chord path collapses to the plain trill
+        // glyph or skips the wiggle entirely.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("E", 4), p("G", 4)], Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed_compound_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            bracketed_compound_chord
+                .matches("<line ")
+                .count()
+                .saturating_sub(plain_chord.matches("<line ").count()),
+            2,
+            "Both-bracketed compound chord must add exactly 2 hook <line>s"
+        );
+        assert!(
+            bracketed_compound_chord.matches("<path").count()
+                > plain_chord.matches("<path").count(),
+            "Both-bracketed compound chord must add wiggle paths over plain chord"
+        );
+    }
+
     // --- trill_with_mordent_with_extension ---
 
     #[test]

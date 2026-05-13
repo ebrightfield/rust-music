@@ -530,7 +530,18 @@ impl ScoreBuilder {
     /// fields populated is byte-equivalent to the matching
     /// `trill_with_extension_bracketed_custom` call.
     ///
-    /// No-op if the last event was a rest.
+    /// To bracket a compound precomposed trill, set
+    /// [`TrillBracketOptions::ornament`](crate::layout::trill_bracket::TrillBracketOptions::ornament)
+    /// to `Some(Ornament::TrillWithMordent)` via `.with_ornament(...)`. The
+    /// renderer drives the wiggle's start past the full compound glyph (not
+    /// just the "tr" prefix) and the bracket hooks anchor at the wiggle's
+    /// edges, so the mordent suffix remains visually intact.
+    ///
+    /// No-op if the last event was a rest. The ornament must satisfy
+    /// [`Ornament::supports_trill_extension`]; passing an unsupported
+    /// ornament (e.g. `ShortTrill`, `Mordent`, a turn) makes the renderer
+    /// silently drop the extension and the bracket, leaving only the
+    /// ornament glyph itself.
     pub fn trill_with_extension_bracketed_with_options(
         mut self,
         opts: crate::layout::trill_bracket::TrillBracketOptions,
@@ -539,7 +550,11 @@ impl ScoreBuilder {
             (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
         ) = self.current_events.last_mut()
         {
-            annotations.ornament = Some(Ornament::Trill);
+            // `None` ornament collapses to `Trill` here (not at the renderer)
+            // because the annotation field is the source of truth for the
+            // glyph + trill-extension-eligibility check downstream; keeping
+            // it explicit keeps the renderer logic glyph-agnostic.
+            annotations.ornament = Some(opts.ornament.unwrap_or(Ornament::Trill));
             annotations.trill_extension = true;
             annotations.trill_bracket = Some(opts.side);
             // `None` here means "use the renderer's default" — we explicitly
@@ -595,10 +610,12 @@ impl ScoreBuilder {
     ///
     /// Bracket and speed modifiers attached separately (`trill_bracket`,
     /// `trill_wiggle_speed`) are honored on this ornament too — they are
-    /// properties of the wiggle, not the prefix glyph. The
-    /// `trill_with_extension*_bracketed*` builder methods themselves
-    /// hardcode `Ornament::Trill`; users wanting bracket-form trills
-    /// suffixed with a mordent must compose the annotations manually.
+    /// properties of the wiggle, not the prefix glyph. The non-options
+    /// bracket builders (`trill_with_extension_bracketed`,
+    /// `..._bracketed_custom`) hardcode `Ornament::Trill`; for a
+    /// bracket-form compound trill use
+    /// [`trill_with_extension_bracketed_with_options`](Self::trill_with_extension_bracketed_with_options)
+    /// with `.with_ornament(Ornament::TrillWithMordent)`.
     pub fn trill_with_mordent_with_extension(mut self) -> Self {
         if let Some(
             (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),

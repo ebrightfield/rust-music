@@ -3441,6 +3441,181 @@ fn golden_trill_with_mordent_extension() {
     assert_golden("trill_with_mordent_extension", &svg);
 }
 
+/// Build the bracketed compound-trill score.
+///
+/// Four whole-note measures, 2 per system → 2 systems total:
+/// - M1: compound trill with `Both` brackets, all defaults (Down/0.75ss).
+/// - M2: compound trill with `Start`-only bracket, `Up` direction, 1.0ss length.
+/// - M3: compound trill with `End`-only bracket, default direction, 0.5ss length.
+/// - M4: chord compound trill with `Both` brackets, all defaults.
+///
+/// Exercises every combination of `TrillBracketOptions` knobs in the
+/// presence of the `ornament` override. Hook geometry should be
+/// glyph-independent (same hook count as the parallel plain-trill scores)
+/// while the prefix glyph + wiggle start should differ.
+fn build_trill_bracket_with_mordent() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    use music_engraver::layout::trill_bracket::{
+        HookDirection, TrillBracketOptions, TrillBracketSide,
+    };
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // M1: Both, all defaults, compound override.
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_with_options(
+            TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .barline()
+        // M2: Start only, Up direction, 1.0ss length.
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_with_options(
+            TrillBracketOptions::new(TrillBracketSide::Start)
+                .with_ornament(Ornament::TrillWithMordent)
+                .with_direction(HookDirection::Up)
+                .with_length_ss(1.0),
+        )
+        .barline()
+        // M3: End only, default direction, 0.5ss length.
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_with_options(
+            TrillBracketOptions::new(TrillBracketSide::End)
+                .with_ornament(Ornament::TrillWithMordent)
+                .with_length_ss(0.5),
+        )
+        .barline()
+        // M4: chord compound-trill, Both, all defaults.
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_extension_bracketed_with_options(
+            TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same shape as `build_trill_bracket_with_mordent` but with plain `Trill`
+/// brackets (no `.with_ornament(...)`). Used to prove the compound override
+/// actually propagates a different glyph through the renderer.
+fn build_trill_bracket_with_mordent_plain_variant() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    use music_engraver::layout::trill_bracket::{
+        HookDirection, TrillBracketOptions, TrillBracketSide,
+    };
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+            TrillBracketSide::Both,
+        ))
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_with_options(
+            TrillBracketOptions::new(TrillBracketSide::Start)
+                .with_direction(HookDirection::Up)
+                .with_length_ss(1.0),
+        )
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_bracketed_with_options(
+            TrillBracketOptions::new(TrillBracketSide::End).with_length_ss(0.5),
+        )
+        .barline()
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+            TrillBracketSide::Both,
+        ))
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same shape as `build_trill_bracket_with_mordent` but with plain compound
+/// `.trill_with_mordent_with_extension()` (no brackets). Used to count the
+/// hook-line delta the brackets contribute.
+fn build_trill_bracket_with_mordent_no_bracket_variant() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_mordent_with_extension()
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_mordent_with_extension()
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_mordent_with_extension()
+        .barline()
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_mordent_with_extension()
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_bracket_with_mordent() {
+    let svg = build_trill_bracket_with_mordent();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Structural guard 1: exact 6-hook delta vs the no-bracket variant.
+    // The example exercises Both+Start+End+Both = 2+1+1+2 = 6 hooks.
+    let no_bracket = build_trill_bracket_with_mordent_no_bracket_variant();
+    let bracket_lines = svg.matches("<line ").count();
+    let no_bracket_lines = no_bracket.matches("<line ").count();
+    let delta = bracket_lines.saturating_sub(no_bracket_lines);
+    assert_eq!(
+        delta, 6,
+        "expected 6 hook lines added by bracketed compound (M1 Both+M2 Start+M3 End+M4 chord Both); \
+         got delta={delta} (bracketed={bracket_lines}, no_bracket={no_bracket_lines})"
+    );
+
+    // Structural guard 2: the compound override must produce a different
+    // SVG than the same brackets on plain `Ornament::Trill`. This is the
+    // regression canary that the `.with_ornament(...)` actually propagated
+    // through the renderer — different prefix glyph + wider wiggle start.
+    let plain_variant = build_trill_bracket_with_mordent_plain_variant();
+    assert_ne!(
+        svg, plain_variant,
+        "bracketed compound must differ from bracketed plain trill: \
+         different prefix glyph, wider wiggle start"
+    );
+
+    // Structural guard 3: hook geometry is glyph-independent, so the
+    // bracketed compound and bracketed plain variants must emit the same
+    // number of <line> elements. (The prefix glyph affects path data, not
+    // line count.)
+    assert_eq!(
+        bracket_lines,
+        plain_variant.matches("<line ").count(),
+        "bracket hook count must be glyph-independent — plain and compound \
+         brackets emit the same <line> count"
+    );
+
+    assert_golden("trill_bracket_with_mordent", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -3504,6 +3679,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_bracket_custom",
         "trill_wiggle_speed",
         "trill_with_mordent_extension",
+        "trill_bracket_with_mordent",
     ];
 
     for name in &names {

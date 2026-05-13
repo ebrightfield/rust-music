@@ -18,6 +18,7 @@
 //! Layout produces pure geometry. The renderer
 //! (`crate::render::trill_bracket_renderer`) emits one `<line>` per hook.
 
+use crate::layout::ornament::Ornament;
 use crate::layout::trill_extension::{trill_extension_right_edge, TrillExtensionLayout};
 
 /// Which end(s) of a trill wavy-line extension should be capped with a hook.
@@ -63,6 +64,14 @@ pub enum TrillBracketSide {
 /// identical to the existing non-custom `trill_with_extension_bracketed`
 /// API. Callers who want to lock in the defaults explicitly should pass
 /// `Some(HookDirection::Down)` and `Some(0.75)` instead.
+///
+/// To bracket a compound trill (precomposed "trill + mordent"), set
+/// [`Self::ornament`] to `Some(Ornament::TrillWithMordent)`. `None` (the
+/// default) selects `Ornament::Trill` at the score-builder layer. The
+/// ornament must satisfy [`Ornament::supports_trill_extension`] — passing
+/// an unsupported ornament (e.g. [`Ornament::ShortTrill`] or a turn) makes
+/// the renderer's collector skip the extension entirely (no wiggle, no
+/// bracket), and only the ornament glyph itself is drawn.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrillBracketOptions {
     /// Which end(s) of the wiggle to bracket — always required.
@@ -73,16 +82,24 @@ pub struct TrillBracketOptions {
     /// Hook length in staff spaces. `None` defers to the renderer's
     /// conventional default (~0.75ss).
     pub length_ss: Option<f64>,
+    /// Ornament glyph override. `None` selects [`Ornament::Trill`] (the
+    /// conventional "tr" mark). `Some(Ornament::TrillWithMordent)` selects
+    /// the precomposed compound. The ornament must satisfy
+    /// [`Ornament::supports_trill_extension`]; otherwise the renderer will
+    /// silently skip the extension and the bracket.
+    pub ornament: Option<Ornament>,
 }
 
 impl TrillBracketOptions {
-    /// Construct options bracketing the given side with both knobs at
-    /// renderer defaults (Down direction, ~0.75ss length).
+    /// Construct options bracketing the given side with every knob at
+    /// renderer defaults (Down direction, ~0.75ss length, plain `Trill`
+    /// ornament).
     pub const fn new(side: TrillBracketSide) -> Self {
         Self {
             side,
             direction: None,
             length_ss: None,
+            ornament: None,
         }
     }
 
@@ -99,6 +116,17 @@ impl TrillBracketOptions {
     /// produces a degenerate hook (no visible line).
     pub const fn with_length_ss(mut self, length_ss: f64) -> Self {
         self.length_ss = Some(length_ss);
+        self
+    }
+
+    /// Override the ornament glyph. Pass `Ornament::TrillWithMordent` for
+    /// a bracketed precomposed compound trill; any other ornament that
+    /// satisfies [`Ornament::supports_trill_extension`] (currently only
+    /// `Trill` itself or `TrillWithMordent`) is also valid. Passing an
+    /// unsupported ornament makes the renderer drop the entire trill
+    /// extension (no wiggle, no bracket — only the ornament glyph).
+    pub const fn with_ornament(mut self, ornament: Ornament) -> Self {
+        self.ornament = Some(ornament);
         self
     }
 }
@@ -486,5 +514,77 @@ mod tests {
         let orig = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.0);
         let _ = take(orig);
         assert_eq!(orig.length_ss, Some(1.0));
+    }
+
+    // --- TrillBracketOptions ornament override ---
+
+    #[test]
+    fn options_new_has_unset_ornament() {
+        // `None` here is meaningful: the score-builder layer collapses it to
+        // `Ornament::Trill`. The layout struct itself stays glyph-agnostic.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both);
+        assert_eq!(opts.ornament, None);
+    }
+
+    #[test]
+    fn options_with_ornament_sets_only_ornament() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_ornament(Ornament::TrillWithMordent);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.direction, None, "direction must remain unset");
+        assert_eq!(opts.length_ss, None, "length must remain unset");
+        assert_eq!(opts.side, TrillBracketSide::Both);
+    }
+
+    #[test]
+    fn options_with_ornament_chains_with_other_setters() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Start)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_direction(HookDirection::Up)
+            .with_length_ss(1.1);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+        assert_eq!(opts.length_ss, Some(1.1));
+    }
+
+    #[test]
+    fn options_with_ornament_chain_order_independent() {
+        let a = TrillBracketOptions::new(TrillBracketSide::End)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_length_ss(0.9);
+        let b = TrillBracketOptions::new(TrillBracketSide::End)
+            .with_length_ss(0.9)
+            .with_ornament(Ornament::TrillWithMordent);
+        assert_eq!(a, b, "with_ornament must commute with other setters");
+    }
+
+    #[test]
+    fn options_with_ornament_overwrites_prior_value() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_ornament(Ornament::Trill)
+            .with_ornament(Ornament::TrillWithMordent);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn options_with_ornament_const_constructible() {
+        // `with_ornament` must be `const` so the canonical bundles can live
+        // in `const` items. Removal of `const fn` makes this stop compiling.
+        const _OPTS: TrillBracketOptions = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_ornament(Ornament::TrillWithMordent);
+    }
+
+    #[test]
+    fn options_with_ornament_accepts_unsupported_ornament_at_layout_layer() {
+        // The layout struct does not validate the contract — it is the
+        // renderer's collector (filtering by `supports_trill_extension()`)
+        // that drops the extension for unsupported ornaments. Documenting
+        // this at the layout layer: an unsupported ornament must still
+        // round-trip through the field unchanged so the renderer can apply
+        // the filter consistently.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_ornament(Ornament::ShortTrill);
+        assert_eq!(opts.ornament, Some(Ornament::ShortTrill));
+        assert!(!Ornament::ShortTrill.supports_trill_extension());
     }
 }
