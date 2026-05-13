@@ -595,6 +595,52 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a speed-variant trill extension using a
+    /// [`TrillExtensionSpeedOptions`](crate::layout::trill_extension::TrillExtensionSpeedOptions)
+    /// bundle.
+    ///
+    /// Ergonomic alternative to
+    /// [`trill_with_extension_speed`](Self::trill_with_extension_speed) when
+    /// the caller also wants to override the ornament glyph (for example,
+    /// pairing a precomposed `TrillWithMordent` with a non-default wiggle
+    /// speed). The bare `trill_with_extension_speed(speed)` builder hardcodes
+    /// `Ornament::Trill`, so without this options-based variant a user
+    /// wanting "compound trill at fast wiggle speed" had no API to reach the
+    /// combination short of hand-constructing annotations.
+    ///
+    /// Concretely:
+    /// `trill_with_extension_speed_with_options(TrillExtensionSpeedOptions::new(speed))`
+    /// is byte-equivalent to `trill_with_extension_speed(speed)`.
+    /// `trill_with_extension_speed_with_options(opts.with_ornament(Ornament::TrillWithMordent))`
+    /// renders a compound trill glyph followed by the chosen-speed wiggle —
+    /// the wiggle starts past the full compound glyph (not just the "tr"
+    /// prefix), matching the existing renderer behavior for
+    /// `trill_with_mordent_with_extension`.
+    ///
+    /// No-op if the last event was a rest. The ornament must satisfy
+    /// [`Ornament::supports_trill_extension`]; passing an unsupported
+    /// ornament (e.g. `ShortTrill`, `Mordent`, a turn) makes the renderer
+    /// silently drop the extension, leaving only the ornament glyph itself.
+    pub fn trill_with_extension_speed_with_options(
+        mut self,
+        opts: crate::layout::trill_extension::TrillExtensionSpeedOptions,
+    ) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            // `None` ornament collapses to `Trill` here (not at the renderer)
+            // so the annotation field remains the single source of truth for
+            // the glyph + trill-extension-eligibility check downstream. This
+            // matches the convention established by
+            // `trill_with_extension_bracketed_with_options`.
+            annotations.ornament = Some(opts.ornament.unwrap_or(Ornament::Trill));
+            annotations.trill_extension = true;
+            annotations.trill_wiggle_speed = Some(opts.speed);
+        }
+        self
+    }
+
     /// Attach a precomposed trill-with-mordent ornament + wavy-line extension
     /// to the most recently added note or chord. The compound glyph
     /// (`OrnamentPrecompTrillWithMordent`) reads as "trill, then a mordent

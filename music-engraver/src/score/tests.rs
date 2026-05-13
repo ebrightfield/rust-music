@@ -5966,6 +5966,380 @@
         );
     }
 
+    // --- trill_with_extension_speed_with_options (ScoreBuilder, options builder API) ---
+
+    #[test]
+    fn speed_with_options_default_ornament_matches_plain_speed_byte_for_byte() {
+        // The whole point of the options builder is that the
+        // ornament-unspecified case is byte-identical to the existing
+        // non-options `trill_with_extension_speed(speed)` API. If a future
+        // change to either path drifts, this canary fails.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Fast)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let opts = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(TrillExtensionSpeedOptions::new(
+                TrillWiggleSpeed::Fast,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, opts,
+            "Options(speed only) must render byte-identically to trill_with_extension_speed"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_via_into_matches_plain_speed_byte_for_byte() {
+        // The `From<TrillWiggleSpeed>` ergonomics must produce the exact same
+        // SVG as the explicit constructor. Catches a regression where the
+        // From impl picks up a different default for the ornament field.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Slower)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let via_into = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(TrillWiggleSpeed::Slower.into())
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // Helper to remind future readers that this conversion exists and
+        // must be byte-stable.
+        let _round_trip: TrillExtensionSpeedOptions = TrillWiggleSpeed::Slower.into();
+
+        assert_eq!(
+            plain, via_into,
+            "`TrillWiggleSpeed::into()` ergonomics must match the explicit constructor"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_sets_three_annotation_fields() {
+        // Field-level inspection of the builder's intermediate state proving
+        // the three coupled fields propagate exactly and the ornament
+        // collapse happens at the builder layer.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fastest)
+                    .with_ornament(Ornament::TrillWithMordent),
+            );
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::TrillWithMordent));
+                assert!(annotations.trill_extension);
+                assert_eq!(
+                    annotations.trill_wiggle_speed,
+                    Some(TrillWiggleSpeed::Fastest)
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn speed_with_options_unset_ornament_writes_plain_trill_to_annotation() {
+        // `None` ornament must collapse to `Some(Trill)` at the builder, not
+        // at the renderer — the annotation field is the single source of
+        // truth for downstream supports_trill_extension() filtering.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(TrillExtensionSpeedOptions::new(
+                TrillWiggleSpeed::Standard,
+            ));
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.ornament,
+                    Some(Ornament::Trill),
+                    "unset ornament must collapse to Trill at the builder"
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn speed_with_options_compound_ornament_renders_distinct_from_plain_trill_same_speed() {
+        // The whole reason this method exists: pairing a compound ornament
+        // with a non-default speed must produce a visibly different SVG from
+        // pairing the plain Trill with the same speed. The renderer's
+        // glyph-advance lookup differs between the two ornaments (Bravura:
+        // 521 vs 990 font-units), so the wiggle's start position shifts.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let plain_trill = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(TrillExtensionSpeedOptions::new(
+                TrillWiggleSpeed::Fast,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            plain_trill, compound,
+            "Compound ornament + same speed must produce a visibly different SVG"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_compound_with_speed_distinct_from_compound_default_speed() {
+        // Pairing the compound ornament with a non-Standard speed must also
+        // produce a distinct SVG from pairing the compound with the
+        // (default) Standard speed — proves the speed half of the options
+        // bundle actually propagates when the ornament is overridden.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let compound_standard = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let compound_fastest = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fastest)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            compound_standard, compound_fastest,
+            "Compound ornament + different speeds must produce different SVG"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_compound_renders_wiggle_paths_beyond_plain_compound() {
+        // Sanity check: the renderer must actually draw a wiggle for compound
+        // + speed. The trill_with_mordent extension path was already verified
+        // by the existing compound-extension test, but the speed-options path
+        // walks the new builder method — same downstream wiring, but a fresh
+        // canary that no annotation-routing regression silently dropped the
+        // extension flag.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let plain_compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            // Plain compound, no extension at all.
+            .ornament(Ornament::TrillWithMordent)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let compound_with_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let plain_paths = plain_compound.matches("<path").count();
+        let with_speed_paths = compound_with_speed.matches("<path").count();
+        assert!(
+            with_speed_paths > plain_paths,
+            "compound ornament + speed must add wiggle paths beyond plain compound: \
+             plain={plain_paths}, with_speed={with_speed_paths}"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_on_rest_is_noop() {
+        // Builder method must silently no-op when the most recent event was a
+        // rest. SVG must be byte-equal to the same chain without the call.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let with_call = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fastest)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .render_svg();
+
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            with_call, without,
+            "trill_with_extension_speed_with_options on a rest must be a no-op"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_on_chord_renders_wiggle() {
+        // Chord trills must also pick up both halves of the options bundle.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let plain_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let chord_with_options = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert!(
+            chord_with_options.matches("<path").count() > plain_chord.matches("<path").count(),
+            "speed+ornament options on chord must add compound + wiggle paths"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_unsupported_ornament_silently_drops_extension() {
+        // Contract canary: passing an ornament that does NOT satisfy
+        // supports_trill_extension() must make the renderer silently skip
+        // the wiggle, matching the behavior of the bracket-options path.
+        // Compared to the plain (Trill) variant at the same speed, the
+        // unsupported variant must have STRICTLY FEWER wiggle paths.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        // Sanity guard: ShortTrill is intentionally unsupported.
+        assert!(!Ornament::ShortTrill.supports_trill_extension());
+
+        let supported = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(TrillExtensionSpeedOptions::new(
+                TrillWiggleSpeed::Fast,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let unsupported = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast)
+                    .with_ornament(Ornament::ShortTrill),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let supported_paths = supported.matches("<path").count();
+        let unsupported_paths = unsupported.matches("<path").count();
+        assert!(
+            unsupported_paths < supported_paths,
+            "unsupported ornament (ShortTrill) must silently drop the extension; \
+             expected fewer paths than supported variant: \
+             supported={supported_paths}, unsupported={unsupported_paths}"
+        );
+    }
+
     // --- trill_with_extension_bracketed_custom (ScoreBuilder) ---
 
     #[test]

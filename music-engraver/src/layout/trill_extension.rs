@@ -13,6 +13,7 @@
 //! from the active font and pass it in as `segment_advance_fu`. Renderers
 //! consume both the layout and the font to emit per-segment paths.
 
+use crate::layout::ornament::Ornament;
 use smufl::Glyph;
 
 /// Speed/density variant for the trill wavy-line extension.
@@ -83,6 +84,88 @@ impl TrillWiggleSpeed {
 impl Default for TrillWiggleSpeed {
     fn default() -> Self {
         Self::Standard
+    }
+}
+
+/// Ergonomic options bundle for the speed-variant trill API.
+///
+/// The all-or-nothing `trill_with_extension_speed(speed)` ScoreBuilder method
+/// hardcodes the ornament glyph to [`Ornament::Trill`] — so a caller wanting a
+/// compound *trill-with-mordent* at a non-standard wiggle speed has no API to
+/// reach the combination without hand-constructing annotations. This struct
+/// lets callers express both knobs together: required speed + optional
+/// ornament override. `None` ornament selects [`Ornament::Trill`] at the
+/// score-builder layer.
+///
+/// Construction is fluent — start with [`TrillExtensionSpeedOptions::new`] (or
+/// `TrillWiggleSpeed::into()`) and chain the with-method for the ornament if
+/// you need it:
+///
+/// ```no_run
+/// use music_engraver::layout::ornament::Ornament;
+/// use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+///
+/// // Default ornament (plain "tr"), Fast wiggle.
+/// let _ = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast);
+///
+/// // Precomposed trill-with-mordent, Slow wiggle.
+/// let _ = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+///     .with_ornament(Ornament::TrillWithMordent);
+///
+/// // Ergonomic conversion from a bare speed.
+/// let _: TrillExtensionSpeedOptions = TrillWiggleSpeed::Standard.into();
+/// ```
+///
+/// `None` for the ornament field means "the score-builder picks the
+/// conventional default ([`Ornament::Trill`]) at attachment time," and the
+/// resulting SVG is byte-identical to the existing non-options
+/// `trill_with_extension_speed(speed)` API. Callers who want to lock the
+/// default ornament in explicitly should pass `Some(Ornament::Trill)`.
+///
+/// The ornament must satisfy [`Ornament::supports_trill_extension`] — passing
+/// an unsupported ornament (e.g. [`Ornament::ShortTrill`], a turn, a mordent)
+/// makes the renderer's collector skip the extension entirely (no wiggle), and
+/// only the ornament glyph itself is drawn. This matches
+/// [`crate::layout::trill_bracket::TrillBracketOptions::ornament`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrillExtensionSpeedOptions {
+    /// Wiggle speed/density variant — always required. There is no
+    /// "default speed" hidden in the options because the existing
+    /// `trill_with_extension()` method already covers the standard-speed
+    /// case without any options at all.
+    pub speed: TrillWiggleSpeed,
+    /// Ornament glyph override. `None` selects [`Ornament::Trill`] (the
+    /// conventional "tr" mark). `Some(Ornament::TrillWithMordent)` selects
+    /// the precomposed compound. The ornament must satisfy
+    /// [`Ornament::supports_trill_extension`]; otherwise the renderer will
+    /// silently skip the extension.
+    pub ornament: Option<Ornament>,
+}
+
+impl TrillExtensionSpeedOptions {
+    /// Construct options at the given wiggle speed with every other knob at
+    /// score-builder defaults (plain `Trill` ornament).
+    pub const fn new(speed: TrillWiggleSpeed) -> Self {
+        Self {
+            speed,
+            ornament: None,
+        }
+    }
+
+    /// Override the ornament glyph. Pass [`Ornament::TrillWithMordent`] for a
+    /// compound precomposed trill at the chosen speed; any ornament that
+    /// satisfies [`Ornament::supports_trill_extension`] is valid. Passing an
+    /// unsupported ornament makes the renderer drop the entire trill
+    /// extension (no wiggle — only the ornament glyph).
+    pub const fn with_ornament(mut self, ornament: Ornament) -> Self {
+        self.ornament = Some(ornament);
+        self
+    }
+}
+
+impl From<TrillWiggleSpeed> for TrillExtensionSpeedOptions {
+    fn from(speed: TrillWiggleSpeed) -> Self {
+        Self::new(speed)
     }
 }
 
@@ -390,5 +473,112 @@ mod tests {
         let b =
             layout_trill_extension_with_glyph(0.0, 300.0, 25.0, Glyph::WiggleTrill, 100.0).unwrap();
         assert_eq!(a, b);
+    }
+
+    // --- TrillExtensionSpeedOptions ---
+
+    #[test]
+    fn speed_options_new_has_required_speed_and_unset_ornament() {
+        // `None` on the ornament is meaningful: the score-builder collapses it
+        // to `Ornament::Trill` at attachment time, keeping the layout struct
+        // glyph-agnostic. Speed is always required.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast);
+        assert_eq!(opts.speed, TrillWiggleSpeed::Fast);
+        assert_eq!(opts.ornament, None);
+    }
+
+    #[test]
+    fn speed_options_with_ornament_sets_only_ornament() {
+        // Speed must remain unchanged after with_ornament; only the ornament
+        // field flips. Catches a regression where with_ornament accidentally
+        // reset speed to Default.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_ornament(Ornament::TrillWithMordent);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(
+            opts.speed,
+            TrillWiggleSpeed::Slow,
+            "speed must remain Slow after with_ornament"
+        );
+    }
+
+    #[test]
+    fn speed_options_with_ornament_overwrites_prior_value() {
+        // Calling with_ornament twice keeps the last value — covers the case
+        // where a caller composes options conditionally.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_ornament(Ornament::Trill)
+            .with_ornament(Ornament::TrillWithMordent);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn speed_options_from_speed_matches_new() {
+        let from_speed: TrillExtensionSpeedOptions = TrillWiggleSpeed::Faster.into();
+        assert_eq!(
+            from_speed,
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+        );
+    }
+
+    #[test]
+    fn speed_options_const_constructible() {
+        // The constructor and with-method must be `const`-callable so the
+        // common defaults can live in `const` items at module scope. If
+        // someone removes `const fn`, this test stops compiling.
+        const _OPTS: TrillExtensionSpeedOptions =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slowest)
+                .with_ornament(Ornament::TrillWithMordent);
+    }
+
+    #[test]
+    fn speed_options_copy_does_not_consume_original() {
+        // Options is `Copy`; passing it by value to a function that returns it
+        // must leave the original usable. Catches accidental removal of the
+        // `Copy` derive.
+        fn take(opts: TrillExtensionSpeedOptions) -> TrillExtensionSpeedOptions {
+            opts
+        }
+        let orig = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast)
+            .with_ornament(Ornament::TrillWithMordent);
+        let _ = take(orig);
+        assert_eq!(orig.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(orig.speed, TrillWiggleSpeed::Fast);
+    }
+
+    #[test]
+    fn speed_options_accepts_unsupported_ornament_at_layout_layer() {
+        // The layout struct does not validate the contract — it's the
+        // renderer's collector (filtering by `supports_trill_extension()`)
+        // that drops the extension for unsupported ornaments. Documenting
+        // this at the layout layer: an unsupported ornament must still
+        // round-trip through the field unchanged so the renderer can apply
+        // the filter consistently.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_ornament(Ornament::ShortTrill);
+        assert_eq!(opts.ornament, Some(Ornament::ShortTrill));
+        assert!(
+            !Ornament::ShortTrill.supports_trill_extension(),
+            "ShortTrill must not support the extension"
+        );
+    }
+
+    #[test]
+    fn speed_options_different_speeds_compare_distinct() {
+        // The struct derives PartialEq; differing speeds must compare unequal.
+        let a = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast);
+        let b = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn speed_options_same_speed_different_ornament_compare_distinct() {
+        // Two options bundles that differ only in ornament must compare
+        // unequal — important for tests that rely on PartialEq to detect
+        // accidental field collapse.
+        let a = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard);
+        let b = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_ornament(Ornament::TrillWithMordent);
+        assert_ne!(a, b);
     }
 }

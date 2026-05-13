@@ -155,7 +155,7 @@ pub use trill_bracket::{
 };
 pub use trill_extension::{
     layout_trill_extension, layout_trill_extension_with_glyph, trill_extension_right_edge,
-    TrillExtensionLayout, TrillWiggleSpeed,
+    TrillExtensionLayout, TrillExtensionSpeedOptions, TrillWiggleSpeed,
 };
 pub use voice_collision::{compute_voice_collision_offsets, VoiceCollisionOffset};
 pub use tuplet::{
