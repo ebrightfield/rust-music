@@ -3838,6 +3838,225 @@ fn golden_trill_speed_with_mordent() {
     assert_golden("trill_speed_with_mordent", &svg);
 }
 
+/// Build the canonical `TrillExtensionFullOptions` proofing score: 4 measures
+/// across 2 systems, each picking a bracket+speed+ornament combination that
+/// neither single-purpose options bundle can express on its own. Mirrors the
+/// content of `examples/trill_full_options_score.rs`.
+///
+/// Closes the visual-proofing follow-up explicitly flagged in the "Next" /
+/// "Open issues" section of the 2026-05-13 `TrillExtensionFullOptions`
+/// introduction chunk.
+fn build_trill_full_options() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    use music_engraver::layout::trill_bracket::{HookDirection, TrillBracketSide};
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    use music_engraver::layout::trill_options::TrillExtensionFullOptions;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // M1: Both bracket + Slow speed + TrillWithMordent.
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_speed(TrillWiggleSpeed::Slow)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .barline()
+        // M2: End bracket + Faster speed + plain Trill + Up direction.
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::End)
+                .with_bracket_direction(HookDirection::Up)
+                .with_speed(TrillWiggleSpeed::Faster),
+        )
+        .barline()
+        // M3: Start bracket + Slowest speed + TrillWithMordent + 1.0ss length.
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Start)
+                .with_bracket_length_ss(1.0)
+                .with_speed(TrillWiggleSpeed::Slowest)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .barline()
+        // M4: chord + Both bracket + Standard speed + TrillWithMordent.
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_speed(TrillWiggleSpeed::Standard)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same musical content + same ornaments + same speeds + same extension flag,
+/// but every measure's `.bracket = None` (no hooks). Bracket-isolation
+/// baseline for the golden test's hook-line delta check.
+fn build_trill_full_options_no_bracket_variant() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    use music_engraver::layout::trill_options::TrillExtensionFullOptions;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_speed(TrillWiggleSpeed::Slow)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new().with_speed(TrillWiggleSpeed::Faster),
+        )
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_speed(TrillWiggleSpeed::Slowest)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .barline()
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_speed(TrillWiggleSpeed::Standard)
+                .with_ornament(Ornament::TrillWithMordent),
+        )
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same brackets + same speeds + same extension flag, but every measure's
+/// `.ornament = None` (collapses to `Trill` at the builder). Ornament-
+/// propagation baseline for the golden test's plain-vs-compound canary.
+fn build_trill_full_options_plain_trill_variant() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    use music_engraver::layout::trill_bracket::{HookDirection, TrillBracketSide};
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    use music_engraver::layout::trill_options::TrillExtensionFullOptions;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_speed(TrillWiggleSpeed::Slow),
+        )
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::End)
+                .with_bracket_direction(HookDirection::Up)
+                .with_speed(TrillWiggleSpeed::Faster),
+        )
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Start)
+                .with_bracket_length_ss(1.0)
+                .with_speed(TrillWiggleSpeed::Slowest),
+        )
+        .barline()
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_speed(TrillWiggleSpeed::Standard),
+        )
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_full_options() {
+    let svg = build_trill_full_options();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Structural guard 1: exact 6-hook delta vs the no-bracket variant.
+    // M1 Both=2 + M2 End=1 + M3 Start=1 + M4 chord Both=2 = 6 hook lines.
+    // Catches a regression where a bracket field stops propagating from the
+    // full-options bundle to the annotation, or where the renderer drops a
+    // hook for one of the four bracket variants.
+    let no_bracket = build_trill_full_options_no_bracket_variant();
+    let full_lines = svg.matches("<line ").count();
+    let no_bracket_lines = no_bracket.matches("<line ").count();
+    let delta = full_lines.saturating_sub(no_bracket_lines);
+    assert_eq!(
+        delta, 6,
+        "expected exactly 6 bracket hook lines (M1 Both=2 + M2 End=1 + M3 Start=1 + M4 chord Both=2); \
+         got delta={delta} (full={full_lines}, no_bracket={no_bracket_lines})"
+    );
+
+    // Structural guard 2: ornament propagation — the same bracket+speed
+    // settings on plain `Trill` must produce a byte-different SVG. The
+    // compound glyph is ~470 fu wider than bare "tr" in Bravura, so the
+    // wiggle start positions differ. Three of the four measures use
+    // `TrillWithMordent`, so this must hold.
+    let plain_trill = build_trill_full_options_plain_trill_variant();
+    assert_ne!(
+        svg, plain_trill,
+        "full-options compound score must differ from same options with ornament=None: \
+         different prefix glyph, different wiggle start positions"
+    );
+
+    // Structural guard 3: bracket geometry is glyph-independent — the plain
+    // and compound variants must emit the same `<line>` count. Sandwiches
+    // the previous assertion: ornament changed path data, but it did NOT
+    // change the bracket hook count.
+    assert_eq!(
+        full_lines,
+        plain_trill.matches("<line ").count(),
+        "bracket hook count must be glyph-independent — plain and compound \
+         brackets emit the same <line> count"
+    );
+
+    // Structural guard 4: byte-inequality vs the existing
+    // `trill_bracket_with_mordent` baseline. The two golden baselines use
+    // closely related shapes (similar measures, similar brackets, similar
+    // ornaments), but `trill_full_options` mixes in non-Standard wiggle
+    // speeds — that wiggle-speed mix must produce visibly different SVG.
+    // If a future refactor accidentally wired `trill_with_extension_full_options`
+    // to drop the speed field, the two outputs would converge.
+    let bracket_with_mordent = build_trill_bracket_with_mordent();
+    assert_ne!(
+        svg, bracket_with_mordent,
+        "trill_full_options must differ from trill_bracket_with_mordent: \
+         the full-options score adds non-Standard speed overrides on 3 of 4 measures"
+    );
+
+    assert_golden("trill_full_options", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -3903,6 +4122,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_with_mordent_extension",
         "trill_bracket_with_mordent",
         "trill_speed_with_mordent",
+        "trill_full_options",
     ];
 
     for name in &names {
