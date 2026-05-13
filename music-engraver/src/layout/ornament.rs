@@ -28,6 +28,32 @@ pub enum Ornament {
     /// Short trill (trill without wavy line) — a compact trill symbol used
     /// when no extended wavy line follows.
     ShortTrill,
+    /// Vertical-axis turn — a turn rotated 90° clockwise. Used as Mozart's
+    /// turn sign and notated for clarinet/wind articulation in some
+    /// 19th-century repertoire.
+    TurnUp,
+    /// Vertical-axis turn with slash — the slashed variant of [`Self::TurnUp`].
+    TurnUpSlash,
+    /// Tremblement — a French Baroque trill-like ornament (Couperin /
+    /// D'Anglebert). Distinct from the wavy-line trill: rendered as a
+    /// stacked-zigzag glyph above the note.
+    Tremblement,
+    /// Tremblement (Couperin variant) — the specific zigzag form used in
+    /// François Couperin's tables.
+    TremblementCouperin,
+    /// Haydn ornament — a stuttered turn-figure introduced in Joseph Haydn's
+    /// keyboard works.
+    Haydn,
+    /// Shake — a three-line wavy mark indicating a rapid alternation,
+    /// historically distinct from the trill in 17th–18th century practice.
+    Shake,
+    /// Schleifer (slide) — a German Baroque slide-into-note ornament,
+    /// rendered as a small upward-curving glyph before the principal note.
+    Schleifer,
+    /// Trill-with-mordent — a precomposed compound ornament (trill suffixed
+    /// with a mordent), commonly notated in Baroque keyboard music as a
+    /// single symbol rather than two stacked marks.
+    TrillWithMordent,
 }
 
 impl Ornament {
@@ -41,20 +67,47 @@ impl Ornament {
             Self::InvertedTurn => Glyph::OrnamentTurnInverted,
             Self::TurnSlash => Glyph::OrnamentTurnSlash,
             Self::ShortTrill => Glyph::OrnamentShortTrill,
+            Self::TurnUp => Glyph::OrnamentTurnUp,
+            Self::TurnUpSlash => Glyph::OrnamentTurnUpS,
+            Self::Tremblement => Glyph::OrnamentTremblement,
+            Self::TremblementCouperin => Glyph::OrnamentTremblementCouperin,
+            Self::Haydn => Glyph::OrnamentHaydn,
+            Self::Shake => Glyph::OrnamentShake3,
+            Self::Schleifer => Glyph::OrnamentSchleifer,
+            Self::TrillWithMordent => Glyph::OrnamentPrecompTrillWithMordent,
         }
     }
 
+    /// Every ornament variant, in a canonical ordering (trills first, then
+    /// mordent family, then turn family in horizontal+vertical pairs, then
+    /// historical/precomposed ornaments).
+    ///
+    /// Useful for tests and for iterating the full set of supported
+    /// ornaments in higher-level code.
+    pub const ALL: [Ornament; 15] = [
+        Self::Trill,
+        Self::ShortTrill,
+        Self::Mordent,
+        Self::InvertedMordent,
+        Self::Turn,
+        Self::InvertedTurn,
+        Self::TurnSlash,
+        Self::TurnUp,
+        Self::TurnUpSlash,
+        Self::Tremblement,
+        Self::TremblementCouperin,
+        Self::Haydn,
+        Self::Shake,
+        Self::Schleifer,
+        Self::TrillWithMordent,
+    ];
+
     /// All standard ornament variants, useful for iteration in tests.
+    ///
+    /// Returns the same set as [`Self::ALL`] but as a slice — preserved for
+    /// callers that prefer the `&[Ornament]` shape.
     pub fn all() -> &'static [Ornament] {
-        &[
-            Self::Trill,
-            Self::Mordent,
-            Self::InvertedMordent,
-            Self::Turn,
-            Self::InvertedTurn,
-            Self::TurnSlash,
-            Self::ShortTrill,
-        ]
+        &Self::ALL
     }
 }
 
@@ -146,8 +199,51 @@ mod tests {
     }
 
     #[test]
-    fn all_returns_seven_variants() {
-        assert_eq!(Ornament::all().len(), 7);
+    fn all_returns_fifteen_variants() {
+        assert_eq!(Ornament::all().len(), 15);
+        assert_eq!(Ornament::ALL.len(), 15);
+    }
+
+    #[test]
+    fn all_and_const_yield_same_slice() {
+        let from_fn: &[Ornament] = Ornament::all();
+        let from_const: &[Ornament] = &Ornament::ALL;
+        assert_eq!(from_fn, from_const);
+    }
+
+    #[test]
+    fn all_contains_no_duplicates() {
+        use std::collections::HashSet;
+        let unique: HashSet<_> = Ornament::ALL.iter().collect();
+        assert_eq!(
+            unique.len(),
+            Ornament::ALL.len(),
+            "Ornament::ALL contains duplicates"
+        );
+    }
+
+    #[test]
+    fn all_variants_map_to_distinct_glyphs_except_short_trill_alias() {
+        // InvertedMordent and ShortTrill share the SMuFL OrnamentShortTrill
+        // glyph by long-standing engraving convention — the Pralltriller is
+        // visually identical to a short trill in modern notation. Every
+        // other pair must map to a different glyph.
+        use std::collections::HashMap;
+        let mut by_glyph: HashMap<Glyph, Vec<Ornament>> = HashMap::new();
+        for o in Ornament::ALL {
+            by_glyph.entry(o.glyph()).or_default().push(o);
+        }
+        for (glyph, variants) in &by_glyph {
+            if variants.len() > 1 {
+                let mut sorted = variants.clone();
+                sorted.sort_by_key(|o| format!("{o:?}"));
+                let expected = vec![Ornament::InvertedMordent, Ornament::ShortTrill];
+                assert_eq!(
+                    sorted, expected,
+                    "unexpected glyph collision for {glyph:?}: {variants:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -158,6 +254,106 @@ mod tests {
     #[test]
     fn turn_and_inverted_turn_produce_distinct_glyphs() {
         assert_ne!(Ornament::Turn.glyph(), Ornament::InvertedTurn.glyph());
+    }
+
+    #[test]
+    fn turn_up_glyph() {
+        assert_eq!(Ornament::TurnUp.glyph(), Glyph::OrnamentTurnUp);
+    }
+
+    #[test]
+    fn turn_up_slash_glyph() {
+        assert_eq!(Ornament::TurnUpSlash.glyph(), Glyph::OrnamentTurnUpS);
+    }
+
+    #[test]
+    fn turn_up_and_turn_up_slash_differ() {
+        assert_ne!(Ornament::TurnUp.glyph(), Ornament::TurnUpSlash.glyph());
+    }
+
+    #[test]
+    fn horizontal_and_vertical_turns_differ() {
+        // Mozart-style vertical turn (TurnUp) must not collapse to the
+        // horizontal Turn glyph — they are visually distinct in every SMuFL
+        // font and conflating them silently would be an engraving regression.
+        assert_ne!(Ornament::Turn.glyph(), Ornament::TurnUp.glyph());
+        assert_ne!(Ornament::TurnSlash.glyph(), Ornament::TurnUpSlash.glyph());
+    }
+
+    #[test]
+    fn tremblement_glyph() {
+        assert_eq!(Ornament::Tremblement.glyph(), Glyph::OrnamentTremblement);
+    }
+
+    #[test]
+    fn tremblement_couperin_glyph() {
+        assert_eq!(
+            Ornament::TremblementCouperin.glyph(),
+            Glyph::OrnamentTremblementCouperin
+        );
+    }
+
+    #[test]
+    fn tremblement_variants_differ() {
+        assert_ne!(
+            Ornament::Tremblement.glyph(),
+            Ornament::TremblementCouperin.glyph()
+        );
+    }
+
+    #[test]
+    fn tremblement_is_distinct_from_trill() {
+        // Tremblement and Trill are both trill-family ornaments but the
+        // glyphs must be visually distinct — French Baroque notation
+        // depends on the differentiation.
+        assert_ne!(Ornament::Tremblement.glyph(), Ornament::Trill.glyph());
+    }
+
+    #[test]
+    fn haydn_glyph() {
+        assert_eq!(Ornament::Haydn.glyph(), Glyph::OrnamentHaydn);
+    }
+
+    #[test]
+    fn shake_glyph() {
+        assert_eq!(Ornament::Shake.glyph(), Glyph::OrnamentShake3);
+    }
+
+    #[test]
+    fn schleifer_glyph() {
+        assert_eq!(Ornament::Schleifer.glyph(), Glyph::OrnamentSchleifer);
+    }
+
+    #[test]
+    fn trill_with_mordent_glyph() {
+        assert_eq!(
+            Ornament::TrillWithMordent.glyph(),
+            Glyph::OrnamentPrecompTrillWithMordent
+        );
+    }
+
+    #[test]
+    fn trill_with_mordent_distinct_from_trill_and_mordent() {
+        let twm = Ornament::TrillWithMordent.glyph();
+        assert_ne!(twm, Ornament::Trill.glyph());
+        assert_ne!(twm, Ornament::Mordent.glyph());
+    }
+
+    #[test]
+    fn all_contains_each_new_variant_exactly_once() {
+        for v in [
+            Ornament::TurnUp,
+            Ornament::TurnUpSlash,
+            Ornament::Tremblement,
+            Ornament::TremblementCouperin,
+            Ornament::Haydn,
+            Ornament::Shake,
+            Ornament::Schleifer,
+            Ornament::TrillWithMordent,
+        ] {
+            let count = Ornament::ALL.iter().filter(|&&o| o == v).count();
+            assert_eq!(count, 1, "{v:?} should appear exactly once in ALL");
+        }
     }
 
     #[test]

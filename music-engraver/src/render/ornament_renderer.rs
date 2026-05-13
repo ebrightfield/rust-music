@@ -137,4 +137,105 @@ mod tests {
             "SVG should contain the x-coordinate 789"
         );
     }
+
+    /// Extract the `d="..."` content of the first `<path` element in `svg`.
+    fn first_path_d(svg: &str) -> Option<String> {
+        let path_start = svg.find("<path")?;
+        let after = &svg[path_start..];
+        let d_start = after.find("d=\"")?;
+        let after_d = &after[d_start + 3..];
+        let d_end = after_d.find('"')?;
+        Some(after_d[..d_end].to_string())
+    }
+
+    #[test]
+    fn all_ornaments_produce_pairwise_distinct_paths_except_short_trill_alias() {
+        // Regression check: every Ornament variant should render its own
+        // distinct glyph outline. The known exception is that
+        // `InvertedMordent` is documented to share `OrnamentShortTrill` with
+        // `ShortTrill` — that single collision is allowed; any other pair
+        // collapsing to the same path data would indicate a wiring bug
+        // where a variant silently fell back to a sibling's glyph.
+        let font = test_font();
+        let staff = test_staff();
+
+        let paths: Vec<(Ornament, String)> = Ornament::ALL
+            .iter()
+            .map(|&o| {
+                let layout = layout_ornament(o, 100.0, 4, &staff);
+                let mut w = test_writer();
+                draw_ornament(&mut w, &font, &layout).unwrap();
+                let d = first_path_d(&w.to_svg())
+                    .unwrap_or_else(|| panic!("no path d found for {o:?}"));
+                (o, d)
+            })
+            .collect();
+
+        for i in 0..paths.len() {
+            for j in (i + 1)..paths.len() {
+                let (oi, di) = &paths[i];
+                let (oj, dj) = &paths[j];
+                let is_known_alias = matches!(
+                    (oi, oj),
+                    (Ornament::InvertedMordent, Ornament::ShortTrill)
+                        | (Ornament::ShortTrill, Ornament::InvertedMordent)
+                );
+                if is_known_alias {
+                    assert_eq!(
+                        di, dj,
+                        "InvertedMordent and ShortTrill should share path data"
+                    );
+                } else {
+                    assert_ne!(
+                        di, dj,
+                        "{oi:?} and {oj:?} should produce distinct path data"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn turn_up_renders_distinct_from_turn() {
+        // Anchors the horizontal-vs-vertical turn distinction at the
+        // renderer level, not just the glyph-mapping level. If a future
+        // refactor inadvertently routes TurnUp to the wrong glyph, this
+        // catches it independently of the layout test.
+        let font = test_font();
+        let staff = test_staff();
+        let turn = layout_ornament(Ornament::Turn, 100.0, 4, &staff);
+        let turn_up = layout_ornament(Ornament::TurnUp, 100.0, 4, &staff);
+        let mut w1 = test_writer();
+        draw_ornament(&mut w1, &font, &turn).unwrap();
+        let mut w2 = test_writer();
+        draw_ornament(&mut w2, &font, &turn_up).unwrap();
+        assert_ne!(first_path_d(&w1.to_svg()), first_path_d(&w2.to_svg()));
+    }
+
+    #[test]
+    fn every_new_ornament_glyph_has_nonzero_advance_in_bravura() {
+        // Defensive: confirm Bravura actually carries every newly added
+        // glyph as a real, non-zero-width outline. If a glyph were missing
+        // or empty in the bundled font, layout would silently advance zero
+        // pixels and the glyph would be invisible in rendered output.
+        let font = test_font();
+        for orn in [
+            Ornament::TurnUp,
+            Ornament::TurnUpSlash,
+            Ornament::Tremblement,
+            Ornament::TremblementCouperin,
+            Ornament::Haydn,
+            Ornament::Shake,
+            Ornament::Schleifer,
+            Ornament::TrillWithMordent,
+        ] {
+            let outline = font
+                .glyph_outline(orn.glyph())
+                .unwrap_or_else(|_| panic!("Bravura missing outline for {orn:?}"));
+            assert!(
+                !outline.path_data.is_empty(),
+                "{orn:?} has empty path data — Bravura glyph is missing or degenerate"
+            );
+        }
+    }
 }
