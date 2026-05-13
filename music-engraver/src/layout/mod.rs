@@ -54,6 +54,7 @@ pub mod tie;
 pub mod tremolo;
 pub mod trill_bracket;
 pub mod trill_extension;
+pub mod trill_options;
 pub mod time_signature;
 pub mod tuplet;
 pub mod voice_collision;
@@ -157,6 +158,7 @@ pub use trill_extension::{
     layout_trill_extension, layout_trill_extension_with_glyph, trill_extension_right_edge,
     TrillExtensionLayout, TrillExtensionSpeedOptions, TrillWiggleSpeed,
 };
+pub use trill_options::TrillExtensionFullOptions;
 pub use voice_collision::{compute_voice_collision_offsets, VoiceCollisionOffset};
 pub use tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,

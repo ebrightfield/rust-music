@@ -7458,3 +7458,467 @@
              with_ext={compound_count}, plain={plain_compound_paths}"
         );
     }
+
+    // --- trill_with_extension_full_options ---
+
+    #[test]
+    fn full_options_default_matches_plain_trill_with_extension_byte_for_byte() {
+        // The all-defaults case is the central byte-equivalence canary: a
+        // bare `TrillExtensionFullOptions::new()` must produce SVG byte-
+        // identical to `trill_with_extension()`. If a future change drifts
+        // either path (e.g. the ornament-collapse-to-Trill semantics
+        // shift, or the trill_extension flag's default value flips), this
+        // catches it.
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let full = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(TrillExtensionFullOptions::new())
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, full,
+            "default full options must render byte-identically to trill_with_extension()"
+        );
+    }
+
+    #[test]
+    fn full_options_from_bracket_matches_bracketed_options_byte_for_byte() {
+        // A TrillBracketOptions widened via `.into()` and applied through
+        // the full-options builder must produce SVG byte-identical to
+        // applying the same TrillBracketOptions through the existing
+        // bracket-options builder. Proves the From conversion threads
+        // through every relevant annotation field correctly.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let bracket_opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_direction(HookDirection::Up)
+            .with_length_ss(0.85)
+            .with_ornament(Ornament::TrillWithMordent);
+
+        let bracketed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(bracket_opts)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let full: TrillExtensionFullOptions = bracket_opts.into();
+        let via_full = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(full)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            bracketed, via_full,
+            "TrillBracketOptions::into() routed through full_options must match bracketed_with_options"
+        );
+    }
+
+    #[test]
+    fn full_options_from_speed_matches_speed_options_byte_for_byte() {
+        // Mirror of the bracket-From test: a TrillExtensionSpeedOptions
+        // widened via `.into()` and applied through the full-options
+        // builder must produce SVG byte-identical to applying the same
+        // speed options through the existing speed-options builder.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let speed_opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_ornament(Ornament::TrillWithMordent);
+
+        let via_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(speed_opts)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let full: TrillExtensionFullOptions = speed_opts.into();
+        let via_full = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(full)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            via_speed, via_full,
+            "TrillExtensionSpeedOptions::into() routed through full_options must match speed_with_options"
+        );
+    }
+
+    #[test]
+    fn full_options_sets_every_annotation_field_when_all_knobs_specified() {
+        // Field-level inspection of the builder's intermediate state: a
+        // fully-specified options bundle must thread every knob into the
+        // matching annotation field (ornament, trill_extension,
+        // trill_bracket, trill_bracket_direction, trill_bracket_length_ss,
+        // trill_wiggle_speed). Any silently-dropped field shows up here.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let opts = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Both)
+            .with_bracket_direction(HookDirection::Up)
+            .with_bracket_length_ss(0.9)
+            .with_speed(TrillWiggleSpeed::Fast)
+            .with_ornament(Ornament::TrillWithMordent);
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(opts);
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.ornament,
+                    Some(Ornament::TrillWithMordent),
+                    "ornament must propagate"
+                );
+                assert!(annotations.trill_extension, "trill_extension must be set");
+                assert_eq!(
+                    annotations.trill_bracket,
+                    Some(TrillBracketSide::Both),
+                    "bracket side must propagate"
+                );
+                assert_eq!(
+                    annotations.trill_bracket_direction,
+                    Some(HookDirection::Up),
+                    "bracket direction must propagate"
+                );
+                assert_eq!(
+                    annotations.trill_bracket_length_ss,
+                    Some(0.9),
+                    "bracket length must propagate"
+                );
+                assert_eq!(
+                    annotations.trill_wiggle_speed,
+                    Some(TrillWiggleSpeed::Fast),
+                    "wiggle speed must propagate"
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn full_options_unset_ornament_writes_plain_trill_to_annotation() {
+        // Matches the convention of the two single-purpose options
+        // builders: `None` ornament must collapse to `Some(Trill)` at the
+        // builder layer (not the renderer), so the annotation field
+        // remains the single source of truth for the downstream
+        // supports_trill_extension() check.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(TrillExtensionFullOptions::new());
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.ornament,
+                    Some(Ornament::Trill),
+                    "unset ornament must collapse to Trill at the builder"
+                );
+                assert!(annotations.trill_extension);
+                assert_eq!(
+                    annotations.trill_bracket, None,
+                    "bracket must remain unset when not requested"
+                );
+                assert_eq!(annotations.trill_wiggle_speed, None);
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn full_options_bracket_plus_speed_renders_distinct_from_bracket_only() {
+        // The whole point of the unified options bundle: a single call
+        // can combine bracket + speed, where neither single-purpose
+        // builder can. The combined SVG must be visibly distinct from
+        // the bracket-only variant at the same bracket settings — proves
+        // the speed override actually propagated through.
+        use crate::layout::trill_bracket::TrillBracketSide;
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let bracket_only = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new().with_bracket(TrillBracketSide::Both),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracket_plus_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::Both)
+                    .with_speed(TrillWiggleSpeed::Slowest),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            bracket_only, bracket_plus_speed,
+            "adding a non-default speed must visibly change the rendered SVG"
+        );
+        // Both must still draw the bracket — exactly two hook <line>s for
+        // Both-sided bracket. Catches a regression where adding speed
+        // somehow eats the bracket.
+        assert!(
+            bracket_only.matches("<line ").count() >= 2,
+            "Both-bracket must draw at least 2 hook lines (bracket-only)"
+        );
+        assert!(
+            bracket_plus_speed.matches("<line ").count() >= 2,
+            "Both-bracket must draw at least 2 hook lines (bracket+speed)"
+        );
+    }
+
+    #[test]
+    fn full_options_compound_bracket_plus_speed_renders_distinct_from_plain_trill_same_options() {
+        // Coupling the compound ornament with bracket+speed must produce a
+        // visibly different SVG from the plain Trill at the same
+        // bracket+speed. Proves the ornament half of the bundle propagates
+        // through the renderer's glyph-advance lookup (Bravura: 521 vs
+        // 990 font-units for "tr" vs the compound).
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::TrillBracketSide;
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let plain_trill = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::End)
+                    .with_speed(TrillWiggleSpeed::Fast),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let compound = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::End)
+                    .with_speed(TrillWiggleSpeed::Fast)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            plain_trill, compound,
+            "compound ornament must visibly differ from plain Trill at same bracket+speed"
+        );
+        // Bracket should still draw exactly 1 hook <line> over the
+        // no-bracket baseline of either variant — guards against the
+        // ornament half eating the bracket half.
+        let plain_lines = plain_trill.matches("<line ").count();
+        let compound_lines = compound.matches("<line ").count();
+        assert_eq!(
+            plain_lines, compound_lines,
+            "bracket geometry is glyph-independent — line counts must match (plain={plain_lines}, compound={compound_lines})"
+        );
+    }
+
+    #[test]
+    fn full_options_unsupported_ornament_silently_drops_extension_and_bracket() {
+        // The renderer-layer contract: an ornament that fails
+        // supports_trill_extension() causes the collector to drop the
+        // wiggle AND the bracket hooks, leaving only the ornament glyph
+        // itself. Matches the behavior of the two single-purpose options
+        // builders.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::TrillBracketSide;
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let supported = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::Both)
+                    .with_speed(TrillWiggleSpeed::Standard)
+                    .with_ornament(Ornament::Trill),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let unsupported = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::Both)
+                    .with_speed(TrillWiggleSpeed::Standard)
+                    .with_ornament(Ornament::ShortTrill),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // The unsupported variant must produce strictly fewer paths — no
+        // wiggle, and no bracket hook lines.
+        assert!(
+            unsupported.matches("<path").count() < supported.matches("<path").count(),
+            "ShortTrill must drop the wiggle (fewer paths than Trill)"
+        );
+        assert!(
+            unsupported.matches("<line ").count() < supported.matches("<line ").count(),
+            "ShortTrill must drop the bracket hooks (fewer <line>s than Trill)"
+        );
+    }
+
+    #[test]
+    fn full_options_on_rest_is_noop() {
+        // The no-op-on-rest contract must extend to the unified options
+        // builder. Applying a fully-specified bundle to a rest must
+        // produce SVG byte-identical to the plain-rest baseline.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::TrillBracketSide;
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let plain_rest = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .render_svg();
+
+        let annotated_rest = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::Both)
+                    .with_speed(TrillWiggleSpeed::Slow)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain_rest, annotated_rest,
+            "full_options on rest must be a no-op (byte-identical to plain rest)"
+        );
+    }
+
+    #[test]
+    fn full_options_on_chord_renders_bracket_and_wiggle() {
+        // Chord targeting: the full bundle on a chord must add both
+        // bracket hook lines AND wiggle paths beyond the plain chord
+        // baseline.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::TrillBracketSide;
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let plain_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("E", 4), p("G", 4)], Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let full_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::Both)
+                    .with_speed(TrillWiggleSpeed::Fast)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // Exact 2-line delta for Both-sided bracket on chord.
+        assert_eq!(
+            full_chord
+                .matches("<line ")
+                .count()
+                .saturating_sub(plain_chord.matches("<line ").count()),
+            2,
+            "Both-bracketed compound chord must add exactly 2 hook <line>s"
+        );
+        assert!(
+            full_chord.matches("<path").count() > plain_chord.matches("<path").count(),
+            "Bracketed compound chord must add wiggle paths over plain chord"
+        );
+    }

@@ -673,6 +673,80 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a trill-with-extension annotation using a
+    /// [`TrillExtensionFullOptions`](crate::layout::trill_options::TrillExtensionFullOptions)
+    /// bundle — the unified counterpart of
+    /// [`trill_with_extension_bracketed_with_options`](Self::trill_with_extension_bracketed_with_options)
+    /// and
+    /// [`trill_with_extension_speed_with_options`](Self::trill_with_extension_speed_with_options).
+    ///
+    /// The two existing options-based builders cover bracket-only and
+    /// speed-only configurations; this builder covers their union, so a
+    /// caller wanting *bracket + speed* together (e.g. a `Both`-bracketed
+    /// `Slow` wiggle on a precomposed `TrillWithMordent`) can express the
+    /// combination in a single call rather than hand-constructing the
+    /// underlying annotation fields. Every option is independent.
+    ///
+    /// Field semantics:
+    /// - `opts.bracket` — `None` skips the bracket entirely. When `Some`,
+    ///   the bracket flag is set and `opts.bracket_direction` /
+    ///   `opts.bracket_length_ss` are forwarded directly (still `None` if
+    ///   the caller did not override them, so the renderer's defaults apply
+    ///   downstream).
+    /// - `opts.speed` — `None` leaves `trill_wiggle_speed` unset (renderer
+    ///   uses the standard wiggle); `Some(speed)` selects a SMuFL
+    ///   `wiggleTrill*` variant.
+    /// - `opts.ornament` — `None` collapses to [`Ornament::Trill`] at the
+    ///   annotation field (kept consistent with the other options-based
+    ///   builders so the renderer's `supports_trill_extension()` check sees
+    ///   the canonical glyph). `Some(Ornament::TrillWithMordent)` selects
+    ///   the precomposed compound; other ornaments that don't satisfy
+    ///   [`Ornament::supports_trill_extension`] make the renderer's
+    ///   collector silently drop the extension and the bracket.
+    ///
+    /// Byte-equivalence guarantees:
+    /// - `trill_with_extension_full_options(TrillExtensionFullOptions::new())`
+    ///   is byte-equivalent to [`trill_with_extension`](Self::trill_with_extension).
+    /// - `trill_with_extension_full_options(bracket_opts.into())` is
+    ///   byte-equivalent to
+    ///   `trill_with_extension_bracketed_with_options(bracket_opts)` for any
+    ///   `bracket_opts: TrillBracketOptions`.
+    /// - `trill_with_extension_full_options(speed_opts.into())` is
+    ///   byte-equivalent to
+    ///   `trill_with_extension_speed_with_options(speed_opts)` for any
+    ///   `speed_opts: TrillExtensionSpeedOptions`.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn trill_with_extension_full_options(
+        mut self,
+        opts: crate::layout::trill_options::TrillExtensionFullOptions,
+    ) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            // `None` ornament collapses to `Trill` at the builder layer (not
+            // the renderer) so the annotation field stays the single source
+            // of truth for glyph + extension-eligibility — matches the
+            // convention established by the two single-purpose options
+            // builders.
+            annotations.ornament = Some(opts.ornament.unwrap_or(Ornament::Trill));
+            annotations.trill_extension = true;
+            // `None` bracket means "no bracket" — clear the side; the
+            // direction/length overrides are tied to whether a bracket is
+            // set, so they propagate downstream where the renderer would
+            // ignore them in the bracket-absent case anyway.
+            annotations.trill_bracket = opts.bracket;
+            annotations.trill_bracket_direction = opts.bracket_direction;
+            annotations.trill_bracket_length_ss = opts.bracket_length_ss;
+            // `None` speed leaves the field unset — the renderer's existing
+            // `unwrap_or_default()` picks `Standard`, matching the bare
+            // `trill_with_extension()` output.
+            annotations.trill_wiggle_speed = opts.speed;
+        }
+        self
+    }
+
     /// Attach a navigation sign (segno, coda) to the most recently added note
     /// or chord. The sign glyph is placed above the staff, centered on the note.
     ///
