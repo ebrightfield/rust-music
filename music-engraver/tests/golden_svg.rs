@@ -505,6 +505,33 @@ fn build_ornaments() -> String {
         .render_svg()
 }
 
+/// Every variant in `Ornament::ALL` (15 ornaments) — one per note, laid
+/// out 4 ornaments per measure across 2 systems. Visual proofing
+/// companion to the unit-test glyph-distinctness assertions added when
+/// `Ornament::ALL` was introduced.
+fn build_ornaments_full() -> String {
+    let pitches = [
+        ("C", 4), ("D", 4), ("E", 4), ("F", 4),
+        ("G", 4), ("A", 4), ("B", 4), ("C", 5),
+        ("D", 5), ("E", 5), ("F", 5), ("G", 5),
+        ("A", 5), ("B", 5), ("C", 6),
+    ];
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    for (i, ornament) in Ornament::ALL.iter().enumerate() {
+        let (n, oct) = pitches[i];
+        b = b.note(p(n, oct), Duration::QTR).ornament(*ornament);
+        if (i + 1) % 4 == 0 {
+            b = b.barline();
+        }
+    }
+    // Pad measure 4 to 4/4 with one ornamentless quarter.
+    b.note(p("D", 6), Duration::QTR).end_barline().render_svg()
+}
+
 /// Hairpins (crescendo + decrescendo) spanning notes.
 fn build_hairpins() -> String {
     ScoreBuilder::new()
@@ -739,6 +766,85 @@ fn golden_chord_symbols() {
 #[test]
 fn golden_ornaments() {
     assert_golden("ornaments", &build_ornaments());
+}
+
+#[test]
+fn golden_ornaments_full() {
+    let svg = build_ornaments_full();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "ornaments_full should be SVG");
+    assert!(svg.contains("</svg>"), "ornaments_full should close SVG");
+
+    // Path-count guard: must strictly exceed the same score without any
+    // ornaments (identical 16-note scale + key sig + time sig + clef).
+    // This proves every ornament call actually drew a path, rather than
+    // silently no-oping.
+    let pitches = [
+        ("C", 4), ("D", 4), ("E", 4), ("F", 4),
+        ("G", 4), ("A", 4), ("B", 4), ("C", 5),
+        ("D", 5), ("E", 5), ("F", 5), ("G", 5),
+        ("A", 5), ("B", 5), ("C", 6),
+    ];
+    let mut plain = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    for (i, (n, oct)) in pitches.iter().enumerate() {
+        plain = plain.note(p(n, *oct), Duration::QTR);
+        if (i + 1) % 4 == 0 {
+            plain = plain.barline();
+        }
+    }
+    let plain_svg = plain
+        .note(p("D", 6), Duration::QTR)
+        .end_barline()
+        .render_svg();
+
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain_svg.matches("<path").count();
+    let ornament_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        ornament_paths, 15,
+        "ornaments_full must add exactly one path per ornament \
+         (15 ornaments → 15 paths). full={full_paths}, plain={plain_paths}, \
+         delta={ornament_paths}"
+    );
+
+    // Distinct-d guard: the 15 ornament glyphs reduce to 14 unique SMuFL
+    // paths because `InvertedMordent` and `ShortTrill` deliberately share
+    // `OrnamentShortTrill` (documented in `layout::ornament`). Compute
+    // the set of d="..." values in `svg` vs `plain_svg`; the difference
+    // must be exactly the unique ornament glyphs.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg).difference(&distinct_d(&plain_svg)).cloned().collect();
+    assert_eq!(
+        added.len(),
+        14,
+        "ornaments must contribute exactly 14 unique path d-strings \
+         (15 variants − 1 InvertedMordent≡ShortTrill alias), got {}",
+        added.len()
+    );
+
+    // Byte-equal regression: ornaments_full SVG must differ from the
+    // existing 4-ornament `ornaments` baseline.
+    assert_ne!(
+        svg,
+        build_ornaments(),
+        "ornaments_full must differ from the 4-ornament baseline"
+    );
+
+    assert_golden("ornaments_full", &svg);
 }
 
 #[test]
@@ -2759,6 +2865,7 @@ fn golden_baselines_are_valid_svgs() {
         "lyrics",
         "chord_symbols",
         "ornaments",
+        "ornaments_full",
         "hairpins",
         "cross_system_ties",
         "expression_text",
