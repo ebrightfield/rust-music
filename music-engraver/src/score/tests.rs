@@ -6243,3 +6243,308 @@
              down_y1={down_y1}, up_y2={up_y2}"
         );
     }
+
+    // --- trill_with_extension_bracketed_with_options (ScoreBuilder, builder API) ---
+
+    #[test]
+    fn with_options_default_matches_plain_bracketed_byte_for_byte() {
+        // The whole point of the options builder is that the all-defaults
+        // case is byte-identical to the existing non-custom API. If a future
+        // change to either path drifts, this canary fails.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed(TrillBracketSide::Both)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let opts = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, opts,
+            "Options(side only) must render byte-identically to plain bracketed"
+        );
+    }
+
+    #[test]
+    fn with_options_both_overrides_matches_custom_call_byte_for_byte() {
+        // Options with both fields populated must match the all-or-nothing
+        // custom call exactly — they should walk the same code path in the
+        // renderer.
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
+
+        let custom = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_custom(
+                TrillBracketSide::Both,
+                HookDirection::Up,
+                1.0,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let opts = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_direction(HookDirection::Up)
+                    .with_length_ss(1.0),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            custom, opts,
+            "Options(Up, 1.0) must render byte-identically to custom(Both, Up, 1.0)"
+        );
+    }
+
+    #[test]
+    fn with_options_length_only_renders_distinct_from_default() {
+        // Setting just length (leaving direction unset) must visibly change
+        // the SVG while preserving the line count.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let default = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let longer = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            default, longer,
+            "Length-only override must change SVG output"
+        );
+        assert_eq!(
+            default.matches("<line ").count(),
+            longer.matches("<line ").count(),
+            "Length-only override must NOT change <line> count"
+        );
+    }
+
+    #[test]
+    fn with_options_direction_only_renders_distinct_from_default() {
+        // Setting just direction (leaving length unset) must visibly change
+        // the SVG while preserving the line count.
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
+
+        let default = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let up = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_direction(HookDirection::Up),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(default, up, "Direction-only override must change SVG output");
+        assert_eq!(
+            default.matches("<line ").count(),
+            up.matches("<line ").count(),
+            "Direction-only override must NOT change <line> count"
+        );
+    }
+
+    #[test]
+    fn with_options_from_side_via_into_matches_new() {
+        // The `From<TrillBracketSide>` impl should make `side.into()`
+        // equivalent to `TrillBracketOptions::new(side)`. Verify at the
+        // SVG output level so the integration of the conversion is
+        // exercised, not just the type-level conversion.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let via_new = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::End,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let via_into = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketSide::End.into())
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(via_new, via_into, "TrillBracketSide::into() must match new()");
+    }
+
+    #[test]
+    fn with_options_sets_annotation_fields_matching_overrides() {
+        // Field-level inspection: confirm that an Option in the input lands
+        // as the same Option in the annotation (not collapsed to a default).
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
+
+        let event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::WHOLE,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_bracket: Some(TrillBracketSide::Start),
+                trill_bracket_direction: Some(HookDirection::Up),
+                trill_bracket_length_ss: None, // intentionally unset
+                ..NoteAnnotations::default()
+            },
+        };
+        // Independently verify the same outcome via the builder path.
+        let built = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Start)
+                    .with_direction(HookDirection::Up),
+            );
+        let last = built.current_events.last().expect("at least one event");
+        let ann = match &last.1 {
+            ScoreEvent::Note { annotations, .. } => annotations,
+            _ => panic!("expected Note event"),
+        };
+        assert_eq!(ann.ornament, Some(Ornament::Trill));
+        assert!(ann.trill_extension);
+        assert_eq!(ann.trill_bracket, Some(TrillBracketSide::Start));
+        assert_eq!(ann.trill_bracket_direction, Some(HookDirection::Up));
+        assert_eq!(
+            ann.trill_bracket_length_ss, None,
+            "Unset length_ss must remain None (not collapsed to a default)"
+        );
+        let _ = event; // silence unused-binding lint on the parallel constructor
+    }
+
+    #[test]
+    fn with_options_on_rest_is_noop() {
+        // Bracketing a rest is meaningless — must be a complete no-op.
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
+
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with_bracket = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_direction(HookDirection::Up)
+                    .with_length_ss(1.0),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            plain, with_bracket,
+            "Options bracket on rest must be a complete no-op"
+        );
+    }
+
+    #[test]
+    fn with_options_on_chord_renders_bracket() {
+        // Bracketing a chord must work the same as bracketing a single note —
+        // the bracket targets the chord as a unit. We verify by comparing
+        // <line> counts: a plain chord vs a chord with a Both bracket must
+        // differ by exactly 2 lines.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let plain_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("E", 4), p("G", 4)], Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let bracketed_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(TrillBracketOptions::new(
+                TrillBracketSide::Both,
+            ))
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let plain_lines = plain_chord.matches("<line ").count();
+        let bracketed_lines = bracketed_chord.matches("<line ").count();
+        assert_eq!(
+            bracketed_lines.saturating_sub(plain_lines),
+            2,
+            "Bracketed (Both) chord must add exactly 2 <line> elements (Start + End hooks); \
+             plain={plain_lines}, bracketed={bracketed_lines}"
+        );
+    }

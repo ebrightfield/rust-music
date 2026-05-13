@@ -31,6 +31,84 @@ pub enum TrillBracketSide {
     Both,
 }
 
+/// Ergonomic options bundle for the bracket-form trill API.
+///
+/// The all-or-nothing custom variant of the bracket builder requires the
+/// caller to supply both a `HookDirection` and a length even when they only
+/// want to override one of them. This struct lets callers express "bracket
+/// on this side; for any unspecified knob, fall back to the conventional
+/// default" by leaving the optional fields as `None`.
+///
+/// Construction is fluent — start with [`TrillBracketOptions::new`] (or
+/// `TrillBracketSide::into()`) and chain the with-methods for the knobs you
+/// care about:
+///
+/// ```no_run
+/// use music_engraver::layout::trill_bracket::{
+///     HookDirection, TrillBracketOptions, TrillBracketSide,
+/// };
+///
+/// // Default direction (Down) and default length (~0.75ss), End only.
+/// let _ = TrillBracketOptions::new(TrillBracketSide::End);
+///
+/// // Override length while keeping conventional Down direction.
+/// let _ = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.0);
+///
+/// // Override direction while keeping default length.
+/// let _ = TrillBracketOptions::new(TrillBracketSide::Start).with_direction(HookDirection::Up);
+/// ```
+///
+/// `None` for either optional field means "the layout/renderer picks the
+/// conventional default at draw time," and the resulting SVG is byte-
+/// identical to the existing non-custom `trill_with_extension_bracketed`
+/// API. Callers who want to lock in the defaults explicitly should pass
+/// `Some(HookDirection::Down)` and `Some(0.75)` instead.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrillBracketOptions {
+    /// Which end(s) of the wiggle to bracket — always required.
+    pub side: TrillBracketSide,
+    /// Hook direction override. `None` defers to the renderer's conventional
+    /// default (`HookDirection::Down`).
+    pub direction: Option<HookDirection>,
+    /// Hook length in staff spaces. `None` defers to the renderer's
+    /// conventional default (~0.75ss).
+    pub length_ss: Option<f64>,
+}
+
+impl TrillBracketOptions {
+    /// Construct options bracketing the given side with both knobs at
+    /// renderer defaults (Down direction, ~0.75ss length).
+    pub const fn new(side: TrillBracketSide) -> Self {
+        Self {
+            side,
+            direction: None,
+            length_ss: None,
+        }
+    }
+
+    /// Override the hook direction. Pass `HookDirection::Up` for trills
+    /// rendered below the staff so the hook still points back toward the
+    /// affected notes.
+    pub const fn with_direction(mut self, direction: HookDirection) -> Self {
+        self.direction = Some(direction);
+        self
+    }
+
+    /// Override the hook length in staff spaces. Reasonable values are
+    /// roughly 0.5..=1.0; the layout does not clamp, and a 0.0 length
+    /// produces a degenerate hook (no visible line).
+    pub const fn with_length_ss(mut self, length_ss: f64) -> Self {
+        self.length_ss = Some(length_ss);
+        self
+    }
+}
+
+impl From<TrillBracketSide> for TrillBracketOptions {
+    fn from(side: TrillBracketSide) -> Self {
+        Self::new(side)
+    }
+}
+
 /// Whether the hook extends downward from (or upward to) the wiggle baseline.
 ///
 /// The wiggle's `y` is conventionally the baseline of the trill "tr" glyph,
@@ -323,5 +401,90 @@ mod tests {
             hooks[0].x,
             crate::layout::trill_extension::trill_extension_right_edge(&ext)
         );
+    }
+
+    // --- TrillBracketOptions (builder) ---
+
+    #[test]
+    fn options_new_has_required_side_and_unset_overrides() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Start);
+        assert_eq!(opts.side, TrillBracketSide::Start);
+        assert_eq!(opts.direction, None);
+        assert_eq!(opts.length_ss, None);
+    }
+
+    #[test]
+    fn options_with_direction_sets_only_direction() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::End).with_direction(HookDirection::Up);
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+        assert_eq!(opts.length_ss, None, "length must remain unset");
+        assert_eq!(opts.side, TrillBracketSide::End, "side must remain End");
+    }
+
+    #[test]
+    fn options_with_length_ss_sets_only_length() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.25);
+        assert_eq!(opts.length_ss, Some(1.25));
+        assert_eq!(opts.direction, None, "direction must remain unset");
+        assert_eq!(opts.side, TrillBracketSide::Both);
+    }
+
+    #[test]
+    fn options_chained_with_methods_both_apply() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_direction(HookDirection::Up)
+            .with_length_ss(0.5);
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+        assert_eq!(opts.length_ss, Some(0.5));
+    }
+
+    #[test]
+    fn options_chain_order_independent() {
+        let a = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_direction(HookDirection::Down)
+            .with_length_ss(0.9);
+        let b = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_length_ss(0.9)
+            .with_direction(HookDirection::Down);
+        assert_eq!(a, b, "chain order must not affect the resulting options");
+    }
+
+    #[test]
+    fn options_with_method_overwrites_prior_value() {
+        // Calling with_direction twice keeps the last value — covers the
+        // case where a caller composes options conditionally.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Start)
+            .with_direction(HookDirection::Down)
+            .with_direction(HookDirection::Up);
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+    }
+
+    #[test]
+    fn options_from_side_matches_new() {
+        let from_side: TrillBracketOptions = TrillBracketSide::End.into();
+        assert_eq!(from_side, TrillBracketOptions::new(TrillBracketSide::End));
+    }
+
+    #[test]
+    fn options_const_constructible() {
+        // The constructor and with-methods must be `const`-callable so the
+        // common defaults can live in `const` items at module scope. If
+        // someone removes `const fn`, this test stops compiling.
+        const _OPTS: TrillBracketOptions = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_direction(HookDirection::Down)
+            .with_length_ss(0.75);
+    }
+
+    #[test]
+    fn options_copy_does_not_consume_original() {
+        // Options is `Copy`; passing it by value to a function that returns
+        // it must leave the original usable. Catches accidental removal of
+        // the `Copy` derive.
+        fn take(opts: TrillBracketOptions) -> TrillBracketOptions {
+            opts
+        }
+        let orig = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.0);
+        let _ = take(orig);
+        assert_eq!(orig.length_ss, Some(1.0));
     }
 }

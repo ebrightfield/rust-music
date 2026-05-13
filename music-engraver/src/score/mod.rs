@@ -515,6 +515,42 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a bracket-form trill using a [`TrillBracketOptions`] bundle.
+    ///
+    /// Ergonomic alternative to
+    /// [`trill_with_extension_bracketed_custom`](Self::trill_with_extension_bracketed_custom)
+    /// when the caller wants to override only one of the two custom knobs
+    /// (direction or length) without restating the other. Any optional
+    /// field left as `None` in the options falls back to the renderer's
+    /// conventional default (`HookDirection::Down`, ~0.75 staff-space length).
+    ///
+    /// Concretely, `trill_with_extension_bracketed_with_options(TrillBracketOptions::new(side))`
+    /// is byte-equivalent to `trill_with_extension_bracketed(side)`, and
+    /// `trill_with_extension_bracketed_with_options(opts)` with both optional
+    /// fields populated is byte-equivalent to the matching
+    /// `trill_with_extension_bracketed_custom` call.
+    ///
+    /// No-op if the last event was a rest.
+    pub fn trill_with_extension_bracketed_with_options(
+        mut self,
+        opts: crate::layout::trill_bracket::TrillBracketOptions,
+    ) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_bracket = Some(opts.side);
+            // `None` here means "use the renderer's default" — we explicitly
+            // do NOT collapse `None` to `Some(default)` so a future tweak to
+            // the default propagates without API churn.
+            annotations.trill_bracket_direction = opts.direction;
+            annotations.trill_bracket_length_ss = opts.length_ss;
+        }
+        self
+    }
+
     /// Attach a trill ornament with a speed-variant wavy-line extension to
     /// the most recently added note or chord. The wiggle is tiled with the
     /// chosen SMuFL `wiggleTrill*` glyph: faster variants pack the wiggle
