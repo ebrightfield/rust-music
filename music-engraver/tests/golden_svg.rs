@@ -279,6 +279,62 @@ fn build_dynamics_variants_plain() -> String {
         .render_svg()
 }
 
+/// 28 pitches threading every variant in `Dynamic::ALL`. Two passes through
+/// the diatonic C scale (C4-B4-C5-B5) so the noteheads occupy a consistent
+/// staff-position range and don't introduce ledger lines below the staff
+/// (which would crowd the dynamics' below-staff baseline). Shared between
+/// `build_dynamics_full`, its no-dynamic sibling, and the golden test so
+/// all three see the same list.
+const DYNAMICS_FULL_PITCHES: [(&str, u8); 28] = [
+    ("C", 4), ("D", 4), ("E", 4), ("F", 4),
+    ("G", 4), ("A", 4), ("B", 4), ("C", 5),
+    ("D", 5), ("E", 5), ("F", 5), ("G", 5),
+    ("A", 5), ("B", 5), ("C", 4), ("D", 4),
+    ("E", 4), ("F", 4), ("G", 4), ("A", 4),
+    ("B", 4), ("C", 5), ("D", 5), ("E", 5),
+    ("F", 5), ("G", 5), ("A", 5), ("B", 5),
+];
+
+/// Every variant in `Dynamic::ALL` (28 dynamics) — one per quarter note,
+/// laid out 4 per measure across 7 measures (2 measures per system). Visual
+/// proofing companion to the unit-test glyph-distinctness assertions
+/// covering the full set (e.g. `all_dynamics_produce_distinct_svg_output`
+/// in `render::dynamics_renderer`).
+fn build_dynamics_full() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    for (i, dynamic) in Dynamic::ALL.iter().enumerate() {
+        let (n, oct) = DYNAMICS_FULL_PITCHES[i];
+        b = b.note(p(n, oct), Duration::QTR).dynamic(*dynamic);
+        if (i + 1) % 4 == 0 && (i + 1) < DYNAMICS_FULL_PITCHES.len() {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
+/// Same 28-note pattern as `build_dynamics_full` with no dynamics attached.
+/// The golden test uses this as the structural baseline so the full-coverage
+/// score must differ by exactly one path and one unique d-string per
+/// variant.
+fn build_dynamics_full_plain() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    for (i, (n, oct)) in DYNAMICS_FULL_PITCHES.iter().enumerate() {
+        b = b.note(p(n, *oct), Duration::QTR);
+        if (i + 1) % 4 == 0 && (i + 1) < DYNAMICS_FULL_PITCHES.len() {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
 /// Tuplet bracket (triplet).
 fn build_tuplet() -> String {
     ScoreBuilder::new()
@@ -868,6 +924,75 @@ fn golden_dynamics_variants() {
     );
 
     assert_golden("dynamics_variants", &svg);
+}
+
+#[test]
+fn golden_dynamics_full() {
+    let svg = build_dynamics_full();
+    let plain = build_dynamics_full_plain();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "dynamics_full should be SVG");
+    assert!(svg.contains("</svg>"), "dynamics_full should close SVG");
+
+    // Path-count guard: every variant in `Dynamic::ALL` must add exactly
+    // one path on top of the same 28-note score with no dynamics. Catches
+    // a silent regression where a variant maps to a missing glyph and
+    // renders zero paths.
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths,
+        Dynamic::ALL.len(),
+        "each dynamic variant must add exactly one path: full={full_paths}, \
+         plain={plain_paths}, delta={added_paths}, expected={}",
+        Dynamic::ALL.len()
+    );
+
+    // Distinct-d guard: all 28 variants must contribute distinct SMuFL
+    // path payloads (Bravura provides a dedicated composite glyph for each
+    // — proven at the renderer-unit-test layer by
+    // `all_dynamics_produce_distinct_svg_output` and the per-variant
+    // distinctness tests; this guard reinforces it at the integration layer).
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        Dynamic::ALL.len(),
+        "all 28 dynamic variants must contribute unique path d-strings \
+         (no glyph collapses), got {}",
+        added.len()
+    );
+
+    // Byte-inequality vs smaller dynamics baselines: the full-coverage
+    // score must differ from both the 4-note `dynamics` and 4-note
+    // `dynamics_variants` baselines. Sanity check that the new golden
+    // isn't accidentally identical to a prior one.
+    assert_ne!(
+        svg,
+        build_dynamics(),
+        "dynamics_full must differ from the 4-note `dynamics` baseline"
+    );
+    assert_ne!(
+        svg,
+        build_dynamics_variants(),
+        "dynamics_full must differ from the `dynamics_variants` baseline"
+    );
+
+    assert_golden("dynamics_full", &svg);
 }
 
 #[test]
@@ -3247,6 +3372,7 @@ fn golden_baselines_are_valid_svgs() {
         "ties",
         "dynamics",
         "dynamics_variants",
+        "dynamics_full",
         "tuplet",
         "slurs",
         "articulations",
