@@ -335,6 +335,67 @@ fn build_dynamics_full_plain() -> String {
     b.end_barline().render_svg()
 }
 
+/// Visually-similar `Dynamic` clusters laid out side-by-side so a viewer
+/// can A/B compare the letterforms in a single glance.
+///
+/// - **m-cluster** (M1, 3 dynamics): `Mezzo` / `Mp` / `Mf` — three
+///   superficially similar "m"-prefixed glyphs that Bravura draws with
+///   distinct shapes.
+/// - **sfp-cluster** (M2, 2 dynamics): `Sfp` (sforzando-prefixed) /
+///   `SforzatoPiano` (sforzato-prefixed) — both spell "sfp" but use a
+///   different `s` letterform.
+///
+/// 5 dynamics across 2 measures of 4 quarters each. The unattached
+/// quarters are plain padding so the structural delta vs the
+/// dynamics-stripped baseline is exactly 5.
+fn build_dynamics_lookalikes() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // M1: m-cluster
+        .note(p("G", 4), Duration::QTR)
+        .dynamic(Dynamic::Mezzo)
+        .note(p("A", 4), Duration::QTR)
+        .dynamic(Dynamic::Mp)
+        .note(p("B", 4), Duration::QTR)
+        .dynamic(Dynamic::Mf)
+        .note(p("C", 5), Duration::QTR)
+        .barline()
+        // M2: sfp-cluster
+        .note(p("G", 4), Duration::QTR)
+        .dynamic(Dynamic::Sfp)
+        .note(p("A", 4), Duration::QTR)
+        .dynamic(Dynamic::SforzatoPiano)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same two-measure layout as `build_dynamics_lookalikes` with no dynamics
+/// attached. The golden test uses this as the structural baseline so the
+/// lookalike score must differ by exactly 5 paths and 5 unique d-strings.
+fn build_dynamics_lookalikes_plain() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("B", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
 /// Tuplet bracket (triplet).
 fn build_tuplet() -> String {
     ScoreBuilder::new()
@@ -993,6 +1054,80 @@ fn golden_dynamics_full() {
     );
 
     assert_golden("dynamics_full", &svg);
+}
+
+#[test]
+fn golden_dynamics_lookalikes() {
+    let svg = build_dynamics_lookalikes();
+    let plain = build_dynamics_lookalikes_plain();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "dynamics_lookalikes should be SVG");
+    assert!(
+        svg.contains("</svg>"),
+        "dynamics_lookalikes should close SVG"
+    );
+
+    // Path-count guard: the 5 lookalike dynamics (Mezzo/Mp/Mf in M1,
+    // Sfp/SforzatoPiano in M2) must add exactly 5 paths on top of the
+    // dynamics-stripped baseline. Catches a silent regression where one
+    // of these less-common glyphs maps to an empty font slot.
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths, 5,
+        "the 5 lookalike dynamics must add exactly 5 paths: full={full_paths}, \
+         plain={plain_paths}, delta={added_paths}, expected=5"
+    );
+
+    // Distinct-d guard: the whole point of putting these glyphs
+    // side-by-side is that each is a distinct shape in Bravura. If two
+    // ever collapsed to the same glyph (e.g. a future font swap aliased
+    // `Mezzo` to `Mp` or unified the two `s` letterforms in
+    // `Sfp`/`SforzatoPiano`), the comparison example would mislead. This
+    // assertion is the canary.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        5,
+        "the 5 lookalike dynamics must contribute 5 unique path d-strings \
+         (no glyph collapse in either cluster), got {}",
+        added.len()
+    );
+
+    // Byte-inequality vs neighboring dynamics baselines. The `dynamics`
+    // baseline shares some glyphs (Mp/Mf appear there too) but uses
+    // different gestures (hairpins, more variants); `dynamics_variants`
+    // shares Mezzo/SforzatoPiano but adds `Z` and uses a single-measure
+    // C–F layout. Sanity check that the new golden isn't accidentally
+    // identical to a prior one — if it were, this test would silently be
+    // duplicate coverage rather than independent verification.
+    assert_ne!(
+        svg,
+        build_dynamics(),
+        "dynamics_lookalikes must differ from the existing `dynamics` baseline"
+    );
+    assert_ne!(
+        svg,
+        build_dynamics_variants(),
+        "dynamics_lookalikes must differ from the `dynamics_variants` baseline"
+    );
+
+    assert_golden("dynamics_lookalikes", &svg);
 }
 
 #[test]
@@ -4069,6 +4204,7 @@ fn golden_baselines_are_valid_svgs() {
         "dynamics",
         "dynamics_variants",
         "dynamics_full",
+        "dynamics_lookalikes",
         "tuplet",
         "slurs",
         "articulations",
