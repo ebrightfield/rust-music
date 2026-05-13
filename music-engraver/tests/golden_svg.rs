@@ -3616,6 +3616,228 @@ fn golden_trill_bracket_with_mordent() {
     assert_golden("trill_bracket_with_mordent", &svg);
 }
 
+/// Build the canonical mixed-speed compound-trill score: every variant of
+/// `TrillWiggleSpeed` paired with `Ornament::TrillWithMordent` via
+/// `TrillExtensionSpeedOptions::new(speed).with_ornament(...)`. Three
+/// measures per system × 9 speeds + 1 terminating measure = 4 systems.
+///
+/// Closes the visual-proofing gap from the 2026-05-13
+/// `TrillExtensionSpeedOptions` introduction chunk by freezing a baseline
+/// for "compound at every speed."
+fn build_trill_speed_with_mordent() -> String {
+    use music_engraver::layout::trill_extension::{
+        TrillExtensionSpeedOptions, TrillWiggleSpeed,
+    };
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+
+    let pitches = [
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+    ];
+    for (i, speed) in TrillWiggleSpeed::ALL.iter().enumerate() {
+        let (n, oct) = pitches[i];
+        b = b
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(*speed)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .barline();
+    }
+    b.note(p("B", 5), Duration::QTR).end_barline().render_svg()
+}
+
+/// Same musical content + speeds, but using plain
+/// `trill_with_extension_speed(speed)` (`Ornament::Trill`, no compound).
+/// Regression-canary baseline for the golden test.
+fn build_trill_speed_with_mordent_plain_trill_variant() -> String {
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+
+    let pitches = [
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+    ];
+    for (i, speed) in TrillWiggleSpeed::ALL.iter().enumerate() {
+        let (n, oct) = pitches[i];
+        b = b
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed(*speed)
+            .barline();
+    }
+    b.note(p("B", 5), Duration::QTR).end_barline().render_svg()
+}
+
+/// Same musical content, every measure uses the compound ornament at
+/// `Slowest` speed. Lower bookend for the sandwich check that the mixed
+/// speeds aren't being collapsed to a single glyph.
+fn build_trill_speed_with_mordent_all_slowest() -> String {
+    use music_engraver::layout::trill_extension::{
+        TrillExtensionSpeedOptions, TrillWiggleSpeed,
+    };
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+
+    let pitches = [
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+    ];
+    for (n, oct) in pitches {
+        b = b
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slowest)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .barline();
+    }
+    b.note(p("B", 5), Duration::QTR).end_barline().render_svg()
+}
+
+/// Same musical content, every measure uses the compound ornament at
+/// `Fastest` speed. Upper bookend.
+fn build_trill_speed_with_mordent_all_fastest() -> String {
+    use music_engraver::layout::trill_extension::{
+        TrillExtensionSpeedOptions, TrillWiggleSpeed,
+    };
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(3);
+
+    let pitches = [
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+    ];
+    for (n, oct) in pitches {
+        b = b
+            .note(p(n, oct), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fastest)
+                    .with_ornament(Ornament::TrillWithMordent),
+            )
+            .barline();
+    }
+    b.note(p("B", 5), Duration::QTR).end_barline().render_svg()
+}
+
+#[test]
+fn golden_trill_speed_with_mordent() {
+    let svg = build_trill_speed_with_mordent();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    // Structural guard 1: regression canary that the `.with_ornament(...)`
+    // on the speed options actually propagated through the renderer. The
+    // same speeds with plain `Trill` ornament must produce a byte-different
+    // SVG — different prefix glyph (bare "tr" vs precomposed compound), and
+    // different wiggle start positions (compound is ~470 fu wider).
+    let plain_trill = build_trill_speed_with_mordent_plain_trill_variant();
+    assert_ne!(
+        svg, plain_trill,
+        "compound-speed mixed score must differ from plain-trill-speed mixed score: \
+         different prefix glyph + wider wiggle start"
+    );
+
+    // Structural guard 2: the mixed-speed score must have strictly more
+    // tile paths than the all-Slowest compound bookend, and strictly
+    // fewer than the all-Fastest compound bookend. Sandwich check that
+    // none of the 9 speeds are being silently collapsed to a single glyph.
+    let all_slowest = build_trill_speed_with_mordent_all_slowest();
+    let all_fastest = build_trill_speed_with_mordent_all_fastest();
+    let mixed_paths = svg.matches("<path").count();
+    let slowest_paths = all_slowest.matches("<path").count();
+    let fastest_paths = all_fastest.matches("<path").count();
+    assert!(
+        mixed_paths > slowest_paths,
+        "mixed-speed compound must produce more tile paths than all-Slowest: \
+         mixed={mixed_paths}, slowest={slowest_paths}"
+    );
+    assert!(
+        fastest_paths > mixed_paths,
+        "all-Fastest compound must produce more tile paths than mixed: \
+         fastest={fastest_paths}, mixed={mixed_paths}"
+    );
+
+    // Structural guard 3: mixed compound must produce more paths than
+    // a plain compound-only baseline (no extension at all). Confirms the
+    // wiggle is rendering for at least some of the speeds.
+    let no_extension = {
+        let mut b = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .key_signature(KeySignature::Open)
+            .time_signature(4, 4)
+            .measures_per_system(3);
+        let pitches = [
+            ("G", 4),
+            ("A", 4),
+            ("B", 4),
+            ("C", 5),
+            ("D", 5),
+            ("E", 5),
+            ("F", 5),
+            ("G", 5),
+            ("A", 5),
+        ];
+        for (n, oct) in pitches {
+            b = b
+                .note(p(n, oct), Duration::WHOLE)
+                .ornament(Ornament::TrillWithMordent)
+                .barline();
+        }
+        b.note(p("B", 5), Duration::QTR).end_barline().render_svg()
+    };
+    let no_ext_paths = no_extension.matches("<path").count();
+    assert!(
+        mixed_paths > no_ext_paths,
+        "compound-speed with extension must add wiggle paths beyond plain compound: \
+         mixed_ext={mixed_paths}, no_ext={no_ext_paths}"
+    );
+
+    assert_golden("trill_speed_with_mordent", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -3680,6 +3902,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_wiggle_speed",
         "trill_with_mordent_extension",
         "trill_bracket_with_mordent",
+        "trill_speed_with_mordent",
     ];
 
     for name in &names {
