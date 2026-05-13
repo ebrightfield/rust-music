@@ -294,6 +294,80 @@ fn build_articulations() -> String {
         .render_svg()
 }
 
+/// Canonical ordering of the 7 fermata variants. Shared between
+/// `build_fermata_variants`, its no-fermata sibling, and the golden test
+/// so all three see the same list.
+const FERMATA_VARIANTS: [Articulation; 7] = [
+    Articulation::Fermata,
+    Articulation::FermataLong,
+    Articulation::FermataShort,
+    Articulation::FermataVeryLong,
+    Articulation::FermataVeryShort,
+    Articulation::FermataHenzeLong,
+    Articulation::FermataHenzeShort,
+];
+
+/// Pitches for the fermata-variant score. Staggered so successive variants
+/// don't all sit at the same staff position — keeps the visual gap between
+/// glyphs honest at golden-comparison time.
+const FERMATA_PITCHES: [(&str, u8); 7] = [
+    ("G", 4),
+    ("A", 4),
+    ("B", 4),
+    ("C", 5),
+    ("D", 5),
+    ("E", 5),
+    ("F", 5),
+];
+
+/// Each of the 7 fermata variants from the SMuFL duration-coded family on
+/// a whole note in its own measure, plus a padding whole note to close
+/// the 4-system layout neatly.
+fn build_fermata_variants() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    let count = FERMATA_VARIANTS.len();
+    for (i, variant) in FERMATA_VARIANTS.iter().enumerate() {
+        let (n, oct) = FERMATA_PITCHES[i];
+        b = b.note(p(n, oct), Duration::WHOLE).articulation(*variant);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.barline()
+        .note(p("G", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
+/// The same layout as `build_fermata_variants` with no articulations.
+/// Used as the structural baseline for the fermata-variants golden test:
+/// the variant score must differ from this by exactly one path per
+/// variant, and the variant score's d-string set must contribute exactly
+/// `FERMATA_VARIANTS.len()` unique d-strings.
+fn build_fermata_variants_plain() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    let count = FERMATA_VARIANTS.len();
+    for (i, _variant) in FERMATA_VARIANTS.iter().enumerate() {
+        let (n, oct) = FERMATA_PITCHES[i];
+        b = b.note(p(n, oct), Duration::WHOLE);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.barline()
+        .note(p("G", 4), Duration::WHOLE)
+        .end_barline()
+        .render_svg()
+}
+
 /// Grace note before a principal note.
 fn build_grace_notes() -> String {
     ScoreBuilder::new()
@@ -703,6 +777,70 @@ fn golden_slurs() {
 #[test]
 fn golden_articulations() {
     assert_golden("articulations", &build_articulations());
+}
+
+#[test]
+fn golden_fermata_variants() {
+    let svg = build_fermata_variants();
+    let plain = build_fermata_variants_plain();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "fermata_variants should be SVG");
+    assert!(svg.contains("</svg>"), "fermata_variants should close SVG");
+
+    // Path-count guard: each variant must add exactly one path on top of
+    // the same score with no articulations. Catches a silent regression
+    // where a variant maps to a missing glyph and renders zero paths.
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths,
+        FERMATA_VARIANTS.len(),
+        "each fermata variant must add exactly one path: full={full_paths}, \
+         plain={plain_paths}, delta={added_paths}, expected={}",
+        FERMATA_VARIANTS.len()
+    );
+
+    // Distinct-d guard: each variant must contribute a unique SMuFL path
+    // payload. Bravura's plain Fermata, FermataLong, FermataShort,
+    // FermataVeryLong, FermataVeryShort, FermataLongHenze, and
+    // FermataShortHenze are all distinct shapes — if any two glyphs
+    // accidentally collapse to the same d-string, this assertion fails.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        FERMATA_VARIANTS.len(),
+        "fermata variants must contribute exactly {} unique path d-strings \
+         (no glyph collapses), got {}",
+        FERMATA_VARIANTS.len(),
+        added.len()
+    );
+
+    // Byte-equal regression: this score must differ from the existing
+    // 4-articulation `articulations` baseline (different gestures, different
+    // layout — sanity check that the new golden isn't accidentally
+    // identical to a prior one).
+    assert_ne!(
+        svg,
+        build_articulations(),
+        "fermata_variants must differ from the existing articulations baseline"
+    );
+
+    assert_golden("fermata_variants", &svg);
 }
 
 #[test]
@@ -3005,6 +3143,7 @@ fn golden_baselines_are_valid_svgs() {
         "tuplet",
         "slurs",
         "articulations",
+        "fermata_variants",
         "grace_notes",
         "grace_note_slur",
         "annotations",
