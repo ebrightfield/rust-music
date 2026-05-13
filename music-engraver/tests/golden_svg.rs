@@ -239,6 +239,46 @@ fn build_dynamics() -> String {
         .render_svg()
 }
 
+/// The three less-common `Dynamic` variants exposed in the 2026-05-13
+/// Dynamic-expansion chunk: `Mezzo` (bare letter-`m`, distinct from
+/// `Mp`/`Mf`), `SforzatoPiano` (sforzato-prefixed sfp, distinct from
+/// the sforzando-prefixed `Sfp`), and `Z` (the rare single-letter sudden
+/// accent). One quarter note per variant + a plain padding quarter so the
+/// 4/4 measure closes and the structural delta in
+/// `golden_dynamics_variants` is exactly 3.
+fn build_dynamics_variants() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .dynamic(Dynamic::Mezzo)
+        .note(p("D", 4), Duration::QTR)
+        .dynamic(Dynamic::SforzatoPiano)
+        .note(p("E", 4), Duration::QTR)
+        .dynamic(Dynamic::Z)
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// The same four-note measure as `build_dynamics_variants` with no
+/// dynamics attached. The golden test uses this as the structural baseline
+/// so the variant score must differ by exactly one path and one unique
+/// d-string per variant.
+fn build_dynamics_variants_plain() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
 /// Tuplet bracket (triplet).
 fn build_tuplet() -> String {
     ScoreBuilder::new()
@@ -762,6 +802,72 @@ fn golden_ties() {
 #[test]
 fn golden_dynamics() {
     assert_golden("dynamics", &build_dynamics());
+}
+
+#[test]
+fn golden_dynamics_variants() {
+    let svg = build_dynamics_variants();
+    let plain = build_dynamics_variants_plain();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "dynamics_variants should be SVG");
+    assert!(svg.contains("</svg>"), "dynamics_variants should close SVG");
+
+    // Path-count guard: each new variant must add exactly one path on top
+    // of the same notes with no dynamics. Catches a silent regression
+    // where a variant maps to a missing glyph and renders zero paths
+    // (e.g. a future SMuFL font swap that omits one of these less-common
+    // glyphs — already guarded at the unit-test level by
+    // `new_variants_have_nonzero_advance_in_bravura`, but reinforced
+    // here at the integration layer).
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths, 3,
+        "each new dynamic variant must add exactly one path: full={full_paths}, \
+         plain={plain_paths}, delta={added_paths}, expected=3"
+    );
+
+    // Distinct-d guard: each variant must contribute a unique SMuFL path
+    // payload. `Mezzo`, `SforzatoPiano`, and `Z` are visually similar to
+    // their neighbours (`Mp`/`Mf`, `Sfp`, `Sfz`/`Fz` respectively) but
+    // must produce distinct path data in Bravura — see
+    // `new_variants_render_distinct_path_data_in_bravura` in
+    // `render::dynamics_renderer` for the per-glyph proof.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        3,
+        "the 3 new dynamic variants must contribute 3 unique path d-strings \
+         (no glyph collapses), got {}",
+        added.len()
+    );
+
+    // Byte-equal regression: this score must differ from the existing
+    // `dynamics` baseline (different gestures — no hairpins, different
+    // variants — sanity check that the new golden isn't accidentally
+    // identical to a prior one).
+    assert_ne!(
+        svg,
+        build_dynamics(),
+        "dynamics_variants must differ from the existing dynamics baseline"
+    );
+
+    assert_golden("dynamics_variants", &svg);
 }
 
 #[test]
@@ -3140,6 +3246,7 @@ fn golden_baselines_are_valid_svgs() {
         "beams",
         "ties",
         "dynamics",
+        "dynamics_variants",
         "tuplet",
         "slurs",
         "articulations",
