@@ -4192,6 +4192,137 @@ fn golden_trill_full_options() {
     assert_golden("trill_full_options", &svg);
 }
 
+/// Four whole-note trills across two systems with explicit-length
+/// extensions of 2.0, 4.0, and 1.5 staff spaces (plus an unannotated
+/// baseline). Exercises `ScoreBuilder::trill_with_extension_length_ss`.
+fn build_trill_short_extension() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_length_ss(2.0)
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_length_ss(4.0)
+        .barline()
+        .note(p("C", 5), Duration::WHOLE)
+        .trill_with_extension_length_ss(1.5)
+        .end_barline()
+        .render_svg()
+}
+
+/// The same musical content but every trill uses the default extension
+/// (next-note / system-edge termination). Used as the regression baseline
+/// for proving the explicit-length call shortened the wiggles.
+fn build_trill_short_extension_defaults() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension()
+        .barline()
+        .note(p("C", 5), Duration::WHOLE)
+        .trill_with_extension()
+        .end_barline()
+        .render_svg()
+}
+
+/// Same musical content with only the "tr" prefix glyph (no wiggle).
+/// Used to verify the explicit-length wiggles still produce *some*
+/// segments rather than silently dropping every wiggle.
+fn build_trill_short_extension_plain() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("G", 4), Duration::WHOLE)
+        .ornament(Ornament::Trill)
+        .barline()
+        .note(p("A", 4), Duration::WHOLE)
+        .ornament(Ornament::Trill)
+        .barline()
+        .note(p("B", 4), Duration::WHOLE)
+        .ornament(Ornament::Trill)
+        .barline()
+        .note(p("C", 5), Duration::WHOLE)
+        .ornament(Ornament::Trill)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_short_extension() {
+    let svg = build_trill_short_extension();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    let defaults = build_trill_short_extension_defaults();
+    let plain = build_trill_short_extension_plain();
+
+    let svg_paths = svg.matches("<path").count();
+    let defaults_paths = defaults.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+
+    // (1) Explicit-length wiggles still produce wiggle segments (path
+    //     count strictly exceeds the no-wiggle baseline). Regression
+    //     canary against a future change that drops every wiggle when
+    //     the explicit length is set.
+    assert!(
+        svg_paths > plain_paths,
+        "explicit-length wiggles must produce some wiggle paths: \
+         explicit={svg_paths}, plain_trill={plain_paths}"
+    );
+
+    // (2) Explicit lengths shorter than natural produce strictly fewer
+    //     paths than the default (next-note / system-edge) extensions.
+    //     Three of the four measures specify short explicit lengths, so
+    //     three measures each lose tiles vs. the all-defaults baseline.
+    assert!(
+        svg_paths < defaults_paths,
+        "explicit lengths must shorten wiggles vs defaults: \
+         explicit={svg_paths}, defaults={defaults_paths}"
+    );
+
+    // (3) Byte-inequality vs the all-defaults baseline. The explicit
+    //     lengths must change SVG content; if a future refactor silently
+    //     drops the length annotation, both versions would render the
+    //     same bytes and this assertion would fire.
+    assert_ne!(
+        svg, defaults,
+        "explicit-length score must not be byte-identical to all-defaults score"
+    );
+
+    // (4) The number of "tr" glyph paths must be the same in both
+    //     versions — explicit length affects the wiggle, not the prefix.
+    //     This grounds the path-count comparison: the path-count
+    //     reduction in (2) comes solely from missing wiggle tiles, not
+    //     from a missing "tr".
+    let svg_tr_count = svg.matches("translate(").count();
+    let defaults_tr_count = defaults.matches("translate(").count();
+    assert!(
+        svg_tr_count <= defaults_tr_count,
+        "explicit-length must not ADD any glyphs vs defaults — only remove wiggle tiles: \
+         explicit_translates={svg_tr_count}, defaults_translates={defaults_tr_count}"
+    );
+
+    assert_golden("trill_short_extension", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -4259,6 +4390,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_bracket_with_mordent",
         "trill_speed_with_mordent",
         "trill_full_options",
+        "trill_short_extension",
     ];
 
     for name in &names {

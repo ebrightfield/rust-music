@@ -3187,3 +3187,347 @@ fn trill_with_mordent_extension_uses_wider_glyph_advance() {
          the wiggle-start adjustment; advances: trill={trill_advance}, compound={compound_advance}"
     );
 }
+
+// --- trill_extension_length_ss (explicit early termination) ---
+
+fn trill_ext_length_note(pos: i8, length_ss: f64) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_length_ss: Some(length_ss),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn collector_propagates_explicit_length_when_trill_extension_active() {
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_length_note(4, 2.5), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let (_font, _config, mcfg) = setup();
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(info[0].has_trill_extension);
+    assert_eq!(info[0].explicit_length_ss, Some(2.5));
+}
+
+#[test]
+fn collector_drops_explicit_length_when_trill_extension_inactive() {
+    // The collector's contract: explicit length only travels through when
+    // `has_trill_extension == true`. A length set on a note that ALSO has
+    // `trill_extension = false` must be filtered out — matching how
+    // bracket / wiggle_speed fields are filtered. Without this, a stale
+    // length annotation could leak into the renderer state.
+    let stale_length = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: false,
+            trill_extension_length_ss: Some(3.0),
+            ..NoteAnnotations::default()
+        },
+    });
+    let measures = vec![MeasureContent {
+        events: vec![stale_length, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let (_font, _config, mcfg) = setup();
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(!info[0].has_trill_extension);
+    assert_eq!(info[0].explicit_length_ss, None);
+}
+
+#[test]
+fn explicit_length_renders_fewer_paths_than_default_when_shorter() {
+    // The default test measure spacing leaves only ~1 wiggle of natural
+    // span (just enough for the existing `_renders_at_least_one_wiggle_path`
+    // smoke test). For an *inequality* test we need the natural span to
+    // accommodate several wiggles, so we widen `min_note_spacing` to ensure
+    // there's a meaningful contrast between explicit-1.0-ss and natural.
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 12.0 * config.staff_space;
+
+    let short = vec![MeasureContent {
+        events: vec![trill_ext_length_note(4, 1.0), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let natural = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_short = layout_system(&treble_prefix(), &short, &mcfg, None);
+    let sys_natural = layout_system(&treble_prefix(), &natural, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_short, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_natural, 0.0, 0.0).unwrap();
+    let short_paths = svg_a.to_svg().matches("<path").count();
+    let natural_paths = svg_b.to_svg().matches("<path").count();
+    assert!(
+        short_paths < natural_paths,
+        "1.0-ss explicit length must produce fewer paths than the natural span: \
+         short={short_paths}, natural={natural_paths}"
+    );
+}
+
+#[test]
+fn explicit_length_larger_than_natural_clamps_to_natural() {
+    // A length larger than the natural span must clamp — the wiggle never
+    // overruns the next note. We exercise this by setting an absurdly large
+    // length (1000 ss) and verifying the result is byte-identical to the
+    // natural (no-length) render.
+    let (font, config, mcfg) = setup();
+    let huge = vec![MeasureContent {
+        events: vec![trill_ext_length_note(4, 1000.0), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let natural = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_huge = layout_system(&treble_prefix(), &huge, &mcfg, None);
+    let sys_natural = layout_system(&treble_prefix(), &natural, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_huge, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_natural, 0.0, 0.0).unwrap();
+
+    // Note: the natural version is a "within-system" trill (there's a
+    // following note), so cross_system == false in both branches.
+    // The end_x must clamp identically.
+    assert_eq!(
+        svg_a.to_svg(),
+        svg_b.to_svg(),
+        "explicit length 1000 must clamp to natural and render byte-identical"
+    );
+}
+
+#[test]
+fn explicit_length_zero_produces_no_wiggle() {
+    // A non-positive length disables the wiggle entirely (the "tr" glyph
+    // still renders). We compare path counts vs the plain-trill-no-extension
+    // case (which also produces only the "tr" glyph + notes + staff) and
+    // expect equality on path count: the wiggle contributed nothing.
+    let (font, config, mcfg) = setup();
+    let zero_length = vec![MeasureContent {
+        events: vec![trill_ext_length_note(4, 0.0), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let plain_trill = vec![MeasureContent {
+        events: vec![trill_no_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_zero = layout_system(&treble_prefix(), &zero_length, &mcfg, None);
+    let sys_plain = layout_system(&treble_prefix(), &plain_trill, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_zero, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_plain, 0.0, 0.0).unwrap();
+    let zero_paths = svg_a.to_svg().matches("<path").count();
+    let plain_paths = svg_b.to_svg().matches("<path").count();
+    assert_eq!(
+        zero_paths, plain_paths,
+        "explicit length 0 must contribute zero wiggle paths: zero={zero_paths}, plain={plain_paths}"
+    );
+}
+
+#[test]
+fn explicit_length_negative_produces_no_wiggle() {
+    // A negative length goes through the same `_ <= 0` branch as zero —
+    // produces no wiggle. Documenting this contract explicitly: callers
+    // need not validate length sign at the API boundary.
+    let (font, config, mcfg) = setup();
+    let negative_length = vec![MeasureContent {
+        events: vec![trill_ext_length_note(4, -2.0), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let plain_trill = vec![MeasureContent {
+        events: vec![trill_no_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_neg = layout_system(&treble_prefix(), &negative_length, &mcfg, None);
+    let sys_plain = layout_system(&treble_prefix(), &plain_trill, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_neg, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_plain, 0.0, 0.0).unwrap();
+    assert_eq!(
+        svg_a.to_svg().matches("<path").count(),
+        svg_b.to_svg().matches("<path").count(),
+        "negative explicit length must contribute zero wiggle paths"
+    );
+}
+
+#[test]
+fn explicit_length_in_chord_collector_propagates() {
+    use crate::layout::measure::ChordEvent;
+
+    let chord_with_length = MeasureEvent::Chord(ChordEvent {
+        staff_positions: vec![2, 4, 6],
+        duration_log2: 0,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_length_ss: Some(2.0),
+            ..NoteAnnotations::default()
+        },
+    });
+    let measures = vec![MeasureContent {
+        events: vec![chord_with_length, quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let (_font, _config, mcfg) = setup();
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(info[0].has_trill_extension, "chord trill must be flagged");
+    assert_eq!(
+        info[0].explicit_length_ss,
+        Some(2.0),
+        "chord-level explicit length must travel through the collector"
+    );
+    // Top-of-chord anchoring: the system_renderer pins the wiggle's y to
+    // the highest chord note.
+    assert_eq!(info[0].staff_position, 6);
+}
+
+#[test]
+fn explicit_length_on_last_note_avoids_cross_system_extension() {
+    // The trilled note is the LAST note in the system AND has an explicit
+    // length. The wiggle terminates at the explicit point, NOT at the
+    // system edge — confirmed by comparing the rendered system width
+    // between the explicit-length version and an unannotated version.
+    // Specifically: the explicit-length version's wiggle must have fewer
+    // segments than the system-edge default (which extends to the staff
+    // right edge minus a small gap). Widen `min_note_spacing` to ensure
+    // the natural-to-edge span is meaningfully larger than the explicit
+    // 1.5-ss request.
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 12.0 * config.staff_space;
+
+    let with_explicit = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_length_note(6, 1.5)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let without_explicit = vec![MeasureContent {
+        events: vec![quarter_note(4), trill_ext_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_explicit = layout_system(&treble_prefix(), &with_explicit, &mcfg, None);
+    let sys_natural = layout_system(&treble_prefix(), &without_explicit, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_explicit, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_natural, 0.0, 0.0).unwrap();
+    let explicit_paths = svg_a.to_svg().matches("<path").count();
+    let natural_paths = svg_b.to_svg().matches("<path").count();
+    assert!(
+        explicit_paths < natural_paths,
+        "explicit length on last note must terminate before the system edge: \
+         explicit={explicit_paths}, natural-to-edge={natural_paths}"
+    );
+}
+
+#[test]
+fn explicit_length_with_end_bracket_anchors_at_shortened_terminus() {
+    // The bracket's End hook follows the wiggle's actual right edge. With
+    // an explicit length, the wiggle terminates earlier — so the End hook
+    // moves left with it. We verify by counting `<line>` elements: an End
+    // bracket adds exactly one vertical hook line. The explicit-length
+    // version must have the same number of `<line>` elements as a natural
+    // End-bracketed trill (the hook count is glyph-independent — only its
+    // x-position changes).
+    use crate::layout::trill_bracket::TrillBracketSide;
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 12.0 * config.staff_space;
+
+    let make_event = |length_ss: Option<f64>| -> MeasureEvent {
+        MeasureEvent::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 0,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_bracket: Some(TrillBracketSide::End),
+                trill_extension_length_ss: length_ss,
+                ..NoteAnnotations::default()
+            },
+        })
+    };
+
+    let with_length = vec![MeasureContent {
+        events: vec![make_event(Some(1.5)), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let without_length = vec![MeasureContent {
+        events: vec![make_event(None), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_with = layout_system(&treble_prefix(), &with_length, &mcfg, None);
+    let sys_without = layout_system(&treble_prefix(), &without_length, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_with, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_without, 0.0, 0.0).unwrap();
+    let line_count_with = svg_a.to_svg().matches("<line").count();
+    let line_count_without = svg_b.to_svg().matches("<line").count();
+    assert_eq!(
+        line_count_with, line_count_without,
+        "End-bracket hook count must be glyph-position-independent: \
+         with_length={line_count_with}, without_length={line_count_without}"
+    );
+    // And the byte content must differ — same hook count, different x.
+    assert_ne!(
+        svg_a.to_svg(),
+        svg_b.to_svg(),
+        "explicit-length End-bracketed trill must render distinctly from natural-length"
+    );
+}

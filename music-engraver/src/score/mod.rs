@@ -641,6 +641,44 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a trill ornament with an *explicit-length* wavy-line extension
+    /// to the most recently added note or chord. The wiggle terminates after
+    /// the requested number of staff spaces past the trill glyph, regardless
+    /// of where the next note sits or whether the trilled note is the last
+    /// in its system. Use this when the trill should visually "run out"
+    /// before the next note (sub-note granularity) — e.g. a trill on a half
+    /// note that the player should release midway through the held duration.
+    ///
+    /// The clamp is one-sided: if `length_ss` is larger than the available
+    /// natural span (to the next note's left edge or to the system's right
+    /// edge), the wiggle is shortened to the natural span. A non-positive
+    /// `length_ss` produces no wiggle at all (the "tr" glyph is still
+    /// drawn), matching the renderer's silent fail-safe for spans too short
+    /// to fit a single tile.
+    ///
+    /// Sets three flags: `ornament == Some(Ornament::Trill)`,
+    /// `trill_extension == true`, `trill_extension_length_ss ==
+    /// Some(length_ss)`. No-op if the last event was a rest.
+    ///
+    /// **Cross-system interaction:** a positive explicit length disables
+    /// cross-system propagation — the trill terminates within its source
+    /// system at the requested point, even if the trilled note happens to
+    /// be the last note in its system. The convention is that an explicit
+    /// length specifies a definite endpoint, while the default
+    /// "extend to next note" behavior is the only path that ever produces
+    /// cross-system wavy lines.
+    pub fn trill_with_extension_length_ss(mut self, length_ss: f64) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_extension_length_ss = Some(length_ss);
+        }
+        self
+    }
+
     /// Attach a precomposed trill-with-mordent ornament + wavy-line extension
     /// to the most recently added note or chord. The compound glyph
     /// (`OrnamentPrecompTrillWithMordent`) reads as "trill, then a mordent
@@ -703,6 +741,14 @@ impl ScoreBuilder {
     ///   the precomposed compound; other ornaments that don't satisfy
     ///   [`Ornament::supports_trill_extension`] make the renderer's
     ///   collector silently drop the extension and the bracket.
+    /// - `opts.length_ss` — `None` (the default) lets the wiggle extend to
+    ///   the next note or to the system's right edge. `Some(length_ss)`
+    ///   clamps the wiggle to terminate `length_ss` staff spaces past its
+    ///   natural start, mirroring
+    ///   [`trill_with_extension_length_ss`](Self::trill_with_extension_length_ss).
+    ///   Overruns are clamped to the natural span; non-positive values
+    ///   suppress the wiggle. A positive explicit length disables
+    ///   cross-system propagation for this trill.
     ///
     /// Byte-equivalence guarantees:
     /// - `trill_with_extension_full_options(TrillExtensionFullOptions::new())`
@@ -715,6 +761,10 @@ impl ScoreBuilder {
     ///   byte-equivalent to
     ///   `trill_with_extension_speed_with_options(speed_opts)` for any
     ///   `speed_opts: TrillExtensionSpeedOptions`.
+    /// - `trill_with_extension_full_options(TrillExtensionFullOptions::new().with_length_ss(L))`
+    ///   is byte-equivalent to
+    ///   [`trill_with_extension_length_ss(L)`](Self::trill_with_extension_length_ss)
+    ///   for any `L: f64`.
     ///
     /// No-op if the last event was a rest.
     pub fn trill_with_extension_full_options(
@@ -743,6 +793,14 @@ impl ScoreBuilder {
             // `unwrap_or_default()` picks `Standard`, matching the bare
             // `trill_with_extension()` output.
             annotations.trill_wiggle_speed = opts.speed;
+            // `None` length_ss leaves the field unset so the renderer falls
+            // back to the natural-span behavior; `Some(L)` mirrors
+            // `trill_with_extension_length_ss(L)` byte-for-byte. The
+            // renderer's existing clamping (overruns to natural span,
+            // non-positive → no wiggle, cross-system suppression for
+            // positive lengths) handles all edge cases without further
+            // intervention here.
+            annotations.trill_extension_length_ss = opts.length_ss;
         }
         self
     }

@@ -1193,6 +1193,13 @@ fn find_unresolved_trill_extension(
     if !last.has_trill_extension {
         return None;
     }
+    // An explicit length terminates the wiggle within the source system
+    // unconditionally (matching the within-system clamp in
+    // `draw_system_trill_extensions`), so the trill is "resolved" — no
+    // incoming wiggle on system N+1, no cross-system End hook either.
+    if matches!(last.explicit_length_ss, Some(len) if len > 0.0) {
+        return None;
+    }
     // Recompute the source ornament y the same way system_renderer does,
     // then strip the staff's absolute y so the offset is portable across
     // systems on the same page.

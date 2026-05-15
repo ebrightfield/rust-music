@@ -732,6 +732,16 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// `bracket`: only meaningful when `has_trill_extension == true`.
     /// `None` selects the standard wiggle.
     pub wiggle_speed: Option<TrillWiggleSpeed>,
+    /// Optional explicit termination length for the wiggle, in staff spaces.
+    /// Filtered the same way as `bracket`: only carries through when
+    /// `has_trill_extension == true`. `None` selects the conventional
+    /// "extend to next note or system edge" behavior; `Some(length_ss)`
+    /// clamps the wiggle so it terminates no later than `length_ss` past
+    /// its natural start. When set to a positive value the trill is also
+    /// treated as definitively terminated within its source system
+    /// (no cross-system propagation, since the explicit length specifies
+    /// a definite endpoint).
+    pub explicit_length_ss: Option<f64>,
 }
 
 /// Collect notes relevant to trill-extension rendering. Includes a `None`-like
@@ -768,6 +778,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     } else {
                         None
                     };
+                    let explicit_length_ss = if has_ext {
+                        n.annotations.trill_extension_length_ss
+                    } else {
+                        None
+                    };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: n.staff_position,
@@ -777,6 +792,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         bracket_direction,
                         bracket_length_ss,
                         wiggle_speed,
+                        explicit_length_ss,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -806,6 +822,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     } else {
                         None
                     };
+                    let explicit_length_ss = if has_ext {
+                        c.annotations.trill_extension_length_ss
+                    } else {
+                        None
+                    };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: top_pos,
@@ -815,6 +836,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         bracket_direction,
                         bracket_length_ss,
                         wiggle_speed,
+                        explicit_length_ss,
                     });
                 }
                 _ => {}
@@ -895,11 +917,30 @@ fn draw_system_trill_extensions(
         // in the system, at the system's right edge (just inside the final
         // barline). This is the cross-system convention: a trilled note at
         // the end of a system extends its wiggle to the system break.
-        let cross_system = notes.get(i + 1).is_none();
-        let end_x = match notes.get(i + 1) {
+        //
+        // When the user supplied an explicit length, clamp the natural
+        // end_x with `start_x + length_ss * staff_space`. The clamp is
+        // one-sided (we only ever shorten, never extend past the natural
+        // endpoint), so an explicit length larger than the natural span is
+        // a no-op rather than an overrun. A positive explicit length also
+        // disables cross-system propagation: the trill terminates within
+        // this system at the requested point, regardless of position.
+        let natural_end_x = match notes.get(i + 1) {
             Some(target) => system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space,
             None => system_x + system.staff_width
                 - TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS * staff_space,
+        };
+        let (end_x, cross_system) = match note.explicit_length_ss {
+            Some(len_ss) if len_ss > 0.0 => {
+                let requested = start_x + len_ss * staff_space;
+                (requested.min(natural_end_x), false)
+            }
+            // Negative or zero explicit lengths produce no wiggle: setting
+            // end_x equal to start_x guarantees `layout_trill_extension`
+            // returns None (span < segment_advance), matching the
+            // documented fail-safe.
+            Some(_) => (start_x, false),
+            None => (natural_end_x, notes.get(i + 1).is_none()),
         };
 
         // Look up the wiggle glyph + advance for this note's chosen speed.

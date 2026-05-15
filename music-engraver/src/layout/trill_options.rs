@@ -47,13 +47,14 @@ use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpee
 /// use music_engraver::layout::trill_extension::TrillWiggleSpeed;
 /// use music_engraver::layout::trill_options::TrillExtensionFullOptions;
 ///
-/// // Bracket + speed + compound ornament in one call.
+/// // Bracket + speed + compound ornament + explicit termination length in one call.
 /// let _ = TrillExtensionFullOptions::new()
 ///     .with_bracket(TrillBracketSide::End)
 ///     .with_bracket_direction(HookDirection::Down)
 ///     .with_bracket_length_ss(0.9)
 ///     .with_speed(TrillWiggleSpeed::Slow)
-///     .with_ornament(Ornament::TrillWithMordent);
+///     .with_ornament(Ornament::TrillWithMordent)
+///     .with_length_ss(3.5);
 /// ```
 ///
 /// `From<TrillBracketOptions>` and `From<TrillExtensionSpeedOptions>` are
@@ -87,6 +88,18 @@ pub struct TrillExtensionFullOptions {
     pub speed: Option<TrillWiggleSpeed>,
     /// Ornament glyph override. `None` selects [`Ornament::Trill`].
     pub ornament: Option<Ornament>,
+    /// Optional explicit termination length for the wavy line, in staff
+    /// spaces. `None` lets the wiggle extend to the next note (within-system)
+    /// or to the system's right edge (cross-system) per the usual convention.
+    /// `Some(length_ss)` clamps the wiggle to terminate no later than
+    /// `length_ss` staff spaces past its natural start, mirroring the contract
+    /// of [`crate::score::ScoreBuilder::trill_with_extension_length_ss`].
+    /// Clamping is one-sided (overruns clamp to the natural span; non-positive
+    /// values produce no wiggle). A positive explicit length disables
+    /// cross-system propagation — the wiggle terminates within its source
+    /// system. Independent of bracket: combining `Some(length_ss)` with a
+    /// bracket anchors the end-hook at the explicitly-shortened terminus.
+    pub length_ss: Option<f64>,
 }
 
 impl TrillExtensionFullOptions {
@@ -101,6 +114,7 @@ impl TrillExtensionFullOptions {
             bracket_length_ss: None,
             speed: None,
             ornament: None,
+            length_ss: None,
         }
     }
 
@@ -138,28 +152,51 @@ impl TrillExtensionFullOptions {
         self.ornament = Some(ornament);
         self
     }
+
+    /// Set an explicit termination length for the wavy line, in staff spaces,
+    /// measured from the wiggle's natural start (past the ornament glyph and
+    /// its trailing padding). Overruns are clamped to the natural span; a
+    /// non-positive length suppresses the wiggle entirely. Setting a positive
+    /// length disables cross-system propagation for this trill.
+    ///
+    /// Mirrors the contract of
+    /// [`crate::score::ScoreBuilder::trill_with_extension_length_ss`] and is
+    /// independent of the bracket — a bracketed trill with an explicit length
+    /// anchors its end hook at the shortened terminus.
+    pub const fn with_length_ss(mut self, length_ss: f64) -> Self {
+        self.length_ss = Some(length_ss);
+        self
+    }
 }
 
 impl From<TrillBracketOptions> for TrillExtensionFullOptions {
     fn from(opts: TrillBracketOptions) -> Self {
+        // `length_ss` left as `None` so widening preserves byte-equivalence
+        // with `trill_with_extension_bracketed_with_options(opts)` — that path
+        // does not touch `trill_extension_length_ss`, and the full-options
+        // builder mirrors it via this conversion.
         Self {
             bracket: Some(opts.side),
             bracket_direction: opts.direction,
             bracket_length_ss: opts.length_ss,
             speed: None,
             ornament: opts.ornament,
+            length_ss: None,
         }
     }
 }
 
 impl From<TrillExtensionSpeedOptions> for TrillExtensionFullOptions {
     fn from(opts: TrillExtensionSpeedOptions) -> Self {
+        // `length_ss` left as `None` to mirror the byte-equivalence guarantee
+        // with `trill_with_extension_speed_with_options(opts)`.
         Self {
             bracket: None,
             bracket_direction: None,
             bracket_length_ss: None,
             speed: Some(opts.speed),
             ornament: opts.ornament,
+            length_ss: None,
         }
     }
 }
@@ -178,6 +215,7 @@ mod tests {
         assert_eq!(opts.bracket_length_ss, None);
         assert_eq!(opts.speed, None);
         assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
     }
 
     #[test]
@@ -202,6 +240,7 @@ mod tests {
         assert_eq!(opts.bracket_length_ss, None);
         assert_eq!(opts.speed, None);
         assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
     }
 
     #[test]
@@ -212,6 +251,7 @@ mod tests {
         assert_eq!(opts.bracket_length_ss, None);
         assert_eq!(opts.speed, None);
         assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
     }
 
     #[test]
@@ -222,6 +262,7 @@ mod tests {
         assert_eq!(opts.bracket_direction, None);
         assert_eq!(opts.speed, None);
         assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
     }
 
     #[test]
@@ -232,6 +273,7 @@ mod tests {
         assert_eq!(opts.bracket_direction, None);
         assert_eq!(opts.bracket_length_ss, None);
         assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
     }
 
     #[test]
@@ -242,28 +284,46 @@ mod tests {
         assert_eq!(opts.bracket_direction, None);
         assert_eq!(opts.bracket_length_ss, None);
         assert_eq!(opts.speed, None);
+        assert_eq!(opts.length_ss, None);
+    }
+
+    #[test]
+    fn with_length_ss_sets_only_length_ss() {
+        // The new method must isolate the same way the other five with_*
+        // setters do: flip only `length_ss` and leave every other field at
+        // its `None` default. Catches a regression where the setter
+        // accidentally resets a sibling field.
+        let opts = TrillExtensionFullOptions::new().with_length_ss(3.5);
+        assert_eq!(opts.length_ss, Some(3.5));
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.ornament, None);
     }
 
     // --- Chaining ---
 
     #[test]
-    fn chain_sets_all_five_knobs() {
+    fn chain_sets_all_six_knobs() {
         let opts = TrillExtensionFullOptions::new()
             .with_bracket(TrillBracketSide::Both)
             .with_bracket_direction(HookDirection::Down)
             .with_bracket_length_ss(0.9)
             .with_speed(TrillWiggleSpeed::Fast)
-            .with_ornament(Ornament::TrillWithMordent);
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_length_ss(4.25);
         assert_eq!(opts.bracket, Some(TrillBracketSide::Both));
         assert_eq!(opts.bracket_direction, Some(HookDirection::Down));
         assert_eq!(opts.bracket_length_ss, Some(0.9));
         assert_eq!(opts.speed, Some(TrillWiggleSpeed::Fast));
         assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.length_ss, Some(4.25));
     }
 
     #[test]
     fn chain_order_independent() {
-        // The five with_* methods all commute. Two equivalent orderings must
+        // The six with_* methods all commute. Two equivalent orderings must
         // produce equal options bundles. Catches a regression where a
         // with-method accidentally reset another field.
         let a = TrillExtensionFullOptions::new()
@@ -271,8 +331,10 @@ mod tests {
             .with_speed(TrillWiggleSpeed::Slow)
             .with_ornament(Ornament::TrillWithMordent)
             .with_bracket_length_ss(0.7)
-            .with_bracket_direction(HookDirection::Up);
+            .with_bracket_direction(HookDirection::Up)
+            .with_length_ss(2.5);
         let b = TrillExtensionFullOptions::new()
+            .with_length_ss(2.5)
             .with_ornament(Ornament::TrillWithMordent)
             .with_bracket_direction(HookDirection::Up)
             .with_bracket_length_ss(0.7)
@@ -289,6 +351,29 @@ mod tests {
         assert_eq!(opts.speed, Some(TrillWiggleSpeed::Slowest));
     }
 
+    #[test]
+    fn with_length_ss_overwrites_prior_value() {
+        // Same overwrite semantic as the other with_* methods — last write
+        // wins. If a future change accidentally introduced "first write
+        // wins" or accumulated values, this canary fires.
+        let opts = TrillExtensionFullOptions::new()
+            .with_length_ss(1.0)
+            .with_length_ss(7.5);
+        assert_eq!(opts.length_ss, Some(7.5));
+    }
+
+    #[test]
+    fn with_length_ss_accepts_non_positive_at_layout_layer() {
+        // Layout layer is validation-free (mirrors the policy for
+        // unsupported ornaments) — zero and negative values round-trip
+        // unchanged. The renderer's existing non-positive fail-safe is
+        // what gives them the "no wiggle" semantic at draw time.
+        let zero = TrillExtensionFullOptions::new().with_length_ss(0.0);
+        assert_eq!(zero.length_ss, Some(0.0));
+        let neg = TrillExtensionFullOptions::new().with_length_ss(-2.0);
+        assert_eq!(neg.length_ss, Some(-2.0));
+    }
+
     // --- Const constructibility ---
 
     #[test]
@@ -301,7 +386,8 @@ mod tests {
             .with_bracket_direction(HookDirection::Down)
             .with_bracket_length_ss(0.75)
             .with_speed(TrillWiggleSpeed::Standard)
-            .with_ornament(Ornament::TrillWithMordent);
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_length_ss(3.0);
     }
 
     // --- Copy semantics ---
@@ -339,13 +425,17 @@ mod tests {
             full.speed, None,
             "speed must remain unset — bracket-only options carry no speed"
         );
+        assert_eq!(
+            full.length_ss, None,
+            "length_ss must remain unset — bracket-only options carry no termination length"
+        );
     }
 
     #[test]
     fn from_trill_bracket_options_with_unset_overrides_widens_cleanly() {
         // A bare TrillBracketOptions::new(side) widens to a full bundle
         // with only `bracket` populated — proves the From conversion does
-        // not synthesize defaults for `direction`/`length_ss`.
+        // not synthesize defaults for `direction`/`length_ss`/`length_ss`.
         let bracket_only = TrillBracketOptions::new(TrillBracketSide::Start);
         let full: TrillExtensionFullOptions = bracket_only.into();
         assert_eq!(full.bracket, Some(TrillBracketSide::Start));
@@ -353,6 +443,7 @@ mod tests {
         assert_eq!(full.bracket_length_ss, None);
         assert_eq!(full.speed, None);
         assert_eq!(full.ornament, None);
+        assert_eq!(full.length_ss, None);
     }
 
     #[test]
@@ -368,6 +459,10 @@ mod tests {
         );
         assert_eq!(full.bracket_direction, None);
         assert_eq!(full.bracket_length_ss, None);
+        assert_eq!(
+            full.length_ss, None,
+            "length_ss must remain unset — speed-only options carry no termination length"
+        );
     }
 
     #[test]
@@ -381,6 +476,29 @@ mod tests {
         assert_eq!(full.bracket, None);
         assert_eq!(full.bracket_direction, None);
         assert_eq!(full.bracket_length_ss, None);
+        assert_eq!(full.length_ss, None);
+    }
+
+    #[test]
+    fn widen_then_add_length_ss_round_trips_other_fields() {
+        // The intended ergonomic path: widen a single-purpose bundle then
+        // layer in the missing knob via `.with_length_ss(...)`. The
+        // bracket-side fields must survive the chain unchanged.
+        let bracket_only = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_direction(HookDirection::Down)
+            .with_length_ss(0.8);
+        let widened: TrillExtensionFullOptions = bracket_only.into();
+        let augmented = widened.with_length_ss(2.5);
+        assert_eq!(augmented.bracket, Some(TrillBracketSide::Both));
+        assert_eq!(augmented.bracket_direction, Some(HookDirection::Down));
+        assert_eq!(
+            augmented.bracket_length_ss,
+            Some(0.8),
+            "bracket hook length must survive the widening + augmentation"
+        );
+        assert_eq!(augmented.length_ss, Some(2.5));
+        assert_eq!(augmented.speed, None);
+        assert_eq!(augmented.ornament, None);
     }
 
     // --- Layout-layer contract: unsupported ornaments round-trip unchanged ---
@@ -419,5 +537,25 @@ mod tests {
         let a = TrillExtensionFullOptions::new().with_ornament(Ornament::Trill);
         let b = TrillExtensionFullOptions::new().with_ornament(Ornament::TrillWithMordent);
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn distinct_length_ss_values_compare_distinct() {
+        // PartialEq must be sensitive to length_ss — catches a regression
+        // where the derive ever forgot the new field.
+        let a = TrillExtensionFullOptions::new().with_length_ss(1.0);
+        let b = TrillExtensionFullOptions::new().with_length_ss(2.0);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn length_ss_some_zero_distinct_from_none() {
+        // `Some(0.0)` is semantically distinct from `None` (it suppresses
+        // the wiggle at the renderer's non-positive fail-safe, while `None`
+        // means "use the natural span"). The PartialEq derive must reflect
+        // that — they must not collapse.
+        let none = TrillExtensionFullOptions::new();
+        let zero = TrillExtensionFullOptions::new().with_length_ss(0.0);
+        assert_ne!(none, zero);
     }
 }

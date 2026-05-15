@@ -129,6 +129,26 @@ pub struct NoteAnnotations {
     /// a faster or slower variant communicates trill speed visually while
     /// keeping the gesture's meaning unchanged.
     pub trill_wiggle_speed: Option<TrillWiggleSpeed>,
+    /// Optional explicit termination length for the trill wavy-line
+    /// extension, in staff spaces. Has no effect unless `trill_extension ==
+    /// true`. `None` (the default) lets the wiggle extend to the next note
+    /// (within-system) or to the system's right edge (cross-system) per the
+    /// usual convention. `Some(length_ss)` clamps the wiggle so it terminates
+    /// no later than `length_ss` staff spaces past its natural start —
+    /// useful when a trill should visually "run out" before the next note
+    /// (e.g. a trill on a half note where the trill is intended to release
+    /// partway through the held duration).
+    ///
+    /// Clamping is one-sided: if the requested length is larger than the
+    /// natural span, the natural span wins (no overrun past the next note
+    /// or the system edge). When set to a positive value, the wiggle never
+    /// propagates across a system break — even if the natural span would
+    /// have extended to the system edge — because the explicit length
+    /// already specifies a definite endpoint.
+    ///
+    /// Non-positive values produce no wiggle (the renderer's same
+    /// fail-safe as for spans too short to fit one tile).
+    pub trill_extension_length_ss: Option<f64>,
 }
 
 /// A group of notes to be beamed together.
