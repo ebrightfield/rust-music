@@ -14,6 +14,7 @@ use smufl::Glyph;
 use crate::font::{FontError, MusicFont};
 use crate::layout::chord_symbol::{
     ChordSymbolCompositeLayout, ChordSymbolLayout, ChordSymbolSegment,
+    ChordSymbolSegmentBox,
 };
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
@@ -59,14 +60,24 @@ pub fn draw_chord_symbol_composite(
                 };
                 svg.add_text(box_.x_left, box_.y_baseline, s, &style);
             }
-            ChordSymbolSegment::Sharp => {
-                draw_accidental_glyph(svg, font, Glyph::AccidentalSharp, box_, upe)?
-            }
-            ChordSymbolSegment::Flat => {
-                draw_accidental_glyph(svg, font, Glyph::AccidentalFlat, box_, upe)?
-            }
-            ChordSymbolSegment::Natural => {
-                draw_accidental_glyph(svg, font, Glyph::AccidentalNatural, box_, upe)?
+            // Single source of truth for chord-symbol → SMuFL mapping lives on
+            // `ChordSymbolSegment::glyph()` (layout/chord_symbol.rs). The
+            // or-pattern keeps match exhaustiveness — adding a new accidental
+            // variant requires updating this arm — while folding the three
+            // formerly-duplicated arms (Sharp/Flat/Natural → matching SMuFL
+            // glyph) into a single dispatch through `seg.glyph()`. The
+            // `expect` is a layout-layer invariant: any segment that
+            // `is_accidental()` must yield `Some(glyph)`. A regression that
+            // violated it would surface immediately as a panic in tests
+            // covering each accidental variant, not silently produce wrong
+            // SVG output.
+            seg @ (ChordSymbolSegment::Sharp
+            | ChordSymbolSegment::Flat
+            | ChordSymbolSegment::Natural) => {
+                let glyph = seg
+                    .glyph()
+                    .expect("accidental segment must resolve to a SMuFL glyph");
+                draw_accidental_glyph(svg, font, glyph, box_, upe)?;
             }
         }
     }
@@ -83,7 +94,7 @@ fn draw_accidental_glyph(
     svg: &mut SvgWriter,
     font: &MusicFont,
     glyph: Glyph,
-    box_: &crate::layout::chord_symbol::ChordSymbolSegmentBox,
+    box_: &ChordSymbolSegmentBox,
     upe: f64,
 ) -> Result<(), FontError> {
     let outline = font.glyph_outline(glyph)?;
@@ -388,5 +399,115 @@ mod tests {
         // and the composite path must preserve that on every text run.
         let bold_count = output.matches(r#"font-weight="bold""#).count();
         assert_eq!(bold_count, 3, "all 3 text runs in F#m7b5 should be bold");
+    }
+
+    // ---------------- glyph()-as-source-of-truth dispatch canaries ----------------
+    //
+    // These four tests lock in the contract that `draw_chord_symbol_composite`
+    // dispatches accidental segments through `ChordSymbolSegment::glyph()` —
+    // not via a private per-variant map duplicated inside the renderer. If a
+    // future refactor reintroduces a duplicate map and accidentally writes a
+    // different glyph for one variant (e.g. routing `Sharp` to
+    // `AccidentalDoubleSharp`), exactly one of these tests fires while the
+    // others continue to pass — pinpointing the regression to a single
+    // variant.
+
+    /// Extract the path `d` attribute from the *first* path in the SVG.
+    /// Helper for the dispatch tests below.
+    fn first_path_d(svg: &SvgWriter) -> String {
+        let s = svg.to_svg();
+        let start = s.find(r#"d=""#).expect("should contain a path");
+        let after = &s[start + 3..];
+        let end = after.find('"').expect("path data should close");
+        after[..end].to_string()
+    }
+
+    #[test]
+    fn composite_dispatches_through_segment_glyph_for_sharp() {
+        // `C#` → Text("C") + Sharp. The single emitted path must match the
+        // font's outline for the glyph that `ChordSymbolSegment::Sharp.glyph()`
+        // returns — currently `AccidentalSharp`. If `glyph()` is changed to
+        // return a different SMuFL glyph (e.g. a small/raised variant for
+        // chord-symbol contexts), the renderer must follow without code
+        // changes here.
+        let font = test_font();
+        let layout = composite("C#");
+        let mut svg = test_svg();
+        draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
+        let rendered_d = first_path_d(&svg);
+
+        let expected_glyph = ChordSymbolSegment::Sharp
+            .glyph()
+            .expect("Sharp must have a glyph");
+        let expected_outline = font.glyph_outline(expected_glyph).unwrap();
+        assert_eq!(
+            rendered_d, expected_outline.path_data,
+            "Sharp segment's rendered path must equal font outline for ChordSymbolSegment::Sharp.glyph()",
+        );
+    }
+
+    #[test]
+    fn composite_dispatches_through_segment_glyph_for_flat() {
+        // `Cb` → Text("C") + Flat (`b` after uppercase root letter `C` is
+        // a flat by chord-symbol rules). Rendered path must match the outline
+        // for `ChordSymbolSegment::Flat.glyph()`.
+        let font = test_font();
+        let layout = composite("Cb");
+        let mut svg = test_svg();
+        draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
+        let rendered_d = first_path_d(&svg);
+
+        let expected_glyph = ChordSymbolSegment::Flat
+            .glyph()
+            .expect("Flat must have a glyph");
+        let expected_outline = font.glyph_outline(expected_glyph).unwrap();
+        assert_eq!(
+            rendered_d, expected_outline.path_data,
+            "Flat segment's rendered path must equal font outline for ChordSymbolSegment::Flat.glyph()",
+        );
+    }
+
+    #[test]
+    fn composite_dispatches_through_segment_glyph_for_natural() {
+        // `C♮` (U+266E) → Text("C") + Natural. Rendered path must match the
+        // outline for `ChordSymbolSegment::Natural.glyph()`.
+        let font = test_font();
+        let layout = composite("C\u{266E}");
+        let mut svg = test_svg();
+        draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
+        let rendered_d = first_path_d(&svg);
+
+        let expected_glyph = ChordSymbolSegment::Natural
+            .glyph()
+            .expect("Natural must have a glyph");
+        let expected_outline = font.glyph_outline(expected_glyph).unwrap();
+        assert_eq!(
+            rendered_d, expected_outline.path_data,
+            "Natural segment's rendered path must equal font outline for ChordSymbolSegment::Natural.glyph()",
+        );
+    }
+
+    #[test]
+    fn composite_dispatch_is_deterministic_across_repeated_calls() {
+        // Determinism canary for the new `glyph()`-driven dispatch path.
+        // Two independent calls with identical inputs must produce
+        // byte-identical SVG output. If the dispatch ever pulled in
+        // any non-deterministic state (env, time, RNG, hash iteration
+        // order), this fires.
+        let font = test_font();
+
+        let layout1 = composite("F#m7b5");
+        let layout2 = composite("F#m7b5");
+
+        let mut svg1 = test_svg();
+        let mut svg2 = test_svg();
+        draw_chord_symbol_composite(&mut svg1, &font, &layout1).unwrap();
+        draw_chord_symbol_composite(&mut svg2, &font, &layout2).unwrap();
+
+        assert_eq!(
+            svg1.to_svg(),
+            svg2.to_svg(),
+            "two identical-input calls must produce byte-identical SVG"
+        );
     }
 }
