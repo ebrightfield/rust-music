@@ -31,12 +31,26 @@ pub fn draw_brace(
     Ok(())
 }
 
-/// Draw a bracket connector (thick line with serifs for orchestral sections).
+/// Draw a bracket connector (orchestral section grouping).
 ///
-/// Renders a thick vertical line from `y_top` to `y_bottom`, with short
-/// horizontal serif lines at both ends extending to the right (toward the staff).
-pub fn draw_bracket(svg: &mut SvgWriter, bracket: &BracketLayout) {
-    // Thick vertical line
+/// Renders a thick vertical line spanning `y_top..y_bottom`, with SMuFL
+/// `bracketTop` and `bracketBottom` scroll glyphs anchored at the line's
+/// endpoints — the published-engraving convention (Gould, Behind Bars) for
+/// section brackets. Each scroll glyph extends outward (above `y_top` or
+/// below `y_bottom`) and joins the thick line at its origin point, so no
+/// horizontal serif stroke is needed.
+///
+/// Returns an error only if the bundled font is missing one of the two
+/// scroll glyphs — caught by unit tests against the Bravura bundle.
+pub fn draw_bracket(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    bracket: &BracketLayout,
+) -> Result<(), FontError> {
+    // Thick vertical line: y_top..y_bottom inclusive. The scroll glyphs
+    // attach at the line's endpoints (their origins sit at y_top / y_bottom),
+    // so this segment together with the two glyph paths forms a continuous
+    // bracket without a visible seam.
     svg.add_line(
         bracket.x + bracket.thickness / 2.0,
         bracket.y_top,
@@ -46,25 +60,22 @@ pub fn draw_bracket(svg: &mut SvgWriter, bracket: &BracketLayout) {
         bracket.thickness,
     );
 
-    // Top serif (extends rightward)
-    svg.add_line(
-        bracket.x,
-        bracket.y_top + bracket.serif_thickness / 2.0,
-        bracket.x + bracket.serif_length,
-        bracket.y_top + bracket.serif_thickness / 2.0,
-        "black",
-        bracket.serif_thickness,
-    );
+    // Decorative top scroll. The glyph's origin (font convention: bBoxSW for
+    // bracketTop) sits at the line's top edge; the outline extends upward
+    // into the area above the top staff.
+    let top_outline = font.glyph_outline(bracket.top_glyph)?;
+    let top_transform = format!("translate({},{})", bracket.x, bracket.y_top);
+    svg.add_path(&top_outline.path_data, "black", Some(&top_transform));
 
-    // Bottom serif (extends rightward)
-    svg.add_line(
-        bracket.x,
-        bracket.y_bottom - bracket.serif_thickness / 2.0,
-        bracket.x + bracket.serif_length,
-        bracket.y_bottom - bracket.serif_thickness / 2.0,
-        "black",
-        bracket.serif_thickness,
-    );
+    // Decorative bottom scroll. The glyph's origin (font convention: bBoxNW
+    // for bracketBottom — i.e. the bbox extends downward from the origin)
+    // sits at the line's bottom edge; the outline extends below the bottom
+    // staff.
+    let bottom_outline = font.glyph_outline(bracket.bottom_glyph)?;
+    let bottom_transform = format!("translate({},{})", bracket.x, bracket.y_bottom);
+    svg.add_path(&bottom_outline.path_data, "black", Some(&bottom_transform));
+
+    Ok(())
 }
 
 /// Draw all connectors for a multi-staff layout.
@@ -79,7 +90,7 @@ pub fn draw_multi_staff_connectors(
         draw_brace(svg, font, brace)?;
     }
     if let Some(ref bracket) = layout.bracket {
-        draw_bracket(svg, bracket);
+        draw_bracket(svg, font, bracket)?;
     }
     Ok(())
 }
@@ -123,19 +134,126 @@ mod tests {
     }
 
     #[test]
-    fn draw_bracket_produces_three_lines() {
+    fn draw_bracket_produces_one_line_and_two_glyph_paths() {
         let group = StaffGroup::section(2);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let bracket = layout.bracket.as_ref().unwrap();
 
+        let font = bravura_font();
         let mut svg = SvgWriter::new(200.0, 600.0, -200.0, -50.0, 5500.0, 3500.0);
-        draw_bracket(&mut svg, bracket);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
 
         let output = svg.to_svg();
         let line_count = output.matches("<line").count();
+        let path_count = output.matches("<path").count();
+        // Exactly 1 line (the thick vertical) + 2 glyph paths (bracketTop +
+        // bracketBottom). Catches a regression that reverts to serif lines
+        // (which would emit 3 lines and 0 paths) or that draws either glyph
+        // twice.
         assert_eq!(
-            line_count, 3,
-            "bracket should produce 3 lines (1 vertical + 2 serifs), got {line_count}"
+            line_count, 1,
+            "bracket should produce exactly 1 line (vertical), got {line_count}"
+        );
+        assert_eq!(
+            path_count, 2,
+            "bracket should produce exactly 2 glyph paths (top + bottom scroll), got {path_count}"
+        );
+    }
+
+    #[test]
+    fn draw_bracket_top_glyph_anchored_at_y_top() {
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        // The top scroll glyph must be translated to (bracket.x, bracket.y_top).
+        // y_top is 100.0 (the y_start passed to layout_multi_staff).
+        let needle = format!("translate({},{})", bracket.x, bracket.y_top);
+        assert!(
+            output.contains(&needle),
+            "top scroll must be translated to (x={}, y={}); SVG:\n{output}",
+            bracket.x,
+            bracket.y_top
+        );
+    }
+
+    #[test]
+    fn draw_bracket_bottom_glyph_anchored_at_y_bottom() {
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let needle = format!("translate({},{})", bracket.x, bracket.y_bottom);
+        assert!(
+            output.contains(&needle),
+            "bottom scroll must be translated to (x={}, y={}); SVG:\n{output}",
+            bracket.x,
+            bracket.y_bottom
+        );
+    }
+
+    #[test]
+    fn draw_bracket_top_and_bottom_glyphs_render_distinct_outlines() {
+        // The two scroll glyphs curl in opposite vertical directions, so their
+        // path_data must differ. Catches a regression where both glyph paths
+        // accidentally pick up the same outline (e.g. swapping `top_glyph`
+        // into `bottom_glyph` slot, or reusing the same Glyph variant).
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, -50.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        // Split on `<path ` and extract each path's `d="..."` attribute.
+        let parts: Vec<&str> = output.split("<path ").collect();
+        assert_eq!(parts.len(), 3, "expected 2 path elements (plus 1 head split)");
+        let extract_d = |s: &str| -> String {
+            let d_start = s.find("d=\"").expect("path missing d attribute") + 3;
+            let d_rest = &s[d_start..];
+            let d_end = d_rest.find('"').expect("unterminated d attribute");
+            d_rest[..d_end].to_string()
+        };
+        let d_top = extract_d(parts[1]);
+        let d_bottom = extract_d(parts[2]);
+        assert_ne!(
+            d_top, d_bottom,
+            "bracketTop and bracketBottom outlines must differ; got identical path data"
+        );
+        // Sanity: both must be non-empty SVG path commands.
+        assert!(d_top.starts_with('M'), "top path must start with moveto");
+        assert!(d_bottom.starts_with('M'), "bottom path must start with moveto");
+    }
+
+    #[test]
+    fn draw_bracket_vertical_line_uses_thickness() {
+        // Stroke width on the single line element must be `bracket.thickness`.
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, -50.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let needle = format!("stroke-width=\"{}\"", bracket.thickness);
+        assert!(
+            output.contains(&needle),
+            "vertical line must use stroke-width={}; SVG:\n{output}",
+            bracket.thickness
         );
     }
 
@@ -163,7 +281,15 @@ mod tests {
 
         let output = svg.to_svg();
         let line_count = output.matches("<line").count();
-        assert_eq!(line_count, 3, "section bracket should produce 3 lines");
+        let path_count = output.matches("<path").count();
+        assert_eq!(
+            line_count, 1,
+            "section bracket should produce exactly 1 line (thick vertical), got {line_count}"
+        );
+        assert_eq!(
+            path_count, 2,
+            "section bracket should produce exactly 2 scroll-glyph paths, got {path_count}"
+        );
     }
 
     #[test]

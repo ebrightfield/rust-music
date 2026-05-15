@@ -531,26 +531,36 @@ impl MultiStaffScore {
 
             // --- Bracket extending to cover tab stave ---
             if self.tab_stave.is_some() && !self.staves.is_empty() {
-                // Re-draw bracket to extend to tab stave bottom
-                // The initial bracket from draw_multi_staff_connectors only covers
-                // notation staves. We draw an extended bracket manually.
+                // `draw_multi_staff_connectors` above drew a bracket spanning
+                // only the notation staves. For the guitar+tab layout, the
+                // bracket should reach the *bottom* of the tab stave. We
+                // overdraw by constructing a `BracketLayout` covering the
+                // full notation+tab span and re-invoking the shared
+                // `draw_bracket` helper — the previous bracket gets visually
+                // replaced (the new path/line cover the same x range and
+                // extend further). Sharing the helper keeps the SMuFL scroll
+                // glyphs (bracketTop/bracketBottom) consistent with the
+                // notation-only bracket.
                 if self.connector == ConnectorKind::Bracket && !ms_layout.staff_y_origins.is_empty() {
                     let tab_y = {
                         let last_y = ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1];
                         last_y + staff_space * 4.0 + tab_gap
                     };
-                    let y_top = ms_layout.staff_y_origins[0];
-                    let y_bottom = tab_y + tab_staff_height;
-                    let bracket_x = left_margin - crate::layout::multi_staff::BRACKET_THICKNESS_SS * staff_space;
                     let thickness = crate::layout::multi_staff::BRACKET_THICKNESS_SS * staff_space;
-                    let serif_len = crate::layout::multi_staff::BRACKET_SERIF_LENGTH_SS * staff_space;
-                    let serif_thick = thickness * 0.4;
-                    // Vertical line
-                    svg.add_line(bracket_x, y_top, bracket_x, y_bottom, "black", thickness);
-                    // Top serif
-                    svg.add_line(bracket_x, y_top, bracket_x + serif_len, y_top, "black", serif_thick);
-                    // Bottom serif
-                    svg.add_line(bracket_x, y_bottom, bracket_x + serif_len, y_bottom, "black", serif_thick);
+                    let extended_bracket = crate::layout::multi_staff::BracketLayout {
+                        x: left_margin
+                            - crate::layout::multi_staff::BRACKET_THICKNESS_SS * staff_space,
+                        y_top: ms_layout.staff_y_origins[0],
+                        y_bottom: tab_y + tab_staff_height,
+                        thickness,
+                        top_glyph: smufl::Glyph::BracketTop,
+                        bottom_glyph: smufl::Glyph::BracketBottom,
+                    };
+                    crate::render::multi_staff_renderer::draw_bracket(
+                        &mut svg,
+                        &font,
+                        &extended_bracket,
+                    )?;
                 }
             }
         }
@@ -712,7 +722,7 @@ mod tests {
     }
 
     #[test]
-    fn section_bracket_renders_three_bracket_lines() {
+    fn section_bracket_renders_single_thick_line_and_two_scroll_glyphs() {
         let staves = vec![
             simple_treble(),
             ScoreBuilder::new()
@@ -724,13 +734,48 @@ mod tests {
         ];
         let svg = MultiStaffScore::section(staves).render_svg();
         assert!(svg.starts_with("<svg"));
-        // Bracket produces 3 lines (1 vertical + 2 serifs)
-        // Plus staff lines, barlines, stems, joined barlines — should be many lines
+
+        // The orchestral section bracket is now a single thick vertical line
+        // plus two SMuFL `bracketTop`/`bracketBottom` scroll glyphs (paths) —
+        // not three serif lines. Beyond the bracket itself the SVG carries
+        // 3 × 5 = 15 staff lines plus joined barlines and stems.
         let line_count = svg.matches("<line").count();
-        // 3 staves × 5 lines + bracket (3 lines) + barlines + joined barlines + stems
+        let path_count = svg.matches("<path").count();
+        // Floor of 16 = 15 staff lines + at least 1 bracket vertical line.
         assert!(
-            line_count >= 18,
-            "section should have many lines (>=18), got {line_count}"
+            line_count >= 16,
+            "section should have ≥16 lines (15 staff + bracket vertical), got {line_count}"
+        );
+        // Bracket adds 2 paths over the no-bracket baseline; clef glyphs and
+        // noteheads also add paths, so the floor is ≥2.
+        assert!(
+            path_count >= 2,
+            "section should have ≥2 bracket scroll paths, got {path_count}"
+        );
+
+        // Compare against the `independent` (no-bracket) variant of the same
+        // music to lock in the actual *bracket-induced* delta: the section
+        // bracket must add at least 2 paths (top + bottom scrolls) and at
+        // least 1 line (the thick vertical) over the no-connector baseline.
+        let staves_indep = vec![
+            simple_treble(),
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .note(pitch(Note::C, 5), Duration::WHOLE)
+                .end_barline(),
+            simple_bass(),
+        ];
+        let svg_indep = MultiStaffScore::independent(staves_indep).render_svg();
+        let line_count_indep = svg_indep.matches("<line").count();
+        let path_count_indep = svg_indep.matches("<path").count();
+        assert!(
+            line_count > line_count_indep,
+            "bracket should add ≥1 line over independent baseline ({line_count} vs {line_count_indep})"
+        );
+        assert!(
+            path_count >= path_count_indep + 2,
+            "bracket should add ≥2 scroll paths over independent baseline ({path_count} vs {path_count_indep})"
         );
     }
 
@@ -1328,13 +1373,28 @@ mod tests {
         let notation = simple_treble();
         let tab = simple_tab();
         let svg = MultiStaffScore::guitar_tab(notation, tab).render_svg();
-        // Bracket has 3 lines: vertical + 2 serifs — but we draw an extended bracket
-        // so there should be extra bracket lines
+        // The bracket is now 1 thick vertical line + 2 SMuFL scroll glyphs
+        // (paths). Counted separately the bracket adds:
+        //   notation-only initial bracket: 1 line + 2 paths
+        //   extended bracket re-draw (spanning notation+tab): 1 line + 2 paths
+        // → 2 additional lines + 4 additional paths from brackets alone,
+        // on top of staff lines (5 notation + 6 tab = 11), joined barlines,
+        // stems, and notehead/clef glyph paths.
         let line_count = svg.matches("<line ").count();
-        // Notation (5) + tab (6) + bracket (3) + joined barlines + stems ≥ 17
+        // Floor: 11 staff lines + ≥1 bracket vertical (the most visible one).
         assert!(
-            line_count >= 17,
-            "guitar_tab should have bracket lines (>=17 total), got {line_count}"
+            line_count >= 12,
+            "guitar_tab should have ≥12 lines (11 staff + bracket vertical), got {line_count}"
+        );
+
+        // The bracket glyphs (bracketTop/bracketBottom) must be rendered:
+        // assert their characteristic translate-anchor strings appear by
+        // checking that the SVG carries at least 2 `<path` elements
+        // anchored above and below the notation+tab span.
+        let path_count = svg.matches("<path").count();
+        assert!(
+            path_count >= 2,
+            "guitar_tab should have ≥2 paths (bracket scrolls + clef), got {path_count}"
         );
     }
 

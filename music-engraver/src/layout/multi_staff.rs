@@ -73,8 +73,6 @@ pub const INTER_STAFF_GAP_SS: f64 = 6.0;
 pub const BRACE_LEFT_OFFSET_SS: f64 = 0.5;
 /// Bracket line thickness, in staff spaces.
 pub const BRACKET_THICKNESS_SS: f64 = 0.5;
-/// Bracket serif (horizontal cap) length, in staff spaces.
-pub const BRACKET_SERIF_LENGTH_SS: f64 = 0.5;
 
 /// Computed geometry for a brace connector.
 #[derive(Clone, Debug)]
@@ -93,20 +91,35 @@ pub struct BraceLayout {
 }
 
 /// Computed geometry for a bracket connector.
+///
+/// The bracket is rendered as a thick vertical line with decorative SMuFL
+/// scroll glyphs (`bracketTop`, `bracketBottom`) at each end — the published
+/// engraving convention for orchestral grouping brackets. Each glyph's origin
+/// (its inner edge where the scroll meets the line) sits at the corresponding
+/// endpoint of the thick line, so the line segment and glyph join cleanly
+/// without an explicit serif stroke.
 #[derive(Clone, Debug)]
 pub struct BracketLayout {
-    /// X position of the bracket's thick vertical line.
+    /// X position of the bracket's thick vertical line (left edge).
     pub x: f64,
-    /// Y of the top serif.
+    /// Y of the top of the thick line (where `top_glyph`'s origin anchors).
     pub y_top: f64,
-    /// Y of the bottom serif.
+    /// Y of the bottom of the thick line (where `bottom_glyph`'s origin anchors).
     pub y_bottom: f64,
     /// Thickness of the vertical line, in font design units.
     pub thickness: f64,
-    /// Length of each horizontal serif, in font design units.
-    pub serif_length: f64,
-    /// Stroke width for the serif lines (typically same as bracket thickness).
-    pub serif_thickness: f64,
+    /// SMuFL glyph for the decorative top scroll. The glyph's origin sits at
+    /// the bottom-left of its bounding box (font convention: bBoxSW); its
+    /// outline extends upward and rightward, so drawing it translated to
+    /// `(x, y_top)` makes the scroll appear above `y_top` while joining the
+    /// thick line at `y_top` exactly.
+    pub top_glyph: Glyph,
+    /// SMuFL glyph for the decorative bottom scroll. The glyph's origin sits
+    /// at the top-left of its bounding box (font convention: bBoxNW for the
+    /// bottom variant); its outline extends downward and rightward, so
+    /// drawing it translated to `(x, y_bottom)` makes the scroll appear
+    /// below `y_bottom` while joining the thick line at `y_bottom` exactly.
+    pub bottom_glyph: Glyph,
 }
 
 /// Computed vertical positions for staves in a multi-staff system.
@@ -191,8 +204,8 @@ pub fn layout_multi_staff(
             y_top,
             y_bottom,
             thickness: BRACKET_THICKNESS_SS * staff_space,
-            serif_length: BRACKET_SERIF_LENGTH_SS * staff_space,
-            serif_thickness: BRACKET_THICKNESS_SS * staff_space * 0.4,
+            top_glyph: Glyph::BracketTop,
+            bottom_glyph: Glyph::BracketBottom,
         })
     } else {
         None
@@ -329,7 +342,8 @@ mod tests {
         assert_eq!(bracket.y_top, 0.0);
         assert!(bracket.y_bottom > bracket.y_top);
         assert!(bracket.thickness > 0.0);
-        assert!(bracket.serif_length > 0.0);
+        assert_eq!(bracket.top_glyph, Glyph::BracketTop);
+        assert_eq!(bracket.bottom_glyph, Glyph::BracketBottom);
     }
 
     #[test]
@@ -431,11 +445,49 @@ mod tests {
     }
 
     #[test]
-    fn bracket_serif_thickness_is_fraction_of_main() {
+    fn bracket_uses_smufl_scroll_glyphs() {
         let group = StaffGroup::section(2);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let bracket = layout.bracket.as_ref().unwrap();
-        assert!(bracket.serif_thickness < bracket.thickness);
-        assert!(bracket.serif_thickness > 0.0);
+        // The decorative scrolls are SMuFL `bracketTop`/`bracketBottom` — the
+        // published-engraving convention for orchestral grouping brackets.
+        assert_eq!(bracket.top_glyph, Glyph::BracketTop);
+        assert_eq!(bracket.bottom_glyph, Glyph::BracketBottom);
+        // Top and bottom are distinct glyphs (scroll curves in opposite
+        // vertical directions). Catches a regression where both fields
+        // accidentally got the same value.
+        assert_ne!(bracket.top_glyph, bracket.bottom_glyph);
+    }
+
+    #[test]
+    fn bracket_thickness_matches_smufl_engraving_default() {
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+        // Bravura's `bracketThickness` is 0.5 staff spaces; in design units
+        // that's 0.5 * SS. Locks the constant choice — if anyone ever
+        // bumps `BRACKET_THICKNESS_SS` to track an updated SMuFL convention,
+        // this fires for confirmation.
+        let expected = 0.5 * SS;
+        assert!(
+            (bracket.thickness - expected).abs() < 1e-6,
+            "bracket.thickness: expected {expected}, got {}",
+            bracket.thickness
+        );
+    }
+
+    #[test]
+    fn bracket_x_is_left_of_staff_by_thickness() {
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+        // The bracket's left edge sits one bracket-thickness to the left of
+        // the staff origin (x=0), so the thick line's right edge meets x=0.
+        let expected_x = -BRACKET_THICKNESS_SS * SS;
+        assert!(
+            (bracket.x - expected_x).abs() < 1e-6,
+            "bracket.x: expected {expected_x}, got {}",
+            bracket.x
+        );
     }
 }

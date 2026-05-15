@@ -73,10 +73,16 @@ fn main() {
         line_count,
     );
 
-    // Verify expected content
+    // Verify expected content. The section bracket now uses SMuFL
+    // `bracketTop` + `bracketBottom` scroll glyphs (2 paths) plus 1 thick
+    // vertical line — so the path/line breakdown is:
+    //   paths: 1 brace + 2 bracket scrolls = 3
+    //   lines: 25 staff (5 × 5) + 1 bracket vertical + 2 joined barlines = 28
     assert!(output.contains("<svg"), "should be valid SVG");
-    assert!(path_count >= 1, "should have at least 1 path (brace glyph)");
-    // 5 lines per staff × 5 staves = 25 staff lines + 3 bracket lines + 2 joined barlines = 30
+    assert!(
+        path_count >= 3,
+        "should have at least 3 paths (brace + 2 bracket scrolls), got {path_count}"
+    );
     assert!(
         line_count >= 25,
         "should have at least 25 staff lines, got {line_count}"
