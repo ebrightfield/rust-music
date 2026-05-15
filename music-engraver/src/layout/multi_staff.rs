@@ -112,31 +112,32 @@ impl BraceLayout {
 ///
 /// The bracket is rendered as a thick vertical line with decorative SMuFL
 /// scroll glyphs (`bracketTop`, `bracketBottom`) at each end — the published
-/// engraving convention for orchestral grouping brackets. Each glyph's origin
-/// (its inner edge where the scroll meets the line) sits at the corresponding
-/// endpoint of the thick line, so the line segment and glyph join cleanly
-/// without an explicit serif stroke.
+/// engraving convention for orchestral grouping brackets.
+///
+/// `BracketLayout` records only the **geometric intent**: where the thick
+/// line spans (`y_top..y_bottom` along `x`) and which scroll glyphs to
+/// attach. The renderer queries each scroll glyph's actual bbox from the
+/// font's SMuFL metadata and computes a translate that aligns the glyph's
+/// inner edge (the edge meeting the line) with the line's endpoint — so the
+/// seam stays clean across SMuFL fonts whose scroll-glyph origin may
+/// diverge from the typical Bravura convention (bBoxSW for `bracketTop`,
+/// bBoxNW for `bracketBottom`).
 #[derive(Clone, Debug)]
 pub struct BracketLayout {
-    /// X position of the bracket's thick vertical line (left edge).
+    /// X position of the bracket's thick vertical line (left edge). The
+    /// scroll glyphs are aligned so their left edges sit at this x.
     pub x: f64,
-    /// Y of the top of the thick line (where `top_glyph`'s origin anchors).
+    /// Y of the top of the thick line. The top scroll glyph's bottom edge
+    /// is aligned to this y.
     pub y_top: f64,
-    /// Y of the bottom of the thick line (where `bottom_glyph`'s origin anchors).
+    /// Y of the bottom of the thick line. The bottom scroll glyph's top
+    /// edge is aligned to this y.
     pub y_bottom: f64,
     /// Thickness of the vertical line, in font design units.
     pub thickness: f64,
-    /// SMuFL glyph for the decorative top scroll. The glyph's origin sits at
-    /// the bottom-left of its bounding box (font convention: bBoxSW); its
-    /// outline extends upward and rightward, so drawing it translated to
-    /// `(x, y_top)` makes the scroll appear above `y_top` while joining the
-    /// thick line at `y_top` exactly.
+    /// SMuFL glyph for the decorative top scroll (curls upward/outward).
     pub top_glyph: Glyph,
-    /// SMuFL glyph for the decorative bottom scroll. The glyph's origin sits
-    /// at the top-left of its bounding box (font convention: bBoxNW for the
-    /// bottom variant); its outline extends downward and rightward, so
-    /// drawing it translated to `(x, y_bottom)` makes the scroll appear
-    /// below `y_bottom` while joining the thick line at `y_bottom` exactly.
+    /// SMuFL glyph for the decorative bottom scroll (curls downward/outward).
     pub bottom_glyph: Glyph,
 }
 

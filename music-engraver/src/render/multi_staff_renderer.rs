@@ -63,9 +63,25 @@ pub fn draw_brace(
 /// Renders a thick vertical line spanning `y_top..y_bottom`, with SMuFL
 /// `bracketTop` and `bracketBottom` scroll glyphs anchored at the line's
 /// endpoints — the published-engraving convention (Gould, Behind Bars) for
-/// section brackets. Each scroll glyph extends outward (above `y_top` or
-/// below `y_bottom`) and joins the thick line at its origin point, so no
-/// horizontal serif stroke is needed.
+/// section brackets.
+///
+/// **Metric-driven anchoring** (parallel to the brace bbox fix): rather than
+/// assuming the scroll glyph's origin sits at a specific bbox corner
+/// (Bravura's convention is bBoxSW for `bracketTop` and bBoxNW for
+/// `bracketBottom`), the renderer queries each glyph's actual bbox from the
+/// font's SMuFL metadata and computes a translate that places the glyph's
+/// inner edge — the edge meeting the thick line — exactly at `y_top` /
+/// `y_bottom`. The same applies horizontally: the glyph's left edge is
+/// aligned to `bracket.x`. This keeps the seam clean for any conforming
+/// SMuFL font, even one whose bracket-scroll glyph origin diverges from the
+/// Bravura convention. For Bravura specifically (bracketTop bbox.x_left=0,
+/// bbox.y_bottom=0; bracketBottom bbox.x_left=0, bbox.y_top=0) the formula
+/// reduces to the previous `translate(bracket.x, bracket.y_top|y_bottom)`
+/// pattern, so output is byte-identical.
+///
+/// Falls back to the corner-anchored translate (the pre-fix behavior) when
+/// the font's metadata supplies no bbox for a scroll glyph — the bracket
+/// still renders, just under the SMuFL-convention assumption.
 ///
 /// Returns an error only if the bundled font is missing one of the two
 /// scroll glyphs — caught by unit tests against the Bravura bundle.
@@ -75,9 +91,8 @@ pub fn draw_bracket(
     bracket: &BracketLayout,
 ) -> Result<(), FontError> {
     // Thick vertical line: y_top..y_bottom inclusive. The scroll glyphs
-    // attach at the line's endpoints (their origins sit at y_top / y_bottom),
-    // so this segment together with the two glyph paths forms a continuous
-    // bracket without a visible seam.
+    // attach at the line's endpoints, so this segment together with the two
+    // glyph paths forms a continuous bracket without a visible seam.
     svg.add_line(
         bracket.x + bracket.thickness / 2.0,
         bracket.y_top,
@@ -87,22 +102,81 @@ pub fn draw_bracket(
         bracket.thickness,
     );
 
-    // Decorative top scroll. The glyph's origin (font convention: bBoxSW for
-    // bracketTop) sits at the line's top edge; the outline extends upward
-    // into the area above the top staff.
+    // Decorative top scroll. We want the glyph's *bottom* edge (where it
+    // meets the thick line) to land at SVG y = bracket.y_top, and its left
+    // edge to land at SVG x = bracket.x. With a `translate(tx, ty)` the
+    // glyph's path point (px, py) lands at (tx + px, ty + py). The glyph's
+    // bottom in SVG-flipped path space is at py = bbox.y_bottom (the largest
+    // y, since SVG y grows downward); its left is at px = bbox.x_left. So:
+    //   tx = bracket.x      - bbox.x_left
+    //   ty = bracket.y_top  - bbox.y_bottom
     let top_outline = font.glyph_outline(bracket.top_glyph)?;
-    let top_transform = format!("translate({},{})", bracket.x, bracket.y_top);
+    let (top_tx, top_ty) = bracket_anchor(
+        font,
+        bracket.top_glyph,
+        bracket.x,
+        bracket.y_top,
+        ScrollEnd::Top,
+    );
+    let top_transform = format!("translate({},{})", top_tx, top_ty);
     svg.add_path(&top_outline.path_data, "black", Some(&top_transform));
 
-    // Decorative bottom scroll. The glyph's origin (font convention: bBoxNW
-    // for bracketBottom — i.e. the bbox extends downward from the origin)
-    // sits at the line's bottom edge; the outline extends below the bottom
-    // staff.
+    // Decorative bottom scroll. Symmetric: the glyph's *top* edge meets the
+    // line at SVG y = bracket.y_bottom; its left edge at SVG x = bracket.x.
+    // The glyph's top in SVG-flipped path space is at py = bbox.y_top. So:
+    //   tx = bracket.x        - bbox.x_left
+    //   ty = bracket.y_bottom - bbox.y_top
     let bottom_outline = font.glyph_outline(bracket.bottom_glyph)?;
-    let bottom_transform = format!("translate({},{})", bracket.x, bracket.y_bottom);
+    let (bot_tx, bot_ty) = bracket_anchor(
+        font,
+        bracket.bottom_glyph,
+        bracket.x,
+        bracket.y_bottom,
+        ScrollEnd::Bottom,
+    );
+    let bottom_transform = format!("translate({},{})", bot_tx, bot_ty);
     svg.add_path(&bottom_outline.path_data, "black", Some(&bottom_transform));
 
     Ok(())
+}
+
+/// Which end of the bracket the scroll glyph attaches to. Determines which
+/// edge of the glyph's bbox is treated as the "inner" edge meeting the line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScrollEnd {
+    /// Glyph sits above its anchor; its **bottom** edge meets the line.
+    Top,
+    /// Glyph sits below its anchor; its **top** edge meets the line.
+    Bottom,
+}
+
+/// Compute the `(tx, ty)` translate values that align a bracket scroll
+/// glyph's inner edge with `(line_x, line_y)`, using the glyph's bbox from
+/// the font's SMuFL metadata.
+///
+/// For fonts whose metadata supplies no bbox for the glyph, falls back to
+/// `(line_x, line_y)` — the corner-anchored translate that assumes the
+/// SMuFL bracket-scroll convention (bBoxSW for `bracketTop`, bBoxNW for
+/// `bracketBottom`). The fallback keeps rendering nonzero for
+/// metadata-stripped custom fonts.
+fn bracket_anchor(
+    font: &MusicFont,
+    glyph: smufl::Glyph,
+    line_x: f64,
+    line_y: f64,
+    end: ScrollEnd,
+) -> (f64, f64) {
+    match font.glyph_bbox_design_units(glyph) {
+        Some(bbox) => {
+            let tx = line_x - bbox.x_left;
+            let ty = match end {
+                ScrollEnd::Top => line_y - bbox.y_bottom,
+                ScrollEnd::Bottom => line_y - bbox.y_top,
+            };
+            (tx, ty)
+        }
+        None => (line_x, line_y),
+    }
 }
 
 /// Draw all connectors for a multi-staff layout.
@@ -198,8 +272,13 @@ mod tests {
         draw_bracket(&mut svg, &font, bracket).unwrap();
         let output = svg.to_svg();
 
-        // The top scroll glyph must be translated to (bracket.x, bracket.y_top).
-        // y_top is 100.0 (the y_start passed to layout_multi_staff).
+        // For Bravura the metric-driven formula (translate to
+        // `bracket.x - bbox.x_left, bracket.y_top - bbox.y_bottom`) reduces
+        // to `translate(bracket.x, bracket.y_top)` since Bravura's
+        // bracketTop bbox has x_left=0 and y_bottom=0. So this Bravura test
+        // continues to assert against the fixed substring while
+        // `bracket_top_anchor_uses_glyph_bbox_y_bottom` (below) proves the
+        // formula actually consults the bbox by using a synthetic font.
         let needle = format!("translate({},{})", bracket.x, bracket.y_top);
         assert!(
             output.contains(&needle),
@@ -220,6 +299,11 @@ mod tests {
         draw_bracket(&mut svg, &font, bracket).unwrap();
         let output = svg.to_svg();
 
+        // Bravura's bracketBottom bbox has x_left=0 and y_top=0, so the
+        // metric-driven formula (translate to `bracket.x - bbox.x_left,
+        // bracket.y_bottom - bbox.y_top`) reduces to `translate(bracket.x,
+        // bracket.y_bottom)`. See the synthetic-font test below for
+        // formula-locking.
         let needle = format!("translate({},{})", bracket.x, bracket.y_bottom);
         assert!(
             output.contains(&needle),
@@ -504,6 +588,255 @@ mod tests {
         assert!(
             (bracket.y_bottom - expected_bottom).abs() < 0.01,
             "bracket should span to bottom of last staff"
+        );
+    }
+
+    /// Bravura is exactly the convention case (bbox.x_left=0, bbox.y_bottom=0
+    /// for bracketTop), so the *value* of the translate hasn't changed —
+    /// what changed is that the value is now derived from the bbox rather
+    /// than written as `(bracket.x, bracket.y_top)` literally. This test
+    /// proves the derivation is in effect by asserting the SVG translate
+    /// matches the bbox-driven formula evaluated against the live font.
+    #[test]
+    fn bracket_top_translate_matches_metric_driven_formula() {
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let bbox = font
+            .glyph_bbox_design_units(bracket.top_glyph)
+            .expect("Bravura supplies bracketTop bbox");
+        let expected_tx = bracket.x - bbox.x_left;
+        let expected_ty = bracket.y_top - bbox.y_bottom;
+        let needle = format!("translate({},{})", expected_tx, expected_ty);
+        assert!(
+            output.contains(&needle),
+            "bracketTop translate must be `{needle}`; SVG:\n{output}"
+        );
+    }
+
+    #[test]
+    fn bracket_bottom_translate_matches_metric_driven_formula() {
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let bbox = font
+            .glyph_bbox_design_units(bracket.bottom_glyph)
+            .expect("Bravura supplies bracketBottom bbox");
+        let expected_tx = bracket.x - bbox.x_left;
+        let expected_ty = bracket.y_bottom - bbox.y_top;
+        let needle = format!("translate({},{})", expected_tx, expected_ty);
+        assert!(
+            output.contains(&needle),
+            "bracketBottom translate must be `{needle}`; SVG:\n{output}"
+        );
+    }
+
+    /// A synthetic font whose bracketTop bbox has a non-zero `bBoxSW.y`
+    /// proves the renderer actually consults the bbox: a regression that
+    /// reverted to `translate(bracket.x, bracket.y_top)` would mis-anchor
+    /// the glyph (ignoring the offset) and this test would fire.
+    ///
+    /// The synthetic font reuses Bravura's OTF (so `glyph_outline` still
+    /// works) but supplies custom `glyphBBoxes` for `bracketTop` and
+    /// `bracketBottom`. Bravura's defaults are bracketTop SW=(0,0)/NE=(1.876,
+    /// 1.18) and bracketBottom SW=(0,-1.18)/NE=(1.876,0); we shift each
+    /// inner-edge corner by 0.5 staff-spaces (= 125 design units) in the
+    /// inner-edge direction to produce a measurable, non-zero offset.
+    #[test]
+    fn bracket_top_anchor_uses_glyph_bbox_y_bottom_when_nonzero() {
+        use crate::font::{MusicFont, BRAVURA_OTF};
+        // bracketTop with bBoxSW.y = -0.5 (instead of 0) → after y-flip the
+        // bbox.y_bottom becomes +125 (instead of 0). The renderer should
+        // translate to (bracket.x - 0, bracket.y_top - 125).
+        let custom_metadata = br#"{
+            "fontName": "Synthetic",
+            "glyphBBoxes": {
+                "bracketTop": {
+                    "bBoxSW": [0.0, -0.5],
+                    "bBoxNE": [1.876, 1.18]
+                },
+                "bracketBottom": {
+                    "bBoxSW": [0.0, -1.18],
+                    "bBoxNE": [1.876, 0.0]
+                }
+            }
+        }"#;
+        let font = MusicFont::new(BRAVURA_OTF, custom_metadata).unwrap();
+
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        // Expected ty = bracket.y_top - 125. (UPM=1000, ss = UPM/4 = 250,
+        // 0.5 * 250 = 125; with y-flip, sw.y = -0.5 → bbox.y_bottom = +125.)
+        let bbox = font.glyph_bbox_design_units(bracket.top_glyph).unwrap();
+        assert!(
+            (bbox.y_bottom - 125.0).abs() < 0.01,
+            "synthetic bbox.y_bottom should be 125, got {}",
+            bbox.y_bottom
+        );
+        let expected_ty = bracket.y_top - 125.0;
+        let needle = format!("translate({},{})", bracket.x, expected_ty);
+        assert!(
+            output.contains(&needle),
+            "expected metric-driven translate `{needle}`; SVG:\n{output}"
+        );
+        // Anti-needle: the corner-anchored translate (the regression
+        // pattern) must NOT appear in the SVG for this synthetic font.
+        let bad_needle = format!("translate({},{})", bracket.x, bracket.y_top);
+        assert!(
+            !output.contains(&bad_needle),
+            "regression: bracketTop must not anchor at raw y_top when bbox.y_bottom != 0"
+        );
+    }
+
+    #[test]
+    fn bracket_bottom_anchor_uses_glyph_bbox_y_top_when_nonzero() {
+        use crate::font::{MusicFont, BRAVURA_OTF};
+        // bracketBottom with bBoxNE.y = +0.5 (instead of 0) → after y-flip
+        // the bbox.y_top becomes -125 (instead of 0). The renderer should
+        // translate to (bracket.x, bracket.y_bottom - (-125)) = (x, y_bottom
+        // + 125).
+        let custom_metadata = br#"{
+            "fontName": "Synthetic",
+            "glyphBBoxes": {
+                "bracketTop": {
+                    "bBoxSW": [0.0, 0.0],
+                    "bBoxNE": [1.876, 1.18]
+                },
+                "bracketBottom": {
+                    "bBoxSW": [0.0, -1.18],
+                    "bBoxNE": [1.876, 0.5]
+                }
+            }
+        }"#;
+        let font = MusicFont::new(BRAVURA_OTF, custom_metadata).unwrap();
+
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let bbox = font.glyph_bbox_design_units(bracket.bottom_glyph).unwrap();
+        assert!(
+            (bbox.y_top - (-125.0)).abs() < 0.01,
+            "synthetic bbox.y_top should be -125, got {}",
+            bbox.y_top
+        );
+        let expected_ty = bracket.y_bottom + 125.0; // y_bottom - (-125)
+        let needle = format!("translate({},{})", bracket.x, expected_ty);
+        assert!(
+            output.contains(&needle),
+            "expected metric-driven translate `{needle}`; SVG:\n{output}"
+        );
+        let bad_needle = format!("translate({},{})", bracket.x, bracket.y_bottom);
+        assert!(
+            !output.contains(&bad_needle),
+            "regression: bracketBottom must not anchor at raw y_bottom when bbox.y_top != 0"
+        );
+    }
+
+    /// The x-axis half of the metric-driven anchor: a synthetic font whose
+    /// scroll glyphs have `bBoxSW.x != 0` shifts the translate's x by
+    /// `-bbox.x_left` so the glyph's left edge still lands at `bracket.x`.
+    #[test]
+    fn bracket_anchor_uses_glyph_bbox_x_left_when_nonzero() {
+        use crate::font::{MusicFont, BRAVURA_OTF};
+        // bracketTop with bBoxSW.x = 0.4 (instead of 0) → bbox.x_left = 100
+        // (0.4 sp × 250 design units/sp). Renderer should translate to
+        // (bracket.x - 100, ...) so the glyph's left edge sits at bracket.x.
+        let custom_metadata = br#"{
+            "fontName": "Synthetic",
+            "glyphBBoxes": {
+                "bracketTop": {
+                    "bBoxSW": [0.4, 0.0],
+                    "bBoxNE": [1.876, 1.18]
+                },
+                "bracketBottom": {
+                    "bBoxSW": [0.0, -1.18],
+                    "bBoxNE": [1.876, 0.0]
+                }
+            }
+        }"#;
+        let font = MusicFont::new(BRAVURA_OTF, custom_metadata).unwrap();
+
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let bbox = font.glyph_bbox_design_units(bracket.top_glyph).unwrap();
+        assert!(
+            (bbox.x_left - 100.0).abs() < 0.01,
+            "synthetic bbox.x_left should be 100, got {}",
+            bbox.x_left
+        );
+        let expected_tx = bracket.x - 100.0;
+        let needle = format!("translate({},{})", expected_tx, bracket.y_top);
+        assert!(
+            output.contains(&needle),
+            "expected metric-driven x translate `{needle}`; SVG:\n{output}"
+        );
+    }
+
+    /// Empty-metadata fallback: if a font's bbox lookup returns None for a
+    /// scroll glyph, the renderer falls back to `translate(bracket.x,
+    /// bracket.y_top|y_bottom)` — the corner-anchored placement that
+    /// assumes the SMuFL-canonical bracket-scroll convention. The bracket
+    /// still renders rather than panicking.
+    #[test]
+    fn bracket_render_falls_back_when_metadata_missing_bbox() {
+        use crate::font::{MusicFont, BRAVURA_OTF};
+        let empty_metadata = br#"{"fontName":"Empty"}"#;
+        let font = MusicFont::new(BRAVURA_OTF, empty_metadata).unwrap();
+
+        let group = StaffGroup::section(2);
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let bracket = layout.bracket.as_ref().unwrap();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 3500.0);
+        // Must not panic; must emit two paths and one line.
+        draw_bracket(&mut svg, &font, bracket).unwrap();
+        let output = svg.to_svg();
+
+        let path_count = output.matches("<path").count();
+        let line_count = output.matches("<line").count();
+        assert_eq!(path_count, 2, "fallback should still emit 2 scroll paths");
+        assert_eq!(line_count, 1, "fallback should still emit the thick line");
+
+        // Fallback anchors at corner: bracket.x for x, raw y_top / y_bottom
+        // for y. Both must appear in the SVG.
+        let top_needle = format!("translate({},{})", bracket.x, bracket.y_top);
+        let bot_needle = format!("translate({},{})", bracket.x, bracket.y_bottom);
+        assert!(
+            output.contains(&top_needle),
+            "fallback top translate `{top_needle}` not found; SVG:\n{output}"
+        );
+        assert!(
+            output.contains(&bot_needle),
+            "fallback bottom translate `{bot_needle}` not found; SVG:\n{output}"
         );
     }
 }
