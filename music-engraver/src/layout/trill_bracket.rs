@@ -19,7 +19,10 @@
 //! (`crate::render::trill_bracket_renderer`) emits one `<line>` per hook.
 
 use crate::layout::ornament::Ornament;
-use crate::layout::trill_extension::{trill_extension_right_edge, TrillExtensionLayout};
+use crate::layout::trill_extension::{
+    multi_speed_trill_extension_right_edge, trill_extension_right_edge,
+    MultiSpeedTrillExtensionLayout, TrillExtensionLayout,
+};
 
 /// Which end(s) of a trill wavy-line extension should be capped with a hook.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -335,6 +338,54 @@ pub fn layout_trill_bracket_hooks(
     hooks
 }
 
+/// Multi-speed counterpart of [`layout_trill_bracket_hooks`].
+///
+/// Hook x-positions are anchored to the multi-speed layout's first tile's
+/// left edge (Start) and the right edge of its last tile as computed by
+/// [`multi_speed_trill_extension_right_edge`] (End). The geometry matches
+/// the single-speed function exactly — the only difference is the data
+/// shape we read from, since [`MultiSpeedTrillExtensionLayout`] has
+/// `tiles: Vec<TrillExtensionTile>` rather than `segment_xs: Vec<f64>`.
+///
+/// Returns an empty vector when the multi-speed layout has no tiles — a
+/// wiggle that could not be laid out cannot meaningfully be bracketed,
+/// matching the single-speed function's fail-safe.
+pub fn layout_trill_bracket_hooks_multi_speed(
+    extension: &MultiSpeedTrillExtensionLayout,
+    side: TrillBracketSide,
+    length: f64,
+    direction: HookDirection,
+    stroke_width: f64,
+) -> Vec<TrillBracketHookLayout> {
+    let Some(first_tile) = extension.tiles.first() else {
+        return Vec::new();
+    };
+    let first_x = first_tile.x;
+    let right_edge = multi_speed_trill_extension_right_edge(extension);
+    let baseline_y = extension.y;
+
+    let mut hooks = Vec::with_capacity(2);
+    if matches!(side, TrillBracketSide::Start | TrillBracketSide::Both) {
+        hooks.push(layout_trill_bracket_hook(
+            first_x,
+            baseline_y,
+            length,
+            direction,
+            stroke_width,
+        ));
+    }
+    if matches!(side, TrillBracketSide::End | TrillBracketSide::Both) {
+        hooks.push(layout_trill_bracket_hook(
+            right_edge,
+            baseline_y,
+            length,
+            direction,
+            stroke_width,
+        ));
+    }
+    hooks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -517,6 +568,155 @@ mod tests {
             hooks[0].x,
             crate::layout::trill_extension::trill_extension_right_edge(&ext)
         );
+    }
+
+    // --- layout_trill_bracket_hooks_multi_speed ---
+
+    fn make_multi_speed_extension() -> MultiSpeedTrillExtensionLayout {
+        // Two regions, each with 2 tiles. Region 0: glyph=WiggleTrillSlow,
+        // advance=100, span starts at x=100 → tiles at 100, 200.
+        // Region 1: glyph=WiggleTrillFast, advance=80, span starts at
+        // x=300 → tiles at 300, 380. Right edge = 380 + 80 = 460.
+        // y=50.
+        use crate::layout::trill_extension::{
+            layout_trill_extension_multi_speed, TrillSpeedRegion,
+        };
+        layout_trill_extension_multi_speed(
+            460.0,
+            50.0,
+            &[
+                TrillSpeedRegion {
+                    start_x: 100.0,
+                    glyph: Glyph::WiggleTrillSlow,
+                    segment_advance: 100.0,
+                },
+                TrillSpeedRegion {
+                    start_x: 300.0,
+                    glyph: Glyph::WiggleTrillFast,
+                    segment_advance: 80.0,
+                },
+            ],
+        )
+        .expect("multi-speed layout must succeed")
+    }
+
+    #[test]
+    fn multi_speed_hooks_start_only_at_first_tile_x() {
+        let ext = make_multi_speed_extension();
+        let hooks = layout_trill_bracket_hooks_multi_speed(
+            &ext,
+            TrillBracketSide::Start,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        assert_eq!(hooks.len(), 1);
+        assert_eq!(hooks[0].x, 100.0);
+    }
+
+    #[test]
+    fn multi_speed_hooks_end_only_at_right_edge() {
+        let ext = make_multi_speed_extension();
+        let hooks = layout_trill_bracket_hooks_multi_speed(
+            &ext,
+            TrillBracketSide::End,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        assert_eq!(hooks.len(), 1);
+        // Region 1's last tile at x=380, advance 80 → right edge = 460.
+        assert_eq!(hooks[0].x, 460.0);
+    }
+
+    #[test]
+    fn multi_speed_hooks_both_returns_two_at_endpoints() {
+        let ext = make_multi_speed_extension();
+        let hooks = layout_trill_bracket_hooks_multi_speed(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        assert_eq!(hooks.len(), 2);
+        assert_eq!(hooks[0].x, 100.0);
+        assert_eq!(hooks[1].x, 460.0);
+    }
+
+    #[test]
+    fn multi_speed_hooks_empty_layout_returns_empty_vec() {
+        let ext = MultiSpeedTrillExtensionLayout {
+            tiles: vec![],
+            y: 50.0,
+        };
+        let hooks = layout_trill_bracket_hooks_multi_speed(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        assert!(hooks.is_empty());
+    }
+
+    #[test]
+    fn multi_speed_hooks_share_layout_y_baseline_down() {
+        let ext = make_multi_speed_extension();
+        let hooks = layout_trill_bracket_hooks_multi_speed(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        for h in &hooks {
+            assert_eq!(h.y_top, ext.y);
+            assert_eq!(h.y_bottom, ext.y + 30.0);
+        }
+    }
+
+    #[test]
+    fn multi_speed_hooks_match_single_speed_when_only_one_region() {
+        // Equivalence canary: a multi-speed layout with one region whose
+        // tiles match a single-speed layout's segment_xs must produce the
+        // same bracket hook x-coordinates as the single-speed bracket
+        // helper. Guards against the two helpers drifting in their
+        // start/right-edge anchor conventions.
+        use crate::layout::trill_extension::{
+            layout_trill_extension, layout_trill_extension_multi_speed, TrillSpeedRegion,
+        };
+        let single = layout_trill_extension(50.0, 50.0 + 3.0 * 80.0, 0.0, 80.0).unwrap();
+        let multi = layout_trill_extension_multi_speed(
+            50.0 + 3.0 * 80.0,
+            0.0,
+            &[TrillSpeedRegion {
+                start_x: 50.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 80.0,
+            }],
+        )
+        .unwrap();
+        let single_hooks = layout_trill_bracket_hooks(
+            &single,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        let multi_hooks = layout_trill_bracket_hooks_multi_speed(
+            &multi,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
+        assert_eq!(single_hooks.len(), multi_hooks.len());
+        for (s, m) in single_hooks.iter().zip(multi_hooks.iter()) {
+            assert_eq!(s.x, m.x);
+            assert_eq!(s.y_top, m.y_top);
+            assert_eq!(s.y_bottom, m.y_bottom);
+        }
     }
 
     // --- TrillBracketOptions (builder) ---

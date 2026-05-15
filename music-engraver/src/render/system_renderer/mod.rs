@@ -11,9 +11,13 @@ use crate::layout::stem::{auto_stem_direction, StemDirection};
 use crate::layout::system::SystemLayout;
 use crate::layout::tie::{layout_tie, tie_direction_from_stem};
 use crate::layout::trill_bracket::{
-    layout_trill_bracket_hook, layout_trill_bracket_hooks, HookDirection, TrillBracketSide,
+    layout_trill_bracket_hook, layout_trill_bracket_hooks, layout_trill_bracket_hooks_multi_speed,
+    HookDirection, TrillBracketSide,
 };
-use crate::layout::trill_extension::{layout_trill_extension_with_glyph, TrillWiggleSpeed};
+use crate::layout::trill_extension::{
+    layout_trill_extension_multi_speed, layout_trill_extension_with_glyph, TrillSpeedRampSpec,
+    TrillWiggleSpeed,
+};
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
 use crate::render::note_renderer::NoteheadKind;
@@ -25,7 +29,9 @@ use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::trill_bracket_renderer::draw_trill_bracket_hooks;
-use crate::render::trill_extension_renderer::draw_trill_extension;
+use crate::render::trill_extension_renderer::{
+    draw_trill_extension, draw_trill_extension_multi_speed,
+};
 use crate::render::volta_renderer::draw_volta_bracket;
 use crate::render::SvgWriter;
 
@@ -794,6 +800,13 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// (no cross-system propagation, since the explicit length specifies
     /// a definite endpoint).
     pub explicit_length_ss: Option<f64>,
+    /// Optional multi-speed ramp spec for this trill. Filtered the same
+    /// way as `bracket`: only carries through when
+    /// `has_trill_extension == true`. `None` selects the single-speed
+    /// renderer path (using `wiggle_speed`); `Some(spec)` engages the
+    /// multi-speed renderer path — `wiggle_speed` is ignored for glyph
+    /// selection in that case (the per-region glyphs come from the ramp).
+    pub speed_ramp: Option<TrillSpeedRampSpec>,
 }
 
 /// Collect notes relevant to trill-extension rendering. Includes a `None`-like
@@ -835,6 +848,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     } else {
                         None
                     };
+                    let speed_ramp = if has_ext {
+                        n.annotations.trill_speed_ramp
+                    } else {
+                        None
+                    };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: n.staff_position,
@@ -845,6 +863,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         bracket_length_ss,
                         wiggle_speed,
                         explicit_length_ss,
+                        speed_ramp,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -879,6 +898,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     } else {
                         None
                     };
+                    let speed_ramp = if has_ext {
+                        c.annotations.trill_speed_ramp
+                    } else {
+                        None
+                    };
                     notes.push(TrillExtensionNoteInfo {
                         x: elem_x,
                         staff_position: top_pos,
@@ -889,6 +913,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         bracket_length_ss,
                         wiggle_speed,
                         explicit_length_ss,
+                        speed_ramp,
                     });
                 }
                 _ => {}
@@ -995,9 +1020,65 @@ fn draw_system_trill_extensions(
             None => (natural_end_x, notes.get(i + 1).is_none()),
         };
 
-        // Look up the wiggle glyph + advance for this note's chosen speed.
-        // Each wiggleTrill* variant has its own advance, so the lookup must
-        // travel with the glyph choice.
+        // Dispatch: multi-speed (ramp present) supersedes single-speed.
+        // The single-speed branch uses `wiggle_speed`; the multi-speed
+        // branch synthesizes per-region speeds from `speed_ramp` and
+        // ignores `wiggle_speed` for glyph selection. Bracket-hook
+        // rendering and cross-system propagation behave identically in
+        // both branches.
+        if let Some(spec) = note.speed_ramp {
+            // Multi-speed path. The synthesizer is font-agnostic; we
+            // thread the active font's per-glyph advance lookup through
+            // the closure. `synthesize_regions` returns `None` for
+            // degenerate specs (region_count==0, or Linear with
+            // region_count==1) and for non-positive spans (start_x >=
+            // end_x — happens when an explicit non-positive length
+            // collapsed end_x to start_x). The fall-through to no wiggle
+            // matches the single-speed renderer's fail-safe.
+            let regions = match spec.ramp.synthesize_regions(
+                start_x,
+                end_x,
+                spec.region_count,
+                |speed| font.glyph_advance(speed.to_glyph()).unwrap_or(0) as f64,
+            ) {
+                Some(r) => r,
+                None => continue,
+            };
+            if let Some(layout) =
+                layout_trill_extension_multi_speed(end_x, ornament_layout.y, &regions)
+            {
+                draw_trill_extension_multi_speed(svg, font, &layout)?;
+
+                // Brackets in multi-speed mode anchor to the leftmost
+                // tile's left edge (Start) and the rightmost tile's right
+                // edge (End). The multi-speed bracket helper reads from
+                // `MultiSpeedTrillExtensionLayout` directly so we don't
+                // need to fabricate a single-speed shim.
+                if let Some(side) = note.bracket {
+                    let render_side = bracket_side_for_system_pass(side, cross_system);
+                    if let Some(side) = render_side {
+                        let hook_length = note
+                            .bracket_length_ss
+                            .map(|ss| ss * staff.staff_space)
+                            .unwrap_or(default_hook_length);
+                        let direction = note.bracket_direction.unwrap_or(HookDirection::Down);
+                        let hooks = layout_trill_bracket_hooks_multi_speed(
+                            &layout,
+                            side,
+                            hook_length,
+                            direction,
+                            hook_stroke,
+                        );
+                        draw_trill_bracket_hooks(svg, &hooks);
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Single-speed path. Look up the wiggle glyph + advance for this
+        // note's chosen speed. Each wiggleTrill* variant has its own
+        // advance, so the lookup must travel with the glyph choice.
         let wiggle_glyph = note.wiggle_speed.unwrap_or_default().to_glyph();
         let wiggle_advance = font.glyph_advance(wiggle_glyph)? as f64;
 

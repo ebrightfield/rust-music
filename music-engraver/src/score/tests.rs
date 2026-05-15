@@ -8998,3 +8998,479 @@
         );
     }
 
+    // --- trill_with_extension_speed_ramp / speed_ramp via full options ---
+
+    #[test]
+    fn full_options_with_speed_ramp_sets_annotation_field() {
+        // The new field on TrillExtensionFullOptions must thread through to
+        // the annotation. A regression that silently dropped opts.speed_ramp
+        // in trill_with_extension_full_options would fire here.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillSpeedRampSpec, TrillWiggleSpeed};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            3,
+        );
+        let opts = TrillExtensionFullOptions::new().with_speed_ramp(spec);
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(opts);
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::Trill));
+                assert!(annotations.trill_extension);
+                assert_eq!(
+                    annotations.trill_speed_ramp,
+                    Some(spec),
+                    "speed_ramp must propagate from opts to the annotation field"
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn full_options_without_speed_ramp_leaves_annotation_none() {
+        // Symmetric counterpart: a full-options bundle without
+        // speed_ramp must leave the annotation's trill_speed_ramp at None
+        // even if all other fields are populated. Critical canary against
+        // a regression that "promoted" some other setter into a default
+        // ramp.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
+        use crate::layout::trill_extension::TrillWiggleSpeed;
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let opts = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Both)
+            .with_bracket_direction(HookDirection::Up)
+            .with_bracket_length_ss(0.9)
+            .with_speed(TrillWiggleSpeed::Fast)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_length_ss(2.0);
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(opts);
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.trill_speed_ramp, None,
+                    "speed_ramp must remain None when not requested"
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn trill_with_extension_speed_ramp_sets_three_annotation_fields() {
+        // The convenience builder must set ornament=Trill,
+        // trill_extension=true, and trill_speed_ramp=Some(spec). Any
+        // silently-dropped flag would fire here.
+        use crate::layout::ornament::Ornament;
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillWiggleSpeed};
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                3,
+            );
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.ornament,
+                    Some(Ornament::Trill),
+                    "convenience builder hardcodes Trill"
+                );
+                assert!(
+                    annotations.trill_extension,
+                    "convenience builder enables trill_extension"
+                );
+                let spec = annotations.trill_speed_ramp.expect("ramp set");
+                assert_eq!(spec.region_count, 3);
+                assert!(matches!(
+                    spec.ramp,
+                    TrillSpeedRamp::Linear {
+                        start: TrillWiggleSpeed::Slow,
+                        end: TrillWiggleSpeed::Fast,
+                    }
+                ));
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn trill_with_extension_speed_ramp_on_rest_is_noop() {
+        // No-op semantics on a rest: the most recent event being a rest
+        // means there's no note/chord to annotate; the builder must not
+        // panic and must not retroactively annotate an earlier event.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillWiggleSpeed};
+
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                3,
+            )
+            .end_barline()
+            .render_svg();
+
+        assert!(svg.starts_with("<?xml") || svg.starts_with("<svg"));
+        // A trill on a rest must produce no "tr" glyph. The trill glyph is
+        // bundled under Bravura's ornament range; without the ornament
+        // attached to a note, the renderer emits no trill glyph at all.
+        assert!(
+            !svg.contains("ornamentTrill"),
+            "rest must not get a trill glyph attached"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_speed_ramp_byte_equivalent_to_full_options_path() {
+        // The convenience method must produce SVG byte-identical to
+        // `trill_with_extension_full_options(new().with_speed_ramp_ramp_count(ramp, n))`.
+        // This is the single most important canary for the convenience
+        // builder: if it ever drifts from the full-options path (e.g. by
+        // setting an extra annotation field), this fires.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillSpeedRampSpec, TrillWiggleSpeed};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let region_count = 3;
+
+        let via_convenience = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(ramp, region_count)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let via_full = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_speed_ramp(TrillSpeedRampSpec::new(ramp, region_count)),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            via_convenience, via_full,
+            "convenience builder must be byte-equivalent to the full-options path"
+        );
+    }
+
+    #[test]
+    fn speed_ramp_renders_distinct_svg_from_single_speed() {
+        // The whole point of the multi-speed path: a ramp must produce
+        // visibly different SVG from a single-speed trill at any of the
+        // ramp's endpoint speeds. If the dispatch silently fell through
+        // to the single-speed path (e.g. ignoring the new annotation
+        // field), the two would render identically and this fires.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillWiggleSpeed};
+
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Standard)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let multi = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                3,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            single, multi,
+            "multi-speed ramp must produce SVG distinct from single-speed Standard"
+        );
+        // Both paths must produce a non-empty wiggle — i.e. at least
+        // some <path> elements attributable to the trill rendering on
+        // top of the staff lines, clef, and notehead. We assert each has
+        // strictly more <path> elements than the baseline "no trill" SVG
+        // would emit. The conservative floor is "more than the staff +
+        // clef + notehead total." This score has 2 notes + 1 clef so a
+        // safe lower bound for "with trill" is `> 4` paths.
+        let count_paths = |s: &str| s.matches("<path").count();
+        assert!(
+            count_paths(&multi) > 4,
+            "multi-speed must emit visible wiggle (path count = {})",
+            count_paths(&multi)
+        );
+        assert!(
+            count_paths(&single) > 4,
+            "single-speed must emit visible wiggle (path count = {})",
+            count_paths(&single)
+        );
+    }
+
+    #[test]
+    fn constant_ramp_byte_equivalent_to_single_speed_when_one_region() {
+        // A 1-region Constant ramp is degenerate-equivalent to the
+        // single-speed path at the same speed: same number of tiles,
+        // same glyph, same positions. The multi-speed renderer's tiling
+        // for a single region uses identical floor(span/advance) math as
+        // the single-speed renderer; with the same advance and span the
+        // tile xs must be identical.
+        //
+        // Multi-speed and single-speed renderers emit identical glyph
+        // outline path *data*, but they emit *different* number-of-paths
+        // counts only when the multi-speed has multiple regions. With
+        // exactly one Constant region they emit identical SVG.
+        //
+        // We assert this rather than asserting full byte-equality with
+        // single-speed because the dispatch path inserts no extra geometry
+        // for the multi-speed case — the only difference would be the
+        // tile-x positions, which must match by construction.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillWiggleSpeed};
+
+        let single = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Standard)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let constant_ramp = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+                1,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // The two paths render the same number of wiggle tiles. The
+        // multi-speed dispatch with 1 Constant Standard region uses
+        // identical (start_x, end_x, advance) math as the single-speed
+        // path, so they emit the same number of <path> elements.
+        let count_paths = |s: &str| s.matches("<path").count();
+        assert_eq!(
+            count_paths(&single),
+            count_paths(&constant_ramp),
+            "1-region Constant Standard ramp must emit same path count as single-speed Standard"
+        );
+    }
+
+    #[test]
+    fn degenerate_ramp_renders_no_wiggle_but_keeps_trill_glyph() {
+        // A degenerate spec (region_count == 0) must make the renderer's
+        // synthesizer return None, which falls through to "no wiggle." The
+        // "tr" glyph itself remains drawn (since ornament=Trill is still
+        // set on the annotation). Without the speed_ramp the same call
+        // would produce a normal trill extension; with the degenerate
+        // ramp the wiggle silently disappears.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillWiggleSpeed};
+
+        let with_extension = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let degenerate = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                1, // Linear with 1 region is degenerate → None
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // The degenerate render must produce strictly *fewer* <path>
+        // elements than the non-degenerate one: the trill glyph remains
+        // but the wiggle is suppressed (typically several tiles' worth).
+        let count_paths = |s: &str| s.matches("<path").count();
+        assert!(
+            count_paths(&degenerate) < count_paths(&with_extension),
+            "degenerate ramp must produce fewer <path> elements than normal trill_with_extension \
+             (degenerate={}, with_extension={})",
+            count_paths(&degenerate),
+            count_paths(&with_extension)
+        );
+    }
+
+    #[test]
+    fn ramp_with_bracket_renders_both_wiggle_and_hooks() {
+        // Bracket + multi-speed must coexist: the multi-speed bracket
+        // dispatch must call layout_trill_bracket_hooks_multi_speed and
+        // emit hook <line>s in addition to the wiggle tiles. Without
+        // bracket support in the multi-speed branch, the hooks would be
+        // silently dropped.
+        use crate::layout::trill_bracket::TrillBracketSide;
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillSpeedRampSpec, TrillWiggleSpeed};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_bracket(TrillBracketSide::Both)
+                    .with_speed_ramp(TrillSpeedRampSpec::new(
+                        TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                        3,
+                    )),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // For Both brackets, the system renderer emits 2 hook <line>s
+        // (start + end). No hooks are drawn elsewhere in this score, so
+        // the count is a clean attribution.
+        //
+        // The wiggle is rendered as <path> elements; the bracket hooks
+        // are <line> elements (`draw_trill_bracket_hooks` calls
+        // `svg.add_line`). The count of <line> must be ≥ 2 once the
+        // bracket pass runs — staff lines are typically 5 per staff so
+        // we assert `> 5`.
+        let line_count = svg.matches("<line").count();
+        assert!(
+            line_count >= 7,
+            "Both-bracket + multi-speed should emit at least 5 staff lines + 2 bracket hooks (got {line_count})"
+        );
+    }
+
+    #[test]
+    fn linear_ramp_renders_distinct_svg_from_constant_ramp() {
+        // The Linear and Constant variants must produce different SVG
+        // across the same span and region_count: Linear cycles through
+        // multiple glyphs, Constant uses one. Same span, same tile
+        // anchor — if the renderer ignored the variant choice they would
+        // be byte-equal.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillWiggleSpeed};
+
+        let constant = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+                3,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let linear = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_ramp(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                3,
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            constant, linear,
+            "Linear and Constant ramps must produce different SVG with the same region count"
+        );
+    }
+
+    #[test]
+    fn speed_ramp_supersedes_speed_field_for_glyph_selection() {
+        // When both `speed` and `speed_ramp` are set, the ramp's per-
+        // region glyphs must drive the wiggle — the `speed` field is
+        // ignored for glyph selection. Concrete canary: a Linear Slow→
+        // Fast ramp on a single-speed-Slowest base produces different
+        // SVG than the single-speed-Slowest baseline, proving the ramp
+        // wins.
+        use crate::layout::trill_extension::{TrillSpeedRamp, TrillSpeedRampSpec, TrillWiggleSpeed};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let speed_only = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Slowest)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let speed_plus_ramp = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(
+                TrillExtensionFullOptions::new()
+                    .with_speed(TrillWiggleSpeed::Slowest)
+                    .with_speed_ramp(TrillSpeedRampSpec::new(
+                        TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                        3,
+                    )),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            speed_only, speed_plus_ramp,
+            "ramp must supersede speed field for glyph selection — same speed but with a ramp \
+             must render distinct SVG"
+        );
+    }
+

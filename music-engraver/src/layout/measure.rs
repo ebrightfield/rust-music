@@ -18,7 +18,7 @@ use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
-use crate::layout::trill_extension::TrillWiggleSpeed;
+use crate::layout::trill_extension::{TrillSpeedRampSpec, TrillWiggleSpeed};
 use crate::layout::time_signature::TimeSignatureKind;
 
 /// Articulation and expression annotations attached to a note or chord event.
@@ -149,6 +149,26 @@ pub struct NoteAnnotations {
     /// Non-positive values produce no wiggle (the renderer's same
     /// fail-safe as for spans too short to fit one tile).
     pub trill_extension_length_ss: Option<f64>,
+    /// Optional multi-speed ramp spec for the trill wavy-line extension.
+    /// Has no effect unless `trill_extension == true`. `None` (the default)
+    /// renders a single-speed wiggle using `trill_wiggle_speed` (or the
+    /// `Standard` default when that is also `None`). `Some(spec)` engages
+    /// the multi-speed renderer path: the system renderer evenly partitions
+    /// the wiggle's span into `spec.region_count` regions and tiles each
+    /// region with the speed produced by `spec.ramp.synthesize_regions`.
+    ///
+    /// When a ramp is present, it *supersedes* `trill_wiggle_speed` for
+    /// glyph selection — the speed field's value is ignored by the
+    /// renderer's wiggle path (the bracket/length fields continue to apply
+    /// as normal). Both fields are permitted to coexist on the annotation
+    /// so widening a single-speed annotation by layering a ramp does not
+    /// force the caller to first clear the speed field.
+    ///
+    /// A degenerate spec (e.g. `region_count == 0`, or `Linear` with
+    /// `region_count == 1`) makes `synthesize_regions` return `None` at
+    /// draw time, and the renderer falls back to no wiggle — same
+    /// fail-safe as for spans too short to tile.
+    pub trill_speed_ramp: Option<TrillSpeedRampSpec>,
 }
 
 /// A group of notes to be beamed together.

@@ -156,8 +156,8 @@ pub use volta::{
 };
 pub use tremolo::{layout_tremolo, TremoloCount, TremoloLayout};
 pub use trill_bracket::{
-    layout_trill_bracket_hook, layout_trill_bracket_hooks, HookDirection,
-    TrillBracketHookLayout, TrillBracketOptions, TrillBracketSide,
+    layout_trill_bracket_hook, layout_trill_bracket_hooks, layout_trill_bracket_hooks_multi_speed,
+    HookDirection, TrillBracketHookLayout, TrillBracketOptions, TrillBracketSide,
 };
 pub use trill_extension::{
     layout_trill_extension, layout_trill_extension_multi_speed,

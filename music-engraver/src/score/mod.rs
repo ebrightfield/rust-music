@@ -814,6 +814,59 @@ impl ScoreBuilder {
             // positive lengths) handles all edge cases without further
             // intervention here.
             annotations.trill_extension_length_ss = opts.length_ss;
+            // `None` ramp leaves the multi-speed path disengaged — the
+            // renderer falls back to single-speed wiggle using
+            // `trill_wiggle_speed`. `Some(spec)` populates the annotation;
+            // the renderer's wiggle dispatch checks for this field before
+            // selecting a path. The spec is stored raw (no validation) —
+            // a degenerate spec produces `None` at draw time and the
+            // renderer's existing "no wiggle" fail-safe handles it.
+            annotations.trill_speed_ramp = opts.speed_ramp;
+        }
+        self
+    }
+
+    /// Attach a multi-speed trill extension using a [`TrillSpeedRamp`] and
+    /// region count. Convenience wrapper for the most common multi-speed
+    /// configuration: a single ornament (Trill), no bracket, no explicit
+    /// length, and the multi-speed renderer path engaged via a freshly
+    /// constructed [`TrillSpeedRampSpec`].
+    ///
+    /// Byte-equivalent to:
+    /// ```ignore
+    /// trill_with_extension_full_options(
+    ///     TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(ramp, region_count)
+    /// )
+    /// ```
+    ///
+    /// This is the multi-speed counterpart of
+    /// [`trill_with_extension_speed`](Self::trill_with_extension_speed). The
+    /// single-speed builder hardcodes `Ornament::Trill` and accepts a single
+    /// `TrillWiggleSpeed`; this one accepts a ramp (constant or linear) plus
+    /// a region count. Callers wanting to combine a ramp with a bracket, an
+    /// alternative ornament, or an explicit length should use
+    /// [`trill_with_extension_full_options`](Self::trill_with_extension_full_options)
+    /// with the full options bundle directly.
+    ///
+    /// A degenerate spec — `region_count == 0`, or `Linear` with
+    /// `region_count == 1` — produces no wiggle at draw time, matching the
+    /// renderer's existing fail-safe. The annotation fields still get set;
+    /// the dispatch silently falls through to "no wiggle, only the trill
+    /// glyph drawn." No-op if the last event was a rest.
+    pub fn trill_with_extension_speed_ramp(
+        mut self,
+        ramp: crate::layout::trill_extension::TrillSpeedRamp,
+        region_count: usize,
+    ) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_speed_ramp = Some(
+                crate::layout::trill_extension::TrillSpeedRampSpec::new(ramp, region_count),
+            );
         }
         self
     }

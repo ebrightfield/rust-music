@@ -1317,6 +1317,17 @@ fn find_unresolved_trill_extension(
     if matches!(last.explicit_length_ss, Some(len) if len > 0.0) {
         return None;
     }
+    // A multi-speed ramp also terminates the wiggle within the source
+    // system. The cross-system incoming renderer only reads `wiggle_speed`
+    // and would draw the continuation at a single (potentially wrong)
+    // speed; until the cross-system path is taught to synthesize regions
+    // on the target system, the safest behavior is to confine multi-speed
+    // trills to a single system. This is intentionally a tight constraint
+    // — adding cross-system multi-speed support is a separate chunk that
+    // would re-anchor regions against the target system's note positions.
+    if last.speed_ramp.is_some() {
+        return None;
+    }
     // Recompute the source ornament y the same way system_renderer does,
     // then strip the staff's absolute y so the offset is portable across
     // systems on the same page.
