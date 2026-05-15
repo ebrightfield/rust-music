@@ -99,6 +99,12 @@ pub struct TrillExtensionFullOptions {
     /// cross-system propagation — the wiggle terminates within its source
     /// system. Independent of bracket: combining `Some(length_ss)` with a
     /// bracket anchors the end-hook at the explicitly-shortened terminus.
+    ///
+    /// Note: this is the **wiggle extension** length, *not* the bracket hook
+    /// length — see [`bracket_length_ss`](Self::bracket_length_ss) for the
+    /// latter. The clearer-named
+    /// [`extension_length_ss()`](Self::extension_length_ss) accessor returns
+    /// the same `Option<f64>`.
     pub length_ss: Option<f64>,
 }
 
@@ -163,9 +169,46 @@ impl TrillExtensionFullOptions {
     /// [`crate::score::ScoreBuilder::trill_with_extension_length_ss`] and is
     /// independent of the bracket — a bracketed trill with an explicit length
     /// anchors its end hook at the shortened terminus.
+    ///
+    /// Prefer
+    /// [`with_extension_length_ss`](Self::with_extension_length_ss) at call
+    /// sites where the bare name `length_ss` reads ambiguously next to
+    /// `bracket_length_ss` — both setters write the same field and are
+    /// byte-equivalent. The shorter name is retained for backwards
+    /// compatibility (renaming the public method would be breaking).
     pub const fn with_length_ss(mut self, length_ss: f64) -> Self {
         self.length_ss = Some(length_ss);
         self
+    }
+
+    /// Non-breaking alias for [`with_length_ss`](Self::with_length_ss) with a
+    /// clearer name. Writes to the same [`length_ss`](Self::length_ss) field
+    /// (the wiggle's horizontal *extension* termination length, not the
+    /// bracket hook length — see
+    /// [`with_bracket_length_ss`](Self::with_bracket_length_ss)).
+    ///
+    /// The two setters are byte-equivalent; pick whichever reads more clearly
+    /// at the call site. Locked into the same field by construction, so a
+    /// future refactor that splits them would have to update both methods
+    /// together. This alias symmetrically mirrors
+    /// [`crate::layout::trill_bracket::TrillBracketOptions::with_extension_length_ss`]
+    /// — both single-purpose and full-options bundles now expose the same
+    /// `with_extension_length_ss` setter name for the wiggle's termination
+    /// length.
+    pub const fn with_extension_length_ss(mut self, length_ss: f64) -> Self {
+        self.length_ss = Some(length_ss);
+        self
+    }
+
+    /// Read the wiggle's explicit *extension* termination length, equivalent
+    /// to accessing the [`length_ss`](Self::length_ss) field directly but
+    /// named to match
+    /// [`with_extension_length_ss`](Self::with_extension_length_ss) — clearer
+    /// at the call site when the surrounding code also reads
+    /// [`bracket_length_ss`](Self::bracket_length_ss). Returns `None` when no
+    /// explicit length is set.
+    pub const fn extension_length_ss(&self) -> Option<f64> {
+        self.length_ss
     }
 }
 
@@ -561,5 +604,184 @@ mod tests {
         let none = TrillExtensionFullOptions::new();
         let zero = TrillExtensionFullOptions::new().with_length_ss(0.0);
         assert_ne!(none, zero);
+    }
+
+    // --- TrillExtensionFullOptions: non-breaking `extension_length_ss` alias for `length_ss` ---
+    //
+    // On this struct, `length_ss` is the wiggle's extension termination
+    // length, while `bracket_length_ss` is the bracket hook length — the
+    // opposite naming convention from `TrillBracketOptions`. The bare name
+    // `length_ss` is ambiguous next to `bracket_length_ss`; the alias
+    // `extension_length_ss` (setter `with_extension_length_ss`, getter
+    // `extension_length_ss`) names the wiggle-extension semantics explicitly
+    // without breaking the existing API. The two setters write the same
+    // field; these tests lock that in. Mirrors the
+    // `TrillBracketOptions::with_hook_length_ss` alias pattern from the prior
+    // chunk.
+
+    #[test]
+    fn with_extension_length_ss_writes_to_length_ss_field() {
+        // The new setter must populate the existing `length_ss` field — not a
+        // separate parallel field. Catches a refactor that accidentally
+        // introduces a phantom `extension_length_ss` field that diverges from
+        // `length_ss` at the storage layer.
+        let opts = TrillExtensionFullOptions::new().with_extension_length_ss(2.75);
+        assert_eq!(opts.length_ss, Some(2.75));
+        // And no other knob is touched.
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.ornament, None);
+    }
+
+    #[test]
+    fn with_extension_length_ss_is_byte_equivalent_to_with_length_ss() {
+        // Both setters must produce structurally identical options. If a
+        // future refactor splits them into different field assignments, this
+        // catches it directly. PartialEq derive covers every field — the
+        // assertion fires if any field diverges.
+        for &len in &[0.0, 0.5, 0.75, 1.0, 1.5, 3.5, -2.0] {
+            let via_legacy = TrillExtensionFullOptions::new().with_length_ss(len);
+            let via_new = TrillExtensionFullOptions::new().with_extension_length_ss(len);
+            assert_eq!(
+                via_legacy, via_new,
+                "with_length_ss({len}) and with_extension_length_ss({len}) must produce equal options"
+            );
+        }
+    }
+
+    #[test]
+    fn with_extension_length_ss_overwrites_with_length_ss_when_chained() {
+        // Last-write-wins canary: a caller chaining both setters lands on
+        // whichever was called last. The two are aliases, so this is the
+        // expected sequential-mutation semantic.
+        let opts_last_new = TrillExtensionFullOptions::new()
+            .with_length_ss(0.5)
+            .with_extension_length_ss(1.2);
+        assert_eq!(opts_last_new.length_ss, Some(1.2));
+
+        let opts_last_legacy = TrillExtensionFullOptions::new()
+            .with_extension_length_ss(1.2)
+            .with_length_ss(0.5);
+        assert_eq!(opts_last_legacy.length_ss, Some(0.5));
+    }
+
+    #[test]
+    fn extension_length_ss_getter_returns_length_ss_field() {
+        // Getter must return the same Option<f64> the field holds, including
+        // the `None` default.
+        let unset = TrillExtensionFullOptions::new();
+        assert_eq!(unset.extension_length_ss(), None);
+        assert_eq!(unset.extension_length_ss(), unset.length_ss);
+
+        let via_legacy = TrillExtensionFullOptions::new().with_length_ss(0.6);
+        assert_eq!(via_legacy.extension_length_ss(), Some(0.6));
+        assert_eq!(via_legacy.extension_length_ss(), via_legacy.length_ss);
+
+        let via_new = TrillExtensionFullOptions::new().with_extension_length_ss(0.6);
+        assert_eq!(via_new.extension_length_ss(), Some(0.6));
+        assert_eq!(via_new.extension_length_ss(), via_new.length_ss);
+    }
+
+    #[test]
+    fn with_extension_length_ss_is_distinct_from_with_bracket_length_ss() {
+        // Critical naming-disambiguation canary, mirroring the analogous
+        // `with_hook_length_ss_is_distinct_from_with_extension_length_ss`
+        // test on `TrillBracketOptions`. The two methods MUST write to
+        // different fields — the wiggle's extension length and the bracket
+        // hook length are semantically distinct knobs even though both are
+        // lengths in staff spaces. This is the inverse-direction
+        // disambiguation that motivates having this alias on
+        // `TrillExtensionFullOptions` at all.
+        let ext_only = TrillExtensionFullOptions::new().with_extension_length_ss(1.0);
+        let hook_only = TrillExtensionFullOptions::new().with_bracket_length_ss(1.0);
+
+        assert_eq!(ext_only.length_ss, Some(1.0));
+        assert_eq!(ext_only.bracket_length_ss, None);
+        assert_eq!(hook_only.length_ss, None);
+        assert_eq!(hook_only.bracket_length_ss, Some(1.0));
+        assert_ne!(
+            ext_only, hook_only,
+            "wiggle extension length and bracket hook length must be independent fields"
+        );
+    }
+
+    #[test]
+    fn with_extension_length_ss_chains_with_other_setters() {
+        let opts = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::End)
+            .with_bracket_direction(HookDirection::Up)
+            .with_bracket_length_ss(0.7)
+            .with_speed(TrillWiggleSpeed::Slow)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(3.25);
+        assert_eq!(opts.bracket, Some(TrillBracketSide::End));
+        assert_eq!(opts.bracket_direction, Some(HookDirection::Up));
+        assert_eq!(opts.bracket_length_ss, Some(0.7));
+        assert_eq!(opts.speed, Some(TrillWiggleSpeed::Slow));
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.length_ss, Some(3.25));
+        assert_eq!(opts.extension_length_ss(), Some(3.25));
+    }
+
+    #[test]
+    fn with_extension_length_ss_chain_order_independent_from_other_setters() {
+        // Mirrors `chain_order_independent` for the new setter: calling order
+        // must not affect the resulting struct.
+        let a = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Both)
+            .with_extension_length_ss(2.5)
+            .with_speed(TrillWiggleSpeed::Faster)
+            .with_ornament(Ornament::TrillWithMordent);
+        let b = TrillExtensionFullOptions::new()
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(2.5)
+            .with_speed(TrillWiggleSpeed::Faster)
+            .with_bracket(TrillBracketSide::Both);
+        let c = TrillExtensionFullOptions::new()
+            .with_speed(TrillWiggleSpeed::Faster)
+            .with_bracket(TrillBracketSide::Both)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(2.5);
+        assert_eq!(a, b);
+        assert_eq!(b, c);
+    }
+
+    #[test]
+    fn with_extension_length_ss_is_const_constructible() {
+        // Mirror of `const_constructible` for the new setter. Locks in
+        // `const fn` — a future change that drops `const` would silently
+        // disqualify the new method from `const` items at module scope; this
+        // test stops compiling in that case.
+        const _OPTS: TrillExtensionFullOptions = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Both)
+            .with_extension_length_ss(3.0);
+    }
+
+    #[test]
+    fn extension_length_ss_getter_is_const_callable() {
+        // The getter must be `const fn` for the same reason — symmetry with
+        // the setter and to let callers read defaults at const-eval time.
+        const _LEN: Option<f64> = TrillExtensionFullOptions::new().extension_length_ss();
+        // The accessor on the `None` default must yield `None` — basic value
+        // check beyond the bare "compiles in const context" guarantee.
+        assert_eq!(_LEN, None);
+    }
+
+    #[test]
+    fn extension_length_ss_getter_after_widening_from_bracket_options() {
+        // Widening a `TrillBracketOptions` that carries an
+        // `extension_length_ss` must populate `TrillExtensionFullOptions::length_ss`
+        // — and therefore the new `extension_length_ss()` accessor must
+        // surface it correctly. Locks in the source-of-truth chain:
+        //   TrillBracketOptions::extension_length_ss
+        //     → TrillExtensionFullOptions::length_ss
+        //     → TrillExtensionFullOptions::extension_length_ss()
+        let bracket = TrillBracketOptions::new(TrillBracketSide::End)
+            .with_extension_length_ss(4.0);
+        let widened: TrillExtensionFullOptions = bracket.into();
+        assert_eq!(widened.extension_length_ss(), Some(4.0));
+        assert_eq!(widened.extension_length_ss(), widened.length_ss);
     }
 }
