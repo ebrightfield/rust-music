@@ -160,8 +160,11 @@ pub use trill_bracket::{
     TrillBracketHookLayout, TrillBracketOptions, TrillBracketSide,
 };
 pub use trill_extension::{
-    layout_trill_extension, layout_trill_extension_with_glyph, trill_extension_right_edge,
-    TrillExtensionLayout, TrillExtensionSpeedOptions, TrillWiggleSpeed,
+    layout_trill_extension, layout_trill_extension_multi_speed,
+    layout_trill_extension_with_glyph, multi_speed_trill_extension_right_edge,
+    trill_extension_right_edge, MultiSpeedTrillExtensionLayout, TrillExtensionLayout,
+    TrillExtensionSpeedOptions, TrillExtensionTile, TrillSpeedRamp, TrillSpeedRegion,
+    TrillWiggleSpeed,
 };
 pub use trill_options::TrillExtensionFullOptions;
 pub use voice_collision::{compute_voice_collision_offsets, VoiceCollisionOffset};

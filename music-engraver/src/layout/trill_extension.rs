@@ -76,6 +76,54 @@ impl TrillWiggleSpeed {
         Self::SlowerStill,
         Self::Slowest,
     ];
+
+    /// Index in [`TrillWiggleSpeed::ALL`] — `0` is [`Self::Fastest`],
+    /// `8` is [`Self::Slowest`]. The ordering matches SMuFL's progression
+    /// from densest tiles to sparsest tiles, so `a.index() < b.index()`
+    /// iff `a` reads as faster than `b`.
+    ///
+    /// Total order is meaningful: subtraction of indices gives a signed
+    /// "speed delta" used by [`TrillSpeedRamp::synthesize_regions`] to
+    /// interpolate between two speed variants.
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Fastest => 0,
+            Self::FasterStill => 1,
+            Self::Faster => 2,
+            Self::Fast => 3,
+            Self::Standard => 4,
+            Self::Slow => 5,
+            Self::Slower => 6,
+            Self::SlowerStill => 7,
+            Self::Slowest => 8,
+        }
+    }
+
+    /// Reverse of [`Self::index`]. Indices `0..=8` map to the canonical
+    /// variants; any index `>= 9` saturates to [`Self::Slowest`] (and any
+    /// negative value would have been clamped to `0` by the caller's
+    /// `usize` cast).
+    ///
+    /// Saturating rather than `Option`-returning because the only sane
+    /// internal caller is [`TrillSpeedRamp::synthesize_regions`], whose
+    /// interpolation `round()` produces a non-negative integer in the
+    /// closed interval `[min(start.index(), end.index()),
+    /// max(start.index(), end.index())]` and therefore can never overflow
+    /// the valid range. Out-of-range external callers (e.g. fuzz tests)
+    /// get the closest variant rather than a panic or error.
+    pub const fn from_index_saturating(i: usize) -> Self {
+        match i {
+            0 => Self::Fastest,
+            1 => Self::FasterStill,
+            2 => Self::Faster,
+            3 => Self::Fast,
+            4 => Self::Standard,
+            5 => Self::Slow,
+            6 => Self::Slower,
+            7 => Self::SlowerStill,
+            _ => Self::Slowest,
+        }
+    }
 }
 
 // The default cannot be derived: the desired default is `Standard`, which is
@@ -299,6 +347,281 @@ pub fn trill_extension_right_edge(layout: &TrillExtensionLayout) -> f64 {
     match layout.segment_xs.last() {
         Some(last) => last + layout.segment_advance,
         None => 0.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-speed trill extension
+// ---------------------------------------------------------------------------
+
+/// A single region of a multi-speed trill wiggle extension.
+///
+/// Real engraving uses progressively-denser or progressively-sparser wiggle
+/// glyphs *within a single sustained trill* to indicate
+/// acceleration/deceleration of the trill — a discrete mid-trill speed
+/// change. Each region carries its own wiggle [`Glyph`] (typically a
+/// `WiggleTrill*` speed variant; nothing about the layout enforces this) and
+/// its own per-tile `segment_advance` (different speed variants have
+/// different intrinsic widths, so callers must query each variant's advance
+/// from the active font and supply it). Regions tile rightward from
+/// `start_x` until the next region's `start_x` (or until the overall
+/// `end_x` for the final region).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrillSpeedRegion {
+    /// X-coordinate where this region begins.
+    ///
+    /// Regions must be sorted strictly non-decreasing by `start_x`. A
+    /// zero-width region (`regions[i+1].start_x == regions[i].start_x`)
+    /// is legal — it contributes zero tiles and exists only to mark a
+    /// transition point — though it is rarely useful in practice.
+    pub start_x: f64,
+    /// SMuFL wiggle glyph to tile across this region.
+    pub glyph: Glyph,
+    /// Per-tile advance width in font units for `glyph`. Must be positive
+    /// or the whole multi-speed layout is rejected.
+    pub segment_advance: f64,
+}
+
+/// One placed tile in a multi-speed trill wiggle extension.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrillExtensionTile {
+    /// X-coordinate of this tile's left edge.
+    pub x: f64,
+    /// Wiggle glyph for this tile (carried per-tile so consecutive tiles
+    /// with different speeds can be rendered without the renderer needing
+    /// to re-derive the speed from position).
+    pub glyph: Glyph,
+    /// This tile's advance width — echoed from its parent region so
+    /// callers can compute the right edge without keeping the originating
+    /// regions slice alive.
+    pub advance: f64,
+}
+
+/// Computed tile positions for a multi-speed trill wavy-line extension.
+///
+/// Tiles within the vec are in left-to-right order. Adjacent tiles may
+/// share a glyph (the layout function does not coalesce regions); the
+/// renderer caches outlines per unique glyph so the redundancy is cheap.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MultiSpeedTrillExtensionLayout {
+    /// All tiles in left-to-right order.
+    pub tiles: Vec<TrillExtensionTile>,
+    /// Shared baseline y for every tile — conventionally aligned with the
+    /// preceding "tr" glyph's anchor so the wiggle reads as a horizontal
+    /// continuation.
+    pub y: f64,
+}
+
+/// Lay out a multi-speed trill wavy-line extension.
+///
+/// For each [`TrillSpeedRegion`] in `regions`, tiles whole copies of its
+/// glyph from `region.start_x` rightward until either the next region's
+/// `start_x` or `end_x` (whichever comes first). Any leftover gap at the
+/// end of a region (less than one tile) is left empty — the same
+/// fixed-tile convention as [`layout_trill_extension`]. Stretching a
+/// wiggle glyph horizontally distorts its shape and visually reads as
+/// wrong, so we never do it.
+///
+/// Returns `None` when any of the following hold:
+/// - `regions` is empty.
+/// - Any region's `segment_advance` is non-positive (would imply
+///   zero-width tiles).
+/// - `regions` is not sorted non-decreasing by `start_x` (catches caller
+///   bugs early; a strict ordering would also forbid zero-width
+///   transition regions which we permit).
+/// - The first region's `start_x` exceeds `end_x`.
+/// - The total tile count across all regions is zero (no region had room
+///   for a single tile).
+///
+/// The function does not validate that the chosen glyphs are actually
+/// `WiggleTrill*` variants — the layout layer is glyph-agnostic. A caller
+/// supplying, say, `Glyph::NoteheadBlack` would produce a wiggle line of
+/// noteheads; the renderer would happily emit them. That is a renderer
+/// integration test's responsibility, not the layout function's.
+pub fn layout_trill_extension_multi_speed(
+    end_x: f64,
+    y: f64,
+    regions: &[TrillSpeedRegion],
+) -> Option<MultiSpeedTrillExtensionLayout> {
+    if regions.is_empty() {
+        return None;
+    }
+    if regions[0].start_x > end_x {
+        return None;
+    }
+
+    let mut tiles = Vec::new();
+    for i in 0..regions.len() {
+        let r = &regions[i];
+        if r.segment_advance <= 0.0 {
+            return None;
+        }
+        let region_end = if i + 1 < regions.len() {
+            regions[i + 1].start_x
+        } else {
+            end_x
+        };
+        // Sort violation: the next region begins before this one's
+        // start_x. (`region_end == r.start_x` is permitted — zero-width
+        // region, contributes no tiles.)
+        if region_end < r.start_x {
+            return None;
+        }
+        let span = region_end - r.start_x;
+        let count = (span / r.segment_advance).floor() as usize;
+        for j in 0..count {
+            tiles.push(TrillExtensionTile {
+                x: r.start_x + (j as f64) * r.segment_advance,
+                glyph: r.glyph,
+                advance: r.segment_advance,
+            });
+        }
+    }
+    if tiles.is_empty() {
+        return None;
+    }
+    Some(MultiSpeedTrillExtensionLayout { tiles, y })
+}
+
+/// X-coordinate of the rightmost edge of the last tile in a multi-speed
+/// trill extension layout. Returns `0.0` for an empty layout — same
+/// convention as [`trill_extension_right_edge`].
+pub fn multi_speed_trill_extension_right_edge(
+    layout: &MultiSpeedTrillExtensionLayout,
+) -> f64 {
+    match layout.tiles.last() {
+        Some(last) => last.x + last.advance,
+        None => 0.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Speed-ramp synthesizer
+// ---------------------------------------------------------------------------
+
+/// Synthesizer for [`TrillSpeedRegion`] sequences expressing common
+/// engraving patterns — currently constant-speed and linear-progression
+/// (accelerating or decelerating) ramps.
+///
+/// Hand-constructing a `&[TrillSpeedRegion]` for a typical accelerating
+/// trill (Slow → Standard → Fast, evenly distributed across a known span)
+/// is mechanical and error-prone: the caller has to compute three start_x
+/// values, pick the right intermediate `WiggleTrill*` glyph, and query
+/// each glyph's advance from the active font. This enum + its
+/// [`synthesize_regions`](Self::synthesize_regions) method does that
+/// mechanical work, leaving the caller to express the *musical* intent
+/// (start speed, end speed, number of regions) plus the font lookup.
+///
+/// The synthesizer is deliberately limited to two patterns. Non-linear
+/// ramps (exponential, log, step) are rare in real engraving and easily
+/// expressed by hand-constructing the regions slice. Adding a
+/// `NonLinear(Box<dyn Fn(f64) -> TrillWiggleSpeed>)` variant later would
+/// be additive and non-breaking.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrillSpeedRamp {
+    /// Single speed across the entire span. Emits `region_count` regions
+    /// all carrying the same speed — visually identical to a single
+    /// region because [`layout_trill_extension_multi_speed`] tiles each
+    /// region independently and adjacent same-speed regions form a
+    /// continuous run. The N-region form keeps the API uniform with
+    /// [`Self::Linear`] so callers can swap variants without recomputing
+    /// `region_count`.
+    Constant(TrillWiggleSpeed),
+    /// Linear progression from `start` (at the leftmost region) to `end`
+    /// (at the rightmost region). Per-region speeds are computed by
+    /// rounding `start.index() + t * (end.index() - start.index())` to
+    /// the nearest integer for `t = i / (region_count - 1)`, then mapped
+    /// back to the variant via [`TrillWiggleSpeed::from_index_saturating`].
+    ///
+    /// `start.index() > end.index()` produces an accelerating ramp
+    /// (slower → faster, since lower indices are faster). The reverse
+    /// produces a decelerating ramp. `start == end` is degenerate but
+    /// permitted; it produces the same output as `Constant(start)` with
+    /// the same `region_count`.
+    ///
+    /// Requires `region_count >= 2` because a single-region "linear
+    /// progression" is ill-defined (only one endpoint can be the
+    /// region's speed; both endpoints can't be). Callers that want a
+    /// degenerate single-region trill should use [`Self::Constant`].
+    Linear {
+        start: TrillWiggleSpeed,
+        end: TrillWiggleSpeed,
+    },
+}
+
+impl TrillSpeedRamp {
+    /// Construct a constant-speed ramp. Equivalent to
+    /// `TrillSpeedRamp::Constant(speed)` but `const`-callable.
+    pub const fn constant(speed: TrillWiggleSpeed) -> Self {
+        Self::Constant(speed)
+    }
+
+    /// Construct a linear-progression ramp from `start` to `end`.
+    /// Equivalent to `TrillSpeedRamp::Linear { start, end }` but
+    /// `const`-callable. See [`Self::Linear`] for the direction
+    /// convention.
+    pub const fn linear(start: TrillWiggleSpeed, end: TrillWiggleSpeed) -> Self {
+        Self::Linear { start, end }
+    }
+
+    /// Synthesize a sorted slice of [`TrillSpeedRegion`]s evenly
+    /// distributed across `[start_x, end_x]`.
+    ///
+    /// Each region occupies `(end_x - start_x) / region_count` units of
+    /// horizontal span. Region `i` (0-indexed) starts at
+    /// `start_x + i * region_span`. The final region's right edge is
+    /// `end_x` by construction, so the returned slice is ready to feed
+    /// directly to [`layout_trill_extension_multi_speed`] with the same
+    /// `end_x`.
+    ///
+    /// `advance_for_speed` is queried once per region with that region's
+    /// chosen [`TrillWiggleSpeed`] — callers thread their active
+    /// [`crate::font::MusicFont`]'s glyph-advance lookup through the
+    /// closure. The synthesizer is font-agnostic.
+    ///
+    /// Returns `None` when:
+    /// - `region_count == 0` (no regions to emit).
+    /// - `end_x <= start_x` (zero-width or inverted span).
+    /// - `self` is [`Self::Linear`] and `region_count < 2` (linear
+    ///   progression is ill-defined for one region).
+    pub fn synthesize_regions(
+        &self,
+        start_x: f64,
+        end_x: f64,
+        region_count: usize,
+        advance_for_speed: impl Fn(TrillWiggleSpeed) -> f64,
+    ) -> Option<Vec<TrillSpeedRegion>> {
+        if region_count == 0 {
+            return None;
+        }
+        if end_x <= start_x {
+            return None;
+        }
+        if matches!(self, Self::Linear { .. }) && region_count < 2 {
+            return None;
+        }
+        let region_span = (end_x - start_x) / (region_count as f64);
+        let mut regions = Vec::with_capacity(region_count);
+        for i in 0..region_count {
+            let speed = match self {
+                Self::Constant(s) => *s,
+                Self::Linear { start, end } => {
+                    let t = (i as f64) / ((region_count - 1) as f64);
+                    let f_idx =
+                        (start.index() as f64) + t * (end.index() as f64 - start.index() as f64);
+                    // `f_idx` is in [min(start.index(), end.index()),
+                    // max(start.index(), end.index())] ⊆ [0, 8], so
+                    // round + cast cannot underflow.
+                    TrillWiggleSpeed::from_index_saturating(f_idx.round() as usize)
+                }
+            };
+            regions.push(TrillSpeedRegion {
+                start_x: start_x + (i as f64) * region_span,
+                glyph: speed.to_glyph(),
+                segment_advance: advance_for_speed(speed),
+            });
+        }
+        Some(regions)
     }
 }
 
@@ -714,5 +1037,876 @@ mod tests {
         let zero = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
             .with_extension_length_ss(0.0);
         assert_ne!(none, zero);
+    }
+
+    // --- layout_trill_extension_multi_speed ---
+
+    fn fast() -> TrillSpeedRegion {
+        TrillSpeedRegion {
+            start_x: 0.0,
+            glyph: Glyph::WiggleTrillFast,
+            segment_advance: 60.0,
+        }
+    }
+
+    #[test]
+    fn multi_speed_empty_regions_returns_none() {
+        assert!(layout_trill_extension_multi_speed(1000.0, 0.0, &[]).is_none());
+    }
+
+    #[test]
+    fn multi_speed_first_region_start_after_end_x_returns_none() {
+        let regions = [TrillSpeedRegion {
+            start_x: 500.0,
+            glyph: Glyph::WiggleTrill,
+            segment_advance: 100.0,
+        }];
+        assert!(layout_trill_extension_multi_speed(100.0, 0.0, &regions).is_none());
+    }
+
+    #[test]
+    fn multi_speed_zero_advance_returns_none() {
+        let regions = [TrillSpeedRegion {
+            start_x: 0.0,
+            glyph: Glyph::WiggleTrill,
+            segment_advance: 0.0,
+        }];
+        assert!(layout_trill_extension_multi_speed(500.0, 0.0, &regions).is_none());
+    }
+
+    #[test]
+    fn multi_speed_negative_advance_returns_none() {
+        let regions = [TrillSpeedRegion {
+            start_x: 0.0,
+            glyph: Glyph::WiggleTrill,
+            segment_advance: -10.0,
+        }];
+        assert!(layout_trill_extension_multi_speed(500.0, 0.0, &regions).is_none());
+    }
+
+    #[test]
+    fn multi_speed_zero_advance_in_second_region_returns_none() {
+        // The validation must apply to every region, not just the first —
+        // a bad advance late in the slice was the easy regression to miss
+        // if the early-out only checked regions[0].
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 200.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 0.0, // bad
+            },
+        ];
+        assert!(layout_trill_extension_multi_speed(500.0, 0.0, &regions).is_none());
+    }
+
+    #[test]
+    fn multi_speed_out_of_order_regions_returns_none() {
+        // regions[1].start_x < regions[0].start_x: invalid ordering.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 200.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 100.0, // before previous
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+        ];
+        assert!(layout_trill_extension_multi_speed(500.0, 0.0, &regions).is_none());
+    }
+
+    #[test]
+    fn multi_speed_zero_total_tiles_returns_none() {
+        // Span too short for even one tile in the only region.
+        let regions = [TrillSpeedRegion {
+            start_x: 0.0,
+            glyph: Glyph::WiggleTrill,
+            segment_advance: 200.0,
+        }];
+        assert!(layout_trill_extension_multi_speed(50.0, 0.0, &regions).is_none());
+    }
+
+    #[test]
+    fn multi_speed_single_region_matches_single_speed_layout() {
+        // For one region, the multi-speed layout's tile positions must
+        // equal the single-speed layout's segment_xs — keeping the two
+        // entry points byte-equivalent on a degenerate input is the
+        // critical contract that lets callers migrate to the multi-speed
+        // path without changing rendered output.
+        let single = layout_trill_extension_with_glyph(
+            10.0,
+            10.0 + 5.0 * 60.0,
+            25.0,
+            Glyph::WiggleTrillFast,
+            60.0,
+        )
+        .unwrap();
+        let multi = layout_trill_extension_multi_speed(
+            10.0 + 5.0 * 60.0,
+            25.0,
+            &[TrillSpeedRegion {
+                start_x: 10.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            }],
+        )
+        .unwrap();
+        assert_eq!(multi.y, single.y);
+        assert_eq!(multi.tiles.len(), single.segment_xs.len());
+        for (i, tile) in multi.tiles.iter().enumerate() {
+            assert!((tile.x - single.segment_xs[i]).abs() < 1e-9);
+            assert_eq!(tile.glyph, single.glyph);
+            assert_eq!(tile.advance, single.segment_advance);
+        }
+    }
+
+    #[test]
+    fn multi_speed_two_regions_have_correct_tile_glyphs() {
+        // Three Fast tiles (0..180) followed by three Slow tiles (180..540).
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 180.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 120.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(540.0, 0.0, &regions).unwrap();
+        assert_eq!(layout.tiles.len(), 6, "3 Fast + 3 Slow");
+        for tile in &layout.tiles[..3] {
+            assert_eq!(tile.glyph, Glyph::WiggleTrillFast);
+            assert_eq!(tile.advance, 60.0);
+        }
+        for tile in &layout.tiles[3..] {
+            assert_eq!(tile.glyph, Glyph::WiggleTrillSlow);
+            assert_eq!(tile.advance, 120.0);
+        }
+    }
+
+    #[test]
+    fn multi_speed_two_regions_have_correct_tile_positions() {
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 180.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 120.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(540.0, 0.0, &regions).unwrap();
+        let xs: Vec<f64> = layout.tiles.iter().map(|t| t.x).collect();
+        assert_eq!(xs, vec![0.0, 60.0, 120.0, 180.0, 300.0, 420.0]);
+    }
+
+    #[test]
+    fn multi_speed_three_regions_accel_pattern() {
+        // Slow → Standard → Fast progression: a real engraving use case
+        // (gradually-accelerating trill). Each region contributes one tile.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 120.0,
+            },
+            TrillSpeedRegion {
+                start_x: 120.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 100.0,
+            },
+            TrillSpeedRegion {
+                start_x: 220.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(280.0, 50.0, &regions).unwrap();
+        assert_eq!(layout.tiles.len(), 3);
+        assert_eq!(layout.tiles[0].glyph, Glyph::WiggleTrillSlow);
+        assert_eq!(layout.tiles[1].glyph, Glyph::WiggleTrill);
+        assert_eq!(layout.tiles[2].glyph, Glyph::WiggleTrillFast);
+        assert_eq!(layout.y, 50.0);
+    }
+
+    #[test]
+    fn multi_speed_region_too_short_for_a_tile_contributes_nothing() {
+        // Middle region's span (10) is less than its advance (100): that
+        // region contributes zero tiles but does NOT abort the layout —
+        // the other regions still tile normally.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 60.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 100.0, // span = 10, < 100
+            },
+            TrillSpeedRegion {
+                start_x: 70.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(190.0, 0.0, &regions).unwrap();
+        // 1 Fast tile in region 0, 0 in region 1, 2 in region 2 = 3 total
+        assert_eq!(layout.tiles.len(), 3);
+        assert_eq!(layout.tiles[0].x, 0.0);
+        assert_eq!(layout.tiles[0].glyph, Glyph::WiggleTrillFast);
+        assert_eq!(layout.tiles[1].x, 70.0);
+        assert_eq!(layout.tiles[1].glyph, Glyph::WiggleTrillFast);
+        assert_eq!(layout.tiles[2].x, 130.0);
+    }
+
+    #[test]
+    fn multi_speed_zero_width_region_is_legal() {
+        // regions[i+1].start_x == regions[i].start_x: zero-width region.
+        // Contributes no tiles. Must NOT be rejected as a sort violation.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 100.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(300.0, 0.0, &regions).unwrap();
+        // All tiles come from region[1] (Slow) since region[0] has zero span.
+        assert_eq!(layout.tiles.len(), 3);
+        for tile in &layout.tiles {
+            assert_eq!(tile.glyph, Glyph::WiggleTrillSlow);
+        }
+    }
+
+    #[test]
+    fn multi_speed_no_distortion_of_glyph_widths() {
+        // Critical correctness canary: tile positions must increment by
+        // exactly `region.segment_advance` within a region (NOT by a
+        // global average) — stretching a wiggle glyph distorts it
+        // visually, which we explicitly forbid in the doc comment.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 47.5, // intentionally non-round
+            },
+            TrillSpeedRegion {
+                start_x: 200.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 113.7, // also non-round
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(700.0, 0.0, &regions).unwrap();
+        // Region 0: floor(200 / 47.5) = 4 tiles at 0, 47.5, 95.0, 142.5
+        // Region 1: floor(500 / 113.7) = 4 tiles at 200, 313.7, 427.4, 541.1
+        for window in layout.tiles[..4].windows(2) {
+            let dx = window[1].x - window[0].x;
+            assert!(
+                (dx - 47.5).abs() < 1e-9,
+                "Fast region must tile at exact 47.5 stride, saw {dx}"
+            );
+        }
+        for window in layout.tiles[4..].windows(2) {
+            let dx = window[1].x - window[0].x;
+            assert!(
+                (dx - 113.7).abs() < 1e-9,
+                "Slow region must tile at exact 113.7 stride, saw {dx}"
+            );
+        }
+    }
+
+    #[test]
+    fn multi_speed_right_edge_for_two_region_layout() {
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 180.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 120.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(540.0, 0.0, &regions).unwrap();
+        // Last tile at 420, advance 120 -> right edge 540
+        assert_eq!(multi_speed_trill_extension_right_edge(&layout), 540.0);
+    }
+
+    #[test]
+    fn multi_speed_right_edge_uses_last_tiles_advance_not_first() {
+        // The right edge formula `last.x + last.advance` MUST use the
+        // last tile's advance, not the first region's — a regression
+        // that hardcoded `regions[0].segment_advance` would fire here.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 60.0,
+            },
+            TrillSpeedRegion {
+                start_x: 60.0,
+                glyph: Glyph::WiggleTrillSlowest,
+                segment_advance: 500.0, // very wide
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(700.0, 0.0, &regions).unwrap();
+        // tiles: Fast at 0 (advance 60), Slowest at 60 (advance 500)
+        assert_eq!(layout.tiles.len(), 2);
+        assert_eq!(layout.tiles.last().unwrap().advance, 500.0);
+        // right edge = 60 + 500 = 560 (NOT 60 + 60 = 120)
+        assert_eq!(multi_speed_trill_extension_right_edge(&layout), 560.0);
+    }
+
+    #[test]
+    fn multi_speed_right_edge_empty_layout_is_zero() {
+        let layout = MultiSpeedTrillExtensionLayout {
+            tiles: vec![],
+            y: 0.0,
+        };
+        assert_eq!(multi_speed_trill_extension_right_edge(&layout), 0.0);
+    }
+
+    #[test]
+    fn multi_speed_y_is_preserved_across_regions() {
+        let regions = [fast(), {
+            let mut r = fast();
+            r.start_x = 300.0;
+            r.glyph = Glyph::WiggleTrillSlow;
+            r.segment_advance = 100.0;
+            r
+        }];
+        let layout = layout_trill_extension_multi_speed(700.0, 271.5, &regions).unwrap();
+        assert_eq!(layout.y, 271.5);
+        // No per-tile y is stored; tiles share the layout's y.
+    }
+
+    #[test]
+    fn multi_speed_tiles_strictly_increasing_x() {
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFastest,
+                segment_advance: 30.0,
+            },
+            TrillSpeedRegion {
+                start_x: 100.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 80.0,
+            },
+            TrillSpeedRegion {
+                start_x: 500.0,
+                glyph: Glyph::WiggleTrillSlowest,
+                segment_advance: 200.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(1200.0, 0.0, &regions).unwrap();
+        for window in layout.tiles.windows(2) {
+            assert!(
+                window[1].x > window[0].x,
+                "tiles must be strictly increasing in x: {:?} -> {:?}",
+                window[0],
+                window[1]
+            );
+        }
+    }
+
+    #[test]
+    fn multi_speed_adjacent_regions_with_same_glyph_still_tile() {
+        // No coalescing: two adjacent regions with the same glyph and
+        // same advance still produce contiguous tiles, just like a single
+        // wider region would. Locks in the no-coalescing decision.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 100.0,
+            },
+            TrillSpeedRegion {
+                start_x: 300.0,
+                glyph: Glyph::WiggleTrill,
+                segment_advance: 100.0,
+            },
+        ];
+        let layout = layout_trill_extension_multi_speed(600.0, 0.0, &regions).unwrap();
+        assert_eq!(layout.tiles.len(), 6);
+        for tile in &layout.tiles {
+            assert_eq!(tile.glyph, Glyph::WiggleTrill);
+            assert_eq!(tile.advance, 100.0);
+        }
+        let xs: Vec<f64> = layout.tiles.iter().map(|t| t.x).collect();
+        assert_eq!(xs, vec![0.0, 100.0, 200.0, 300.0, 400.0, 500.0]);
+    }
+
+    #[test]
+    fn multi_speed_does_not_overflow_end_x() {
+        // The right edge of the entire layout must never exceed end_x —
+        // even with multiple regions, each independently fixed-tiled.
+        let regions = [
+            TrillSpeedRegion {
+                start_x: 0.0,
+                glyph: Glyph::WiggleTrillFast,
+                segment_advance: 47.5,
+            },
+            TrillSpeedRegion {
+                start_x: 200.0,
+                glyph: Glyph::WiggleTrillSlow,
+                segment_advance: 113.7,
+            },
+        ];
+        let end_x = 700.0;
+        let layout = layout_trill_extension_multi_speed(end_x, 0.0, &regions).unwrap();
+        let right = multi_speed_trill_extension_right_edge(&layout);
+        assert!(
+            right <= end_x,
+            "right edge {right} must not exceed end_x {end_x}"
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // TrillWiggleSpeed::index / from_index_saturating
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn index_canonical_order() {
+        // Lock in the Fastest=0..Slowest=8 mapping. Any reorder of the
+        // enum variants without a corresponding `index()` update would
+        // fire here.
+        assert_eq!(TrillWiggleSpeed::Fastest.index(), 0);
+        assert_eq!(TrillWiggleSpeed::FasterStill.index(), 1);
+        assert_eq!(TrillWiggleSpeed::Faster.index(), 2);
+        assert_eq!(TrillWiggleSpeed::Fast.index(), 3);
+        assert_eq!(TrillWiggleSpeed::Standard.index(), 4);
+        assert_eq!(TrillWiggleSpeed::Slow.index(), 5);
+        assert_eq!(TrillWiggleSpeed::Slower.index(), 6);
+        assert_eq!(TrillWiggleSpeed::SlowerStill.index(), 7);
+        assert_eq!(TrillWiggleSpeed::Slowest.index(), 8);
+    }
+
+    #[test]
+    fn index_matches_position_in_all_array() {
+        // The total-order contract: index() must agree with ALL's order.
+        // A future regression that reordered ALL but forgot to update
+        // index() (or vice-versa) would fire here.
+        for (pos, v) in TrillWiggleSpeed::ALL.iter().enumerate() {
+            assert_eq!(v.index(), pos, "ALL[{pos}] = {v:?} but index() = {}", v.index());
+        }
+    }
+
+    #[test]
+    fn index_round_trip_through_from_index_saturating() {
+        // For every variant, from_index_saturating(v.index()) == v.
+        // Locks in the bijection across the valid range.
+        for v in TrillWiggleSpeed::ALL {
+            assert_eq!(TrillWiggleSpeed::from_index_saturating(v.index()), v);
+        }
+    }
+
+    #[test]
+    fn from_index_saturating_clamps_high_values_to_slowest() {
+        // Out-of-range indices saturate to Slowest, not panic. The
+        // saturation point is exactly 8: anything ≥9 is Slowest.
+        assert_eq!(TrillWiggleSpeed::from_index_saturating(9), TrillWiggleSpeed::Slowest);
+        assert_eq!(TrillWiggleSpeed::from_index_saturating(100), TrillWiggleSpeed::Slowest);
+        assert_eq!(
+            TrillWiggleSpeed::from_index_saturating(usize::MAX),
+            TrillWiggleSpeed::Slowest,
+        );
+    }
+
+    #[test]
+    fn from_index_saturating_zero_is_fastest() {
+        // Pin down the lowest index → Fastest mapping at the boundary.
+        assert_eq!(TrillWiggleSpeed::from_index_saturating(0), TrillWiggleSpeed::Fastest);
+    }
+
+    #[allow(clippy::assertions_on_constants)]
+    #[test]
+    fn index_and_from_index_saturating_are_const_callable() {
+        // Compile-fail canary: if a future refactor removed `const fn`
+        // from either method, these const items would fail to compile.
+        const FAST_INDEX: usize = TrillWiggleSpeed::Fast.index();
+        const STANDARD_FROM_IDX: TrillWiggleSpeed =
+            TrillWiggleSpeed::from_index_saturating(4);
+        assert_eq!(FAST_INDEX, 3);
+        assert!(matches!(STANDARD_FROM_IDX, TrillWiggleSpeed::Standard));
+    }
+
+    // -----------------------------------------------------------------
+    // TrillSpeedRamp constructors
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ramp_constant_constructor_round_trips() {
+        let r = TrillSpeedRamp::constant(TrillWiggleSpeed::Fast);
+        assert_eq!(r, TrillSpeedRamp::Constant(TrillWiggleSpeed::Fast));
+    }
+
+    #[test]
+    fn ramp_linear_constructor_round_trips() {
+        let r = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        assert_eq!(
+            r,
+            TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Slow,
+                end: TrillWiggleSpeed::Fast,
+            },
+        );
+    }
+
+    #[allow(clippy::assertions_on_constants)]
+    #[test]
+    fn ramp_constructors_are_const_callable() {
+        // Compile-fail canary on `const fn` for both constructors.
+        const C: TrillSpeedRamp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
+        const L: TrillSpeedRamp =
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        assert!(matches!(C, TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard)));
+        assert!(matches!(
+            L,
+            TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Slow,
+                end: TrillWiggleSpeed::Fast,
+            }
+        ));
+    }
+
+    // -----------------------------------------------------------------
+    // TrillSpeedRamp::synthesize_regions — error cases
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ramp_constant_zero_region_count_returns_none() {
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        assert!(r.synthesize_regions(0.0, 100.0, 0, |_| 80.0).is_none());
+    }
+
+    #[test]
+    fn ramp_linear_zero_region_count_returns_none() {
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        assert!(r.synthesize_regions(0.0, 100.0, 0, |_| 80.0).is_none());
+    }
+
+    #[test]
+    fn ramp_constant_inverted_x_returns_none() {
+        // end_x < start_x.
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        assert!(r.synthesize_regions(200.0, 100.0, 3, |_| 80.0).is_none());
+    }
+
+    #[test]
+    fn ramp_linear_inverted_x_returns_none() {
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        assert!(r.synthesize_regions(200.0, 100.0, 3, |_| 80.0).is_none());
+    }
+
+    #[test]
+    fn ramp_zero_width_span_returns_none() {
+        // end_x == start_x — a zero-width span produces zero-width
+        // regions, which is rejected just like any other degenerate
+        // input.
+        let constant = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        let linear = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        assert!(constant.synthesize_regions(100.0, 100.0, 3, |_| 80.0).is_none());
+        assert!(linear.synthesize_regions(100.0, 100.0, 3, |_| 80.0).is_none());
+    }
+
+    #[test]
+    fn ramp_linear_single_region_returns_none() {
+        // A single-region linear progression is ill-defined.
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        assert!(r.synthesize_regions(0.0, 100.0, 1, |_| 80.0).is_none());
+    }
+
+    #[test]
+    fn ramp_constant_single_region_emits_one_region() {
+        // Constant explicitly permits region_count == 1.
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        let regions = r
+            .synthesize_regions(50.0, 250.0, 1, |_| 80.0)
+            .expect("constant single region is valid");
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].start_x, 50.0);
+        assert_eq!(regions[0].glyph, Glyph::WiggleTrill);
+        assert_eq!(regions[0].segment_advance, 80.0);
+    }
+
+    // -----------------------------------------------------------------
+    // TrillSpeedRamp::synthesize_regions — Constant variant
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ramp_constant_emits_n_regions_with_same_glyph() {
+        // 5 regions, all same glyph & advance.
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Fast);
+        let regions = r
+            .synthesize_regions(0.0, 100.0, 5, |s| {
+                // Sanity: the callback should be invoked with the same
+                // speed for every region in the Constant case.
+                assert_eq!(s, TrillWiggleSpeed::Fast);
+                40.0
+            })
+            .unwrap();
+        assert_eq!(regions.len(), 5);
+        for region in &regions {
+            assert_eq!(region.glyph, Glyph::WiggleTrillFast);
+            assert_eq!(region.segment_advance, 40.0);
+        }
+    }
+
+    #[test]
+    fn ramp_constant_emits_evenly_spaced_start_xs() {
+        // Span [0, 100] divided into 5 regions → start_x = 0,20,40,60,80.
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        let regions = r.synthesize_regions(0.0, 100.0, 5, |_| 30.0).unwrap();
+        let xs: Vec<f64> = regions.iter().map(|r| r.start_x).collect();
+        assert_eq!(xs, vec![0.0, 20.0, 40.0, 60.0, 80.0]);
+    }
+
+    #[test]
+    fn ramp_constant_advance_callback_value_is_propagated() {
+        // The callback's return is stored verbatim in the region's
+        // segment_advance. A regression that hardcoded a wrong value
+        // (e.g. always 100.0) would fire.
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Slow);
+        let regions = r.synthesize_regions(0.0, 200.0, 3, |_| 137.42).unwrap();
+        for region in &regions {
+            assert_eq!(region.segment_advance, 137.42);
+        }
+    }
+
+    #[test]
+    fn ramp_constant_with_nonzero_start_x_offsets_regions() {
+        // The first region's start_x is the span start (not 0.0).
+        let r = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        let regions = r.synthesize_regions(500.0, 600.0, 4, |_| 25.0).unwrap();
+        let xs: Vec<f64> = regions.iter().map(|r| r.start_x).collect();
+        assert_eq!(xs, vec![500.0, 525.0, 550.0, 575.0]);
+    }
+
+    // -----------------------------------------------------------------
+    // TrillSpeedRamp::synthesize_regions — Linear variant
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ramp_linear_accel_endpoint_glyphs_match_input() {
+        // Slow (index 5) → Fast (index 3), 3 regions: t = 0, 0.5, 1.
+        // Indices: 5, 4, 3 — Slow, Standard, Fast.
+        // The endpoints must hit *exactly* their input speeds (no
+        // rounding error at t=0 or t=1).
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        let regions = r.synthesize_regions(0.0, 90.0, 3, |s| s.index() as f64 + 1.0).unwrap();
+        assert_eq!(regions.len(), 3);
+        assert_eq!(regions[0].glyph, Glyph::WiggleTrillSlow);
+        assert_eq!(regions[2].glyph, Glyph::WiggleTrillFast);
+    }
+
+    #[test]
+    fn ramp_linear_accel_middle_region_is_intermediate_speed() {
+        // The intermediate region must be a real intermediate — not
+        // start, not end. For Slow(5) → Fast(3) at t=0.5, expected
+        // speed index is 4 (Standard).
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        let regions = r.synthesize_regions(0.0, 90.0, 3, |_| 30.0).unwrap();
+        assert_eq!(regions[1].glyph, Glyph::WiggleTrill); // Standard
+    }
+
+    #[test]
+    fn ramp_linear_decel_progresses_from_fast_to_slow() {
+        // Fast (3) → Slow (5), 3 regions. Should be Fast, Standard, Slow.
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Fast,
+            end: TrillWiggleSpeed::Slow,
+        };
+        let regions = r.synthesize_regions(0.0, 90.0, 3, |_| 30.0).unwrap();
+        let glyphs: Vec<Glyph> = regions.iter().map(|r| r.glyph).collect();
+        assert_eq!(
+            glyphs,
+            vec![
+                Glyph::WiggleTrillFast,
+                Glyph::WiggleTrill,
+                Glyph::WiggleTrillSlow,
+            ]
+        );
+    }
+
+    #[test]
+    fn ramp_linear_advance_callback_invoked_with_per_region_speed() {
+        // Critical correctness canary: the callback must be queried
+        // with the *region's* speed, not (say) always the start speed.
+        // A regression that mistakenly cached `start` for all regions
+        // would fail here because the per-region speed differs.
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        // Returns a distinct advance per speed so a wrong-speed query
+        // would store a wrong advance in the region.
+        let regions = r
+            .synthesize_regions(0.0, 90.0, 3, |s| match s {
+                TrillWiggleSpeed::Slow => 100.0,
+                TrillWiggleSpeed::Standard => 200.0,
+                TrillWiggleSpeed::Fast => 300.0,
+                _ => panic!("synthesizer queried unexpected speed {s:?}"),
+            })
+            .unwrap();
+        assert_eq!(regions[0].segment_advance, 100.0);
+        assert_eq!(regions[1].segment_advance, 200.0);
+        assert_eq!(regions[2].segment_advance, 300.0);
+    }
+
+    #[test]
+    fn ramp_linear_round_to_nearest_integer_index() {
+        // 4 regions for Slow(5) → Faster(2): t = 0, 1/3, 2/3, 1.
+        // f_idx = 5, 4.0, 3.0, 2.
+        //   (5 + 1/3 * (2 - 5)) = 5 - 1 = 4.0  → round → 4 → Standard
+        //   (5 + 2/3 * (2 - 5)) = 5 - 2 = 3.0  → round → 3 → Fast
+        // Endpoints hit exactly: Slow at i=0, Faster at i=3.
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Faster,
+        };
+        let regions = r.synthesize_regions(0.0, 120.0, 4, |_| 30.0).unwrap();
+        let indices: Vec<usize> = regions
+            .iter()
+            .map(|reg| {
+                // Reverse the glyph→speed mapping via ALL search.
+                TrillWiggleSpeed::ALL
+                    .iter()
+                    .find(|s| s.to_glyph() == reg.glyph)
+                    .unwrap()
+                    .index()
+            })
+            .collect();
+        assert_eq!(indices, vec![5, 4, 3, 2]);
+    }
+
+    #[test]
+    fn ramp_linear_evenly_spaced_start_xs() {
+        // Span [0, 120] divided into 4 regions → start_x = 0,30,60,90.
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        let regions = r.synthesize_regions(0.0, 120.0, 4, |_| 30.0).unwrap();
+        let xs: Vec<f64> = regions.iter().map(|r| r.start_x).collect();
+        assert_eq!(xs, vec![0.0, 30.0, 60.0, 90.0]);
+    }
+
+    #[test]
+    fn ramp_linear_degenerate_start_equals_end_emits_constant() {
+        // Linear { start: Standard, end: Standard } with N=3 produces
+        // 3 regions all with Standard speed — same as Constant(Standard).
+        let linear = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Standard,
+            end: TrillWiggleSpeed::Standard,
+        };
+        let constant = TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard);
+        let r_linear = linear.synthesize_regions(0.0, 90.0, 3, |_| 40.0).unwrap();
+        let r_constant = constant.synthesize_regions(0.0, 90.0, 3, |_| 40.0).unwrap();
+        assert_eq!(r_linear, r_constant);
+    }
+
+    #[test]
+    fn ramp_linear_two_regions_emit_exact_endpoints() {
+        // The minimum-valid Linear region_count. t = 0 and t = 1, so
+        // the two regions must be exactly start and end (no
+        // intermediates, no rounding).
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slowest,
+            end: TrillWiggleSpeed::Fastest,
+        };
+        let regions = r.synthesize_regions(0.0, 100.0, 2, |_| 50.0).unwrap();
+        assert_eq!(regions.len(), 2);
+        assert_eq!(regions[0].glyph, Glyph::WiggleTrillSlowest);
+        assert_eq!(regions[1].glyph, Glyph::WiggleTrillFastest);
+    }
+
+    #[test]
+    fn ramp_synthesized_regions_feed_into_multi_speed_layout() {
+        // End-to-end contract: the synthesizer's output must be
+        // accepted by `layout_trill_extension_multi_speed` without
+        // additional massaging. A future change to that function's
+        // validation rules that broke this contract would fire here.
+        let r = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        };
+        let advances = |s: TrillWiggleSpeed| match s {
+            TrillWiggleSpeed::Slow => 60.0,
+            TrillWiggleSpeed::Standard => 40.0,
+            TrillWiggleSpeed::Fast => 25.0,
+            _ => 30.0,
+        };
+        let regions = r.synthesize_regions(0.0, 300.0, 3, advances).unwrap();
+        let layout = layout_trill_extension_multi_speed(300.0, 0.0, &regions)
+            .expect("synthesized regions must produce a valid multi-speed layout");
+        // At least one tile per region (each region is 100 wide and
+        // every chosen advance ≤ 60 < 100).
+        assert!(layout.tiles.len() >= 3);
+        // Right edge must not overflow the synthesizer's end_x.
+        assert!(multi_speed_trill_extension_right_edge(&layout) <= 300.0);
+    }
+
+    #[test]
+    fn ramp_linear_sorted_start_xs_satisfies_layout_sort_invariant() {
+        // The layout function rejects unsorted regions. Verify the
+        // synthesizer produces sorted output for both directions.
+        let accel = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slowest,
+            end: TrillWiggleSpeed::Fastest,
+        };
+        let decel = TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Fastest,
+            end: TrillWiggleSpeed::Slowest,
+        };
+        for r in [accel, decel] {
+            let regions = r.synthesize_regions(100.0, 700.0, 6, |_| 50.0).unwrap();
+            for window in regions.windows(2) {
+                assert!(
+                    window[1].start_x > window[0].start_x,
+                    "regions must be sorted strictly increasing in start_x"
+                );
+            }
+        }
     }
 }
