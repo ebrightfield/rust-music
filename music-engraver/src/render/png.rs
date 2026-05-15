@@ -132,6 +132,115 @@ pub const fn is_available() -> bool {
     true
 }
 
+/// Pixel-content verification helpers shared across PNG-rendering test modules.
+///
+/// Lives in `png.rs` so multi-staff and tab score tests can reuse the same
+/// decode/inspect primitives that the `png` module's own tests use. The
+/// alternative (duplicating each helper inline in three test modules) drifts
+/// quickly — a tolerance bumped in one place but not another would mask the
+/// regression class these helpers exist to catch.
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    use super::tiny_skia;
+
+    /// A pixel is "ink" if its premultiplied alpha is at least this threshold.
+    /// 32 is large enough to ignore the long anti-aliasing tail and small
+    /// enough to count meaningful coverage — robust to AA changes between
+    /// rasterizer versions.
+    pub const INK_ALPHA_THRESHOLD: u8 = 32;
+
+    /// Extract pixel width and height from the IHDR chunk (PNG bytes 16–23).
+    pub fn png_dimensions(data: &[u8]) -> (u32, u32) {
+        assert!(data.len() >= 24, "PNG too short for IHDR");
+        let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+        let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+        (w, h)
+    }
+
+    /// Decode PNG bytes back into a `tiny_skia::Pixmap` for pixel inspection.
+    pub fn decode_pixmap(png_bytes: &[u8]) -> tiny_skia::Pixmap {
+        tiny_skia::Pixmap::decode_png(png_bytes).expect("decode PNG bytes")
+    }
+
+    /// Count pixels whose premultiplied alpha is at or above `alpha_threshold`.
+    pub fn count_inked_pixels(pixmap: &tiny_skia::Pixmap, alpha_threshold: u8) -> usize {
+        pixmap
+            .pixels()
+            .iter()
+            .filter(|p| p.alpha() >= alpha_threshold)
+            .count()
+    }
+
+    /// Returns `(x_min, y_min, x_max, y_max)` of inked pixels, inclusive.
+    /// `None` when no pixel meets the alpha threshold.
+    pub fn inked_bbox(
+        pixmap: &tiny_skia::Pixmap,
+        alpha_threshold: u8,
+    ) -> Option<(u32, u32, u32, u32)> {
+        let (w, h) = (pixmap.width(), pixmap.height());
+        let mut x_min = u32::MAX;
+        let mut y_min = u32::MAX;
+        let mut x_max = 0u32;
+        let mut y_max = 0u32;
+        let mut any = false;
+        for y in 0..h {
+            for x in 0..w {
+                let p = pixmap.pixel(x, y).expect("in-bounds pixel");
+                if p.alpha() >= alpha_threshold {
+                    any = true;
+                    if x < x_min {
+                        x_min = x;
+                    }
+                    if y < y_min {
+                        y_min = y;
+                    }
+                    if x > x_max {
+                        x_max = x;
+                    }
+                    if y > y_max {
+                        y_max = y;
+                    }
+                }
+            }
+        }
+        if any {
+            Some((x_min, y_min, x_max, y_max))
+        } else {
+            None
+        }
+    }
+
+    /// Returns the number of pixels in row `y` whose alpha meets the threshold.
+    pub fn inked_pixels_in_row(
+        pixmap: &tiny_skia::Pixmap,
+        y: u32,
+        alpha_threshold: u8,
+    ) -> usize {
+        (0..pixmap.width())
+            .filter(|&x| {
+                pixmap
+                    .pixel(x, y)
+                    .map(|p| p.alpha() >= alpha_threshold)
+                    .unwrap_or(false)
+            })
+            .count()
+    }
+
+    /// Count rows whose inked-pixel density is at least `density_fraction` of
+    /// the image width. Useful for counting "staff-line-like" horizontal bands.
+    pub fn count_dense_rows(
+        pixmap: &tiny_skia::Pixmap,
+        alpha_threshold: u8,
+        density_fraction: f64,
+    ) -> usize {
+        let w = pixmap.width() as f64;
+        let min_count = (w * density_fraction) as usize;
+        (0..pixmap.height())
+            .filter(|&y| inked_pixels_in_row(pixmap, y, alpha_threshold) >= min_count)
+            .count()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,13 +323,7 @@ mod tests {
         assert_eq!(via_fn, via_struct);
     }
 
-    /// Extract pixel width and height from the IHDR chunk (bytes 16–23).
-    fn png_dimensions(data: &[u8]) -> (u32, u32) {
-        assert!(data.len() >= 24, "PNG too short for IHDR");
-        let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
-        let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
-        (w, h)
-    }
+    use super::test_helpers::png_dimensions;
 
     #[test]
     fn is_available_returns_true() {
@@ -320,78 +423,14 @@ mod tests {
     // assert on actual pixel content, catching regressions such as: a blank
     // canvas, a font-loading failure that renders glyphs as invisible, or a
     // rasterizer transform bug that paints into the wrong region.
+    //
+    // Helpers (`decode_pixmap`, `count_inked_pixels`, `inked_bbox`,
+    // `inked_pixels_in_row`, and `INK_ALPHA_THRESHOLD`) live in the sibling
+    // `test_helpers` module so multi-staff and tab score tests can reuse them.
 
-    /// A pixel is "ink" if its premultiplied alpha is non-zero. We use a small
-    /// threshold (rather than `> 0`) to ignore the long anti-aliased tail and
-    /// count only meaningful coverage; this keeps tests robust to AA changes.
-    const INK_ALPHA_THRESHOLD: u8 = 32;
-
-    fn decode_pixmap(png_bytes: &[u8]) -> tiny_skia::Pixmap {
-        tiny_skia::Pixmap::decode_png(png_bytes).expect("decode PNG bytes")
-    }
-
-    fn count_inked_pixels(pixmap: &tiny_skia::Pixmap, alpha_threshold: u8) -> usize {
-        pixmap
-            .pixels()
-            .iter()
-            .filter(|p| p.alpha() >= alpha_threshold)
-            .count()
-    }
-
-    /// Returns `(x_min, y_min, x_max, y_max)` of inked pixels, inclusive.
-    /// `None` when no pixel meets the alpha threshold.
-    fn inked_bbox(
-        pixmap: &tiny_skia::Pixmap,
-        alpha_threshold: u8,
-    ) -> Option<(u32, u32, u32, u32)> {
-        let (w, h) = (pixmap.width(), pixmap.height());
-        let mut x_min = u32::MAX;
-        let mut y_min = u32::MAX;
-        let mut x_max = 0u32;
-        let mut y_max = 0u32;
-        let mut any = false;
-        for y in 0..h {
-            for x in 0..w {
-                let p = pixmap.pixel(x, y).expect("in-bounds pixel");
-                if p.alpha() >= alpha_threshold {
-                    any = true;
-                    if x < x_min {
-                        x_min = x;
-                    }
-                    if y < y_min {
-                        y_min = y;
-                    }
-                    if x > x_max {
-                        x_max = x;
-                    }
-                    if y > y_max {
-                        y_max = y;
-                    }
-                }
-            }
-        }
-        if any {
-            Some((x_min, y_min, x_max, y_max))
-        } else {
-            None
-        }
-    }
-
-    /// Returns the number of pixels in row `y` whose alpha meets the threshold.
-    fn inked_pixels_in_row(
-        pixmap: &tiny_skia::Pixmap,
-        y: u32,
-        alpha_threshold: u8,
-    ) -> usize {
-        (0..pixmap.width())
-            .filter(|&x| {
-                pixmap
-                    .pixel(x, y)
-                    .map(|p| p.alpha() >= alpha_threshold)
-                    .unwrap_or(false)
-            })
-            .count()
-    }
+    use super::test_helpers::{
+        count_inked_pixels, decode_pixmap, inked_bbox, inked_pixels_in_row, INK_ALPHA_THRESHOLD,
+    };
 
     fn score_sparse_whole_rest() -> String {
         // Minimal-ink score: just clef + time sig + a single whole rest (a

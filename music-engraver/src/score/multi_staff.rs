@@ -1472,4 +1472,156 @@ mod tests {
             "1 mps should produce 2 systems (>=22 staff lines), got {line_count}"
         );
     }
+
+    // -- Pixel-content PNG verification --
+    //
+    // The existing PNG tests in `render/png.rs` cover single-staff
+    // `ScoreBuilder` output. These tests extend pixel-content depth to
+    // `MultiStaffScore`, which adds a brace/bracket glyph, joined barlines,
+    // and a second staff — code paths the single-staff tests can't exercise.
+    // A `MultiStaffScore` PNG that came back blank, or that dropped one
+    // staff, or whose brace glyph was missing, would still pass the magic-
+    // byte and dimension checks above; the assertions below would fire.
+    #[cfg(feature = "png")]
+    mod png_tests {
+        use super::*;
+        use crate::render::png::test_helpers::{
+            count_dense_rows, count_inked_pixels, decode_pixmap, inked_bbox, png_dimensions,
+            INK_ALPHA_THRESHOLD,
+        };
+
+        #[test]
+        fn grand_staff_png_has_substantial_ink() {
+            // Grand staff = 2 staves + brace + joined barlines + clefs +
+            // time/key sigs + notes. Substantial ink expected.
+            let png = MultiStaffScore::grand_staff(simple_treble(), simple_bass())
+                .render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            let ink = count_inked_pixels(&pixmap, INK_ALPHA_THRESHOLD);
+            // Grand staff is much richer than the single-note ScoreBuilder
+            // baseline (200 ink threshold); demand at least 600 here.
+            assert!(
+                ink >= 600,
+                "grand staff PNG has only {ink} inked pixels; \
+                 expected >= 600 for 2 staves + brace + clefs + notes"
+            );
+        }
+
+        #[test]
+        fn grand_staff_png_has_more_ink_than_single_staff() {
+            // A grand staff renders strictly more content than either single
+            // staff alone. If a refactor accidentally dropped the second
+            // staff (or rendered it on top of the first), this would fire.
+            let single_png = simple_treble().render_png(1.0);
+            let grand_png =
+                MultiStaffScore::grand_staff(simple_treble(), simple_bass()).render_png(1.0);
+            let single_ink =
+                count_inked_pixels(&decode_pixmap(&single_png), INK_ALPHA_THRESHOLD);
+            let grand_ink =
+                count_inked_pixels(&decode_pixmap(&grand_png), INK_ALPHA_THRESHOLD);
+            assert!(
+                grand_ink > single_ink,
+                "grand staff ink ({grand_ink}) should exceed single staff ink ({single_ink})"
+            );
+        }
+
+        #[test]
+        fn grand_staff_png_ink_bbox_is_taller_than_single_staff() {
+            // The vertical span of inked content in a grand staff covers
+            // both staves; a single staff covers only itself. The grand
+            // bbox height must be substantially larger. Catches a regression
+            // where both staves render at the same y-origin.
+            let single_png = simple_treble().render_png(1.0);
+            let grand_png =
+                MultiStaffScore::grand_staff(simple_treble(), simple_bass()).render_png(1.0);
+            let single_bbox =
+                inked_bbox(&decode_pixmap(&single_png), INK_ALPHA_THRESHOLD).expect("single ink");
+            let grand_bbox =
+                inked_bbox(&decode_pixmap(&grand_png), INK_ALPHA_THRESHOLD).expect("grand ink");
+            let single_h = single_bbox.3 - single_bbox.1;
+            let grand_h = grand_bbox.3 - grand_bbox.1;
+            // The grand staff has two staves + the gap between them; even
+            // tightly packed, its vertical span should be at least 1.5× the
+            // single-staff span. Empirically the ratio is ~3× but we leave
+            // headroom for layout tweaks.
+            assert!(
+                grand_h as f64 >= single_h as f64 * 1.5,
+                "grand staff bbox height ({grand_h}) should be >= 1.5× single ({single_h})"
+            );
+        }
+
+        #[test]
+        fn grand_staff_png_has_at_least_ten_dense_horizontal_bands() {
+            // Two five-line staves produce ~10 dense horizontal bands (one
+            // per staff line, blurred by AA so we count "rows >= 50% dense"
+            // rather than a strict line count). Catches a regression where
+            // one staff's lines are dropped or rendered as dashed strokes.
+            let png = MultiStaffScore::grand_staff(simple_treble(), simple_bass())
+                .render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            // 50% density is conservative: staff lines genuinely span 100% of
+            // the staff width, so each line contributes at least 1 row above
+            // 50%. Threshold of 10 corresponds to exactly 5+5 lines with no
+            // AA-fringe expansion; AA typically widens each line to ~2 rows.
+            let dense = count_dense_rows(&pixmap, INK_ALPHA_THRESHOLD, 0.5);
+            assert!(
+                dense >= 10,
+                "grand staff has only {dense} dense rows; \
+                 expected >= 10 (2 staves × 5 staff lines)"
+            );
+        }
+
+        #[test]
+        fn grand_staff_png_ink_starts_left_of_first_note_column() {
+            // The brace glyph and clef sit to the left of any note. The
+            // leftmost inked pixel must therefore appear inside the first
+            // ~20% of the image width. Catches a regression where the brace
+            // is missing or rendered off-canvas (negative x clipped).
+            let png = MultiStaffScore::grand_staff(simple_treble(), simple_bass())
+                .render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            let (x_min, _, _, _) =
+                inked_bbox(&pixmap, INK_ALPHA_THRESHOLD).expect("ink present");
+            let img_w = pixmap.width();
+            let left_band = img_w as f64 * 0.2;
+            assert!(
+                (x_min as f64) < left_band,
+                "leftmost ink column is {x_min}, beyond {left_band:.0} (20% of {img_w}); \
+                 expected brace/clef on the left edge"
+            );
+        }
+
+        #[test]
+        fn empty_grand_staff_renders_to_decodable_png() {
+            // An empty grand-staff score still renders a valid PNG; this is
+            // a regression canary against a panic-on-decode for the empty
+            // case. We don't assert on ink count (could be 0); only that
+            // the PNG decodes and reports its IHDR dimensions correctly.
+            let png = MultiStaffScore::grand_staff(ScoreBuilder::new(), ScoreBuilder::new())
+                .render_png(1.0);
+            let (hdr_w, hdr_h) = png_dimensions(&png);
+            let pixmap = decode_pixmap(&png);
+            assert_eq!(pixmap.width(), hdr_w);
+            assert_eq!(pixmap.height(), hdr_h);
+            assert!(hdr_w > 0 && hdr_h > 0, "empty PNG should still have non-zero dims");
+        }
+
+        #[test]
+        fn grand_staff_png_2x_has_more_ink_than_1x() {
+            // Scale propagates to the rasterizer (verified once for
+            // ScoreBuilder; re-verify for the MultiStaffScore code path
+            // which builds its own PngRenderer instance — catches a wire-up
+            // regression specific to multi-staff).
+            let png_1x =
+                MultiStaffScore::grand_staff(simple_treble(), simple_bass()).render_png(1.0);
+            let png_2x =
+                MultiStaffScore::grand_staff(simple_treble(), simple_bass()).render_png(2.0);
+            let ink_1x = count_inked_pixels(&decode_pixmap(&png_1x), INK_ALPHA_THRESHOLD);
+            let ink_2x = count_inked_pixels(&decode_pixmap(&png_2x), INK_ALPHA_THRESHOLD);
+            assert!(
+                ink_2x > ink_1x * 2,
+                "2× should at least double the ink count (got 1×={ink_1x}, 2×={ink_2x})"
+            );
+        }
+    }
 }

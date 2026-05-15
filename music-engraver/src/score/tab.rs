@@ -2749,14 +2749,10 @@ mod tests {
     #[cfg(feature = "png")]
     mod png_tests {
         use super::*;
-
-        /// Extract PNG width and height from IHDR chunk (bytes 16–23).
-        fn png_dimensions(data: &[u8]) -> (u32, u32) {
-            assert!(data.len() >= 24, "PNG too short for IHDR");
-            let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
-            let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
-            (w, h)
-        }
+        use crate::render::png::test_helpers::{
+            count_dense_rows, count_inked_pixels, decode_pixmap, inked_bbox, png_dimensions,
+            INK_ALPHA_THRESHOLD,
+        };
 
         #[test]
         fn tab_render_png_produces_valid_png() {
@@ -2830,6 +2826,186 @@ mod tests {
             let (w, h) = png_dimensions(&png);
             assert!(w > 100, "complex tab PNG width should be substantial, got {w}");
             assert!(h > 30, "complex tab PNG height should be substantial, got {h}");
+        }
+
+        // -- Pixel-content verification --
+        //
+        // Tab staves have 6 strings (vs 5 staff lines for standard notation),
+        // a TAB clef glyph (vs the much smaller G/F clef), and fret numbers
+        // rendered as text (vs notehead glyphs). A regression like dropping
+        // a string line, rendering the TAB clef as a wrong glyph, or losing
+        // text fret numbers would slip past magic-byte and dimension checks
+        // but show up here as ink-density or layout anomalies.
+
+        /// A small but content-rich tab score: 6 chord notes across two
+        /// measures, both barlines, fret numbers on multiple strings.
+        fn rich_tab_score() -> TabScoreBuilder {
+            TabScoreBuilder::guitar()
+                .quarter()
+                .fret(1, 0)
+                .fret(2, 2)
+                .fret(3, 2)
+                .next()
+                .fret(1, 3)
+                .next()
+                .fret(1, 5)
+                .barline()
+                .fret(6, 0)
+                .next()
+                .fret(5, 2)
+                .next()
+                .fret(4, 0)
+                .end_barline()
+        }
+
+        /// A near-empty tab score: TAB clef + end barline only. No fret
+        /// numbers; the only ink is from the staff lines and clef glyph.
+        fn sparse_tab_score() -> TabScoreBuilder {
+            TabScoreBuilder::guitar().end_barline()
+        }
+
+        #[test]
+        fn tab_png_has_substantial_ink() {
+            let png = rich_tab_score().render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            let ink = count_inked_pixels(&pixmap, INK_ALPHA_THRESHOLD);
+            // 6 strings × full-width staff lines alone yield several hundred
+            // inked pixels; clef + fret numbers + barlines push well beyond.
+            assert!(
+                ink >= 400,
+                "tab PNG has only {ink} inked pixels; expected >= 400 for \
+                 6 strings + TAB clef + fret numbers + barlines"
+            );
+        }
+
+        #[test]
+        fn tab_png_has_at_least_six_dense_horizontal_bands() {
+            // Standard guitar tab has 6 strings drawn as 6 horizontal lines
+            // spanning the full measure width. Each contributes at least one
+            // row above the 50% density threshold (AA may widen each to ~2
+            // rows). Catches a regression where a string line is dropped or
+            // rendered as dashed strokes.
+            let png = rich_tab_score().render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            let dense = count_dense_rows(&pixmap, INK_ALPHA_THRESHOLD, 0.5);
+            assert!(
+                dense >= 6,
+                "tab has only {dense} dense rows; expected >= 6 (six strings)"
+            );
+        }
+
+        #[test]
+        fn tab_png_has_more_dense_rows_than_standard_staff() {
+            // 6-string tab should produce more dense horizontal bands than a
+            // 5-line standard staff (sanity vs the previous test, but with a
+            // built-in baseline comparison — catches a regression that
+            // accidentally collapsed the tab staff to 5 strings).
+            use crate::score::ScoreBuilder as NotationScoreBuilder;
+            use music::notation::clef::Clef;
+            use music::notation::rhythm::duration::Duration;
+            use music::note::note::Note;
+            use music::note::pitch::Pitch;
+
+            let standard_png = NotationScoreBuilder::new()
+                .clef(Clef::Treble)
+                .note(Pitch::new(Note::C, 4).expect("pitch"), Duration::QTR)
+                .end_barline()
+                .render_png(1.0);
+            let tab_png = rich_tab_score().render_png(1.0);
+            let standard_dense = count_dense_rows(
+                &decode_pixmap(&standard_png),
+                INK_ALPHA_THRESHOLD,
+                0.5,
+            );
+            let tab_dense =
+                count_dense_rows(&decode_pixmap(&tab_png), INK_ALPHA_THRESHOLD, 0.5);
+            assert!(
+                tab_dense > standard_dense,
+                "tab dense rows ({tab_dense}) should exceed standard staff ({standard_dense})"
+            );
+        }
+
+        #[test]
+        fn tab_png_with_fret_numbers_has_more_ink_than_sparse_tab() {
+            // Fret-number text is drawn into the same vertical region as the
+            // staff lines; counting total ink is the cleanest way to verify
+            // the text actually rendered. If a font-loading failure ever
+            // rendered fret digits as invisible, the sparse vs rich
+            // difference would shrink to zero.
+            let sparse_png = sparse_tab_score().render_png(1.0);
+            let rich_png = rich_tab_score().render_png(1.0);
+            let sparse_ink =
+                count_inked_pixels(&decode_pixmap(&sparse_png), INK_ALPHA_THRESHOLD);
+            let rich_ink =
+                count_inked_pixels(&decode_pixmap(&rich_png), INK_ALPHA_THRESHOLD);
+            assert!(
+                rich_ink > sparse_ink,
+                "tab with fret numbers ({rich_ink}) should have more ink than \
+                 empty tab ({sparse_ink})"
+            );
+            // And the difference should be substantial — at least 100 extra
+            // inked pixels for 6 fret digits + extra barline.
+            assert!(
+                rich_ink - sparse_ink >= 100,
+                "fret-number ink contribution is only {} pixels; expected >= 100",
+                rich_ink - sparse_ink
+            );
+        }
+
+        #[test]
+        fn tab_png_ink_bbox_spans_most_of_width() {
+            // TAB clef sits on the left, end barline on the right; inked
+            // content must span most of the image width. Catches a bug
+            // where (e.g.) all content rendered into a single column or
+            // the clef was clipped off-canvas.
+            let png = rich_tab_score().render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            let bbox = inked_bbox(&pixmap, INK_ALPHA_THRESHOLD).expect("tab PNG should have ink");
+            let bbox_width = bbox.2 - bbox.0;
+            let img_w = pixmap.width();
+            let span_fraction = bbox_width as f64 / img_w as f64;
+            assert!(
+                span_fraction > 0.5,
+                "tab ink bbox width {bbox_width} is only {:.1}% of image width {img_w}; \
+                 expected staff to span >50%",
+                100.0 * span_fraction
+            );
+        }
+
+        #[test]
+        fn tab_png_is_mostly_transparent_background() {
+            // The tab staff occupies a horizontal band in the middle of a
+            // taller page. Background dominance regression canary (mirrors
+            // the standard-notation test in render::png::tests).
+            let png = rich_tab_score().render_png(1.0);
+            let pixmap = decode_pixmap(&png);
+            let total = (pixmap.width() * pixmap.height()) as usize;
+            let transparent = pixmap
+                .pixels()
+                .iter()
+                .filter(|p| p.alpha() == 0)
+                .count();
+            let transparent_fraction = transparent as f64 / total as f64;
+            assert!(
+                transparent_fraction > 0.5,
+                "expected tab background to dominate, but only {transparent}/{total} \
+                 ({:.1}%) pixels are fully transparent",
+                100.0 * transparent_fraction
+            );
+        }
+
+        #[test]
+        fn tab_png_2x_scale_increases_ink() {
+            // Verifies the scale parameter is wired through the tab-specific
+            // PNG path (it builds its own PngRenderer inside `try_render_png`).
+            let png_1x = rich_tab_score().render_png(1.0);
+            let png_2x = rich_tab_score().render_png(2.0);
+            let ink_1x = count_inked_pixels(&decode_pixmap(&png_1x), INK_ALPHA_THRESHOLD);
+            let ink_2x = count_inked_pixels(&decode_pixmap(&png_2x), INK_ALPHA_THRESHOLD);
+            assert!(
+                ink_2x > ink_1x * 2,
+                "tab 2× should at least double ink (1×={ink_1x}, 2×={ink_2x})"
+            );
         }
     }
 }
