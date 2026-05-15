@@ -75,19 +75,37 @@ pub const BRACE_LEFT_OFFSET_SS: f64 = 0.5;
 pub const BRACKET_THICKNESS_SS: f64 = 0.5;
 
 /// Computed geometry for a brace connector.
+///
+/// `BraceLayout` describes only the **geometric intent** (where the brace must
+/// span vertically); the renderer queries the actual brace glyph's bounding
+/// box from the font and derives the scale factor at draw time. This keeps
+/// the layout font-agnostic — fonts whose brace glyph has a different
+/// design-height than Bravura's render correctly without any layout change.
 #[derive(Clone, Debug)]
 pub struct BraceLayout {
     /// SMuFL glyph for the brace.
     pub glyph: Glyph,
     /// X position of the brace glyph (left of the staff system).
     pub x: f64,
-    /// Y position of the brace glyph center (midpoint between top of first
-    /// staff and bottom of last staff).
-    pub y_center: f64,
-    /// Total height the brace must span (top of first staff to bottom of last).
-    pub span_height: f64,
-    /// Scale factor to apply to the brace glyph to match `span_height`.
-    pub scale_y: f64,
+    /// Y position of the top of the staff system (top of the first staff).
+    /// The brace's top edge will align with this y.
+    pub y_top: f64,
+    /// Y position of the bottom of the staff system (bottom of the last
+    /// staff). The brace's bottom edge will align with this y.
+    pub y_bottom: f64,
+}
+
+impl BraceLayout {
+    /// Total vertical span the brace must cover (>= 0).
+    pub fn span_height(&self) -> f64 {
+        self.y_bottom - self.y_top
+    }
+
+    /// Vertical midpoint between `y_top` and `y_bottom` — convenient for
+    /// callers that want to center other ornamentation on the brace.
+    pub fn y_center(&self) -> f64 {
+        (self.y_top + self.y_bottom) / 2.0
+    }
 }
 
 /// Computed geometry for a bracket connector.
@@ -176,20 +194,15 @@ pub fn layout_multi_staff(
     let brace = if group.connector == ConnectorKind::Brace && group.staff_count >= 2 {
         let top = staff_y_origins[0];
         let bottom_staff_top = staff_y_origins[group.staff_count - 1];
-        let span_height = bottom_staff_top + staff_height - top;
-        let y_center = top + span_height / 2.0;
-
-        // The SMuFL brace glyph is designed to span 1 staff space in height
-        // at em-square scale. We scale it to match the total span.
-        let design_height = staff_space;
-        let scale_y = span_height / design_height;
-
+        let bottom = bottom_staff_top + staff_height;
+        // The vertical scale is computed by the renderer using the font's
+        // actual brace glyph height (read from SMuFL metadata) — see
+        // `draw_brace`. The layout records only the geometric intent.
         Some(BraceLayout {
             glyph: Glyph::Brace,
             x: -BRACE_LEFT_OFFSET_SS * staff_space,
-            y_center,
-            span_height,
-            scale_y,
+            y_top: top,
+            y_bottom: bottom,
         })
     } else {
         None
@@ -303,8 +316,21 @@ mod tests {
 
         let brace = layout.brace.as_ref().expect("grand staff should have brace");
         assert_eq!(brace.glyph, Glyph::Brace);
-        assert!(brace.span_height > 0.0);
-        assert!(brace.scale_y > 1.0, "brace should be scaled up from 1 staff space");
+        // Span covers both staves and the inter-staff gap.
+        // staff_height = 4 ss; gap = 6 ss; 2 staves → 14 ss total.
+        let expected_span = 14.0 * SS;
+        assert!(
+            (brace.span_height() - expected_span).abs() < 0.01,
+            "brace span_height: expected {expected_span}, got {}",
+            brace.span_height()
+        );
+        assert_eq!(brace.y_top, 50.0, "brace top should be at staff system top");
+        let expected_bottom = 50.0 + expected_span;
+        assert!(
+            (brace.y_bottom - expected_bottom).abs() < 0.01,
+            "brace bottom: expected {expected_bottom}, got {}",
+            brace.y_bottom
+        );
     }
 
     #[test]
@@ -318,10 +344,13 @@ mod tests {
         let expected_center = (top + bottom) / 2.0;
 
         assert!(
-            (brace.y_center - expected_center).abs() < 0.01,
+            (brace.y_center() - expected_center).abs() < 0.01,
             "brace center: expected {expected_center}, got {}",
-            brace.y_center
+            brace.y_center()
         );
+        // y_top and y_bottom should bracket the center.
+        assert!(brace.y_top < brace.y_center());
+        assert!(brace.y_bottom > brace.y_center());
     }
 
     #[test]

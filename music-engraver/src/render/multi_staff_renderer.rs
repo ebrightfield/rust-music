@@ -8,9 +8,19 @@ use crate::render::SvgWriter;
 
 /// Draw a brace connector (curly brace for piano/keyboard).
 ///
-/// The brace glyph is vertically scaled to span the distance from the top
-/// of the first staff to the bottom of the last staff. It is positioned to
-/// the left of the staff system at the vertical midpoint.
+/// The brace glyph is vertically scaled to span exactly from `brace.y_top`
+/// (top of first staff) to `brace.y_bottom` (bottom of last staff). The
+/// scale factor is derived from the font's actual brace bbox height (read
+/// from SMuFL metadata) — this keeps brace rendering correct across
+/// different SMuFL fonts whose brace glyph may have different design
+/// heights. (Bravura's brace is ~3.988 staff-spaces tall; an earlier
+/// implementation incorrectly assumed 1 staff-space, producing a brace ~4×
+/// too large and offset upward off the staff system.)
+///
+/// Falls back to scaling against 1 staff space (the previous, font-specific
+/// assumption) if the font's metadata lacks bbox data for the brace glyph —
+/// in that case the rendering may be slightly off, but the brace will at
+/// least be drawn.
 pub fn draw_brace(
     svg: &mut SvgWriter,
     font: &MusicFont,
@@ -18,14 +28,31 @@ pub fn draw_brace(
 ) -> Result<(), FontError> {
     let outline = font.glyph_outline(brace.glyph)?;
 
-    // Build a transform that scales the glyph vertically and positions it.
-    // The brace glyph origin is at its top; we translate to center it.
-    let transform = format!(
-        "translate({},{}) scale(1,{})",
-        brace.x,
-        brace.y_center - brace.span_height / 2.0,
-        brace.scale_y
-    );
+    // Bravura's brace path runs from y=0 (bottom, at the glyph's origin) up
+    // to y = -bbox.height() (top, after the path's y-flip into SVG space).
+    // We want the brace's bottom edge at `y_bottom` and top edge at `y_top`.
+    //
+    // SVG `transform="translate(tx,ty) scale(1,sy)"` composes right-to-left:
+    // a path point (x, py) becomes (x + tx, ty + sy*py). So a path-space
+    // point at py=0 lands at SVG y = ty, and py = -h lands at ty - sy*h.
+    //
+    // Solving: ty = y_bottom and sy = (y_bottom - y_top) / h, where h is the
+    // brace glyph's bbox height in design units.
+    let span = brace.y_bottom - brace.y_top;
+    let glyph_height = font
+        .glyph_bbox_design_units(brace.glyph)
+        .map(|bb| bb.height())
+        // Fallback: the SMuFL recommended default has no brace-specific
+        // value, so we use the long-standing (incorrect-for-Bravura)
+        // assumption of 1 staff space. This branch is unreachable for the
+        // bundled Bravura font; it exists for robustness against custom
+        // metadata-stripped fonts.
+        .filter(|h| *h > 0.0)
+        .unwrap_or_else(|| font.engraving_config().staff_space);
+    let scale_y = span / glyph_height;
+    let ty = brace.y_bottom;
+
+    let transform = format!("translate({},{}) scale(1,{})", brace.x, ty, scale_y);
 
     svg.add_path(&outline.path_data, "black", Some(&transform));
     Ok(())
@@ -353,11 +380,114 @@ mod tests {
         draw_brace(&mut svg, &font, brace).unwrap();
 
         let output = svg.to_svg();
-        // The scale_y should be > 1 since we're scaling from 1 staff space
-        // to the full span across 2 staves + gap
         assert!(
             output.contains("scale(1,"),
             "brace transform should contain scale(1,<y>)"
+        );
+    }
+
+    /// Locks in the corrected brace geometry: the brace glyph's bottom edge
+    /// must land at `y_bottom` (bottom of staff system), and `scale_y` must
+    /// be derived from the font's actual brace bbox height. A regression
+    /// that reverts to "design_height = 1 staff_space" would set `scale_y`
+    /// to the span-in-staff-spaces value (14 for a default grand staff),
+    /// quadruple the correct ~3.51, and fire this test.
+    #[test]
+    fn brace_transform_scale_y_matches_font_bbox_height() {
+        let group = StaffGroup::grand_staff();
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let brace = layout.brace.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 4000.0);
+        draw_brace(&mut svg, &font, brace).unwrap();
+        let output = svg.to_svg();
+
+        // Compute expected scale_y from the actual font bbox so the test
+        // stays font-agnostic. For Bravura: span = 14 ss × 250 = 3500;
+        // brace height ≈ 997 design units → scale_y ≈ 3.5106.
+        let bbox = font.glyph_bbox_design_units(brace.glyph).unwrap();
+        let expected_scale = brace.span_height() / bbox.height();
+        let expected_substr = format!("scale(1,{})", expected_scale);
+        assert!(
+            output.contains(&expected_substr),
+            "brace scale: expected substring `{expected_substr}`; SVG:\n{output}"
+        );
+
+        // Confirm the correct value is comfortably distinct from the old
+        // buggy value (14 for a default grand staff). A regression to the
+        // pre-fix assumption "design_height = 1 staff space" would yield a
+        // scale_y ≈ 14, which is roughly 4× the correct value.
+        assert!(
+            expected_scale > 3.0 && expected_scale < 4.0,
+            "expected scale_y ≈ 3.51 for Bravura grand staff, got {expected_scale}"
+        );
+    }
+
+    /// Locks in the corrected translate y: the brace glyph's origin (its
+    /// bbox SW corner, the bottom in font space) is anchored to `y_bottom`.
+    /// Combined with the correct scale_y this means the brace top lands at
+    /// `y_top` exactly. The pre-fix code translated to `y_top` instead,
+    /// which placed the brace bottom at the top of the staff system and
+    /// made the rest of the brace extend off-screen above the music.
+    #[test]
+    fn brace_transform_translate_y_at_staff_system_bottom() {
+        let group = StaffGroup::grand_staff();
+        let layout = layout_multi_staff(&group, 100.0, SS, 5000.0);
+        let brace = layout.brace.as_ref().unwrap();
+
+        let font = bravura_font();
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, 0.0, 5500.0, 4000.0);
+        draw_brace(&mut svg, &font, brace).unwrap();
+        let output = svg.to_svg();
+
+        // Look for the translate component: `translate(brace.x, brace.y_bottom)`.
+        let needle = format!("translate({},{})", brace.x, brace.y_bottom);
+        assert!(
+            output.contains(&needle),
+            "brace should translate to (x, y_bottom = {}); SVG:\n{output}",
+            brace.y_bottom
+        );
+        // And NOT to y_top (the pre-fix behavior).
+        let bad_needle = format!("translate({},{})", brace.x, brace.y_top);
+        assert!(
+            !output.contains(&bad_needle),
+            "brace must not translate to y_top (= {}); that was the pre-fix bug",
+            brace.y_top
+        );
+    }
+
+    /// Empty-metadata fallback: if a font supplies no brace bbox, the
+    /// renderer still emits a brace (with a fallback scale) rather than
+    /// failing or panicking. The scale is the previous (incorrect)
+    /// assumption — kept so a font missing only its bbox metadata still
+    /// renders, just slightly off.
+    #[test]
+    fn brace_render_falls_back_when_metadata_missing_bbox() {
+        use crate::font::{MusicFont, BRAVURA_OTF};
+        let empty_metadata = br#"{"fontName":"Empty"}"#;
+        let font = MusicFont::new(BRAVURA_OTF, empty_metadata).unwrap();
+
+        let group = StaffGroup::grand_staff();
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let brace = layout.brace.as_ref().unwrap();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -200.0, -50.0, 5500.0, 3500.0);
+        // Must not panic; must emit a path.
+        draw_brace(&mut svg, &font, brace).unwrap();
+        let output = svg.to_svg();
+        assert!(
+            output.contains("<path"),
+            "brace path should be emitted even without bbox metadata"
+        );
+        // Fallback uses staff_space as glyph_height, so scale_y == span/ss == 14.
+        let span = brace.y_bottom - brace.y_top;
+        let staff_space = font.engraving_config().staff_space;
+        let expected_fallback_scale = span / staff_space;
+        let needle = format!("scale(1,{})", expected_fallback_scale);
+        assert!(
+            output.contains(&needle),
+            "fallback scale should be span/staff_space = {expected_fallback_scale}; SVG:\n{output}"
         );
     }
 

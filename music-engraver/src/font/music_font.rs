@@ -19,6 +19,41 @@ pub enum FontError {
     MetadataError(String),
 }
 
+/// Glyph bounding box in font design units (already converted from SMuFL's
+/// staff-space coordinates and y-flipped to SVG convention — y increases
+/// downward, so `y_top < y_bottom`).
+///
+/// Returned by [`MusicFont::glyph_bbox_design_units`]. The two corners hug
+/// the glyph's outline tightly; layout code that needs to scale or position
+/// a glyph relative to its drawn extent (e.g. brace vertical scaling, bracket
+/// scroll anchoring) should drive its math from these values rather than
+/// from font-specific constants.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlyphBBoxDesignUnits {
+    /// X coordinate of the left edge of the bbox, in design units relative
+    /// to the glyph's origin (typically the bbox's SW corner).
+    pub x_left: f64,
+    /// X coordinate of the right edge of the bbox.
+    pub x_right: f64,
+    /// Y coordinate of the top edge of the bbox in SVG convention
+    /// (y increases downward — so `y_top` is the smallest y).
+    pub y_top: f64,
+    /// Y coordinate of the bottom edge of the bbox in SVG convention.
+    pub y_bottom: f64,
+}
+
+impl GlyphBBoxDesignUnits {
+    /// Width of the bbox in design units (always >= 0).
+    pub fn width(&self) -> f64 {
+        self.x_right - self.x_left
+    }
+
+    /// Height of the bbox in design units (always >= 0).
+    pub fn height(&self) -> f64 {
+        self.y_bottom - self.y_top
+    }
+}
+
 /// A parsed SMuFL-compliant music font, providing glyph outlines and metadata.
 ///
 /// Font-agnostic: while v1 ships only Bravura, layout and render code
@@ -82,6 +117,40 @@ impl<'a> MusicFont<'a> {
     pub fn glyph_advance(&self, glyph: Glyph) -> Result<u16, FontError> {
         let gid = self.glyph_id(glyph)?;
         Ok(self.face.glyph_hor_advance(gid).unwrap_or(0))
+    }
+
+    /// Look up a glyph's bounding box from SMuFL metadata, converted to font
+    /// design units and y-flipped to SVG convention.
+    ///
+    /// SMuFL metadata reports glyph bboxes in **staff spaces** with y-up
+    /// (matching font-design conventions). This helper converts to design
+    /// units (multiplying by `staff_space = units_per_em / 4`, the SMuFL
+    /// convention) and flips y so the returned `y_top < y_bottom` matches
+    /// the rest of the engraver's SVG coordinate system.
+    ///
+    /// Returns `None` if the glyph's bbox is not present in the font's
+    /// metadata. The SMuFL spec recommends fonts provide bbox data for all
+    /// supplied glyphs, but it is not strictly required; callers should
+    /// have a sensible fallback for the `None` case.
+    pub fn glyph_bbox_design_units(&self, glyph: Glyph) -> Option<GlyphBBoxDesignUnits> {
+        let bbox = self.metadata.bounding_boxes.get(glyph)?;
+        // SMuFL: 1 staff space = units_per_em / 4 design units.
+        let ss = self.face.units_per_em() as f64 / 4.0;
+        let sw_x = bbox.sw.x().0 * ss;
+        let sw_y = bbox.sw.y().0 * ss;
+        let ne_x = bbox.ne.x().0 * ss;
+        let ne_y = bbox.ne.y().0 * ss;
+        // Font space has y-up; SVG y-down. The path renderer (SvgPathBuilder)
+        // negates y when emitting path data. Mirror that here: a font-space
+        // y of +n design units becomes an SVG-space y of -n. So:
+        //   - font NE.y (top in font space)    → SVG y_top    = -ne_y
+        //   - font SW.y (bottom in font space) → SVG y_bottom = -sw_y
+        Some(GlyphBBoxDesignUnits {
+            x_left: sw_x,
+            x_right: ne_x,
+            y_top: -ne_y,
+            y_bottom: -sw_y,
+        })
     }
 
     /// Build an `EngravingConfig` from this font's metadata, with all values
@@ -176,5 +245,143 @@ mod tests {
             black.path_data, whole.path_data,
             "different noteheads should have different outlines"
         );
+    }
+
+    #[test]
+    fn brace_bbox_design_units_matches_bravura_metadata() {
+        // Bravura's brace bBox (per bravura_metadata.json): SW (0.008, 0.0),
+        // NE (0.328, 3.988) in staff spaces. With Bravura's UPM=1000 and
+        // SMuFL's 1 sp = UPM/4 = 250 design units, the bbox in design units
+        // is: x_left=2, x_right=82, y_top=-997 (SVG-space, after y-flip),
+        // y_bottom=0. The height (y_bottom - y_top) is 997 design units —
+        // i.e. ~3.988 staff spaces, NOT 1 staff space as previously assumed
+        // by the brace layout. The whole point of `glyph_bbox_design_units`
+        // is to let the renderer scale the brace by its actual height.
+        let font = bravura();
+        let bbox = font
+            .glyph_bbox_design_units(Glyph::Brace)
+            .expect("Bravura brace bbox should be present in metadata");
+        let tol = 0.001;
+        assert!(
+            (bbox.x_left - 2.0).abs() < tol,
+            "brace x_left: expected 2.0, got {}",
+            bbox.x_left
+        );
+        assert!(
+            (bbox.x_right - 82.0).abs() < tol,
+            "brace x_right: expected 82.0, got {}",
+            bbox.x_right
+        );
+        // After y-flip: SVG-space y_top = -ne_y = -997 (top of glyph above
+        // origin in SVG), y_bottom = -sw_y = 0 (origin at bottom).
+        assert!(
+            (bbox.y_top - (-997.0)).abs() < tol,
+            "brace y_top (SVG): expected -997, got {}",
+            bbox.y_top
+        );
+        assert!(
+            (bbox.y_bottom - 0.0).abs() < tol,
+            "brace y_bottom (SVG): expected 0, got {}",
+            bbox.y_bottom
+        );
+        assert!(
+            (bbox.height() - 997.0).abs() < tol,
+            "brace height: expected 997 (3.988 sp × 250), got {}",
+            bbox.height()
+        );
+        assert!(
+            (bbox.width() - 80.0).abs() < tol,
+            "brace width: expected 80, got {}",
+            bbox.width()
+        );
+    }
+
+    #[test]
+    fn bracket_top_bbox_origin_at_bottom_left() {
+        // bracketTop's metadata: SW (0,0), NE (1.876, 1.18). The glyph extends
+        // up-and-right from its origin. After y-flip for SVG, the bbox sits
+        // entirely above origin (y_top = -295, y_bottom = 0). This anchors
+        // the SMuFL convention that the multi-staff renderer relies on when
+        // it translates the scroll glyph to `(bracket.x, bracket.y_top)`.
+        let font = bravura();
+        let bbox = font
+            .glyph_bbox_design_units(Glyph::BracketTop)
+            .expect("BracketTop bbox should be present");
+        let tol = 0.01;
+        assert!((bbox.x_left - 0.0).abs() < tol);
+        assert!((bbox.y_bottom - 0.0).abs() < tol);
+        assert!(bbox.y_top < 0.0, "bracketTop extends upward (SVG-negative y)");
+        // Bravura's 1.18 sp = 295 design units.
+        assert!(
+            (bbox.height() - 295.0).abs() < 0.5,
+            "bracketTop height: expected ~295, got {}",
+            bbox.height()
+        );
+    }
+
+    #[test]
+    fn bracket_bottom_bbox_origin_at_top_left() {
+        // bracketBottom's metadata: SW (0,-1.18), NE (1.876, 0). The glyph
+        // extends down-and-right from its origin. After y-flip for SVG, the
+        // bbox sits entirely below origin (y_top = 0, y_bottom = +295).
+        let font = bravura();
+        let bbox = font
+            .glyph_bbox_design_units(Glyph::BracketBottom)
+            .expect("BracketBottom bbox should be present");
+        let tol = 0.01;
+        assert!((bbox.y_top - 0.0).abs() < tol);
+        assert!(bbox.y_bottom > 0.0, "bracketBottom extends downward");
+        assert!(
+            (bbox.height() - 295.0).abs() < 0.5,
+            "bracketBottom height: expected ~295, got {}",
+            bbox.height()
+        );
+    }
+
+    #[test]
+    fn glyph_bbox_design_units_returns_none_for_glyph_without_metadata() {
+        // Build a `MusicFont` with empty metadata JSON: no glyph bboxes
+        // present, so the lookup should return None for everything.
+        let empty_metadata = br#"{"fontName":"Empty"}"#;
+        let font = MusicFont::new(BRAVURA_OTF, empty_metadata)
+            .expect("font with empty metadata still parses");
+        assert!(
+            font.glyph_bbox_design_units(Glyph::Brace).is_none(),
+            "no bbox in metadata → None"
+        );
+        assert!(
+            font.glyph_bbox_design_units(Glyph::NoteheadBlack).is_none(),
+            "no bbox in metadata → None"
+        );
+    }
+
+    #[test]
+    fn glyph_bbox_design_units_height_is_nonnegative() {
+        // Sanity: height = y_bottom - y_top should never be negative after
+        // the y-flip (since ne.y >= sw.y in metadata convention).
+        let font = bravura();
+        for g in [
+            Glyph::Brace,
+            Glyph::BracketTop,
+            Glyph::BracketBottom,
+            Glyph::NoteheadBlack,
+            Glyph::NoteheadWhole,
+            Glyph::GClef,
+            Glyph::FClef,
+        ] {
+            let bbox = font
+                .glyph_bbox_design_units(g)
+                .unwrap_or_else(|| panic!("expected bbox for {g:?}"));
+            assert!(
+                bbox.height() >= 0.0,
+                "{g:?} bbox height should be >= 0, got {}",
+                bbox.height()
+            );
+            assert!(
+                bbox.width() >= 0.0,
+                "{g:?} bbox width should be >= 0, got {}",
+                bbox.width()
+            );
+        }
     }
 }
