@@ -372,17 +372,15 @@ mod tests {
         draw_chord_symbol_composite(&mut svg_sharp, &font, &layout_sharp).unwrap();
         draw_chord_symbol_composite(&mut svg_flat, &font, &layout_flat).unwrap();
         draw_chord_symbol_composite(&mut svg_natural, &font, &layout_natural).unwrap();
-        // Extract just the path data (everything after the first `d="`).
-        fn path_d(svg: &SvgWriter) -> String {
-            let s = svg.to_svg();
-            let start = s.find(r#"d=""#).expect("should contain a path");
-            let after = &s[start + 3..];
-            let end = after.find('"').expect("path data should close");
-            after[..end].to_string()
-        }
-        let d_sharp = path_d(&svg_sharp);
-        let d_flat = path_d(&svg_flat);
-        let d_natural = path_d(&svg_natural);
+        // `first_path_d` is the single test-module helper defined below — the
+        // earlier copy of this helper that lived as a nested fn here has been
+        // consolidated into the module-level definition so that any future
+        // change to "what counts as the first path's d attribute" lives in one
+        // place. If the helper drifts, all four tests (this one plus the
+        // three `composite_dispatches_through_segment_glyph_for_*`) catch it.
+        let d_sharp = first_path_d(&svg_sharp);
+        let d_flat = first_path_d(&svg_flat);
+        let d_natural = first_path_d(&svg_natural);
         assert_ne!(d_sharp, d_flat, "sharp and flat glyphs should have different path data");
         assert_ne!(d_sharp, d_natural, "sharp and natural glyphs should differ");
         assert_ne!(d_flat, d_natural, "flat and natural glyphs should differ");
@@ -413,13 +411,139 @@ mod tests {
     // variant.
 
     /// Extract the path `d` attribute from the *first* path in the SVG.
-    /// Helper for the dispatch tests below.
+    ///
+    /// Shared by the dispatch canaries below AND by
+    /// `composite_different_accidentals_produce_different_paths` above — the
+    /// nested-fn copy that used to live in that test was consolidated here so
+    /// the "find the first `d=""` then read to the next `"`" logic exists in
+    /// exactly one place. Two helpers with the same body but different names
+    /// is the classic DRY smell: a fix or generalization to one would not
+    /// propagate to the other.
+    ///
+    /// Behavior: scans `svg.to_svg()` for the first occurrence of `d="`,
+    /// reads forward until the closing `"`, and returns the inner string.
+    /// Panics (`expect`) if the SVG has no path attribute — which is what
+    /// callers want, since they only invoke this on SVGs that contain at
+    /// least one rendered glyph path.
     fn first_path_d(svg: &SvgWriter) -> String {
         let s = svg.to_svg();
         let start = s.find(r#"d=""#).expect("should contain a path");
         let after = &s[start + 3..];
         let end = after.find('"').expect("path data should close");
         after[..end].to_string()
+    }
+
+    // ---------------- first_path_d helper direct tests ----------------
+    //
+    // The helper itself was previously only exercised indirectly via the
+    // dispatch canaries (which compare it against `font.glyph_outline(...)`).
+    // Direct tests below pin down the helper's contract independent of the
+    // renderer — so if a future refactor changes the helper's parsing rule
+    // (e.g. handling multi-line `d="..."` attributes, or escaping inside the
+    // attribute value), these fire first and pinpoint the helper as the
+    // source rather than a renderer change.
+
+    #[test]
+    fn first_path_d_returns_path_data_for_single_path() {
+        // Sanity: an SVG with one rendered glyph path must yield the same
+        // string as `font.glyph_outline(glyph).path_data`. The first path's
+        // `d` attribute is precisely that outline.
+        let font = test_font();
+        let layout = composite("F#");
+        let mut svg = test_svg();
+        draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
+
+        let extracted = first_path_d(&svg);
+        let expected = font
+            .glyph_outline(
+                ChordSymbolSegment::Sharp
+                    .glyph()
+                    .expect("Sharp has a glyph"),
+            )
+            .unwrap()
+            .path_data;
+        assert_eq!(
+            extracted, expected,
+            "first_path_d must return the rendered glyph's outline path data"
+        );
+    }
+
+    #[test]
+    fn first_path_d_returns_first_path_when_multiple_paths_present() {
+        // For `F#m7b5` the renderer emits two glyph paths (sharp first,
+        // then flat). The helper must return the *first* — the sharp's
+        // outline, not the flat's. If a future refactor accidentally
+        // matched the last `d="` (e.g. `rfind` instead of `find`), the
+        // returned data would equal the flat's outline; the assert_ne
+        // pins down which is which.
+        let font = test_font();
+        let layout = composite("F#m7b5");
+        let mut svg = test_svg();
+        draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
+
+        let extracted = first_path_d(&svg);
+        let sharp_outline = font
+            .glyph_outline(ChordSymbolSegment::Sharp.glyph().unwrap())
+            .unwrap()
+            .path_data;
+        let flat_outline = font
+            .glyph_outline(ChordSymbolSegment::Flat.glyph().unwrap())
+            .unwrap()
+            .path_data;
+        assert_eq!(
+            extracted, sharp_outline,
+            "first_path_d must return the sharp (first) glyph's path data"
+        );
+        assert_ne!(
+            extracted, flat_outline,
+            "first_path_d must NOT return the flat (later) glyph's path data"
+        );
+    }
+
+    #[test]
+    fn first_path_d_is_deterministic_across_repeated_calls() {
+        // Two independent calls with byte-identical SVG input must return
+        // byte-identical strings — locks in that the helper holds no
+        // hidden state and walks the string deterministically.
+        let font = test_font();
+        let layout = composite("Bb");
+        let mut svg1 = test_svg();
+        let mut svg2 = test_svg();
+        draw_chord_symbol_composite(&mut svg1, &font, &layout).unwrap();
+        draw_chord_symbol_composite(&mut svg2, &font, &layout).unwrap();
+
+        assert_eq!(
+            first_path_d(&svg1),
+            first_path_d(&svg2),
+            "first_path_d must be deterministic"
+        );
+    }
+
+    #[test]
+    fn first_path_d_returned_string_is_non_empty() {
+        // Defensive: a rendered glyph's path data is always a non-empty
+        // sequence of SVG path commands. If a regression ever produced an
+        // empty path (`d=""`), the helper would still parse it and return
+        // `""` — this test fires first to pinpoint the regression to the
+        // renderer rather than burying it in a downstream byte-comparison
+        // that just says "two empty strings are equal."
+        let font = test_font();
+        let layout = composite("F\u{266E}");
+        let mut svg = test_svg();
+        draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
+
+        let extracted = first_path_d(&svg);
+        assert!(
+            !extracted.is_empty(),
+            "first_path_d returned an empty string for a rendered natural glyph"
+        );
+        // A real SVG path-data string starts with a command letter. The
+        // SMuFL natural outline begins with `M` (move-to), the standard
+        // starting command for any glyph outline.
+        assert!(
+            extracted.starts_with('M'),
+            "first_path_d returned data that doesn't start with a move command: {extracted:?}"
+        );
     }
 
     #[test]
