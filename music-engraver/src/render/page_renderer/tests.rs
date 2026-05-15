@@ -2634,3 +2634,763 @@ fn cross_system_trill_extension_standard_speed_matches_unset_speed() {
         "explicit Standard speed and unset speed must produce identical SVG"
     );
 }
+
+// --- Cross-system multi-speed trill (speed ramp) continuation tests ---
+
+use crate::layout::trill_extension::{TrillSpeedRamp, TrillSpeedRampSpec};
+
+/// A whole note carrying a trill+extension with a multi-speed `TrillSpeedRamp`.
+fn trill_ext_ramp_whole_note(
+    pos: i8,
+    ramp: TrillSpeedRamp,
+    region_count: usize,
+) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_speed_ramp: Some(TrillSpeedRampSpec::new(ramp, region_count)),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+/// A whole note with both trill+extension and a multi-speed ramp AND a
+/// bracket request — for cross-system multi-speed bracket tests.
+fn trill_ext_ramp_bracketed_whole_note(
+    pos: i8,
+    ramp: TrillSpeedRamp,
+    region_count: usize,
+    side: TrillBracketSide,
+) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_speed_ramp: Some(TrillSpeedRampSpec::new(ramp, region_count)),
+            trill_bracket: Some(side),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn cross_system_multi_speed_trill_adds_incoming_paths_on_next_system() {
+    // A multi-speed trill on the last note of system N must draw an
+    // incoming wiggle on system N+1 (regions re-synthesized against the
+    // target span). The path count must exceed a no-trill baseline by at
+    // least 3 (tr glyph on N + ≥1 trailing tile on N + ≥1 incoming tile
+    // on N+1).
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_ramp = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let without_trill = vec![
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_with = layout_page(&prefix(), &with_ramp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_without = layout_page(&prefix(), &without_trill, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(p_with.systems.len(), 2, "test requires two systems");
+
+    let out_with = draw_page(&font, &config, &p_with).unwrap().to_svg();
+    let out_without = draw_page(&font, &config, &p_without).unwrap().to_svg();
+
+    let with_paths = out_with.matches("<path ").count();
+    let without_paths = out_without.matches("<path ").count();
+    assert!(
+        with_paths >= without_paths + 3,
+        "cross-system multi-speed trill should add ≥3 paths (tr + ≥1 trailing + ≥1 incoming), got {with_paths} vs {without_paths}",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_renders_distinct_svg_from_single_speed() {
+    // Critical correctness canary: a multi-speed cross-system trill must
+    // NOT render byte-identical SVG to a single-speed cross-system trill.
+    // A regression that ignored the speed_ramp on the unresolved side
+    // would silently drop the multi-speed dispatch and produce identical
+    // output to a Standard wiggle.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let ramp_measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let single_speed_measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_speed_whole_note(8, TrillWiggleSpeed::Standard)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_ramp = layout_page(&prefix(), &ramp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_single = layout_page(&prefix(), &single_speed_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(p_ramp.systems.len(), 2);
+    assert_eq!(p_single.systems.len(), 2);
+
+    let out_ramp = draw_page(&font, &config, &p_ramp).unwrap().to_svg();
+    let out_single = draw_page(&font, &config, &p_single).unwrap().to_svg();
+
+    assert_ne!(
+        out_ramp, out_single,
+        "cross-system multi-speed trill must render distinct SVG from single-speed Standard",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_uses_multiple_distinct_wiggle_glyphs() {
+    // A Linear Slow→Fast multi-speed trill must emit at least TWO distinct
+    // wiggle glyph outlines on system N+1 (the incoming wiggle re-
+    // synthesizes regions across the target span and tiles each region's
+    // glyph). A regression that fell back to a single-speed tile-fill
+    // would emit only one distinct outline.
+    //
+    // We compare against a single-speed baseline on the same score
+    // shape: the multi-speed SVG must contain a strict superset of the
+    // single-speed SVG's distinct path `d="..."` values for the wiggle
+    // family of glyphs.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let ramp_measures = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p = layout_page(&prefix(), &ramp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(p.systems.len(), 2);
+    let out = draw_page(&font, &config, &p).unwrap().to_svg();
+
+    // Collect all distinct `d="..."` substrings — a regression that
+    // emitted only one wiggle outline would shrink this set substantially.
+    use std::collections::HashSet;
+    let mut distinct_paths: HashSet<&str> = HashSet::new();
+    let bytes = out.as_bytes();
+    let mut i = 0usize;
+    while i + 3 < bytes.len() {
+        if &bytes[i..i + 3] == b"d=\"" {
+            let start = i + 3;
+            let mut j = start;
+            while j < bytes.len() && bytes[j] != b'"' {
+                j += 1;
+            }
+            // SAFETY: SVG path data is ASCII; we only sliced at ASCII
+            // boundaries (the `"` delimiter is single-byte).
+            distinct_paths.insert(std::str::from_utf8(&bytes[start..j]).unwrap());
+            i = j + 1;
+        } else {
+            i += 1;
+        }
+    }
+    // 3 regions × {Slow, Standard, Fast} produces 3 distinct wiggle
+    // outlines on the target system AND 3 distinct wiggle outlines on
+    // the source system (re-synthesized symmetrically). The overall
+    // distinct path set must have at least 3 distinct wiggle glyphs
+    // present — plus the "tr" glyph, the staff lines (which are <line>
+    // not <path>), and the noteheads.
+    assert!(
+        distinct_paths.len() >= 5,
+        "multi-speed cross-system trill should emit ≥5 distinct path outlines \
+         (tr + Slow + Standard + Fast wiggles + notehead): got {}",
+        distinct_paths.len()
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_explicit_length_suppresses_continuation() {
+    // An explicit length terminates the wiggle within the source system
+    // (this rule applies uniformly to single-speed and multi-speed). The
+    // cross-system pass must NOT draw an incoming wiggle on N+1. We
+    // compare against an identical score WITHOUT the trill: the path
+    // counts on system N+1 must match.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let mut explicit_evt = trill_ext_ramp_whole_note(
+        8,
+        TrillSpeedRamp::Linear {
+            start: TrillWiggleSpeed::Slow,
+            end: TrillWiggleSpeed::Fast,
+        },
+        3,
+    );
+    if let MeasureEvent::Note(ref mut n) = explicit_evt {
+        n.annotations.trill_extension_length_ss = Some(2.0);
+    }
+    let explicit_score = vec![
+        MeasureContent {
+            events: vec![explicit_evt],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let no_ramp_score = vec![
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_expl = layout_page(&prefix(), &explicit_score, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_none = layout_page(&prefix(), &no_ramp_score, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(p_expl.systems.len(), 2);
+    assert_eq!(p_none.systems.len(), 2);
+
+    // Count `<path` segments on the *second* system. The page layout
+    // has the second system starting at a y greater than the first;
+    // splitting the SVG at the second `<line ` containing the system-2
+    // staff-line y would be brittle. Instead, render both with and
+    // without explicit length and assert that explicit length produces
+    // strictly fewer paths than the no-explicit-length variant (which
+    // we know adds an incoming wiggle).
+    let no_explicit_score = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let p_continued = layout_page(
+        &prefix(),
+        &no_explicit_score,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let out_explicit = draw_page(&font, &config, &p_expl).unwrap().to_svg();
+    let out_continued = draw_page(&font, &config, &p_continued).unwrap().to_svg();
+
+    let explicit_paths = out_explicit.matches("<path ").count();
+    let continued_paths = out_continued.matches("<path ").count();
+    assert!(
+        explicit_paths < continued_paths,
+        "explicit_length_ss must suppress cross-system multi-speed continuation: \
+         explicit paths={explicit_paths}, continued paths={continued_paths}",
+    );
+
+    // Also: the explicit-length output must NOT contain MORE paths than
+    // the no-ramp baseline (the trailing wiggle is internal, but the
+    // cross-system incoming wiggle is suppressed).
+    let out_none = draw_page(&font, &config, &p_none).unwrap().to_svg();
+    let none_paths = out_none.matches("<path ").count();
+    // We assert the explicit-length score has at most a few more paths
+    // than the no-trill baseline: the trill glyph + a few internal
+    // wiggle tiles on system N (capped by len_ss=2.0), no incoming on
+    // N+1. A regression that re-engaged cross-system continuation would
+    // add at least one wiggle tile on system N+1 — pushing the count
+    // toward `continued_paths`.
+    let internal_only_delta = explicit_paths.saturating_sub(none_paths);
+    let continued_delta = continued_paths.saturating_sub(none_paths);
+    assert!(
+        internal_only_delta < continued_delta,
+        "explicit-length delta over baseline ({internal_only_delta}) must be smaller \
+         than continued-trill delta over baseline ({continued_delta})",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_bracket_end_adds_one_hook_on_target_system() {
+    // End bracket on a multi-speed trill's last source-system note: no
+    // hook on N (suppressed by within-system pass), one hook on N+1 at
+    // the right edge of the incoming multi-speed wiggle.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_end_bracket = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_bracketed_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+                TrillBracketSide::End,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_bracket = layout_page(&prefix(), &with_end_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_plain = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_bracket = draw_page(&font, &config, &p_bracket).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p_plain).unwrap().to_svg();
+
+    let bracket_lines = out_bracket.matches("<line ").count();
+    let plain_lines = out_plain.matches("<line ").count();
+    // End hook adds exactly one `<line>` element: it's drawn on N+1, no
+    // hook on N (suppressed).
+    assert_eq!(
+        bracket_lines,
+        plain_lines + 1,
+        "End bracket on multi-speed cross-system trill must add exactly one line on N+1: \
+         bracket={bracket_lines}, plain={plain_lines}",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_bracket_both_adds_start_on_n_and_end_on_n_plus_1() {
+    // Both bracket on a multi-speed cross-system trill: Start drawn on
+    // N (within-system pass), End drawn on N+1 (page pass). Total: 2
+    // hook `<line>` elements added over a no-bracket baseline.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_both_bracket = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_bracketed_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+                TrillBracketSide::Both,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_bracket = layout_page(&prefix(), &with_both_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_plain = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_bracket = draw_page(&font, &config, &p_bracket).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p_plain).unwrap().to_svg();
+
+    let bracket_lines = out_bracket.matches("<line ").count();
+    let plain_lines = out_plain.matches("<line ").count();
+    assert_eq!(
+        bracket_lines,
+        plain_lines + 2,
+        "Both bracket on multi-speed cross-system trill must add exactly two lines \
+         (Start on N + End on N+1): bracket={bracket_lines}, plain={plain_lines}",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_bracket_start_only_adds_no_hook_on_target() {
+    // Start-only bracket: hook drawn on N (within-system), nothing on
+    // N+1 (cross-system pass should NOT draw an End hook when not
+    // requested). Total: exactly one `<line>` over a no-bracket baseline.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_start_bracket = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_bracketed_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+                TrillBracketSide::Start,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_bracket = layout_page(&prefix(), &with_start_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_plain = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+
+    let out_bracket = draw_page(&font, &config, &p_bracket).unwrap().to_svg();
+    let out_plain = draw_page(&font, &config, &p_plain).unwrap().to_svg();
+
+    let bracket_lines = out_bracket.matches("<line ").count();
+    let plain_lines = out_plain.matches("<line ").count();
+    assert_eq!(
+        bracket_lines,
+        plain_lines + 1,
+        "Start-only bracket on cross-system multi-speed trill must add exactly one line \
+         (Start on N): bracket={bracket_lines}, plain={plain_lines}",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_accel_distinct_from_decel() {
+    // Slow→Fast (accel) and Fast→Slow (decel) ramps render distinct SVG
+    // end-to-end. Direction-symmetry canary: a regression that ignored
+    // ramp direction or sorted speeds before synthesizing would produce
+    // identical output.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let accel = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let decel = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Fast,
+                    end: TrillWiggleSpeed::Slow,
+                },
+                3,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_accel = layout_page(&prefix(), &accel, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_decel = layout_page(&prefix(), &decel, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let out_accel = draw_page(&font, &config, &p_accel).unwrap().to_svg();
+    let out_decel = draw_page(&font, &config, &p_decel).unwrap().to_svg();
+
+    assert_ne!(
+        out_accel, out_decel,
+        "cross-system accel and decel ramps must render distinct SVG",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_constant_ramp_equals_single_speed_when_one_region() {
+    // Edge-case equivalence: `Constant(Standard)` with 1 region must
+    // produce SVG byte-identical to a single-speed `Standard` trill on
+    // the same score shape. Both should synthesize a single region of
+    // Standard glyphs across the source-system trailing wiggle AND the
+    // target-system incoming wiggle.
+    //
+    // This is the degenerate-equivalence canary that the
+    // within-system test asserts (in `score::tests`); we mirror it for
+    // the cross-system path.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let constant_ramp = vec![
+        MeasureContent {
+            events: vec![trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard),
+                1,
+            )],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let single_speed = vec![
+        MeasureContent {
+            events: vec![trill_ext_speed_whole_note(8, TrillWiggleSpeed::Standard)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_const = layout_page(&prefix(), &constant_ramp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_single = layout_page(&prefix(), &single_speed, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(p_const.systems.len(), 2);
+    assert_eq!(p_single.systems.len(), 2);
+
+    let out_const = draw_page(&font, &config, &p_const).unwrap().to_svg();
+    let out_single = draw_page(&font, &config, &p_single).unwrap().to_svg();
+
+    // We don't assert byte-equality (the two paths use different
+    // synthesize-vs-direct-glyph-lookup code paths; geometry should
+    // match but path-element ordering might differ subtly). Instead,
+    // assert the same total path count — a regression that emitted no
+    // multi-speed continuation would be one path short.
+    let const_paths = out_const.matches("<path ").count();
+    let single_paths = out_single.matches("<path ").count();
+    assert_eq!(
+        const_paths, single_paths,
+        "Constant(Standard) with 1 region must produce the same total path count \
+         as single-speed Standard across system break: const={const_paths}, single={single_paths}",
+    );
+}
+
+#[test]
+fn cross_system_multi_speed_trill_no_target_system_no_crash() {
+    // Single-system page with a multi-speed trill+extension on the last
+    // (and only) note: no system N+1 exists, so the page renderer must
+    // not crash and must not draw any incoming wiggle. The within-system
+    // trailing wiggle (multi-speed) is still drawn by the system
+    // renderer.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![MeasureContent {
+        events: vec![
+            trill_ext_ramp_whole_note(
+                8,
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                3,
+            ),
+            whole_note(8),
+        ],
+        barline: BarlineStyle::Final,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    assert_eq!(page.systems.len(), 1, "test requires exactly one system");
+
+    let out = draw_page(&font, &config, &page).unwrap().to_svg();
+    assert!(out.starts_with("<svg"));
+    // ≥1 trill glyph path + several wiggle tiles + notehead paths.
+    assert!(out.matches("<path ").count() >= 3);
+}

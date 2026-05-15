@@ -11,11 +11,14 @@ use crate::layout::stem::auto_stem_direction;
 use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
-use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
-use crate::layout::trill_extension::{
-    layout_trill_extension_with_glyph, trill_extension_right_edge, TrillWiggleSpeed,
+use crate::layout::trill_bracket::{
+    layout_trill_bracket_hooks_multi_speed, HookDirection, TrillBracketSide,
 };
-use crate::render::trill_bracket_renderer::draw_trill_bracket_hook;
+use crate::layout::trill_extension::{
+    layout_trill_extension_multi_speed, layout_trill_extension_with_glyph,
+    trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
+};
+use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_bracket_hooks};
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
@@ -29,7 +32,9 @@ use crate::render::system_renderer::{
     TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
 };
 use crate::render::tie_renderer::draw_tie;
-use crate::render::trill_extension_renderer::draw_trill_extension;
+use crate::render::trill_extension_renderer::{
+    draw_trill_extension, draw_trill_extension_multi_speed,
+};
 use crate::render::{SvgWriter, TextStyle};
 
 /// A note at the end of a system that has an unresolved `tie_forward`.
@@ -1279,7 +1284,29 @@ struct UnresolvedTrillExtension {
     /// N+1 must tile the same glyph as the trailing wiggle on system N so a
     /// reader sees one continuous wavy line of consistent density across the
     /// line break. `None` selects the standard wiggle.
+    ///
+    /// Ignored for glyph selection when `speed_ramp.is_some()`: the
+    /// multi-speed renderer reads per-region speeds from the ramp and the
+    /// incoming wiggle on system N+1 re-synthesizes those regions against
+    /// the target system's span.
     wiggle_speed: Option<TrillWiggleSpeed>,
+    /// Optional multi-speed ramp spec, mirroring the source-system
+    /// dispatch. `None` selects the single-speed incoming path (using
+    /// `wiggle_speed`); `Some(spec)` engages the multi-speed incoming
+    /// path: regions are re-synthesized across the target system's
+    /// `[staff_left, first_note.x - gap]` span and tiled by
+    /// `draw_trill_extension_multi_speed`.
+    ///
+    /// Re-synthesis (rather than carrying the source-system regions
+    /// across) is deliberate: the multi-speed convention is
+    /// "evenly-distributed regions across the wiggle span." The source-
+    /// system span and the target-system span are different lengths in
+    /// general, so reusing the source's region geometry would compress or
+    /// stretch the speed progression asymmetrically across the line
+    /// break. Re-synthesizing per system keeps each system's wiggle
+    /// region-uniform on its own terms and matches the within-system
+    /// convention exactly.
+    speed_ramp: Option<TrillSpeedRampSpec>,
 }
 
 /// The first note on the target system (system N+1) that an incoming
@@ -1317,17 +1344,6 @@ fn find_unresolved_trill_extension(
     if matches!(last.explicit_length_ss, Some(len) if len > 0.0) {
         return None;
     }
-    // A multi-speed ramp also terminates the wiggle within the source
-    // system. The cross-system incoming renderer only reads `wiggle_speed`
-    // and would draw the continuation at a single (potentially wrong)
-    // speed; until the cross-system path is taught to synthesize regions
-    // on the target system, the safest behavior is to confine multi-speed
-    // trills to a single system. This is intentionally a tight constraint
-    // — adding cross-system multi-speed support is a separate chunk that
-    // would re-anchor regions against the target system's note positions.
-    if last.speed_ramp.is_some() {
-        return None;
-    }
     // Recompute the source ornament y the same way system_renderer does,
     // then strip the staff's absolute y so the offset is portable across
     // systems on the same page.
@@ -1349,6 +1365,7 @@ fn find_unresolved_trill_extension(
         bracket_direction: last.bracket_direction,
         bracket_length_ss: last.bracket_length_ss,
         wiggle_speed: last.wiggle_speed,
+        speed_ramp: last.speed_ramp,
     })
 }
 
@@ -1422,9 +1439,68 @@ pub(crate) fn draw_cross_system_trill_extensions(
         let start_x = tgt.staff_left;
         let end_x = tgt.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space;
 
-        // Tile the incoming wiggle with the same speed glyph as the source
-        // wiggle so a sustained trill reads as one continuous wavy line of
-        // consistent density across the line break.
+        // Dispatch on the source-system trill's ramp: multi-speed (ramp
+        // present) supersedes the single-speed path. Region geometry is
+        // re-synthesized against the *target* system's span so the
+        // incoming wiggle's regions are evenly distributed across the new
+        // span (matching the within-system convention). The source-system
+        // wiggle's per-region tiling is not carried across the line break.
+        if let Some(spec) = src.speed_ramp {
+            // Synthesizer is font-agnostic; thread per-glyph advance
+            // lookup through. Returns `None` for degenerate specs
+            // (region_count==0, Linear with region_count==1) or
+            // non-positive spans (e.g. when start_x >= end_x because the
+            // target system's first note sits at the staff_left). The
+            // None fall-through matches the within-system fail-safe.
+            let regions = match spec.ramp.synthesize_regions(
+                start_x,
+                end_x,
+                spec.region_count,
+                |speed| font.glyph_advance(speed.to_glyph()).unwrap_or(0) as f64,
+            ) {
+                Some(r) => r,
+                None => continue,
+            };
+            if let Some(layout) =
+                layout_trill_extension_multi_speed(end_x, y, &regions)
+            {
+                draw_trill_extension_multi_speed(svg, font, &layout)?;
+
+                // End hook on the incoming wiggle. Anchored at the
+                // right edge of the multi-speed layout's last tile
+                // (via `layout_trill_bracket_hooks_multi_speed`).
+                // Source-system already drew the Start hook (if any).
+                if matches!(src.bracket, Some(TrillBracketSide::End | TrillBracketSide::Both)) {
+                    let hook_stroke = config.thin_barline_thickness_fu();
+                    let hook_length = src
+                        .bracket_length_ss
+                        .map(|ss| ss * staff_space)
+                        .unwrap_or(TRILL_BRACKET_HOOK_LENGTH_SS * staff_space);
+                    let direction = src.bracket_direction.unwrap_or(HookDirection::Down);
+                    // The within-system multi-speed path strips Start
+                    // for cross-system trills via
+                    // `bracket_side_for_system_pass` — we mirror that
+                    // here by drawing End only (Start was suppressed at
+                    // source). Passing `TrillBracketSide::End` directly
+                    // would suffice, but going through the multi-speed
+                    // helper keeps the anchor logic in one place.
+                    let hooks = layout_trill_bracket_hooks_multi_speed(
+                        &layout,
+                        TrillBracketSide::End,
+                        hook_length,
+                        direction,
+                        hook_stroke,
+                    );
+                    draw_trill_bracket_hooks(svg, &hooks);
+                }
+            }
+            continue;
+        }
+
+        // Single-speed path. Tile the incoming wiggle with the same speed
+        // glyph as the source wiggle so a sustained trill reads as one
+        // continuous wavy line of consistent density across the line
+        // break.
         let wiggle_glyph = src.wiggle_speed.unwrap_or_default().to_glyph();
         let wiggle_advance = font.glyph_advance(wiggle_glyph)? as f64;
 
