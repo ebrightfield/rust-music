@@ -171,32 +171,36 @@ impl TrillExtensionFullOptions {
 
 impl From<TrillBracketOptions> for TrillExtensionFullOptions {
     fn from(opts: TrillBracketOptions) -> Self {
-        // `length_ss` left as `None` so widening preserves byte-equivalence
-        // with `trill_with_extension_bracketed_with_options(opts)` — that path
-        // does not touch `trill_extension_length_ss`, and the full-options
-        // builder mirrors it via this conversion.
+        // `length_ss` propagates from the single-purpose bundle's
+        // `extension_length_ss` field — both `From<TrillBracketOptions>`
+        // here and `trill_with_extension_bracketed_with_options(opts)`
+        // write the same value, so the documented byte-equivalence with
+        // the full-options widening path survives a non-`None`
+        // extension length.
         Self {
             bracket: Some(opts.side),
             bracket_direction: opts.direction,
             bracket_length_ss: opts.length_ss,
             speed: None,
             ornament: opts.ornament,
-            length_ss: None,
+            length_ss: opts.extension_length_ss,
         }
     }
 }
 
 impl From<TrillExtensionSpeedOptions> for TrillExtensionFullOptions {
     fn from(opts: TrillExtensionSpeedOptions) -> Self {
-        // `length_ss` left as `None` to mirror the byte-equivalence guarantee
-        // with `trill_with_extension_speed_with_options(opts)`.
+        // `length_ss` propagates from the speed bundle's
+        // `extension_length_ss` to mirror the byte-equivalence guarantee
+        // with `trill_with_extension_speed_with_options(opts)` when the
+        // speed bundle carries an explicit length.
         Self {
             bracket: None,
             bracket_direction: None,
             bracket_length_ss: None,
             speed: Some(opts.speed),
             ornament: opts.ornament,
-            length_ss: None,
+            length_ss: opts.extension_length_ss,
         }
     }
 }

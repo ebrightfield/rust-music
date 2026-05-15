@@ -140,15 +140,33 @@ pub struct TrillExtensionSpeedOptions {
     /// [`Ornament::supports_trill_extension`]; otherwise the renderer will
     /// silently skip the extension.
     pub ornament: Option<Ornament>,
+    /// Optional explicit termination length for the wavy line, in staff
+    /// spaces. `None` (the default) lets the wiggle extend per the usual
+    /// convention (next-note left edge within-system; system right edge
+    /// cross-system). `Some(length_ss)` clamps the wiggle to terminate no
+    /// later than `length_ss` staff spaces past its natural start, mirroring
+    /// the contract of
+    /// [`crate::score::ScoreBuilder::trill_with_extension_length_ss`].
+    /// Clamping is one-sided (overruns clamp to the natural span;
+    /// non-positive values produce no wiggle). A positive explicit length
+    /// disables cross-system propagation — the wiggle terminates within its
+    /// source system. Named symmetrically with
+    /// [`crate::layout::trill_bracket::TrillBracketOptions::extension_length_ss`]
+    /// so widening to
+    /// [`crate::layout::trill_options::TrillExtensionFullOptions`] is a
+    /// mechanical field-by-field copy.
+    pub extension_length_ss: Option<f64>,
 }
 
 impl TrillExtensionSpeedOptions {
     /// Construct options at the given wiggle speed with every other knob at
-    /// score-builder defaults (plain `Trill` ornament).
+    /// score-builder defaults (plain `Trill` ornament, natural-span
+    /// extension).
     pub const fn new(speed: TrillWiggleSpeed) -> Self {
         Self {
             speed,
             ornament: None,
+            extension_length_ss: None,
         }
     }
 
@@ -159,6 +177,22 @@ impl TrillExtensionSpeedOptions {
     /// extension (no wiggle — only the ornament glyph).
     pub const fn with_ornament(mut self, ornament: Ornament) -> Self {
         self.ornament = Some(ornament);
+        self
+    }
+
+    /// Set an explicit termination length for the wavy line, in staff
+    /// spaces, measured from the wiggle's natural start (past the ornament
+    /// glyph and its trailing padding). Overruns are clamped to the natural
+    /// span; a non-positive length suppresses the wiggle entirely. A
+    /// positive length disables cross-system propagation.
+    ///
+    /// Mirrors the contract of
+    /// [`crate::score::ScoreBuilder::trill_with_extension_length_ss`] and is
+    /// independent of the speed knob — combining
+    /// `.with_extension_length_ss(L)` with a non-standard speed clamps a
+    /// fast/slow wiggle to the requested length.
+    pub const fn with_extension_length_ss(mut self, length_ss: f64) -> Self {
+        self.extension_length_ss = Some(length_ss);
         self
     }
 }
@@ -580,5 +614,105 @@ mod tests {
         let b = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
             .with_ornament(Ornament::TrillWithMordent);
         assert_ne!(a, b);
+    }
+
+    // --- TrillExtensionSpeedOptions extension length override ---
+
+    #[test]
+    fn speed_options_new_has_unset_extension_length_ss() {
+        // The newly-added field must start `None` so existing callers (who
+        // never touch it) keep their byte-equivalent SVG output and so the
+        // `speed_options_default_matches_plain_speed_byte_for_byte` canary
+        // continues to hold at the score-integration layer.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast);
+        assert_eq!(opts.extension_length_ss, None);
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_sets_only_extension_length() {
+        // Setting the new field must NOT disturb the speed or the ornament.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss(2.75);
+        assert_eq!(opts.extension_length_ss, Some(2.75));
+        assert_eq!(opts.speed, TrillWiggleSpeed::Slow);
+        assert_eq!(opts.ornament, None);
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_chains_with_ornament() {
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(1.5);
+        assert_eq!(opts.speed, TrillWiggleSpeed::Faster);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.extension_length_ss, Some(1.5));
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_chain_order_independent() {
+        let a = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss(2.0)
+            .with_ornament(Ornament::TrillWithMordent);
+        let b = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(2.0);
+        assert_eq!(
+            a, b,
+            "with_extension_length_ss must commute with with_ornament"
+        );
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_overwrites_prior_value() {
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss(1.0)
+            .with_extension_length_ss(7.5);
+        assert_eq!(opts.extension_length_ss, Some(7.5));
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_accepts_non_positive_at_layout_layer() {
+        // Mirrors the bracket-options policy: zero/negative round-trip
+        // unchanged; the renderer's existing non-positive fail-safe handles
+        // the "no wiggle" semantic at draw time.
+        let zero = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss(0.0);
+        assert_eq!(zero.extension_length_ss, Some(0.0));
+        let neg = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss(-2.0);
+        assert_eq!(neg.extension_length_ss, Some(-2.0));
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_const_constructible() {
+        // The new setter must remain `const`-callable so canonical bundles
+        // can live in module-level `const` items. Compile-time canary if
+        // someone ever drops `const fn`.
+        const _OPTS: TrillExtensionSpeedOptions =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slowest)
+                .with_ornament(Ornament::TrillWithMordent)
+                .with_extension_length_ss(3.0);
+    }
+
+    #[test]
+    fn speed_options_extension_length_distinct_values_compare_distinct() {
+        // PartialEq must be sensitive to the new field — catches a future
+        // derive forgetting to include it.
+        let a = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss(1.0);
+        let b = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss(2.0);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn speed_options_extension_length_some_zero_distinct_from_none() {
+        // `Some(0.0)` vs `None` are semantically different at the renderer
+        // layer (zero suppresses wiggle; None lets the natural span flow).
+        // PartialEq must keep them distinct.
+        let none = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow);
+        let zero = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss(0.0);
+        assert_ne!(none, zero);
     }
 }

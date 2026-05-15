@@ -72,6 +72,16 @@ pub enum TrillBracketSide {
 /// an unsupported ornament (e.g. [`Ornament::ShortTrill`] or a turn) makes
 /// the renderer's collector skip the extension entirely (no wiggle, no
 /// bracket), and only the ornament glyph itself is drawn.
+///
+/// To explicitly terminate the wavy-line extension after a fixed staff-
+/// space distance — independent of where the next note falls — set
+/// [`Self::extension_length_ss`] via
+/// [`with_extension_length_ss`](Self::with_extension_length_ss). The
+/// bracket's `End` hook (when present) anchors at the shortened wiggle
+/// terminus, so a `Both`-bracketed trill with an explicit length renders as
+/// a square-bracket-style range capped at exactly the requested point.
+/// `None` (the default) lets the wiggle extend per the usual convention
+/// (next-note left edge within-system; system right edge cross-system).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrillBracketOptions {
     /// Which end(s) of the wiggle to bracket — always required.
@@ -80,7 +90,10 @@ pub struct TrillBracketOptions {
     /// default (`HookDirection::Down`).
     pub direction: Option<HookDirection>,
     /// Hook length in staff spaces. `None` defers to the renderer's
-    /// conventional default (~0.75ss).
+    /// conventional default (~0.75ss). Naming note: this is the **hook**
+    /// length (the short vertical line capping the wiggle), not the wiggle's
+    /// horizontal extension length — see [`Self::extension_length_ss`] for
+    /// the latter.
     pub length_ss: Option<f64>,
     /// Ornament glyph override. `None` selects [`Ornament::Trill`] (the
     /// conventional "tr" mark). `Some(Ornament::TrillWithMordent)` selects
@@ -88,18 +101,36 @@ pub struct TrillBracketOptions {
     /// [`Ornament::supports_trill_extension`]; otherwise the renderer will
     /// silently skip the extension and the bracket.
     pub ornament: Option<Ornament>,
+    /// Optional explicit termination length for the wavy line, in staff
+    /// spaces. `None` (the default) lets the wiggle extend to the next note
+    /// (within-system) or to the system's right edge (cross-system) per the
+    /// usual convention. `Some(length_ss)` clamps the wiggle to terminate no
+    /// later than `length_ss` staff spaces past its natural start, mirroring
+    /// the contract of
+    /// [`crate::score::ScoreBuilder::trill_with_extension_length_ss`].
+    /// Clamping is one-sided (overruns clamp to the natural span;
+    /// non-positive values produce no wiggle). A positive explicit length
+    /// disables cross-system propagation — the wiggle terminates within its
+    /// source system. The `End` bracket hook anchors at the shortened
+    /// terminus.
+    ///
+    /// Renamed away from a bare `length_ss` to avoid collision with the
+    /// existing [`Self::length_ss`] field (which is the *hook* length, not
+    /// the extension's termination length).
+    pub extension_length_ss: Option<f64>,
 }
 
 impl TrillBracketOptions {
     /// Construct options bracketing the given side with every knob at
-    /// renderer defaults (Down direction, ~0.75ss length, plain `Trill`
-    /// ornament).
+    /// renderer defaults (Down direction, ~0.75ss hook length, plain `Trill`
+    /// ornament, natural-span extension).
     pub const fn new(side: TrillBracketSide) -> Self {
         Self {
             side,
             direction: None,
             length_ss: None,
             ornament: None,
+            extension_length_ss: None,
         }
     }
 
@@ -111,9 +142,12 @@ impl TrillBracketOptions {
         self
     }
 
-    /// Override the hook length in staff spaces. Reasonable values are
+    /// Override the **hook** length in staff spaces. Reasonable values are
     /// roughly 0.5..=1.0; the layout does not clamp, and a 0.0 length
     /// produces a degenerate hook (no visible line).
+    ///
+    /// To shorten the *wiggle* (extension) instead, see
+    /// [`with_extension_length_ss`](Self::with_extension_length_ss).
     pub const fn with_length_ss(mut self, length_ss: f64) -> Self {
         self.length_ss = Some(length_ss);
         self
@@ -127,6 +161,22 @@ impl TrillBracketOptions {
     /// extension (no wiggle, no bracket — only the ornament glyph).
     pub const fn with_ornament(mut self, ornament: Ornament) -> Self {
         self.ornament = Some(ornament);
+        self
+    }
+
+    /// Set an explicit termination length for the wavy line, in staff
+    /// spaces, measured from the wiggle's natural start (past the ornament
+    /// glyph and its trailing padding). Overruns are clamped to the natural
+    /// span; a non-positive length suppresses the wiggle entirely. A
+    /// positive length disables cross-system propagation.
+    ///
+    /// Mirrors the contract of
+    /// [`crate::score::ScoreBuilder::trill_with_extension_length_ss`] and is
+    /// independent of every other knob on this bundle — combining
+    /// `.with_extension_length_ss(L)` with a bracket anchors the end hook
+    /// at the shortened terminus.
+    pub const fn with_extension_length_ss(mut self, length_ss: f64) -> Self {
+        self.extension_length_ss = Some(length_ss);
         self
     }
 }
@@ -586,5 +636,116 @@ mod tests {
             .with_ornament(Ornament::ShortTrill);
         assert_eq!(opts.ornament, Some(Ornament::ShortTrill));
         assert!(!Ornament::ShortTrill.supports_trill_extension());
+    }
+
+    // --- TrillBracketOptions extension length override ---
+
+    #[test]
+    fn options_new_has_unset_extension_length_ss() {
+        // The newly-added field must start `None` so existing callers (who
+        // never touch it) keep their byte-equivalent SVG output.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both);
+        assert_eq!(opts.extension_length_ss, None);
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_sets_only_extension_length() {
+        // Setting the new field must NOT disturb the hook length, direction,
+        // ornament, or side — those are independent knobs.
+        let opts =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(2.75);
+        assert_eq!(opts.extension_length_ss, Some(2.75));
+        assert_eq!(opts.length_ss, None, "hook length must remain unset");
+        assert_eq!(opts.direction, None, "direction must remain unset");
+        assert_eq!(opts.ornament, None, "ornament must remain unset");
+        assert_eq!(opts.side, TrillBracketSide::Both, "side must survive");
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_is_distinct_from_with_length_ss() {
+        // Critical regression canary: `with_length_ss` and
+        // `with_extension_length_ss` write *different* fields. If a future
+        // refactor accidentally aliased them — e.g. by collapsing both
+        // setters onto the same field — this assertion fires. Catches a
+        // very plausible naming-confusion bug.
+        let hook_only = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.0);
+        let ext_only =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(1.0);
+        assert_eq!(hook_only.length_ss, Some(1.0));
+        assert_eq!(hook_only.extension_length_ss, None);
+        assert_eq!(ext_only.length_ss, None);
+        assert_eq!(ext_only.extension_length_ss, Some(1.0));
+        assert_ne!(hook_only, ext_only);
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_chains_with_other_setters() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::End)
+            .with_direction(HookDirection::Up)
+            .with_length_ss(0.6)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(3.25);
+        assert_eq!(opts.side, TrillBracketSide::End);
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+        assert_eq!(opts.length_ss, Some(0.6));
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.extension_length_ss, Some(3.25));
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_chain_order_independent() {
+        let a = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss(2.0)
+            .with_length_ss(0.8);
+        let b = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_length_ss(0.8)
+            .with_extension_length_ss(2.0);
+        assert_eq!(
+            a, b,
+            "with_extension_length_ss must commute with with_length_ss"
+        );
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_overwrites_prior_value() {
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss(1.0)
+            .with_extension_length_ss(5.5);
+        assert_eq!(opts.extension_length_ss, Some(5.5));
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_accepts_non_positive_at_layout_layer() {
+        // Layout layer is validation-free (mirrors the policy for
+        // unsupported ornaments) — zero and negative values round-trip
+        // unchanged. The renderer's existing non-positive fail-safe gives
+        // them the "no wiggle" semantic at draw time.
+        let zero =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
+        assert_eq!(zero.extension_length_ss, Some(0.0));
+        let neg =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(-1.5);
+        assert_eq!(neg.extension_length_ss, Some(-1.5));
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_const_constructible() {
+        // The new setter must remain `const`-callable so canonical bundles
+        // can live in module-level `const` items. Removing `const fn`
+        // breaks this compile-time canary.
+        const _OPTS: TrillBracketOptions = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_length_ss(0.75)
+            .with_extension_length_ss(2.5);
+    }
+
+    #[test]
+    fn options_extension_length_some_zero_distinct_from_none() {
+        // `Some(0.0)` is semantically distinct from `None` (it suppresses
+        // the wiggle at the renderer's non-positive fail-safe; `None` lets
+        // the natural span flow). PartialEq must keep them distinct.
+        let none = TrillBracketOptions::new(TrillBracketSide::Both);
+        let zero =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
+        assert_ne!(none, zero);
     }
 }

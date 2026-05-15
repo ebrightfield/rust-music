@@ -562,6 +562,13 @@ impl ScoreBuilder {
             // the default propagates without API churn.
             annotations.trill_bracket_direction = opts.direction;
             annotations.trill_bracket_length_ss = opts.length_ss;
+            // Explicit wiggle termination length. `None` lets the wiggle
+            // run to the next note or the system edge; `Some(L)` mirrors
+            // `trill_with_extension_length_ss(L)` exactly (the renderer
+            // reads this field independently of the bracket, so a bracketed
+            // trill with an explicit length anchors its end hook at the
+            // shortened terminus).
+            annotations.trill_extension_length_ss = opts.extension_length_ss;
         }
         self
     }
@@ -637,6 +644,12 @@ impl ScoreBuilder {
             annotations.ornament = Some(opts.ornament.unwrap_or(Ornament::Trill));
             annotations.trill_extension = true;
             annotations.trill_wiggle_speed = Some(opts.speed);
+            // Explicit wiggle termination length. `None` leaves the field
+            // unset (renderer uses the natural span); `Some(L)` mirrors
+            // `trill_with_extension_length_ss(L)` byte-for-byte at the
+            // standard speed, and clamps a non-standard-speed wiggle to
+            // the requested length when both knobs are set.
+            annotations.trill_extension_length_ss = opts.extension_length_ss;
         }
         self
     }

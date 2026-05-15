@@ -8483,3 +8483,452 @@
         assert_eq!(neg, zero, "negative explicit length must render byte-identically to zero");
     }
 
+    // --- TrillBracketOptions::extension_length_ss through the score builder ---
+
+    #[test]
+    fn bracketed_with_options_extension_length_ss_propagates_into_annotation() {
+        // The newly-added extension_length_ss field on TrillBracketOptions
+        // must thread into NoteAnnotations::trill_extension_length_ss
+        // through the score-builder method. Catches a silently-dropped
+        // wire-up in trill_with_extension_bracketed_with_options.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_extension_length_ss(2.0),
+            );
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::Trill));
+                assert!(annotations.trill_extension);
+                assert_eq!(annotations.trill_bracket, Some(TrillBracketSide::Both));
+                assert_eq!(
+                    annotations.trill_extension_length_ss,
+                    Some(2.0),
+                    "extension_length_ss must thread into trill_extension_length_ss"
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn bracketed_with_options_extension_length_ss_byte_equivalent_to_widened_full_options() {
+        // The intended ergonomic path: a caller can either set
+        // extension_length_ss on the single-purpose TrillBracketOptions OR
+        // widen to TrillExtensionFullOptions and use .with_length_ss(...).
+        // Both must produce byte-identical SVG — the From conversion
+        // propagates the new field, and the full-options builder writes
+        // the same annotation state.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let via_bracketed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::End)
+                    .with_extension_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let widened: TrillExtensionFullOptions =
+            TrillBracketOptions::new(TrillBracketSide::End)
+                .with_extension_length_ss(1.5)
+                .into();
+        let via_full = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(widened)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            via_bracketed, via_full,
+            "trill_with_extension_bracketed_with_options(opts) must be byte-equivalent \
+             to trill_with_extension_full_options(opts.into()) when opts carries an \
+             explicit extension_length_ss — proves the From conversion propagates the field"
+        );
+    }
+
+    #[test]
+    fn bracketed_with_options_extension_length_ss_shortens_wiggle() {
+        // Setting an explicit extension length on a bracketed trill must
+        // render strictly fewer paths than the same bracket without a
+        // length override. Catches a regression where the new field is
+        // set but the renderer never sees it (e.g. a missing
+        // annotation-write in the score builder).
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let bracketed_natural = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let bracketed_short = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_extension_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let natural_paths = bracketed_natural.matches("<path").count();
+        let short_paths = bracketed_short.matches("<path").count();
+        assert!(
+            short_paths < natural_paths,
+            "explicit length on a bracketed trill must shorten the wiggle: \
+             short_paths={short_paths}, natural_paths={natural_paths}"
+        );
+        // Bracket geometry is glyph-independent — the bracketed variant on
+        // both sides emits exactly 2 hook <line>s regardless of wiggle
+        // length. Catches a regression where the explicit-length code path
+        // accidentally drops one of the hooks.
+        assert_eq!(
+            bracketed_short.matches("<line ").count(),
+            bracketed_natural.matches("<line ").count(),
+            "bracket hook <line> count must be invariant under explicit length"
+        );
+    }
+
+    #[test]
+    fn bracketed_with_options_extension_length_ss_oversized_clamps_to_natural() {
+        // Mirrors the standalone builder's clamp contract: a length larger
+        // than the natural span must render byte-identical to the same
+        // options bundle without any length set.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let natural = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let huge = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_extension_length_ss(1000.0),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            huge, natural,
+            "oversized extension_length_ss must clamp to natural and \
+             render byte-identical to the no-length default"
+        );
+    }
+
+    #[test]
+    fn bracketed_with_options_extension_length_ss_is_distinct_from_hook_length_ss() {
+        // Score-integration canary that the two `with_*_ss` setters write
+        // *different* fields. If a future refactor accidentally aliased
+        // them, the rendered SVGs would converge — this fires the alarm.
+        // Critical because the two names are confusable.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let hook_only = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let ext_only = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_extension_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_ne!(
+            hook_only, ext_only,
+            ".with_length_ss(1.5) (hook length) and .with_extension_length_ss(1.5) \
+             (wiggle termination) must write distinct fields and produce distinct SVGs"
+        );
+    }
+
+    #[test]
+    fn bracketed_with_options_extension_length_ss_on_chord_renders_shortened_wiggle() {
+        // Chord arm of the builder also honors the new field. Catches a
+        // regression where only the Note arm of the let-else wire-up is
+        // updated.
+        use crate::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
+
+        let natural_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let short_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
+            .trill_with_extension_bracketed_with_options(
+                TrillBracketOptions::new(TrillBracketSide::Both)
+                    .with_extension_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let natural_paths = natural_chord.matches("<path").count();
+        let short_paths = short_chord.matches("<path").count();
+        assert!(
+            short_paths < natural_paths,
+            "extension_length_ss on a bracketed chord trill must shorten the wiggle: \
+             short={short_paths}, natural={natural_paths}"
+        );
+    }
+
+    // --- TrillExtensionSpeedOptions::extension_length_ss through the score builder ---
+
+    #[test]
+    fn speed_with_options_extension_length_ss_propagates_into_annotation() {
+        // The newly-added extension_length_ss field on
+        // TrillExtensionSpeedOptions must thread into
+        // NoteAnnotations::trill_extension_length_ss. Catches a
+        // silently-dropped wire-up.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+                    .with_extension_length_ss(2.25),
+            );
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::Trill));
+                assert!(annotations.trill_extension);
+                assert_eq!(annotations.trill_wiggle_speed, Some(TrillWiggleSpeed::Slow));
+                assert_eq!(
+                    annotations.trill_extension_length_ss,
+                    Some(2.25),
+                    "extension_length_ss must thread into trill_extension_length_ss"
+                );
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn speed_with_options_extension_length_ss_byte_equivalent_to_widened_full_options() {
+        // The intended ergonomic path: a caller can either set
+        // extension_length_ss on the single-purpose TrillExtensionSpeedOptions
+        // OR widen to TrillExtensionFullOptions and use .with_length_ss(...).
+        // Both must produce byte-identical SVG.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+        use crate::layout::trill_options::TrillExtensionFullOptions;
+
+        let via_speed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+                    .with_extension_length_ss(1.75),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let widened: TrillExtensionFullOptions =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+                .with_extension_length_ss(1.75)
+                .into();
+        let via_full = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_full_options(widened)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            via_speed, via_full,
+            "trill_with_extension_speed_with_options(opts) must be byte-equivalent \
+             to trill_with_extension_full_options(opts.into()) when opts carries an \
+             explicit extension_length_ss"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_extension_length_ss_shortens_wiggle() {
+        // Setting an explicit extension length on a speed-variant trill
+        // must render strictly fewer paths than the same speed without a
+        // length override.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let speed_natural = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let speed_short = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                    .with_extension_length_ss(1.5),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let natural_paths = speed_natural.matches("<path").count();
+        let short_paths = speed_short.matches("<path").count();
+        assert!(
+            short_paths < natural_paths,
+            "explicit length on a speed-variant trill must shorten the wiggle: \
+             short={short_paths}, natural={natural_paths}"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_extension_length_ss_zero_drops_wiggle() {
+        // Zero length suppresses the wiggle entirely (matches the
+        // standalone builder's non-positive fail-safe contract). The
+        // path count must equal that of the ornament-only plain trill.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let plain_trill = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .ornament(Ornament::Trill)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let zero = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast)
+                    .with_extension_length_ss(0.0),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            zero.matches("<path").count(),
+            plain_trill.matches("<path").count(),
+            "extension_length_ss=0.0 on speed options must drop the wiggle"
+        );
+    }
+
+    #[test]
+    fn speed_with_options_default_extension_length_ss_matches_plain_speed_byte_for_byte() {
+        // Backwards-compatibility canary: adding the new field with a
+        // default of `None` must NOT change the SVG produced by the
+        // existing all-defaults code path. This complements the existing
+        // `speed_with_options_default_ornament_matches_plain_speed_byte_for_byte`
+        // by re-asserting the byte-equivalence after the new field is
+        // added to the struct.
+        use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+
+        let via_options = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed_with_options(
+                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow),
+            )
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let via_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_speed(TrillWiggleSpeed::Slow)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            via_options, via_plain,
+            "TrillExtensionSpeedOptions::new(speed) (no extension_length_ss) must \
+             remain byte-equivalent to trill_with_extension_speed(speed)"
+        );
+    }
+
