@@ -4522,6 +4522,169 @@ fn golden_trill_options_with_length() {
     assert_golden("trill_options_with_length", &svg);
 }
 
+/// Four whole/half-note trills across two systems exercising the full
+/// four-way combination `bracket + speed + ornament + length` through
+/// `TrillExtensionFullOptions` — the unique capability of the unified bundle
+/// over the two single-purpose bundles (neither of which can express all
+/// four knobs in a single call).
+///
+/// Mirrors `build_trill_full_options` exactly, but adds a
+/// `.with_length_ss(...)` on every measure, so every SVG byte-difference is
+/// attributable to the new length field.
+fn build_trill_full_options_with_length() -> String {
+    use music::notation::rhythm::duration::DurationKind;
+    use music_engraver::layout::trill_bracket::{HookDirection, TrillBracketSide};
+    use music_engraver::layout::trill_extension::TrillWiggleSpeed;
+    use music_engraver::layout::trill_options::TrillExtensionFullOptions;
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // M1: Both bracket + Slow speed + TrillWithMordent + 2.0ss length.
+        .note(p("G", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_speed(TrillWiggleSpeed::Slow)
+                .with_ornament(Ornament::TrillWithMordent)
+                .with_length_ss(2.0),
+        )
+        .barline()
+        // M2: End bracket + Up direction + Faster speed + plain Trill + 4.0ss length.
+        // M2 is the last note of system 1; explicit length disables
+        // cross-system propagation so the End hook anchors on system 1.
+        .note(p("A", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::End)
+                .with_bracket_direction(HookDirection::Up)
+                .with_speed(TrillWiggleSpeed::Faster)
+                .with_length_ss(4.0),
+        )
+        .barline()
+        // M3: Start bracket + 1.0ss hook + Slowest speed + TrillWithMordent +
+        // 3.0ss length. Slowest is the widest wiggle glyph; 3.0ss is the
+        // smallest length that still tiles at least one segment.
+        .note(p("B", 4), Duration::WHOLE)
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Start)
+                .with_bracket_length_ss(1.0)
+                .with_speed(TrillWiggleSpeed::Slowest)
+                .with_ornament(Ornament::TrillWithMordent)
+                .with_length_ss(3.0),
+        )
+        .barline()
+        // M4: chord + Both bracket + Standard speed + TrillWithMordent + 2.5ss length.
+        // Exercises the chord arm's length-field wire-up.
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4)],
+            Duration::new(DurationKind::Half, 1),
+        )
+        .trill_with_extension_full_options(
+            TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_speed(TrillWiggleSpeed::Standard)
+                .with_ornament(Ornament::TrillWithMordent)
+                .with_length_ss(2.5),
+        )
+        .note(p("D", 4), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_trill_full_options_with_length() {
+    let svg = build_trill_full_options_with_length();
+
+    assert!(svg.starts_with("<svg"), "should be valid SVG");
+    assert!(svg.contains("</svg>"), "should have closing tag");
+
+    let full_no_length = build_trill_full_options();
+    let svg_paths = svg.matches("<path").count();
+    let svg_lines = svg.matches("<line ").count();
+    let full_paths = full_no_length.matches("<path").count();
+    let full_lines = full_no_length.matches("<line ").count();
+
+    // Structural guard 1: byte-inequality vs the existing
+    // `trill_full_options` baseline (same bracket+speed+ornament, no
+    // length). Locks in that adding `.with_length_ss(...)` to every
+    // measure produces a visibly different SVG. A regression that
+    // silently dropped the length field at the builder layer would fire.
+    assert_ne!(
+        svg, full_no_length,
+        "trill_full_options_with_length must differ from trill_full_options: \
+         the only difference between the two builders is the .with_length_ss(...) call \
+         on every measure"
+    );
+
+    // Structural guard 2: explicit lengths must SHORTEN the wiggle vs the
+    // no-length baseline. All four chosen lengths sit well below the
+    // natural spans. If `length_ss` stops propagating through the unified
+    // bundle, both versions render the same wiggle tile counts.
+    assert!(
+        svg_paths < full_paths,
+        "explicit-length wiggles must produce fewer paths than no-length variant: \
+         with_length={svg_paths}, no_length={full_paths}"
+    );
+
+    // Structural guard 3: bracket-hook count INVARIANCE. Even though M2's
+    // cross-system End hook moves between systems (system 2 in the
+    // no-length variant via `draw_cross_system_trill_extensions`,
+    // system 1 in the with-length variant via the within-system pass),
+    // the **net total** is the same: 1 End hook for M2 either way.
+    // Catches a regression where setting the length accidentally
+    // suppresses a hook (e.g., the renderer drops the End hook on the
+    // source system without also disabling cross-system propagation).
+    //
+    // The chosen lengths (2.0, 4.0, 3.0, 2.5 ss) are deliberately above
+    // the wiggle-too-short fail-safe threshold for every speed used —
+    // M3 with Slowest speed needs ≥3.0ss, the others need ≥1.5ss.
+    assert_eq!(
+        svg_lines, full_lines,
+        "net bracket hook count must be invariant under explicit length: \
+         with_length={svg_lines}, no_length={full_lines} \
+         (cross-system continuation hooks move position but the total is preserved)"
+    );
+
+    // Structural guard 4: byte-inequality vs the standalone
+    // `trill_short_extension` baseline. That baseline uses the
+    // `trill_with_extension_length_ss(L)` shortcut on plain trills with
+    // no bracket and no speed override; this baseline layers bracket +
+    // speed + compound ornament on top of explicit lengths. If a future
+    // refactor accidentally collapsed the unified-options path to the
+    // standalone path (dropping the bracket+speed knobs), the two
+    // baselines would converge.
+    let standalone_short = build_trill_short_extension();
+    assert_ne!(
+        svg, standalone_short,
+        "trill_full_options_with_length must differ from trill_short_extension: \
+         the unified-options path adds bracket + speed + compound-ornament knobs \
+         that the standalone-length shortcut cannot express"
+    );
+
+    // Structural guard 5: byte-inequality vs the existing
+    // `trill_options_with_length` baseline. That baseline uses the two
+    // single-purpose bundles with `extension_length_ss` (one per
+    // measure). This baseline uses the unified bundle with FOUR knobs
+    // set on every measure (`bracket + speed + ornament + length`),
+    // which neither single-purpose bundle can express on its own. The
+    // two outputs are therefore expected to differ — the cross-baseline
+    // canary catches a future refactor that accidentally collapsed the
+    // unified-bundle path's expressiveness down to the single-purpose
+    // bundles'.
+    let options_with_length = build_trill_options_with_length();
+    assert_ne!(
+        svg, options_with_length,
+        "trill_full_options_with_length must differ from trill_options_with_length: \
+         the unified bundle here sets bracket + speed + ornament + length on every \
+         measure, exercising combinations only the unified bundle can express"
+    );
+
+    assert_golden("trill_full_options_with_length", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -4591,6 +4754,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_full_options",
         "trill_short_extension",
         "trill_options_with_length",
+        "trill_full_options_with_length",
     ];
 
     for name in &names {
