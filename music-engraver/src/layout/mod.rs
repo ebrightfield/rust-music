@@ -120,7 +120,12 @@ pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout}
 pub use time_signature::{TimeSignatureKind, TimeSignatureLayout};
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
-pub use chord_symbol::{layout_chord_symbol, ChordSymbolLayout, CHORD_SYMBOL_ABOVE_STAFF_SS};
+pub use chord_symbol::{
+    layout_chord_symbol, layout_chord_symbol_composite, parse_chord_symbol_segments,
+    ChordSymbolCompositeLayout, ChordSymbolLayout, ChordSymbolSegment, ChordSymbolSegmentBox,
+    ACCIDENTAL_BASELINE_RAISE_FACTOR, ACCIDENTAL_SIDE_BEARING_FACTOR, ACCIDENTAL_SIZE_FACTOR,
+    CHORD_SYMBOL_ABOVE_STAFF_SS, CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR,
+};
 pub use navigation::{layout_navigation_sign, NavigationSign, NavigationSignLayout};
 pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
 pub use ottava::{layout_ottava_bracket, OttavaBracketLayout, OttavaKind, OTTAVA_ABOVE_STAFF_SS};

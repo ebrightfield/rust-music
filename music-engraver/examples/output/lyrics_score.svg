@@ -10,14 +10,14 @@
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(3168.0440771349863, 1250)"/>
   <line x1="3068.0440771349863" y1="1250" x2="3563.0440771349863" y2="1250" stroke="black" stroke-width="40"/>
   <line x1="3448.0440771349863" y1="375" x2="3448.0440771349863" y2="1250" stroke="black" stroke-width="30"/>
-  <text x="3315.5440771349863" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">Hap -</text>
+  <text x="3315.5440771349863" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">Hap</text>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(3994.4903581267217, 1250)"/>
   <line x1="3894.4903581267217" y1="1250" x2="4389.490358126722" y2="1250" stroke="black" stroke-width="40"/>
   <line x1="4274.490358126722" y1="375" x2="4274.490358126722" y2="1250" stroke="black" stroke-width="30"/>
   <text x="4141.990358126722" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">py</text>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(4820.936639118458, 1125)"/>
   <line x1="5100.936639118458" y1="250" x2="5100.936639118458" y2="1125" stroke="black" stroke-width="30"/>
-  <text x="4968.436639118458" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">birth -</text>
+  <text x="4968.436639118458" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">birth</text>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(5647.382920110193, 1250)"/>
   <line x1="5547.382920110193" y1="1250" x2="6042.382920110193" y2="1250" stroke="black" stroke-width="40"/>
   <line x1="5927.382920110193" y1="375" x2="5927.382920110193" y2="1250" stroke="black" stroke-width="30"/>
@@ -31,6 +31,8 @@
   <text x="8219.125344352617" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">you,</text>
   <path d="M117 366C125 372 135 375 143 375C150 375 157 373 158 369C159 366 160 364 160 362C160 353 152 345 144 338C131 338 120 311 118 302C115 294 114 285 114 276C114 235 135 203 177 203C206 203 239 214 255 220C256 220 257 221 258 221C261 222 263 222 265 222C268 222 270 221 270 218C270 206 244 173 233 161C195 115 164 78 164 22C164 18 165 13 165 9C169 -49 205 -97 231 -138C234 -143 235 -148 235 -153C235 -163 231 -172 231 -172C231 -172 83 -348 66 -365C61 -370 54 -373 48 -373C38 -373 28 -366 28 -352C28 -347 29 -342 32 -336C36 -325 93 -274 93 -202C93 -165 78 -122 33 -75C23 -65 19 -54 19 -46C19 -32 29 -22 29 -22L78 38C94 58 108 77 121 98C123 102 127 110 127 112C127 113 127 115 126 116C124 120 120 121 115 121C111 121 103 119 99 118C94 118 88 115 83 115C40 115 1 158 1 211C1 261 44 310 117 366Z" fill="black" transform="translate(8898.071625344353, 500)"/>
   <line x1="9724.517906336088" y1="0" x2="9724.517906336088" y2="1000" stroke="black" stroke-width="40"/>
+  <text x="3581.2672176308542" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">-</text>
+  <text x="5234.159779614325" y="2375" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">-</text>
   <line x1="0" y1="2500" x2="10000" y2="2500" stroke="black" stroke-width="32.5"/>
   <line x1="0" y1="2750" x2="10000" y2="2750" stroke="black" stroke-width="32.5"/>
   <line x1="0" y1="3000" x2="10000" y2="3000" stroke="black" stroke-width="32.5"/>
@@ -39,13 +41,13 @@
   <path d="M364 252C387 252 413 250 433 246C444 244 446 243 448 255C460 322 475 409 475 456C475 604 375 622 316 622C262 622 236 606 236 593C236 586 245 583 268 576C299 567 335 540 335 482C335 427 300 380 239 380C172 380 132 433 132 495C132 560 171 658 322 658C389 658 519 628 519 458C519 401 501 306 490 244C488 232 489 233 503 227C604 187 671 102 671 -11C671 -139 577 -252 430 -252C404 -252 404 -252 401 -270L376 -415C374 -427 376 -428 382 -434C490 -535 572 -662 572 -815C572 -902 548 -988 507 -1048C492 -1070 466 -1098 455 -1098C441 -1098 410 -1072 390 -1050C316 -968 292 -843 292 -739C292 -681 299 -616 306 -575C308 -563 309 -561 297 -551C153 -432 0 -289 0 -87C0 87 119 252 364 252ZM80 -20C80 -79 90 -158 173 -252C233 -319 279 -356 326 -394C336 -402 338 -401 340 -390L361 -262C364 -243 364 -244 346 -238C258 -208 201 -129 201 -44C201 46 248 110 316 133C324 136 336 139 343 139C351 139 355 134 355 128C355 121 347 118 340 115C298 97 268 54 268 8C268 -49 307 -92 368 -109C384 -113 386 -112 388 -101L438 197C440 208 439 208 424 211C408 214 388 216 368 216C193 216 80 119 80 -20ZM470 -943C503 -943 530 -916 530 -861C530 -750 435 -660 356 -591C349 -585 345 -586 343 -599C339 -625 337 -659 337 -691C337 -847 409 -943 470 -943ZM441 -117C522 -110 589 -42 589 46C589 109 551 160 495 188C483 194 481 194 479 182L430 -103C428 -115 429 -118 441 -117Z" fill="black" transform="translate(250, 3250)"/>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(2307.6923076923076, 2875)"/>
   <line x1="2322.6923076923076" y1="2875" x2="2322.6923076923076" y2="3750" stroke="black" stroke-width="30"/>
-  <text x="2455.1923076923076" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">Hap -</text>
+  <text x="2455.1923076923076" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">Hap</text>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(3461.538461538462, 2875)"/>
   <line x1="3476.538461538462" y1="2875" x2="3476.538461538462" y2="3750" stroke="black" stroke-width="30"/>
   <text x="3609.038461538462" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">py</text>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(4615.384615384615, 3000)"/>
   <line x1="4630.384615384615" y1="3000" x2="4630.384615384615" y2="3875" stroke="black" stroke-width="30"/>
-  <text x="4762.884615384615" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">birth -</text>
+  <text x="4762.884615384615" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">birth</text>
   <path d="M0 42C0 94 43 125 97 125C186 125 295 43 295 -42C295 -93 255 -125 198 -125C88 -125 0 -44 0 42Z" fill="black" transform="translate(5769.2307692307695, 3125)"/>
   <line x1="6049.2307692307695" y1="2250" x2="6049.2307692307695" y2="3125" stroke="black" stroke-width="30"/>
   <text x="5916.7307692307695" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">day</text>
@@ -58,4 +60,7 @@
   <text x="8609.038461538463" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">friend!</text>
   <line x1="9615.384615384617" y1="2500" x2="9615.384615384617" y2="3500" stroke="black" stroke-width="40"/>
   <line x1="9797.884615384617" y1="2500" x2="9797.884615384617" y2="3500" stroke="black" stroke-width="125"/>
+  <line x1="7407.6923076923085" y1="4875" x2="8411.538461538463" y2="4875" stroke="black" stroke-width="32.5"/>
+  <text x="2884.6153846153848" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">-</text>
+  <text x="5192.307692307692" y="4875" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="normal" font-style="normal">-</text>
 </svg>

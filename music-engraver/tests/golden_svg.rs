@@ -839,6 +839,49 @@ fn build_chord_symbols() -> String {
         .render_svg()
 }
 
+/// Chord symbols that exercise SMuFL accidental glyph composition: flat-root
+/// (`Bb`, `Ebmaj7`), sharp-root (`F#m`, `C#7`), altered-extension flats
+/// (`F#m7b5`, `C7b9`), altered-extension sharps (`D7#9`), and slash chords
+/// (`D/Bb`). The plain symbols (`Cmaj7`, `Am`, `G7`, `F`) are included as
+/// byte-stability controls — they must round-trip through the composite
+/// renderer to single `<text>` elements with the same visual position as the
+/// non-composite renderer.
+fn build_chord_symbols_with_accidentals() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("Bb", 3), Duration::QTR)
+        .chord_symbol("Bb")
+        .note(p("Eb", 4), Duration::QTR)
+        .chord_symbol("Ebmaj7")
+        .note(p("F", 4), Duration::QTR)
+        .chord_symbol("F")
+        .note(p("Bb", 3), Duration::QTR)
+        .chord_symbol("Bb7")
+        .barline()
+        .note(p("F#", 4), Duration::QTR)
+        .chord_symbol("F#m")
+        .note(p("C#", 4), Duration::QTR)
+        .chord_symbol("C#7")
+        .note(p("F#", 4), Duration::QTR)
+        .chord_symbol("F#m7b5")
+        .note(p("C", 4), Duration::QTR)
+        .chord_symbol("C7b9")
+        .barline()
+        .note(p("D", 4), Duration::QTR)
+        .chord_symbol("D7#9")
+        .note(p("C", 4), Duration::QTR)
+        .chord_symbol("Cmaj7")
+        .note(p("D", 4), Duration::QTR)
+        .chord_symbol("D/Bb")
+        .note(p("G", 4), Duration::QTR)
+        .chord_symbol("G7")
+        .end_barline()
+        .render_svg()
+}
+
 /// Multi-staff (grand staff) with cross-system ties and slurs.
 /// 4 measures across 2 systems, treble has tie across system break,
 /// bass has slur across system break.
@@ -1259,12 +1302,109 @@ fn golden_grand_staff() {
 
 #[test]
 fn golden_lyrics() {
-    assert_golden("lyrics", &build_lyrics());
+    let svg = build_lyrics();
+
+    // Structural guards alongside the frozen baseline.
+
+    // Hyphen between syllables is a separate centered '-' text element, not
+    // appended to the source syllable. The baseline must NEVER contain
+    // ">Hap -<" or ">birth -<" (ASCII-concatenated-hyphen regression canary).
+    assert!(
+        !svg.contains(">Hap -<"),
+        "source syllable text must not contain trailing ' -'; rendering regressed"
+    );
+    assert!(
+        !svg.contains(">birth -<"),
+        "source syllable text must not contain trailing ' -'; rendering regressed"
+    );
+
+    // The source syllables must appear standalone.
+    assert!(svg.contains(">Hap<"), "should contain 'Hap' as its own text");
+    assert!(svg.contains(">birth<"), "should contain 'birth' as its own text");
+
+    // At least two standalone hyphens '-' should appear (one between
+    // Hap/py, one between birth/day). The melisma "to/you!" pair uses an
+    // extender (a <line>), not a hyphen.
+    let hyphen_count = svg.matches(">-<").count();
+    assert!(
+        hyphen_count >= 2,
+        "expected >=2 standalone hyphen text elements, got {hyphen_count}"
+    );
+
+    // The extender is still drawn as a <line> for the melisma "to/you!".
+    assert!(svg.contains("<line"), "extender or staff/stem lines should exist");
+
+    assert_golden("lyrics", &svg);
 }
 
 #[test]
 fn golden_chord_symbols() {
     assert_golden("chord_symbols", &build_chord_symbols());
+}
+
+#[test]
+fn golden_chord_symbols_with_accidentals() {
+    let svg = build_chord_symbols_with_accidentals();
+
+    // Structural guards alongside the frozen baseline.
+
+    // The baseline of `chord_symbols` (no accidentals) must NOT contain any
+    // `<path ... d=` elements that come from chord-symbol accidental glyphs.
+    // The accidental-bearing baseline must — at minimum one path per
+    // accidental in the symbol set: Bb (1), Ebmaj7 (1), Bb7 (1), F#m (1),
+    // C#7 (1), F#m7b5 (2), C7b9 (1), D7#9 (1), D/Bb (1) = 10 chord-symbol
+    // accidentals. The total `<path>` count includes staff content, so we
+    // assert a lower bound that strictly exceeds the no-accidental count of
+    // the plain golden.
+    let plain = build_chord_symbols();
+    let plain_paths = plain.matches("<path").count();
+    let accidental_paths = svg.matches("<path").count();
+    assert!(
+        accidental_paths > plain_paths,
+        "with-accidentals SVG should have more <path> elements ({accidental_paths}) than the plain chord_symbols SVG ({plain_paths})"
+    );
+
+    // Byte-inequality vs `chord_symbols` — the two scores intentionally
+    // differ on every accidental-bearing symbol. If a regression collapsed
+    // the composite-renderer path back to plain text, the accidental-bearing
+    // baseline would *visually* differ but might produce text content
+    // equivalent to the plain-text path; the assertion below also relies on
+    // the byte-inequality at the SVG level.
+    assert_ne!(svg, plain, "accidental-bearing score must differ byte-wise from plain chord-symbol score");
+
+    // Composite-renderer-specific marker: text-anchor="start" must appear
+    // in the rendered SVG (the composite path always uses start anchor;
+    // the simple path uses anchor="middle"). Catches a regression that
+    // routes through the simple renderer for accidental-bearing input.
+    assert!(
+        svg.contains(r#"text-anchor="start""#),
+        "composite chord-symbol renderer must emit text-anchor=\"start\""
+    );
+
+    // The composite path produces multiple `<text>` elements for symbols
+    // with accidentals. F#m7b5 alone produces 3 text runs (F, m7, 5).
+    // Total text count across 12 symbols is hard to hand-compute exactly,
+    // but it must STRICTLY exceed 12 (would equal 12 if every symbol were
+    // a single text run — i.e. all-plain).
+    let text_count = svg.matches("<text").count();
+    assert!(
+        text_count > 12,
+        "with-accidentals SVG must have more than 12 text elements (got {text_count}) — \
+         indicates segments are being split by the composite renderer"
+    );
+
+    // ASCII-text regression canary: the `>F#m7b5<` form must NOT appear
+    // anywhere — that was the pre-feature rendering. Same for `>Bb<`.
+    assert!(
+        !svg.contains(">F#m7b5<"),
+        "F#m7b5 should be split into glyph segments, not rendered as a single text run"
+    );
+    assert!(
+        !svg.contains(">Bb<"),
+        "Bb should be split into 'B' + flat glyph, not rendered as 'Bb' text"
+    );
+
+    assert_golden("chord_symbols_with_accidentals", &svg);
 }
 
 #[test]
@@ -4711,6 +4851,7 @@ fn golden_baselines_are_valid_svgs() {
         "grand_staff",
         "lyrics",
         "chord_symbols",
+        "chord_symbols_with_accidentals",
         "ornaments",
         "ornaments_full",
         "hairpins",

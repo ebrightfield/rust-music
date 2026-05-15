@@ -1,7 +1,7 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::glissando::{layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle};
 use crate::layout::hairpin::layout_hairpin;
-use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS};
+use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::page::{PageLayout, PageSystem};
@@ -19,7 +19,7 @@ use crate::render::trill_bracket_renderer::draw_trill_bracket_hook;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
-use crate::render::lyric_renderer::draw_lyric_extender;
+use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::system_renderer::{
@@ -115,6 +115,9 @@ pub fn draw_page(
 
     // Draw cross-system lyric extender lines between adjacent systems
     draw_cross_system_lyric_extenders(&mut svg, config, &page.systems);
+
+    // Draw cross-system lyric hyphens between adjacent systems
+    draw_cross_system_lyric_hyphens(&mut svg, config, &page.systems);
 
     // Draw cross-system ottava brackets between adjacent systems
     draw_cross_system_ottava_brackets(&mut svg, font, config, &page.systems)?;
@@ -781,6 +784,120 @@ fn find_last_unresolved_extender(note_info: &[crate::render::system_renderer::Ly
         // If we hit a note without an extender, no unresolved extender exists
         // (any earlier extender would have had a target note after it).
         return None;
+    }
+    None
+}
+
+/// Draw cross-system lyric hyphens between adjacent systems on a page.
+///
+/// When the last syllable on a system has `Hyphen` continuation, the hyphen
+/// is drawn between the source syllable (on the source system) and the first
+/// syllable-bearing note on the next system. The single hyphen is centered
+/// over the system break — the closer half of the gap on the source system,
+/// the closer half on the target system. We approximate this with one hyphen
+/// per side: a trailing hyphen near the right edge of the source system and
+/// a leading hyphen near the left edge of the target system. Some engraving
+/// conventions draw only one (closest to the syllable text); we draw both
+/// for visual symmetry, which Gould describes as acceptable.
+pub(crate) fn draw_cross_system_lyric_hyphens(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    systems: &[PageSystem],
+) {
+    let font_size = LYRIC_FONT_SIZE_SS * config.staff_space;
+
+    for i in 0..systems.len().saturating_sub(1) {
+        let src_system = &systems[i];
+        let note_info = collect_lyric_note_info(&src_system.system);
+
+        // Find the last note with a Hyphen continuation that has no
+        // syllable-bearing target within the same system (otherwise the
+        // within-system pass already drew it).
+        let Some(last_hyphen) = find_last_unresolved_hyphen(&note_info) else {
+            continue;
+        };
+
+        let src_staff = StaffLayout::new(
+            src_system.x,
+            src_system.y,
+            src_system.system.staff_width,
+            config.staff_space,
+        );
+        let src_y_baseline = src_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+
+        // Trailing hyphen on the source system, between the source syllable
+        // and the right edge of the system's staff.
+        let from_x_src = src_system.x + last_hyphen.x;
+        let to_x_src = src_system.x + src_system.system.staff_width;
+        draw_lyric_hyphen(
+            svg,
+            from_x_src,
+            to_x_src,
+            src_y_baseline,
+            font_size,
+            config.staff_space,
+        );
+
+        // Leading hyphen on the target system, between the left edge of the
+        // target system's content area and the first syllable-bearing note.
+        let tgt_system = &systems[i + 1];
+        let tgt_note_info = collect_lyric_note_info(&tgt_system.system);
+        let Some(first_lyric_note) = tgt_note_info.iter().find(|n| n.lyric.is_some()) else {
+            continue;
+        };
+
+        let tgt_staff = StaffLayout::new(
+            tgt_system.x,
+            tgt_system.y,
+            tgt_system.system.staff_width,
+            config.staff_space,
+        );
+        let tgt_y_baseline = tgt_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+
+        let first_measure_x = tgt_system
+            .system
+            .measures
+            .first()
+            .map(|m| tgt_system.x + m.x_offset)
+            .unwrap_or(tgt_system.x);
+        let to_x_tgt = tgt_system.x + first_lyric_note.x;
+        draw_lyric_hyphen(
+            svg,
+            first_measure_x,
+            to_x_tgt,
+            tgt_y_baseline,
+            font_size,
+            config.staff_space,
+        );
+    }
+}
+
+/// Find the last note in a system with `Hyphen` continuation that has no
+/// subsequent syllable-bearing note in the same system.
+///
+/// Walks backwards: the search ends at the first syllable-bearing note. If
+/// that syllable has hyphen continuation but no successor with a lyric, it is
+/// unresolved and the hyphen crosses the system boundary. If it has any other
+/// continuation (or its successor has a lyric within the system), no
+/// cross-system hyphen is needed.
+fn find_last_unresolved_hyphen(
+    note_info: &[crate::render::system_renderer::LyricNoteInfo],
+) -> Option<&crate::render::system_renderer::LyricNoteInfo> {
+    for (i, info) in note_info.iter().enumerate().rev() {
+        let Some(ref lyric) = info.lyric else {
+            continue;
+        };
+        if lyric.continuation != LyricContinuation::Hyphen {
+            // Last syllable carries no hyphen — nothing crosses the boundary.
+            return None;
+        }
+        // Does any subsequent note in the system carry a lyric?
+        let has_target = note_info.iter().skip(i + 1).any(|n| n.lyric.is_some());
+        if has_target {
+            // Within-system hyphen already drawn — not unresolved.
+            return None;
+        }
+        return Some(info);
     }
     None
 }

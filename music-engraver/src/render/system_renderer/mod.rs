@@ -3,7 +3,7 @@ use crate::layout::glissando::{layout_glissando, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
-use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS};
+use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
 use crate::layout::measure::{MeasureElement, PositionedElement};
 use crate::layout::slur::{layout_slur, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
@@ -19,7 +19,7 @@ use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
-use crate::render::lyric_renderer::draw_lyric_extender;
+use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
 use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
@@ -133,6 +133,11 @@ pub fn draw_system(
     // Draw lyric extender lines (melisma) between syllables with Extender
     // continuation and the next note that has a lyric
     draw_system_lyric_extenders(svg, config, system, &staff, x);
+
+    // Draw lyric hyphens (centered between syllables) for Hyphen continuation.
+    // Engraving convention: the hyphen is a separate centered glyph between
+    // two syllables, not appended to the source syllable text.
+    draw_system_lyric_hyphens(svg, config, system, &staff, x);
 
     // Draw volta brackets above measures that have volta annotations
     draw_system_volta_brackets(svg, config, system, &staff, x);
@@ -487,6 +492,53 @@ fn draw_system_lyric_extenders(
             y_baseline,
             config.staff_space,
             stroke_width,
+        );
+    }
+}
+
+/// Draw lyric hyphens between consecutive syllables where the source syllable
+/// has `Hyphen` continuation.
+///
+/// Engraving convention: the hyphen is a separate centered glyph between two
+/// syllables, sharing the same baseline and font size as the lyrics. The
+/// target is the next note/chord that carries a lyric — a syllable with
+/// hyphen continuation followed by a note WITHOUT a lyric is unusual and
+/// typically indicates a notation error; we render the hyphen anyway against
+/// the next rhythmic event, matching the extender convention.
+fn draw_system_lyric_hyphens(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) {
+    let note_info = collect_lyric_note_info(system);
+
+    let y_baseline = staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+    let font_size = LYRIC_FONT_SIZE_SS * config.staff_space;
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(ref lyric) = info.lyric else {
+            continue;
+        };
+        if lyric.continuation != LyricContinuation::Hyphen {
+            continue;
+        }
+
+        // Find the next note/chord carrying a lyric — this is where the next
+        // syllable lives. If none exists in the same system, the hyphen will
+        // be picked up by the cross-system pass.
+        let Some(target) = note_info.iter().skip(i + 1).find(|n| n.lyric.is_some()) else {
+            continue;
+        };
+
+        draw_lyric_hyphen(
+            svg,
+            system_x + info.x,
+            system_x + target.x,
+            y_baseline,
+            font_size,
+            config.staff_space,
         );
     }
 }

@@ -1742,9 +1742,16 @@ fn chord_with_lyric_adds_text_element() {
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
     let output = svg.to_svg();
+    // The lyric text is rendered alone — the hyphen between syllables is
+    // drawn by the system-level pass once the next syllable's x is known.
+    // The measure renderer must emit just the syllable text, not "hap -".
     assert!(
-        output.contains("hap -"),
-        "chord lyric should show 'hap -' with trailing hyphen"
+        output.contains(">hap<"),
+        "chord lyric should render 'hap' alone, got: {output}"
+    );
+    assert!(
+        !output.contains("hap -"),
+        "measure renderer must not append ' -' to hyphenated syllable, got: {output}"
     );
 }
 

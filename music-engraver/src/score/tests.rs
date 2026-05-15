@@ -2825,7 +2825,71 @@
     }
 
     #[test]
-    fn lyric_with_hyphen_shows_hyphen() {
+    fn lyric_with_hyphen_shows_separated_hyphen_between_syllables() {
+        // Engraving convention: hyphen is a separate centered '-' glyph
+        // between two syllables, NOT appended to the source syllable text.
+        use crate::layout::lyric::LyricSyllable;
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .lyric(LyricSyllable::with_hyphen("hap"))
+            .note(p("D", 4), Duration::QTR)
+            .lyric(LyricSyllable::word("py"))
+            .end_barline()
+            .render_svg();
+        // Source syllable appears alone — no " -" suffix.
+        assert!(svg.contains(">hap<"), "should render 'hap' alone, got: {svg}");
+        assert!(
+            !svg.contains("hap -"),
+            "source syllable text must not have ' -' appended, got: {svg}"
+        );
+        // A standalone hyphen <text>-</text> element is drawn between the
+        // two syllables.
+        let hyphen_count = svg.matches(">-<").count();
+        assert!(
+            hyphen_count >= 1,
+            "expected at least 1 standalone hyphen text between syllables, got {hyphen_count}; svg: {svg}"
+        );
+    }
+
+    #[test]
+    fn lyric_hyphen_crosses_system_boundary() {
+        // When a hyphen syllable is on the last note of a system and the
+        // next syllable is on the first note of the next system, the
+        // cross-system pass must draw the hyphen(s). We use a 1-measure-per-
+        // system layout to force the boundary.
+        use crate::layout::lyric::LyricSyllable;
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .measures_per_system(1)
+            .note(p("C", 4), Duration::QTR)
+            .lyric(LyricSyllable::with_hyphen("hap"))
+            .barline()
+            .note(p("D", 4), Duration::QTR)
+            .lyric(LyricSyllable::word("py"))
+            .end_barline()
+            .render_svg();
+        // Source and target syllables both appear, neither with concatenated
+        // hyphen.
+        assert!(svg.contains(">hap<"));
+        assert!(svg.contains(">py<"));
+        assert!(!svg.contains("hap -"));
+        // The cross-system path emits up to 2 hyphens (one trailing on the
+        // source system, one leading on the target). At least one must
+        // appear — assert exact count is at least 1 (it could be 2; we
+        // don't pin it to a specific number because gap-threshold logic
+        // may suppress one side depending on layout widths).
+        let hyphen_count = svg.matches(">-<").count();
+        assert!(
+            hyphen_count >= 1,
+            "expected at least 1 cross-system hyphen, got {hyphen_count}; svg: {svg}"
+        );
+    }
+
+    #[test]
+    fn lyric_hyphen_not_drawn_when_no_successor_syllable() {
+        // A hyphen continuation with no following syllable in the system
+        // should not produce a stray standalone hyphen.
         use crate::layout::lyric::LyricSyllable;
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
@@ -2833,9 +2897,11 @@
             .lyric(LyricSyllable::with_hyphen("hap"))
             .end_barline()
             .render_svg();
-        assert!(
-            svg.contains("hap -"),
-            "hyphen syllable should show 'hap -' in SVG"
+        assert!(svg.contains(">hap<"));
+        assert_eq!(
+            svg.matches(">-<").count(),
+            0,
+            "no hyphen should be drawn when there is no target syllable"
         );
     }
 

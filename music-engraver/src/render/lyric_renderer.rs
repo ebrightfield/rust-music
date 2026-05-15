@@ -1,29 +1,75 @@
 /// SVG rendering for lyric text syllables.
 ///
-/// Renders roman (upright) text below the staff, with optional trailing
-/// hyphen or extender line, using the geometry from [`crate::layout::lyric`].
-use crate::layout::lyric::{LyricContinuation, LyricLayout};
+/// Renders roman (upright) text below the staff. Hyphens between adjacent
+/// syllables and melisma extender lines are drawn separately in a second
+/// pass, by [`draw_lyric_hyphen`] and [`draw_lyric_extender`] respectively,
+/// once positions of all consecutive notes are known.
+use crate::layout::lyric::LyricLayout;
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
 /// Draw a lyric syllable onto the SVG.
 ///
 /// Renders roman serif text centered on the note's x-position, below the staff.
-/// Appends a trailing hyphen character if continuation is `Hyphen`.
-/// Extender lines are drawn separately by [`draw_lyric_extender`] in a
-/// second pass once all note positions are known.
+/// Hyphenated continuation (`LyricContinuation::Hyphen`) does NOT append a
+/// trailing hyphen to the syllable — proper engraving places the hyphen
+/// centered between the syllable and the next one. Use [`draw_lyric_hyphen`]
+/// in a second pass when the next note's x-position is known.
 pub fn draw_lyric(svg: &mut SvgWriter, layout: &LyricLayout) {
-    let display_text = match &layout.continuation {
-        LyricContinuation::Hyphen => format!("{} -", layout.text),
-        _ => layout.text.clone(),
-    };
-
     svg.add_text(
         layout.x_center,
         layout.y_baseline,
-        &display_text,
+        &layout.text,
         &TextStyle::normal(layout.font_size),
     );
+}
+
+/// Estimated half-width of a lyric syllable, in ems, used to push the
+/// hyphen away from the syllable text edges. Conservative — the bundled
+/// font is not used for text, so this is a layout estimate. A typical
+/// 3-letter syllable occupies ~1.5 em; half of that is ~0.75. We use
+/// 0.5 em so that even short syllables (1–2 letters) have some clearance.
+const HYPHEN_SYLLABLE_HALF_WIDTH_EM: f64 = 0.5;
+
+/// Minimum gap between source and target syllables (in staff spaces) below
+/// which no hyphen is drawn. Prevents drawing a hyphen on top of overlapping
+/// or near-overlapping syllables.
+const HYPHEN_MIN_GAP_SS: f64 = 0.6;
+
+/// Draw a hyphen between a syllable with `Hyphen` continuation and the next
+/// syllable's note position.
+///
+/// The hyphen is centered horizontally between the two note centers, on the
+/// shared lyric baseline. Visual convention (Gould, Gardner Read): a single
+/// hyphen character `-` of the same font size as the surrounding lyrics,
+/// centered in the gap between syllables — not appended to the source
+/// syllable text.
+///
+/// `from_x` is the center-x of the source syllable's note.
+/// `to_x` is the center-x of the target syllable's note.
+/// `y_baseline` is the lyric text baseline (shared across all lyrics in a system).
+/// `font_size` is the lyric font size in font design units.
+/// `staff_space` is the staff space size in font design units; used for the
+/// minimum-gap check.
+///
+/// Returns `true` if a hyphen was drawn, `false` if the gap was too small.
+pub fn draw_lyric_hyphen(
+    svg: &mut SvgWriter,
+    from_x: f64,
+    to_x: f64,
+    y_baseline: f64,
+    font_size: f64,
+    staff_space: f64,
+) -> bool {
+    let half_width = HYPHEN_SYLLABLE_HALF_WIDTH_EM * font_size;
+    let gap = to_x - from_x - 2.0 * half_width;
+    if gap < HYPHEN_MIN_GAP_SS * staff_space {
+        return false;
+    }
+
+    let midpoint = 0.5 * (from_x + to_x);
+    svg.add_text(midpoint, y_baseline, "-", &TextStyle::normal(font_size));
+    true
 }
 
 /// Horizontal padding before the extender line starts (past the syllable text),
@@ -113,16 +159,22 @@ mod tests {
     }
 
     #[test]
-    fn hyphen_continuation_appends_hyphen() {
+    fn hyphen_continuation_renders_only_syllable_text() {
+        // draw_lyric must NOT append " -" to a hyphenated syllable.
+        // The hyphen between syllables is drawn separately by
+        // draw_lyric_hyphen() in a second pass.
         let syl = LyricSyllable::with_hyphen("hap");
         let layout = layout_lyric(&syl, 500.0, &test_staff(), 250.0);
         let mut svg = test_svg();
         draw_lyric(&mut svg, &layout);
         let output = svg.to_svg();
         assert!(
-            output.contains("hap -"),
-            "hyphen syllable should show 'hap -' but got: {}",
-            output
+            output.contains(">hap<"),
+            "hyphen syllable should render only 'hap', got: {output}"
+        );
+        assert!(
+            !output.contains("hap -"),
+            "draw_lyric must not append ' -' to hyphenated syllable text; got: {output}"
         );
     }
 
@@ -149,9 +201,115 @@ mod tests {
         assert!(output.contains(">love<"), "should contain 'love'");
         // Extender line is drawn separately (needs next note x position)
         assert!(
-            !output.contains("hap -"),
+            !output.contains("love -"),
             "extender should not have a hyphen"
         );
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_emits_centered_text_element() {
+        let mut svg = test_svg();
+        let drew = draw_lyric_hyphen(&mut svg, 200.0, 800.0, 1500.0, 100.0, 250.0);
+        assert!(drew, "hyphen should be drawn for a 600fu gap");
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches("<text").count(),
+            1,
+            "hyphen should produce exactly 1 text element"
+        );
+        // midpoint = (200+800)/2 = 500
+        assert!(
+            output.contains(r#"x="500""#),
+            "hyphen should be centered at midpoint x=500, got: {output}"
+        );
+        assert!(
+            output.contains(r#"y="1500""#),
+            "hyphen y should match baseline 1500, got: {output}"
+        );
+        assert!(
+            output.contains(">-<"),
+            "hyphen text content should be '-', got: {output}"
+        );
+        // Must use the lyric font size, not the surrounding default.
+        assert!(
+            output.contains(r#"font-size="100""#),
+            "hyphen should use the given 100 font size, got: {output}"
+        );
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_uses_text_anchor_middle() {
+        let mut svg = test_svg();
+        draw_lyric_hyphen(&mut svg, 100.0, 700.0, 1500.0, 80.0, 250.0);
+        let output = svg.to_svg();
+        assert!(
+            output.contains(r#"text-anchor="middle""#),
+            "hyphen text should be center-anchored, got: {output}"
+        );
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_returns_false_when_gap_too_small() {
+        let mut svg = test_svg();
+        // Centers 10fu apart with 100fu font: half-widths consume 2 * 50 = 100fu,
+        // leaving a -90fu gap — well below the 0.6 * 250 = 150fu minimum.
+        let drew = draw_lyric_hyphen(&mut svg, 200.0, 210.0, 1500.0, 100.0, 250.0);
+        assert!(!drew, "hyphen should not draw when syllables overlap");
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches("<text").count(),
+            0,
+            "no text element should be emitted when hyphen is skipped"
+        );
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_skips_when_gap_below_threshold() {
+        let mut svg = test_svg();
+        // half_width = 0.5 * 80 = 40fu, two of them = 80fu.
+        // min gap = 0.6 * 250 = 150fu.
+        // Centers 220fu apart: gap = 220 - 80 = 140fu (below 150fu) → skip.
+        let drew = draw_lyric_hyphen(&mut svg, 100.0, 320.0, 1500.0, 80.0, 250.0);
+        assert!(!drew, "gap of 140 below 150 threshold should not draw");
+        assert_eq!(svg.to_svg().matches("<text").count(), 0);
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_draws_when_gap_above_threshold() {
+        let mut svg = test_svg();
+        // Centers 250fu apart with 80fu font:
+        // gap = 250 - (2 * 0.5 * 80) = 250 - 80 = 170fu > 0.6 * 250 = 150fu → draw.
+        let drew = draw_lyric_hyphen(&mut svg, 100.0, 350.0, 1500.0, 80.0, 250.0);
+        assert!(drew, "gap of 170 above 150 threshold should draw");
+        let output = svg.to_svg();
+        assert_eq!(output.matches("<text").count(), 1);
+        // midpoint = (100+350)/2 = 225
+        assert!(
+            output.contains(r#"x="225""#),
+            "hyphen midpoint x should be 225, got: {output}"
+        );
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_position_is_independent_of_text() {
+        // Two calls with the same coordinates produce the same hyphen — text
+        // content of source/target syllables is not part of the input.
+        let mut a = test_svg();
+        let mut b = test_svg();
+        draw_lyric_hyphen(&mut a, 300.0, 900.0, 1500.0, 100.0, 250.0);
+        draw_lyric_hyphen(&mut b, 300.0, 900.0, 1500.0, 100.0, 250.0);
+        assert_eq!(a.to_svg(), b.to_svg());
+    }
+
+    #[test]
+    fn draw_lyric_hyphen_midpoint_moves_with_endpoints() {
+        // Sanity: shifting both endpoints by +100 shifts the midpoint by +100.
+        let mut left = test_svg();
+        let mut right = test_svg();
+        draw_lyric_hyphen(&mut left, 100.0, 700.0, 1500.0, 100.0, 250.0);
+        draw_lyric_hyphen(&mut right, 200.0, 800.0, 1500.0, 100.0, 250.0);
+        assert!(left.to_svg().contains(r#"x="400""#));
+        assert!(right.to_svg().contains(r#"x="500""#));
     }
 
     #[test]

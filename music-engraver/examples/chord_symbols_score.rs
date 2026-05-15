@@ -66,13 +66,27 @@ fn main() {
     // Verification
     assert!(svg.starts_with("<svg"), "output should be valid SVG");
     let text_count = svg.matches("<text").count();
+    // Some symbols (F#m7b5) are now split into multiple text runs by the
+    // composite chord-symbol renderer (one text run per non-accidental
+    // fragment). 9 is the old single-run lower bound; with splitting it
+    // is strictly higher.
     assert!(
         text_count >= 9,
         "expected at least 9 chord symbol text elements, got {text_count}"
     );
-    assert!(svg.contains(">Cmaj7<"), "should contain 'Cmaj7'");
-    assert!(svg.contains(">G7<"), "should contain 'G7'");
-    assert!(svg.contains(">F#m7b5<"), "should contain 'F#m7b5'");
+    // Accidental-free symbols are still emitted as one text run.
+    assert!(svg.contains(">Cmaj7<"), "should contain 'Cmaj7' as one text run");
+    assert!(svg.contains(">G7<"), "should contain 'G7' as one text run");
+    // F#m7b5 is now split into three text runs (F, m7, 5) + two SMuFL
+    // accidental paths (# and b). The whole token must NOT appear in any
+    // single <text>...</text>.
+    assert!(
+        !svg.contains(">F#m7b5<"),
+        "F#m7b5 should be split into segments; '#' and 'b' should be glyph paths, not part of the text"
+    );
+    assert!(svg.contains(">F<"), "should contain 'F' text fragment of F#m7b5");
+    assert!(svg.contains(">m7<"), "should contain 'm7' text fragment of F#m7b5");
+    assert!(svg.contains(">5<"), "should contain '5' text fragment of F#m7b5");
     assert!(svg.contains("bold"), "chord symbols should be bold");
 
     println!(

@@ -61,7 +61,7 @@ pub use accidental_renderer::draw_accidental;
 pub use arpeggio_renderer::draw_arpeggio;
 pub use breath_renderer::draw_breath_mark;
 pub use articulation_renderer::draw_articulation;
-pub use chord_symbol_renderer::draw_chord_symbol;
+pub use chord_symbol_renderer::{draw_chord_symbol, draw_chord_symbol_composite};
 pub use church_rest_renderer::draw_church_rest;
 pub use barline_renderer::draw_barline;
 pub use beam_renderer::draw_beam_group;

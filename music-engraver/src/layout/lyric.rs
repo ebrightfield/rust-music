@@ -73,8 +73,10 @@ pub struct LyricLayout {
 /// Below expression text (4.0ss) and dynamics (2.5ss) to avoid collision.
 pub const LYRIC_BELOW_STAFF_SS: f64 = 5.5;
 
-/// Font size for lyric text, in staff spaces.
-const LYRIC_FONT_SIZE_SS: f64 = 1.4;
+/// Font size for lyric text, in staff spaces. Public so the system renderer
+/// can compute hyphen font size to match the lyric text without re-running
+/// `layout_lyric`.
+pub const LYRIC_FONT_SIZE_SS: f64 = 1.4;
 
 /// Lay out a lyric syllable below the staff.
 ///

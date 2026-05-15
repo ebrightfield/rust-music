@@ -422,9 +422,15 @@ fn draw_note_event(
     // Draw chord symbol above the staff if present
     if let Some(ref symbol) = note.annotations.chord_symbol {
         let note_center_x = x + advance / 2.0;
-        let layout =
-            crate::layout::chord_symbol::layout_chord_symbol(symbol, note_center_x, staff, config.staff_space);
-        crate::render::chord_symbol_renderer::draw_chord_symbol(svg, &layout);
+        let layout = crate::layout::chord_symbol::layout_chord_symbol_composite(
+            symbol,
+            note_center_x,
+            staff,
+            config.staff_space,
+            font.units_per_em(),
+            |g| font.glyph_advance(g).unwrap_or(0),
+        );
+        crate::render::chord_symbol_renderer::draw_chord_symbol_composite(svg, font, &layout)?;
     }
 
     // Draw ornament above the staff if present
@@ -694,9 +700,15 @@ fn draw_chord_event(
     // Draw chord symbol above the staff if present
     if let Some(ref symbol) = chord.annotations.chord_symbol {
         let chord_center_x = x + advance / 2.0;
-        let layout =
-            crate::layout::chord_symbol::layout_chord_symbol(symbol, chord_center_x, staff, config.staff_space);
-        crate::render::chord_symbol_renderer::draw_chord_symbol(svg, &layout);
+        let layout = crate::layout::chord_symbol::layout_chord_symbol_composite(
+            symbol,
+            chord_center_x,
+            staff,
+            config.staff_space,
+            font.units_per_em(),
+            |g| font.glyph_advance(g).unwrap_or(0),
+        );
+        crate::render::chord_symbol_renderer::draw_chord_symbol_composite(svg, font, &layout)?;
     }
 
     // Draw ornament above the staff if present
