@@ -87,6 +87,35 @@ pub enum ChordSymbolSegment {
     Natural,
 }
 
+impl ChordSymbolSegment {
+    /// Whether this segment is an accidental (Sharp, Flat, or Natural).
+    ///
+    /// Returns `false` for `Text`. Useful for callers that need to decide
+    /// whether to apply the inter-segment side bearing
+    /// ([`ACCIDENTAL_SIDE_BEARING_FACTOR`]) on either side of a boundary
+    /// without re-pattern-matching the variant.
+    pub const fn is_accidental(&self) -> bool {
+        matches!(self, Self::Sharp | Self::Flat | Self::Natural)
+    }
+
+    /// The SMuFL glyph that depicts this accidental segment in chord-symbol
+    /// context, or `None` for `Text`.
+    ///
+    /// All three chord-symbol accidentals (`Sharp`, `Flat`, `Natural`) map to
+    /// the standard SMuFL accidental glyphs: `AccidentalSharp`, `AccidentalFlat`,
+    /// `AccidentalNatural`. The mapping is fixed for chord symbols — variant
+    /// SMuFL glyphs (small/raised) are reserved for inline notation
+    /// (key signatures, alterations on noteheads), not for chord-symbol use.
+    pub const fn glyph(&self) -> Option<Glyph> {
+        match self {
+            Self::Text(_) => None,
+            Self::Sharp => Some(Glyph::AccidentalSharp),
+            Self::Flat => Some(Glyph::AccidentalFlat),
+            Self::Natural => Some(Glyph::AccidentalNatural),
+        }
+    }
+}
+
 /// Parse a chord-symbol string into a sequence of text runs and accidental tokens.
 ///
 /// Accidental resolution rules — driven by chord-symbol convention, not by the
@@ -237,6 +266,47 @@ pub const ACCIDENTAL_BASELINE_RAISE_FACTOR: f64 = 0.20;
 /// without visually disconnecting from the chord letter it modifies.
 pub const ACCIDENTAL_SIDE_BEARING_FACTOR: f64 = 0.08;
 
+/// Estimated advance width of a single chord-symbol segment, in font design units.
+///
+/// This is a courtesy helper for external callers (e.g. higher-level layout
+/// code that needs to budget chord-symbol width without invoking
+/// [`layout_chord_symbol_composite`] and walking its `boxes`). It returns the
+/// segment's intrinsic width only — **inter-segment side bearings are not
+/// included**, because side bearings depend on the *neighbors* of a segment,
+/// not on the segment in isolation. To get a total composite width including
+/// gaps between accidentals and adjacent text, use the
+/// [`ChordSymbolCompositeLayout::total_width`] field instead.
+///
+/// Formulas (identical to the ones used by [`layout_chord_symbol_composite`]):
+///
+/// - `Text(s)`: `s.chars().count() * text_font_size * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR`
+/// - `Sharp` / `Flat` / `Natural`: `accidental_advance(glyph) * text_font_size * ACCIDENTAL_SIZE_FACTOR / units_per_em`
+///
+/// `units_per_em` is floored at 1 to avoid divide-by-zero on junk font input.
+pub fn chord_symbol_segment_advance(
+    seg: &ChordSymbolSegment,
+    text_font_size: f64,
+    units_per_em: u16,
+    accidental_advance: impl Fn(Glyph) -> u16,
+) -> f64 {
+    let upe = units_per_em.max(1) as f64;
+    let accidental_font_size = text_font_size * ACCIDENTAL_SIZE_FACTOR;
+    match seg {
+        ChordSymbolSegment::Text(s) => {
+            s.chars().count() as f64 * text_font_size * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR
+        }
+        ChordSymbolSegment::Sharp => {
+            accidental_advance(Glyph::AccidentalSharp) as f64 * accidental_font_size / upe
+        }
+        ChordSymbolSegment::Flat => {
+            accidental_advance(Glyph::AccidentalFlat) as f64 * accidental_font_size / upe
+        }
+        ChordSymbolSegment::Natural => {
+            accidental_advance(Glyph::AccidentalNatural) as f64 * accidental_font_size / upe
+        }
+    }
+}
+
 /// Lay out a chord symbol with SMuFL accidental glyph composition.
 ///
 /// `text` is the chord symbol source (e.g. `"F#m7b5"`).
@@ -268,40 +338,21 @@ pub fn layout_chord_symbol_composite(
     let accidental_font_size = font_size * ACCIDENTAL_SIZE_FACTOR;
     let accidental_y_baseline = y_baseline - font_size * ACCIDENTAL_BASELINE_RAISE_FACTOR;
     let accidental_side_bearing = font_size * ACCIDENTAL_SIDE_BEARING_FACTOR;
-    let upe = units_per_em.max(1) as f64;
 
     // Pre-compute per-segment widths and per-segment side bearings (extra
-    // gap added BEFORE this segment) in a single pass.
+    // gap added BEFORE this segment) in a single pass. Side bearings live
+    // between an accidental and any adjacent segment.
     let mut widths: Vec<f64> = Vec::with_capacity(segments.len());
     let mut leading_gaps: Vec<f64> = Vec::with_capacity(segments.len());
     for (i, seg) in segments.iter().enumerate() {
-        let (width, is_accidental) = match seg {
-            ChordSymbolSegment::Text(s) => {
-                (s.chars().count() as f64 * font_size * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR, false)
-            }
-            ChordSymbolSegment::Sharp => (
-                accidental_advance(Glyph::AccidentalSharp) as f64 * accidental_font_size / upe,
-                true,
-            ),
-            ChordSymbolSegment::Flat => (
-                accidental_advance(Glyph::AccidentalFlat) as f64 * accidental_font_size / upe,
-                true,
-            ),
-            ChordSymbolSegment::Natural => (
-                accidental_advance(Glyph::AccidentalNatural) as f64 * accidental_font_size / upe,
-                true,
-            ),
-        };
-        widths.push(width);
-        // Side bearing applies between an accidental and any adjacent segment.
-        let needs_gap_before = i > 0
-            && (is_accidental
-                || matches!(
-                    segments[i - 1],
-                    ChordSymbolSegment::Sharp
-                        | ChordSymbolSegment::Flat
-                        | ChordSymbolSegment::Natural
-                ));
+        widths.push(chord_symbol_segment_advance(
+            seg,
+            font_size,
+            units_per_em,
+            &accidental_advance,
+        ));
+        let needs_gap_before =
+            i > 0 && (seg.is_accidental() || segments[i - 1].is_accidental());
         leading_gaps.push(if needs_gap_before { accidental_side_bearing } else { 0.0 });
     }
 
@@ -857,5 +908,281 @@ mod tests {
         );
         // No panic; layout produced.
         assert_eq!(layout.boxes.len(), 2);
+    }
+
+    // ---------------- ChordSymbolSegment::is_accidental / glyph ----------------
+
+    #[test]
+    fn is_accidental_text_is_false() {
+        assert!(!S::Text("Cmaj7".into()).is_accidental());
+        assert!(!S::Text("".into()).is_accidental());
+    }
+
+    #[test]
+    fn is_accidental_all_variants() {
+        assert!(S::Sharp.is_accidental());
+        assert!(S::Flat.is_accidental());
+        assert!(S::Natural.is_accidental());
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn is_accidental_is_const_callable() {
+        // Compile-fail canary: removing `const fn` from is_accidental breaks
+        // the three const-item initializers below. Const context can't
+        // construct a `String`, so Text is excluded — the body's exhaustive
+        // match keeps Text in lockstep with the no-payload variants.
+        // (Clippy correctly notes the assertions are statically true; that
+        // tautology *is* the test — we're checking the value resolves at
+        // compile time, not at runtime.)
+        const SHARP_IS_ACCIDENTAL: bool = S::Sharp.is_accidental();
+        const FLAT_IS_ACCIDENTAL: bool = S::Flat.is_accidental();
+        const NATURAL_IS_ACCIDENTAL: bool = S::Natural.is_accidental();
+        assert!(SHARP_IS_ACCIDENTAL);
+        assert!(FLAT_IS_ACCIDENTAL);
+        assert!(NATURAL_IS_ACCIDENTAL);
+    }
+
+    #[test]
+    fn glyph_text_is_none() {
+        assert_eq!(S::Text("Cmaj7".into()).glyph(), None);
+        assert_eq!(S::Text("".into()).glyph(), None);
+    }
+
+    #[test]
+    fn glyph_sharp_maps_to_accidental_sharp() {
+        assert_eq!(S::Sharp.glyph(), Some(Glyph::AccidentalSharp));
+    }
+
+    #[test]
+    fn glyph_flat_maps_to_accidental_flat() {
+        assert_eq!(S::Flat.glyph(), Some(Glyph::AccidentalFlat));
+    }
+
+    #[test]
+    fn glyph_natural_maps_to_accidental_natural() {
+        assert_eq!(S::Natural.glyph(), Some(Glyph::AccidentalNatural));
+    }
+
+    #[test]
+    fn glyph_is_const_callable() {
+        // Compile-fail canary for `const fn` on glyph().
+        const G: Option<Glyph> = S::Sharp.glyph();
+        assert_eq!(G, Some(Glyph::AccidentalSharp));
+    }
+
+    // ---------------- chord_symbol_segment_advance ----------------
+
+    #[test]
+    fn segment_advance_text_uses_char_width_factor() {
+        // "Am" — 2 chars; width = 2 * font_size * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR.
+        let w = chord_symbol_segment_advance(
+            &S::Text("Am".into()),
+            400.0,
+            1000,
+            fixed_advance,
+        );
+        let expected = 2.0 * 400.0 * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR;
+        assert!(
+            (w - expected).abs() < 0.01,
+            "expected {expected}, got {w}"
+        );
+    }
+
+    #[test]
+    fn segment_advance_text_scales_linearly_with_length() {
+        let single = chord_symbol_segment_advance(
+            &S::Text("C".into()),
+            400.0,
+            1000,
+            fixed_advance,
+        );
+        let triple = chord_symbol_segment_advance(
+            &S::Text("CCC".into()),
+            400.0,
+            1000,
+            fixed_advance,
+        );
+        assert!(
+            (triple - 3.0 * single).abs() < 0.01,
+            "3-char width {triple} should equal 3 × 1-char width {single}"
+        );
+    }
+
+    #[test]
+    fn segment_advance_text_scales_linearly_with_font_size() {
+        let small = chord_symbol_segment_advance(
+            &S::Text("Am".into()),
+            200.0,
+            1000,
+            fixed_advance,
+        );
+        let large = chord_symbol_segment_advance(
+            &S::Text("Am".into()),
+            400.0,
+            1000,
+            fixed_advance,
+        );
+        assert!(
+            (large - 2.0 * small).abs() < 0.01,
+            "doubling font_size must double text width: small={small}, large={large}"
+        );
+    }
+
+    #[test]
+    fn segment_advance_empty_text_is_zero() {
+        let w = chord_symbol_segment_advance(
+            &S::Text(String::new()),
+            400.0,
+            1000,
+            fixed_advance,
+        );
+        assert_eq!(w, 0.0);
+    }
+
+    #[test]
+    fn segment_advance_text_does_not_invoke_advance_callback() {
+        // Tracks whether the callback is called. For Text segments it MUST NOT
+        // be — text widths are estimated from char count alone.
+        let calls = std::cell::Cell::new(0usize);
+        let counting = |_g: smufl::Glyph| {
+            calls.set(calls.get() + 1);
+            200
+        };
+        let _ = chord_symbol_segment_advance(
+            &S::Text("Cmaj7".into()),
+            400.0,
+            1000,
+            counting,
+        );
+        assert_eq!(
+            calls.get(),
+            0,
+            "text-segment advance must not consult the accidental advance callback"
+        );
+    }
+
+    #[test]
+    fn segment_advance_sharp_uses_advance_callback() {
+        // advance=200, font_size=400, units_per_em=1000, ACCIDENTAL_SIZE_FACTOR=0.70
+        // expected = 200 * (400 * 0.70) / 1000 = 200 * 280 / 1000 = 56
+        let w = chord_symbol_segment_advance(
+            &S::Sharp,
+            400.0,
+            1000,
+            fixed_advance,
+        );
+        let expected = 200.0 * 400.0 * ACCIDENTAL_SIZE_FACTOR / 1000.0;
+        assert!(
+            (w - expected).abs() < 0.01,
+            "expected {expected}, got {w}"
+        );
+    }
+
+    #[test]
+    fn segment_advance_scales_linearly_with_advance() {
+        // Doubling the advance callback's return must double the segment width.
+        let small = chord_symbol_segment_advance(
+            &S::Sharp,
+            400.0,
+            1000,
+            |_g| 200u16,
+        );
+        let big = chord_symbol_segment_advance(
+            &S::Sharp,
+            400.0,
+            1000,
+            |_g| 400u16,
+        );
+        assert!(
+            (big - 2.0 * small).abs() < 0.01,
+            "doubling advance must double width: small={small}, big={big}"
+        );
+    }
+
+    #[test]
+    fn segment_advance_accidentals_use_their_own_glyph() {
+        // Callback returns different widths per glyph — verifies the function
+        // queries the right glyph for each accidental variant.
+        let differentiating = |g: smufl::Glyph| -> u16 {
+            match g {
+                smufl::Glyph::AccidentalSharp => 100,
+                smufl::Glyph::AccidentalFlat => 200,
+                smufl::Glyph::AccidentalNatural => 300,
+                _ => 999,
+            }
+        };
+        let sharp = chord_symbol_segment_advance(&S::Sharp, 400.0, 1000, differentiating);
+        let flat = chord_symbol_segment_advance(&S::Flat, 400.0, 1000, differentiating);
+        let natural =
+            chord_symbol_segment_advance(&S::Natural, 400.0, 1000, differentiating);
+        // Locked-in ordering: flat (200) = 2× sharp (100); natural (300) = 3× sharp.
+        assert!((flat - 2.0 * sharp).abs() < 0.01);
+        assert!((natural - 3.0 * sharp).abs() < 0.01);
+        // Sanity: 999 (the catch-all in `differentiating`) is never reached.
+        // If a refactor accidentally called the callback with a non-accidental
+        // glyph, sharp would equal ~999*280/1000 = 280, not 100*280/1000 = 28.
+        assert!(sharp < 50.0, "sharp width {sharp} should reflect advance=100, not 999");
+    }
+
+    #[test]
+    fn segment_advance_units_per_em_zero_does_not_panic() {
+        // Defensive: divide-by-zero floor — units_per_em.max(1) must hold.
+        let w = chord_symbol_segment_advance(
+            &S::Sharp,
+            400.0,
+            0,
+            fixed_advance,
+        );
+        // The floor turns the divisor into 1, so the width is just
+        // advance * accidental_font_size — large but finite, not NaN/Inf.
+        assert!(w.is_finite());
+        assert!(w > 0.0);
+    }
+
+    #[test]
+    fn segment_advance_matches_composite_layout_widths() {
+        // The most important contract: this helper and
+        // layout_chord_symbol_composite agree on each segment's width.
+        // F#m7b5 covers Text + Sharp + Text + Flat + Text in one symbol.
+        let staff = test_staff();
+        let staff_space = 250.0;
+        let text_font_size = CHORD_SYMBOL_FONT_SIZE_SS * staff_space;
+        let composite = layout_chord_symbol_composite(
+            "F#m7b5",
+            500.0,
+            &staff,
+            staff_space,
+            1000,
+            fixed_advance,
+        );
+        let segments = parse_chord_symbol_segments("F#m7b5");
+        assert_eq!(composite.boxes.len(), segments.len());
+        for (i, seg) in segments.iter().enumerate() {
+            let direct = chord_symbol_segment_advance(seg, text_font_size, 1000, fixed_advance);
+            let from_layout = composite.boxes[i].width;
+            assert!(
+                (direct - from_layout).abs() < 0.01,
+                "segment[{i}] {seg:?}: helper={direct}, composite={from_layout}"
+            );
+        }
+    }
+
+    #[test]
+    fn segment_advance_callable_repeatedly_with_same_callback() {
+        // The `impl Fn` signature must accept callbacks called many times. A
+        // closure that captures non-Copy state (here, a `Vec`) is itself non-
+        // Copy; reusing it across multiple calls requires passing by reference.
+        // This guards against an accidental switch to `FnOnce` (which would
+        // move the closure on the first call and refuse the second) — that
+        // change would break the renderer call site at the same time.
+        let lookup: Box<[u16]> = Box::new([150u16, 200, 250]);
+        let closure = move |_g: smufl::Glyph| lookup[0];
+        let a = chord_symbol_segment_advance(&S::Sharp, 400.0, 1000, &closure);
+        let b = chord_symbol_segment_advance(&S::Flat, 400.0, 1000, &closure);
+        let c = chord_symbol_segment_advance(&S::Natural, 400.0, 1000, &closure);
+        // All three should produce equal widths since the callback is constant.
+        assert!((a - b).abs() < 0.01);
+        assert!((b - c).abs() < 0.01);
     }
 }
