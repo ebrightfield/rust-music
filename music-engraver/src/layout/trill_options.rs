@@ -24,7 +24,9 @@
 
 use crate::layout::ornament::Ornament;
 use crate::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
-use crate::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
+use crate::layout::trill_extension::{
+    TrillExtensionSpeedOptions, TrillSpeedRamp, TrillSpeedRampSpec, TrillWiggleSpeed,
+};
 
 /// Unified options for a trill-with-extension annotation.
 ///
@@ -106,6 +108,30 @@ pub struct TrillExtensionFullOptions {
     /// [`extension_length_ss()`](Self::extension_length_ss) accessor returns
     /// the same `Option<f64>`.
     pub length_ss: Option<f64>,
+    /// Optional multi-speed ramp specification. `None` (the default) means
+    /// "single-speed wiggle" — the renderer uses [`speed`](Self::speed) (or
+    /// the [`TrillWiggleSpeed::Standard`] default when that is also `None`).
+    /// `Some(spec)` requests a multi-speed wiggle synthesized from the
+    /// ramp + region count at draw time via
+    /// [`TrillSpeedRamp::synthesize_regions`] fed into
+    /// [`crate::layout::trill_extension::layout_trill_extension_multi_speed`].
+    ///
+    /// When `speed_ramp` is set, the single-speed [`speed`](Self::speed)
+    /// field is ignored — the ramp's per-region speeds supersede it. Both
+    /// fields are allowed to be set simultaneously so the options bundle
+    /// composes additively (e.g. a caller widening from
+    /// [`TrillExtensionSpeedOptions`] then layering in a ramp doesn't have
+    /// to first clear the speed field). The dispatch is monotone:
+    /// `speed_ramp.is_some()` → multi-speed path; otherwise single-speed.
+    ///
+    /// Carrying a `region_count` of `0` or a `Linear` ramp with
+    /// `region_count == 1` is the same "degenerate input → fall back to
+    /// single-speed" contract as a hand-built
+    /// [`TrillSpeedRamp::synthesize_regions`] call: the synthesizer returns
+    /// `None` and the renderer drops back to the single-speed path. The
+    /// layout layer does not pre-reject those at options-construction time
+    /// (mirroring the unsupported-ornament / non-positive-length policy).
+    pub speed_ramp: Option<TrillSpeedRampSpec>,
 }
 
 impl TrillExtensionFullOptions {
@@ -121,6 +147,7 @@ impl TrillExtensionFullOptions {
             speed: None,
             ornament: None,
             length_ss: None,
+            speed_ramp: None,
         }
     }
 
@@ -210,6 +237,33 @@ impl TrillExtensionFullOptions {
     pub const fn extension_length_ss(&self) -> Option<f64> {
         self.length_ss
     }
+
+    /// Attach a multi-speed ramp spec to the options bundle. The ramp's
+    /// per-region speeds supersede [`speed`](Self::speed) when both are set
+    /// — the renderer dispatches on `speed_ramp.is_some()`.
+    ///
+    /// This is the spec-typed setter; for callers building inline, the
+    /// two-arg [`with_speed_ramp_ramp_count`](Self::with_speed_ramp_ramp_count)
+    /// is more ergonomic.
+    pub const fn with_speed_ramp(mut self, spec: TrillSpeedRampSpec) -> Self {
+        self.speed_ramp = Some(spec);
+        self
+    }
+
+    /// Attach a multi-speed ramp spec inline from a ramp + region count.
+    /// Byte-equivalent to
+    /// `with_speed_ramp(TrillSpeedRampSpec::new(ramp, region_count))`.
+    ///
+    /// Most call sites prefer this form because it elides the explicit
+    /// `TrillSpeedRampSpec::new(...)` wrapping.
+    pub const fn with_speed_ramp_ramp_count(
+        mut self,
+        ramp: TrillSpeedRamp,
+        region_count: usize,
+    ) -> Self {
+        self.speed_ramp = Some(TrillSpeedRampSpec::new(ramp, region_count));
+        self
+    }
 }
 
 impl From<TrillBracketOptions> for TrillExtensionFullOptions {
@@ -227,6 +281,11 @@ impl From<TrillBracketOptions> for TrillExtensionFullOptions {
             speed: None,
             ornament: opts.ornament,
             length_ss: opts.extension_length_ss,
+            // Bracket-only options carry no multi-speed ramp by
+            // construction — `TrillBracketOptions` has no ramp field. Any
+            // ramp the caller wants must be layered in on the widened
+            // bundle via `with_speed_ramp(_ramp_count)?`.
+            speed_ramp: None,
         }
     }
 }
@@ -244,6 +303,12 @@ impl From<TrillExtensionSpeedOptions> for TrillExtensionFullOptions {
             speed: Some(opts.speed),
             ornament: opts.ornament,
             length_ss: opts.extension_length_ss,
+            // Single-speed options carry no multi-speed ramp. A caller
+            // that wants to widen a `TrillExtensionSpeedOptions` and add a
+            // ramp must layer the ramp on the widened bundle — the speed
+            // field stays populated and is superseded by the ramp at
+            // draw time per the `speed_ramp` field's dispatch doc.
+            speed_ramp: None,
         }
     }
 }
@@ -263,6 +328,7 @@ mod tests {
         assert_eq!(opts.speed, None);
         assert_eq!(opts.ornament, None);
         assert_eq!(opts.length_ss, None);
+        assert_eq!(opts.speed_ramp, None);
     }
 
     #[test]
@@ -783,5 +849,469 @@ mod tests {
         let widened: TrillExtensionFullOptions = bracket.into();
         assert_eq!(widened.extension_length_ss(), Some(4.0));
         assert_eq!(widened.extension_length_ss(), widened.length_ss);
+    }
+
+    // --- TrillSpeedRampSpec integration: multi-speed ramp options ---
+    //
+    // Adds a `speed_ramp: Option<TrillSpeedRampSpec>` field plus
+    // `with_speed_ramp` / `with_speed_ramp_ramp_count` setters. The
+    // dispatch contract is documented on the field: when
+    // `speed_ramp.is_some()` the renderer uses the multi-speed path and
+    // the single-speed `speed` field is ignored; both fields are allowed
+    // to coexist so widening + layering composes additively.
+
+    #[test]
+    fn ramp_spec_new_round_trips_fields() {
+        // Basic constructor canary: the public field values come out the
+        // same shape they went in. Catches a refactor that reordered the
+        // struct fields without updating `new`.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let spec = TrillSpeedRampSpec::new(ramp, 5);
+        assert_eq!(spec.ramp, ramp);
+        assert_eq!(spec.region_count, 5);
+    }
+
+    #[test]
+    fn ramp_spec_is_const_constructible() {
+        // `TrillSpeedRampSpec::new` must be `const fn` so canonical specs
+        // can live in module-level `const` items alongside the ramp.
+        const _SPEC: TrillSpeedRampSpec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+            3,
+        );
+        const _SPEC_LINEAR: TrillSpeedRampSpec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            7,
+        );
+    }
+
+    #[test]
+    fn ramp_spec_partial_eq_sensitive_to_ramp() {
+        // Same region_count, different ramp → distinct specs.
+        let a = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Fast),
+            4,
+        );
+        let b = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Slow),
+            4,
+        );
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn ramp_spec_partial_eq_sensitive_to_region_count() {
+        // Same ramp, different region_count → distinct specs. Catches a
+        // PartialEq derive that ever dropped a field.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        assert_ne!(
+            TrillSpeedRampSpec::new(ramp, 3),
+            TrillSpeedRampSpec::new(ramp, 5)
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_sets_only_speed_ramp() {
+        // Setter isolation: setting `speed_ramp` does not touch any other
+        // field. Mirrors the analogous isolation tests for the other
+        // setters.
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            3,
+        );
+        let opts = TrillExtensionFullOptions::new().with_speed_ramp(spec);
+        assert_eq!(opts.speed_ramp, Some(spec));
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
+    }
+
+    #[test]
+    fn with_speed_ramp_ramp_count_sets_only_speed_ramp() {
+        // The two-arg variant must isolate the same way the spec-typed
+        // variant does — particularly that it does not write into the
+        // single-speed `speed` field. Catches a regression where the
+        // sugar accidentally fanned out into two fields.
+        let opts = TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Faster),
+            4,
+        );
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Faster),
+                4
+            ))
+        );
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
+    }
+
+    #[test]
+    fn with_speed_ramp_ramp_count_byte_equivalent_to_with_speed_ramp_new() {
+        // The two-arg sugar must produce a struct field-by-field equal to
+        // the spec-typed form. The PartialEq derive covers every field;
+        // assertion fires if they diverge. Locks in the byte-equivalence
+        // claim in the docstring.
+        for region_count in [1usize, 2, 3, 7] {
+            for ramp in [
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest),
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Fast, TrillWiggleSpeed::Slow),
+            ] {
+                let spec_form = TrillExtensionFullOptions::new()
+                    .with_speed_ramp(TrillSpeedRampSpec::new(ramp, region_count));
+                let sugar_form = TrillExtensionFullOptions::new()
+                    .with_speed_ramp_ramp_count(ramp, region_count);
+                assert_eq!(
+                    spec_form, sugar_form,
+                    "ramp={ramp:?} region_count={region_count}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn with_speed_ramp_overwrites_prior_value() {
+        // Same last-write-wins semantic as the other setters. Catches a
+        // regression where the setter accumulated into a `Vec` or kept the
+        // first write.
+        let first = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Fast),
+            3,
+        );
+        let second = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            7,
+        );
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp(first)
+            .with_speed_ramp(second);
+        assert_eq!(opts.speed_ramp, Some(second));
+        // Sanity: confirm the two specs aren't accidentally equal — the
+        // overwrite test only carries weight when they differ.
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn with_speed_ramp_overwrites_with_speed_ramp_ramp_count() {
+        // Cross-setter last-write-wins: chaining the two variants in
+        // either order ends on the last call's value. Both setters write
+        // the same field, so this must hold.
+        let spec_form = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
+            2,
+        );
+        let opts_a = TrillExtensionFullOptions::new()
+            .with_speed_ramp_ramp_count(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                5,
+            )
+            .with_speed_ramp(spec_form);
+        assert_eq!(opts_a.speed_ramp, Some(spec_form));
+
+        let opts_b = TrillExtensionFullOptions::new()
+            .with_speed_ramp(spec_form)
+            .with_speed_ramp_ramp_count(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Slowest),
+                4,
+            );
+        assert_eq!(
+            opts_b.speed_ramp,
+            Some(TrillSpeedRampSpec::new(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Slowest),
+                4
+            ))
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_chains_with_other_setters() {
+        // Layering the new setter on top of an otherwise-populated bundle
+        // must leave the other six fields intact and populate
+        // `speed_ramp`. Locks in the contract that this setter is
+        // additive.
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest),
+            5,
+        );
+        let opts = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Both)
+            .with_bracket_direction(HookDirection::Down)
+            .with_bracket_length_ss(0.8)
+            .with_speed(TrillWiggleSpeed::Standard)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_length_ss(3.0)
+            .with_speed_ramp(spec);
+        assert_eq!(opts.bracket, Some(TrillBracketSide::Both));
+        assert_eq!(opts.bracket_direction, Some(HookDirection::Down));
+        assert_eq!(opts.bracket_length_ss, Some(0.8));
+        assert_eq!(opts.speed, Some(TrillWiggleSpeed::Standard));
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.length_ss, Some(3.0));
+        assert_eq!(opts.speed_ramp, Some(spec));
+    }
+
+    #[test]
+    fn with_speed_ramp_chain_order_independent_from_other_setters() {
+        // The seven setters all commute. Three different orderings of the
+        // same setter calls must yield equal bundles. Catches a
+        // regression where any setter accidentally cleared a sibling.
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Slow),
+            4,
+        );
+        let a = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::End)
+            .with_speed_ramp(spec)
+            .with_speed(TrillWiggleSpeed::Fast)
+            .with_ornament(Ornament::TrillWithMordent);
+        let b = TrillExtensionFullOptions::new()
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_speed(TrillWiggleSpeed::Fast)
+            .with_speed_ramp(spec)
+            .with_bracket(TrillBracketSide::End);
+        let c = TrillExtensionFullOptions::new()
+            .with_speed(TrillWiggleSpeed::Fast)
+            .with_bracket(TrillBracketSide::End)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_speed_ramp(spec);
+        assert_eq!(a, b);
+        assert_eq!(b, c);
+    }
+
+    #[test]
+    fn with_speed_ramp_is_const_constructible() {
+        // Locks in `const fn` on the new setter. A future change that
+        // dropped `const` would break this compile-time canary.
+        const _OPTS: TrillExtensionFullOptions = TrillExtensionFullOptions::new()
+            .with_speed_ramp(TrillSpeedRampSpec::new(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest),
+                4,
+            ));
+        const _OPTS_SUGAR: TrillExtensionFullOptions =
+            TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Faster),
+                3,
+            );
+    }
+
+    #[test]
+    fn speed_ramp_and_speed_can_coexist_on_options() {
+        // Per the field's documented dispatch: `speed_ramp.is_some()`
+        // wins, but the single-speed `speed` is allowed to remain
+        // populated (so widening from `TrillExtensionSpeedOptions` then
+        // adding a ramp doesn't have to clear `speed` first). This test
+        // pins down the "no field reset" property at the options layer —
+        // the renderer's dispatch is tested separately when wired up.
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            3,
+        );
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed(TrillWiggleSpeed::Slowest)
+            .with_speed_ramp(spec);
+        assert_eq!(opts.speed, Some(TrillWiggleSpeed::Slowest));
+        assert_eq!(opts.speed_ramp, Some(spec));
+    }
+
+    #[test]
+    fn with_speed_does_not_clear_speed_ramp() {
+        // Symmetric guard: layering `.with_speed(...)` on top of an
+        // already-populated `speed_ramp` must not silently drop the ramp.
+        // Catches a regression that "promoted" the single-speed setter
+        // into a multi-speed reset.
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
+            2,
+        );
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp(spec)
+            .with_speed(TrillWiggleSpeed::Standard);
+        assert_eq!(opts.speed, Some(TrillWiggleSpeed::Standard));
+        assert_eq!(opts.speed_ramp, Some(spec));
+    }
+
+    #[test]
+    fn from_bracket_options_leaves_speed_ramp_none() {
+        // `TrillBracketOptions` has no ramp field, so the widening
+        // conversion must leave `speed_ramp` as `None`. Pins down the
+        // From-impl explicit None propagation. Catches a regression that
+        // synthesized a "default ramp" — which would silently engage the
+        // multi-speed renderer path for callers who only asked for a
+        // bracket.
+        let bracket_only = TrillBracketOptions::new(TrillBracketSide::Start)
+            .with_direction(HookDirection::Up)
+            .with_length_ss(1.5)
+            .with_ornament(Ornament::TrillWithMordent);
+        let full: TrillExtensionFullOptions = bracket_only.into();
+        assert_eq!(full.speed_ramp, None);
+    }
+
+    #[test]
+    fn from_speed_options_leaves_speed_ramp_none() {
+        // `TrillExtensionSpeedOptions` is a single-speed bundle by
+        // construction; widening must leave `speed_ramp` as `None`. The
+        // `speed` field is set, the ramp is not — the renderer dispatches
+        // on `speed_ramp.is_some()`, so a widening that synthesized a
+        // ramp would silently move the trill to the multi-speed path.
+        let speed_only = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+            .with_ornament(Ornament::TrillWithMordent);
+        let full: TrillExtensionFullOptions = speed_only.into();
+        assert_eq!(full.speed_ramp, None);
+    }
+
+    #[test]
+    fn widen_from_speed_options_then_add_ramp() {
+        // The intended ergonomic path: widen a `TrillExtensionSpeedOptions`
+        // to a full bundle, then layer in a ramp. The speed field must
+        // survive (the dispatch contract permits speed + ramp to coexist).
+        let speed_only = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard);
+        let widened: TrillExtensionFullOptions = speed_only.into();
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            5,
+        );
+        let augmented = widened.with_speed_ramp(spec);
+        assert_eq!(augmented.speed, Some(TrillWiggleSpeed::Standard));
+        assert_eq!(augmented.speed_ramp, Some(spec));
+    }
+
+    #[test]
+    fn distinct_speed_ramp_specs_compare_distinct() {
+        // PartialEq must be sensitive to the new field — catches a
+        // derive that forgot to pick it up if the field were renamed and
+        // the derive ever fell out of sync.
+        let a = TrillExtensionFullOptions::new().with_speed_ramp(TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Fast),
+            3,
+        ));
+        let b = TrillExtensionFullOptions::new().with_speed_ramp(TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Slow),
+            3,
+        ));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn speed_ramp_some_distinct_from_none() {
+        // `Some(spec)` is semantically distinct from `None` (the
+        // single-speed path vs. the multi-speed path at draw time). The
+        // PartialEq derive must reflect that — same shape canary as
+        // `length_ss_some_zero_distinct_from_none` for the length field.
+        let none = TrillExtensionFullOptions::new();
+        let some = TrillExtensionFullOptions::new().with_speed_ramp(TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+            1,
+        ));
+        assert_ne!(none, some);
+    }
+
+    #[test]
+    fn other_setters_do_not_write_to_speed_ramp() {
+        // Cross-setter isolation canary: every other `with_*` setter
+        // must leave `speed_ramp` unset. The existing per-setter tests
+        // each assert other fields are unset but predate this field;
+        // this test closes that gap in one place.
+        let opts_bracket = TrillExtensionFullOptions::new().with_bracket(TrillBracketSide::End);
+        let opts_dir =
+            TrillExtensionFullOptions::new().with_bracket_direction(HookDirection::Up);
+        let opts_blen = TrillExtensionFullOptions::new().with_bracket_length_ss(0.9);
+        let opts_speed = TrillExtensionFullOptions::new().with_speed(TrillWiggleSpeed::Fast);
+        let opts_orn = TrillExtensionFullOptions::new().with_ornament(Ornament::Trill);
+        let opts_len = TrillExtensionFullOptions::new().with_length_ss(2.0);
+        let opts_ext_len =
+            TrillExtensionFullOptions::new().with_extension_length_ss(2.0);
+        for opts in [
+            opts_bracket,
+            opts_dir,
+            opts_blen,
+            opts_speed,
+            opts_orn,
+            opts_len,
+            opts_ext_len,
+        ] {
+            assert_eq!(opts.speed_ramp, None);
+        }
+    }
+
+    #[test]
+    fn default_speed_ramp_is_none() {
+        // The derived `Default` must agree with `new()` on the new
+        // field. The existing `default_matches_new` covers full-struct
+        // equality; this is a targeted canary that fails with a clearer
+        // message if the derive's behavior for the new field ever
+        // diverges from `new()`.
+        assert_eq!(TrillExtensionFullOptions::default().speed_ramp, None);
+    }
+
+    #[test]
+    fn ramp_spec_carries_degenerate_inputs_unchanged() {
+        // The spec stores raw inputs; rejection happens at
+        // `synthesize_regions` time. `region_count = 0` and a `Linear`
+        // ramp with `region_count = 1` both round-trip through the
+        // options bundle unchanged. Locks in the
+        // "no construction-time validation" policy that mirrors
+        // unsupported-ornament and non-positive-length handling.
+        let degenerate_zero = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+            0,
+        );
+        let opts_zero = TrillExtensionFullOptions::new().with_speed_ramp(degenerate_zero);
+        assert_eq!(opts_zero.speed_ramp, Some(degenerate_zero));
+        assert_eq!(opts_zero.speed_ramp.unwrap().region_count, 0);
+
+        let degenerate_one_linear = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            1,
+        );
+        let opts_one =
+            TrillExtensionFullOptions::new().with_speed_ramp(degenerate_one_linear);
+        assert_eq!(opts_one.speed_ramp, Some(degenerate_one_linear));
+        assert_eq!(opts_one.speed_ramp.unwrap().region_count, 1);
+    }
+
+    #[test]
+    fn spec_in_options_synthesizes_regions_at_draw_time() {
+        // End-to-end contract canary: a `TrillSpeedRampSpec` carried in
+        // options must feed cleanly into `synthesize_regions` at draw
+        // time without massaging. Mirrors
+        // `ramp_synthesized_regions_feed_into_multi_speed_layout` in the
+        // trill_extension test module but routed through the options
+        // bundle as the source of truth.
+        let spec = TrillSpeedRampSpec::new(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            3,
+        );
+        let opts = TrillExtensionFullOptions::new().with_speed_ramp(spec);
+        // Retrieve at "draw time": unpack from options and call the
+        // synthesizer with a dummy font advance (each speed advances 50
+        // font units in the dummy lookup; real callers thread their
+        // active font's glyph-advance closure here).
+        let unpacked = opts.speed_ramp.expect("speed_ramp populated by builder");
+        let regions = unpacked
+            .ramp
+            .synthesize_regions(0.0, 300.0, unpacked.region_count, |_speed| 50.0)
+            .expect("synthesize_regions accepts non-degenerate spec");
+        assert_eq!(regions.len(), 3);
+        // Synthesized region starts evenly spaced across [0, 300] for
+        // region_count = 3.
+        assert_eq!(regions[0].start_x, 0.0);
+        assert_eq!(regions[1].start_x, 100.0);
+        assert_eq!(regions[2].start_x, 200.0);
+        // Linear Slow → Fast over 3 regions → glyphs progress
+        // from `WiggleTrillSlow` (index 5) through `WiggleTrill`
+        // (index 4) to `WiggleTrillFast` (index 3).
+        assert_eq!(regions[0].glyph, TrillWiggleSpeed::Slow.to_glyph());
+        assert_eq!(regions[1].glyph, TrillWiggleSpeed::Standard.to_glyph());
+        assert_eq!(regions[2].glyph, TrillWiggleSpeed::Fast.to_glyph());
     }
 }

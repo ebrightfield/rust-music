@@ -564,6 +564,48 @@ impl TrillSpeedRamp {
         Self::Linear { start, end }
     }
 
+    /// Stricter counterpart to [`Self::linear`]: rejects the degenerate
+    /// `start == end` case at construction time, returning `None`.
+    ///
+    /// The bare [`Self::linear`] constructor (and the public
+    /// [`Self::Linear`] variant) accepts `start == end` for backwards
+    /// compatibility — it produces a [`Self::Constant`]-equivalent
+    /// output from [`Self::synthesize_regions`]. That permissive contract
+    /// makes a `Linear { start: Standard, end: Standard }` syntactically
+    /// valid even though it's musically meaningless (a linear progression
+    /// with zero delta isn't a progression). Callers wanting compile-time
+    /// or run-time confidence that a `Linear` ramp will actually
+    /// interpolate between two distinct speeds should construct via this
+    /// method and propagate the `None` upward — the call site sees
+    /// "degenerate input" at construction rather than discovering it via
+    /// surprising output.
+    ///
+    /// Returns:
+    /// - `Some(Linear { start, end })` when `start != end` (the variants
+    ///   carry distinct speed indices). Direction (accel vs decel) falls
+    ///   out of the ordering exactly as for [`Self::linear`].
+    /// - `None` when `start == end`. Callers in this branch should switch
+    ///   to [`Self::constant`] or [`Self::Constant`] to express the
+    ///   musical intent explicitly.
+    ///
+    /// Comparison is done via [`TrillWiggleSpeed::index`] (a `const fn`)
+    /// so this constructor is itself `const`-callable and can live in
+    /// module-level `const` items via `match`-on-`Option` patterns.
+    pub const fn linear_validated(
+        start: TrillWiggleSpeed,
+        end: TrillWiggleSpeed,
+    ) -> Option<Self> {
+        // `TrillWiggleSpeed` does not implement `const PartialEq` (no
+        // such trait exists on stable as of the current MSRV), so we
+        // compare through the `index()` accessor — both `index()` calls
+        // are `const fn` and `usize == usize` is const-callable.
+        if start.index() == end.index() {
+            None
+        } else {
+            Some(Self::Linear { start, end })
+        }
+    }
+
     /// Synthesize a sorted slice of [`TrillSpeedRegion`]s evenly
     /// distributed across `[start_x, end_x]`.
     ///
@@ -622,6 +664,55 @@ impl TrillSpeedRamp {
             });
         }
         Some(regions)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-speed trill: ramp + region count "intent spec"
+// ---------------------------------------------------------------------------
+
+/// Compact intent-spec pairing a [`TrillSpeedRamp`] with its `region_count`.
+///
+/// `TrillSpeedRamp::synthesize_regions` requires four inputs: the ramp, a
+/// `(start_x, end_x)` span, the `region_count`, and a font-advance lookup.
+/// The span and font are pipeline-level data — known only at draw time, when
+/// the trill's anchoring note positions and active [`crate::font::MusicFont`]
+/// are resolved. The ramp and region count are *caller intent* — known at
+/// score-construction time. This struct bundles those two pieces so they can
+/// travel together through annotation/options bundles (notably
+/// [`crate::layout::trill_options::TrillExtensionFullOptions`]) without the
+/// caller having to keep them in lockstep across separate fields.
+///
+/// Both fields are public for direct destructuring at the draw-time call
+/// site; the [`new`](Self::new) constructor is provided for
+/// `const`-callable bundle construction.
+///
+/// Currently no validation at construction — `region_count == 0` and
+/// `region_count == 1` for a `Linear` ramp are both *defined* failures in
+/// [`TrillSpeedRamp::synthesize_regions`] (returning `None`). The spec
+/// stores the raw values; the consumer that calls `synthesize_regions`
+/// observes the same `None` it would have for a hand-built call. Adding
+/// `new_validated` later would be additive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TrillSpeedRampSpec {
+    /// The ramp pattern (constant or linear-progression) to synthesize.
+    pub ramp: TrillSpeedRamp,
+    /// Number of evenly-spaced regions to emit across the trill's span.
+    /// Must be `>= 1` for `Constant` and `>= 2` for `Linear` to produce a
+    /// non-`None` result from
+    /// [`TrillSpeedRamp::synthesize_regions`].
+    pub region_count: usize,
+}
+
+impl TrillSpeedRampSpec {
+    /// Construct a spec from a ramp and a region count. `const`-callable so
+    /// canonical specs can live in module-level `const` items, mirroring
+    /// [`TrillSpeedRamp::constant`] / [`TrillSpeedRamp::linear`].
+    pub const fn new(ramp: TrillSpeedRamp, region_count: usize) -> Self {
+        Self {
+            ramp,
+            region_count,
+        }
     }
 }
 
@@ -1590,6 +1681,176 @@ mod tests {
                 end: TrillWiggleSpeed::Fast,
             }
         ));
+    }
+
+    // -----------------------------------------------------------------
+    // TrillSpeedRamp::linear_validated — strict constructor
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn linear_validated_accepts_distinct_speeds_accel_direction() {
+        // Slow (idx 5) -> Fast (idx 3): distinct, accelerating. The
+        // returned variant must be Linear with the exact speed values
+        // round-tripped — same byte-content as `linear(...)`.
+        let r = TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        assert_eq!(
+            r,
+            Some(TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Slow,
+                end: TrillWiggleSpeed::Fast,
+            })
+        );
+    }
+
+    #[test]
+    fn linear_validated_accepts_distinct_speeds_decel_direction() {
+        // Direction symmetry: Fast -> Slow (decel) is also accepted.
+        // A regression that only accepted accel inputs (e.g. by checking
+        // `start.index() < end.index()` instead of `!=`) would fail here.
+        let r = TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Fast, TrillWiggleSpeed::Slow);
+        assert_eq!(
+            r,
+            Some(TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Fast,
+                end: TrillWiggleSpeed::Slow,
+            })
+        );
+    }
+
+    #[test]
+    fn linear_validated_rejects_equal_speeds_for_every_variant() {
+        // Walks all 9 canonical speed variants; `linear_validated(v, v)`
+        // must return None for each one. A regression that hardcoded the
+        // check against a specific variant (e.g. `Standard`) would pass
+        // 1/9 tests and fail 8/9 — this test catches all 9 in one shot,
+        // pinpointing the regression as "validation does not apply to
+        // every variant" rather than "validation works for variant X".
+        for speed in TrillWiggleSpeed::ALL {
+            let r = TrillSpeedRamp::linear_validated(speed, speed);
+            assert_eq!(
+                r, None,
+                "linear_validated must reject Linear {{ start: {:?}, end: {:?} }}",
+                speed, speed
+            );
+        }
+    }
+
+    #[test]
+    fn linear_validated_some_branch_byte_equals_linear_constructor() {
+        // For every (start, end) pair with start != end, the Some-branch
+        // result must be byte-identical to `linear(start, end)`. Locks in
+        // the contract that the validated constructor only filters — it
+        // never massages the field values. A regression that, say,
+        // sorted the variants into accel order would change the field
+        // ordering and fire this test.
+        let pairs = [
+            (TrillWiggleSpeed::Fastest, TrillWiggleSpeed::Slowest),
+            (TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            (TrillWiggleSpeed::Standard, TrillWiggleSpeed::Slower),
+            (TrillWiggleSpeed::Faster, TrillWiggleSpeed::SlowerStill),
+        ];
+        for (s, e) in pairs {
+            let validated = TrillSpeedRamp::linear_validated(s, e)
+                .expect("distinct speeds must validate");
+            let permissive = TrillSpeedRamp::linear(s, e);
+            assert_eq!(validated, permissive);
+        }
+    }
+
+    #[test]
+    fn linear_validated_endpoint_speeds_extreme_pair_accepted() {
+        // Fastest (idx 0) -> Slowest (idx 8): the maximum-delta pair.
+        // Both endpoints sit at the boundary of the valid index range.
+        // A regression that ever did `start.index() > 0 && end.index() <
+        // 8` (a too-narrow validity check) would reject this.
+        let r =
+            TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Fastest, TrillWiggleSpeed::Slowest);
+        assert_eq!(
+            r,
+            Some(TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Fastest,
+                end: TrillWiggleSpeed::Slowest,
+            })
+        );
+    }
+
+    #[test]
+    fn linear_validated_minimal_distinct_pair_accepted() {
+        // Adjacent variants (idx 4 vs idx 5) — the smallest possible
+        // non-zero delta. Catches a regression where the validation
+        // check accidentally required a minimum delta (e.g.
+        // `(a.index() as i32 - b.index() as i32).abs() >= 2`).
+        let r =
+            TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Standard, TrillWiggleSpeed::Slow);
+        assert_eq!(
+            r,
+            Some(TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Standard,
+                end: TrillWiggleSpeed::Slow,
+            })
+        );
+    }
+
+    #[test]
+    fn linear_validated_is_const_callable() {
+        // Compile-fail canary on `const fn`. Two const items: one for
+        // each branch (Some / None). If a future refactor accidentally
+        // dropped the `const` qualifier, both lines would fail to
+        // compile.
+        const SOME_RAMP: Option<TrillSpeedRamp> =
+            TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        const NONE_RAMP: Option<TrillSpeedRamp> = TrillSpeedRamp::linear_validated(
+            TrillWiggleSpeed::Standard,
+            TrillWiggleSpeed::Standard,
+        );
+        assert!(matches!(
+            SOME_RAMP,
+            Some(TrillSpeedRamp::Linear {
+                start: TrillWiggleSpeed::Slow,
+                end: TrillWiggleSpeed::Fast,
+            })
+        ));
+        assert!(NONE_RAMP.is_none());
+    }
+
+    #[test]
+    fn linear_validated_some_branch_feeds_synthesize_regions() {
+        // End-to-end contract: a validated ramp passes through
+        // `synthesize_regions` to produce a non-empty region slice.
+        // Catches a regression where the validated branch produces a
+        // structurally-valid `Self::Linear` but with field values that
+        // somehow trip a downstream check in the synthesizer.
+        let ramp =
+            TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast)
+                .expect("distinct speeds must validate");
+        let regions = ramp
+            .synthesize_regions(0.0, 240.0, 3, |_| 60.0)
+            .expect("validated linear ramp with N>=2 must synthesize");
+        assert_eq!(regions.len(), 3);
+        // The first region carries the start speed's glyph and the last
+        // region carries the end speed's glyph — locks in that the
+        // validated ramp threads start/end through unchanged.
+        assert_eq!(regions[0].glyph, TrillWiggleSpeed::Slow.to_glyph());
+        assert_eq!(regions[2].glyph, TrillWiggleSpeed::Fast.to_glyph());
+        // The middle region's glyph differs from both endpoints —
+        // proves real interpolation happened. Standard sits at idx 4,
+        // halfway between Slow (5) and Fast (3).
+        assert_eq!(regions[1].glyph, TrillWiggleSpeed::Standard.to_glyph());
+    }
+
+    #[test]
+    fn linear_validated_uses_index_not_pointer_equality() {
+        // The validation compares speed *values* (via index()), not
+        // memory addresses or any other identity. Two independently
+        // constructed `TrillWiggleSpeed::Standard` values — one stored
+        // in a local binding, one passed as a literal — must both
+        // trigger the None branch. Catches a hypothetical regression
+        // that introduced reference-based comparison (impossible here
+        // because `TrillWiggleSpeed` is `Copy`, but the test pins the
+        // semantic contract regardless).
+        let s = TrillWiggleSpeed::Standard;
+        let r = TrillSpeedRamp::linear_validated(s, TrillWiggleSpeed::Standard);
+        assert_eq!(r, None);
     }
 
     // -----------------------------------------------------------------
