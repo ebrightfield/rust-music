@@ -2242,3 +2242,217 @@
   current behaviour is the safer choice — an explicit offset is a
   user assertion of intent, not a "let it flow" signal — but worth
   noting.
+
+## 2026-05-17 — Post-v1, per-note collision detection in beamed additional voices
+
+- Did: Closed the long-standing open issue ("Beam groups in additional
+  voices don't get per-note collision detection") that has been
+  flagged in every progress entry since April. Previously, the cross-
+  voice collision detector pulled *all* notes from a BeamGroup or
+  TupletGroup, treated a single match as a whole-group offset, and
+  shifted the group's anchor x by one notehead width — silently
+  mis-aligning stems and the beam line for the non-colliding notes in
+  the group. Per Gould, only the *colliding* notehead should
+  displace; the stem and beam stay anchored at the original beat x.
+
+  Shared helper (`src/layout/beam.rs`, ~60 LOC + 8 tests):
+  - `beam_group_note_x_offsets(durations: &[u8], total_width: f64) ->
+    Vec<f64>` extracted from the renderer's inline math. Returns the
+    local x-offset of each note (relative to the group's anchor)
+    under proportional spacing: shortest note → factor 1.0, each
+    doubling of duration multiplies by `BEAM_GROUP_SPACING_RATIO`
+    (1.6, matching the renderer's existing constant). Now the
+    single source of truth for collision detection AND rendering;
+    any drift would silently misalign collision offsets from the
+    drawn noteheads. Empty/single-note edge cases handled cleanly.
+
+  Detection layer (`src/layout/voice_collision.rs`):
+  - Added `inner_note_index: Option<usize>` to `VoiceCollisionOffset`:
+    `None` = whole-element shift (Note/Chord, existing semantics);
+    `Some(i)` = shift only note `i` within the BeamGroup/TupletGroup
+    at `element_index`.
+  - `collect_voice_positions` now expands a *primary* voice's
+    BeamGroup/TupletGroup into per-note `(absolute_x, [pos])` pairs
+    via the shared helper, so cross-voice detection sees individual
+    beat positions on both sides.
+  - `compute_voice_collision_offsets` walks BeamGroup/TupletGroup
+    notes individually, computes each absolute x via the helper,
+    runs `detect_collision` per-note, and emits per-note offsets
+    keyed off `inner_note_index`. Note/Chord elements continue to
+    emit element-level offsets (`inner_note_index = None`) for
+    backwards compatibility.
+  - Extracted two private helpers: `collision_at_x(...)` (find +
+    detect pair, shared between standalone and per-note paths) and
+    `offset_shift_direction(dir)` (StemDirection → ±1.0 shift
+    multiplier, single source of the "down-stems shift right /
+    up-stems shift left / None defaults to right" convention).
+
+  Render layer (`src/render/measure_renderer/mod.rs`):
+  - Added `draw_beam_group_event_with_offsets(..., per_note_x_shift:
+    &[f64])` and `draw_tuplet_group_event_with_offsets(...)`. The
+    shift slice (length-must-match-notes or empty) shifts only the
+    *notehead*, *accidental*, *ledger lines*, and *augmentation dots*
+    of each note; the per-note `BeamedNote { x }` fed into the beam-
+    and-stem layout uses the *unshifted* `note_xs[i]`, so the beam
+    line stays straight and stems stay anchored at the original
+    beat x. The tuplet bracket is also unaffected (frames the
+    original beam-group rhythmic range, not the displaced noteheads).
+  - The existing `draw_beam_group_event(...)` / `draw_tuplet_
+    group_event(...)` are now thin shims that pass an empty shift
+    slice — keeping all primary-voice rendering byte-identical
+    (verified by the 69 goldens passing without churn).
+  - In `draw_additional_voices`, the element-level shift now only
+    fires when `inner_note_index.is_none()` (Note/Chord case). For
+    BeamGroup/TupletGroup, a new helper `per_note_shifts_for_group(
+    collision_offsets, elem_idx, note_count, notehead_width)`
+    materializes a `Vec<f64>` of length `note_count` (zero for non-
+    colliding notes; offset for colliding ones) and hands it off to
+    the with-offsets variant. Empty vec when no per-note offsets
+    target this element — preserves the existing call path for the
+    overwhelmingly common case.
+
+  Example: `examples/beam_group_per_note_collision.rs` — two
+  measures, the first with a primary-voice half-note pair and an
+  additional-voice beam group of four eighths where only notes 0
+  and 2 line up with the primary; the second is a no-collision
+  control. Asserts ≥12 paths, ≥10 lines, ≥2 beam polygons.
+
+  Tests (+22 net, 17 new mechanical):
+
+  `layout::beam::tests` (+8):
+  1. `beam_group_note_x_offsets_empty_returns_empty` — degenerate
+     empty input.
+  2. `beam_group_note_x_offsets_single_note_is_zero` — single-note
+     edge case returns `[0.0]`.
+  3. `beam_group_note_x_offsets_equal_durations_distribute_evenly`
+     — locks the canonical "4 equal eighths → 0, 250, 500, 750"
+     case with explicit numeric assertions, not approximate counts.
+  4. `beam_group_note_x_offsets_first_note_always_zero` — invariant
+     across multiple duration patterns; would catch a leading offset
+     bug.
+  5. `beam_group_note_x_offsets_monotonically_increasing` — every
+     subsequent note's offset > previous (positive width per note).
+  6. `beam_group_note_x_offsets_longer_note_consumes_more_width` —
+     hand-computed expected: [quarter, eighth] step =
+     1000 * 1.6/2.6, exact equality to 1e-9.
+  7. `beam_group_note_x_offsets_total_consumed_strictly_less_than_
+     total_width` — last note's offset never exceeds total_width.
+  8. `beam_group_note_x_offsets_matches_renderer_logic_three_eighths`
+     — independently reimplements the renderer's spacing math and
+     asserts byte-identical output. Canary against any future drift
+     between helper and renderer.
+
+  `layout::voice_collision::tests` (+8 + 1 update):
+  1. `beam_group_first_note_collides_only_first_note_offset` —
+     locks `inner_note_index = Some(0)` for the only colliding note
+     plus `x_offset_noteheads = 1.0` shift direction.
+  2. `beam_group_middle_note_collides_per_note_offset` — middle-
+     note case (`Some(2)`).
+  3. `beam_group_no_collisions_emits_no_offsets` — sixth-distance
+     positions never collide regardless of beat alignment.
+  4. `beam_group_multiple_notes_collide_multiple_offsets` — three
+     simultaneous per-note hits (`Some(0)`, `Some(2)`, `Some(3)`).
+     Sorts inner indices to make ordering-independent assertions.
+  5. `beam_group_up_stem_additional_voice_shifts_left` — up-stem
+     beam group → `-1.0` shift direction.
+  6. `beam_group_none_stem_direction_defaults_to_right_shift` —
+     auto-direction → `+1.0` default. Locks the convention.
+  7. `tuplet_group_per_note_collision_matches_beam_group` — tuplet
+     wrapper inherits the same per-note semantics; specifically
+     `inner_note_index = Some(1)` for the middle triplet note.
+  8. `beam_group_in_primary_voice_detects_per_note_collision_from_
+     additional` — symmetric case: when the *primary* contains the
+     beam group, `collect_voice_positions` expansion picks up the
+     specific colliding inner note's x. Locks the bidirectional
+     property.
+
+  Plus an updated `collision_at_unison` asserting the new
+  `inner_note_index: None` field on standalone-Note collisions
+  (the "still no inner index for non-beam-group elements" canary).
+
+  `render::measure_renderer::tests` (+6):
+  1. `beam_group_no_collisions_renders_byte_identical_to_no_detection`
+     — non-colliding beam group must produce byte-equivalent SVG
+     whether or not the primary is non-empty. Locks the empty-shifts
+     short-circuit.
+  2. `beam_group_per_note_collision_changes_only_one_notehead_path`
+     — with-collision SVG ≠ without; path/line counts are preserved
+     (topology unchanged, only the colliding notehead moves).
+  3. `beam_group_per_note_collision_preserves_stem_line_positions`
+     — extracts every `<line .../>` tag verbatim and asserts
+     `with_collision == without_collision` for the entire stem-line
+     set. The crux invariant: stems do not move with the
+     displaced notehead. A regression that accidentally shifted
+     stems would fail here byte-for-byte.
+  4. `beam_group_per_note_collision_shifts_notehead_by_notehead_width`
+     — parses the first `translate(x,y)` and asserts `x_with -
+     x_without == notehead_advance_width` to within 1e-6. Locks
+     the shift magnitude.
+  5. `beam_group_per_note_collision_does_not_shift_non_colliding_
+     noteheads` — three-note beam group, only index 0 collides;
+     parses all `translate(` x values, asserts index 0 shifted by
+     exactly one notehead width and indices 1+ are byte-identical.
+  6. `tuplet_group_per_note_collision_shifts_only_colliding_notehead`
+     — same invariant on the tuplet wrapper. Middle note shifts,
+     outer notes don't.
+
+  No goldens changed — every existing call site uses the with-empty-
+  shift variant or the unchanged `draw_beam_group_event` thin shim
+  (which delegates with `&[]`). Refactor is byte-equivalent at every
+  rendering call site that doesn't have per-note collision offsets.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes. `cargo clippy -p music-engraver
+  --all-targets` — 0 new lib warnings (1 pre-existing in
+  `score/multi_staff.rs:394`, unchanged); 1 stylistic clippy nit in
+  the new test (`voice_layout.clone()` could be `from_ref` — matches
+  the surrounding test file's style, left as-is). `cargo test -p
+  music-engraver --lib` — **2455 unit tests pass** (+16 vs prior
+  2439: 8 in `layout::beam::tests`, 8 in
+  `layout::voice_collision::tests`, 6 in
+  `render::measure_renderer::tests`; the running counter also
+  reflects test refactoring on the existing `collision_at_unison`
+  which now has an additional `inner_note_index` assertion).
+  `cargo test -p music-engraver --test golden_svg` — **69 golden
+  tests pass, all byte-identical** (refactor of
+  `draw_beam_group_event` is verified byte-equivalent because the
+  thin shim delegates with `&[]`). `cargo test -p music-engraver
+  --test svg_glyph_render` — 3 integration tests pass. `cargo test
+  -p music-engraver --doc` — 13 doc tests pass, 1 ignored.
+  `cargo build -p music-engraver --examples` builds all 94
+  examples (+1 = `beam_group_per_note_collision`).
+
+- Next: With this long-standing open issue closed, candidate post-v1
+  items: **cross-system church rests** (multi-measure rest cluster
+  that breaks across systems — still confined to one measure);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model on top of the existing Knuth-Plass
+  DP); **golden-SVG corpus PHASH-based visual regression** (text-
+  diff already exists; PHASH would catch glyph-data regressions that
+  produce equivalent text); **`HookDirection::Up` standalone builder**
+  (already reachable through `with_direction`, judgment call). Trill
+  polish remaining: per-segment `WiggleTrillFast` variant selection
+  from a single-speed annotation. Also possibilities: cross-voice
+  tie/slur regression test (the open issue from April that pairs
+  this one), additional articulation/ornament gestures, or pumping
+  the PNG export with more tests.
+
+- Open issues: The shift direction for a beam group with
+  `stem_direction = None` (auto-detected at draw time) defaults to
+  `+1.0` (shift right) — matches the typical voice-2 case (auto-
+  stems-down because the group sits low on the staff) but a beam
+  group with auto-direction landing on the stems-up branch and
+  carrying a collision still shifts right. The fix would be to
+  resolve the direction once via `beam_group_stem_direction(...)`
+  inside `compute_voice_collision_offsets` rather than passing
+  `None` through. Deferred because real-world additional voices
+  almost always set explicit direction (voice 1 down, voice 2 up).
+  A separate refinement: the per-note shift currently treats every
+  collision as a flat one-notehead-width displacement. A more
+  refined rule would tighten the unison-same-kind case (allow
+  shared noteheads, no shift) but that requires propagating
+  notehead-kind through the detector — out of scope for this chunk.
+  Cross-voice tie/slur support (the long-standing companion issue
+  to this one in the April logs) is still deferred — the detection
+  layer is now per-note aware, but slur layout doesn't yet consult
+  it.

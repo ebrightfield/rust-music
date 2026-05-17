@@ -1,3 +1,4 @@
+use crate::layout::beam::beam_group_note_x_offsets;
 use crate::layout::measure::{MeasureElement, MeasureLayout};
 use crate::layout::staff::StaffPosition;
 use crate::layout::stem::StemDirection;
@@ -7,22 +8,60 @@ use crate::layout::stem::StemDirection;
 ///
 /// Stored as a multiplier of notehead width (e.g. 1.0 = shift right by one
 /// notehead width, -1.0 = shift left).
+///
+/// `inner_note_index` distinguishes per-element offsets (notes, chords) from
+/// per-note offsets within a beam or tuplet group:
+/// - `None` → shift the entire element (notes/chords).
+/// - `Some(i)` → shift only the `i`-th note inside the BeamGroup or
+///   TupletGroup at `element_index`. The stems and beam line remain at
+///   their unshifted positions; only the notehead (and its accidental,
+///   ledger lines, dots) move. This matches the engraving convention for
+///   second/unison collisions inside a beamed voice: the stem-down voice's
+///   colliding notehead shifts to the opposite side of its stem.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VoiceCollisionOffset {
     /// Index into the voice layout's `elements` vec.
     pub element_index: usize,
     /// X-offset in notehead-width units.
     pub x_offset_noteheads: f64,
+    /// For BeamGroup/TupletGroup elements, the index of the specific note
+    /// within the group's `notes` vec that should receive the offset. `None`
+    /// for standalone Note/Chord elements (entire element shifts).
+    pub inner_note_index: Option<usize>,
 }
 
 /// Collect the staff positions of notes/chords at each positioned element
 /// in a measure layout. Returns `(x, Vec<staff_position>)` pairs.
+///
+/// For BeamGroup and TupletGroup, this expands each member note to its
+/// absolute x (group_x + intra-group offset) so per-beat alignment with
+/// the additional voice's per-note collision check matches the renderer's
+/// actual note placement.
 fn collect_voice_positions(layout: &MeasureLayout) -> Vec<(f64, Vec<StaffPosition>)> {
     let mut result = Vec::new();
     for elem in &layout.elements {
-        let positions = element_staff_positions(&elem.element);
-        if !positions.is_empty() {
-            result.push((elem.x, positions));
+        match &elem.element {
+            MeasureElement::BeamGroup(bg) => {
+                let durations: Vec<u8> = bg.notes.iter().map(|n| n.duration_log2).collect();
+                let offsets = beam_group_note_x_offsets(&durations, elem.width);
+                for (i, note) in bg.notes.iter().enumerate() {
+                    result.push((elem.x + offsets[i], vec![note.staff_position]));
+                }
+            }
+            MeasureElement::TupletGroup(tg) => {
+                let durations: Vec<u8> =
+                    tg.beam_group.notes.iter().map(|n| n.duration_log2).collect();
+                let offsets = beam_group_note_x_offsets(&durations, elem.width);
+                for (i, note) in tg.beam_group.notes.iter().enumerate() {
+                    result.push((elem.x + offsets[i], vec![note.staff_position]));
+                }
+            }
+            _ => {
+                let positions = element_staff_positions(&elem.element);
+                if !positions.is_empty() {
+                    result.push((elem.x, positions));
+                }
+            }
         }
     }
     result
@@ -71,45 +110,108 @@ pub fn compute_voice_collision_offsets(
     let primary_positions = collect_voice_positions(primary);
     let mut offsets = Vec::new();
 
+    // Tolerance for matching x-positions: elements at the "same beat" share
+    // an exact x but floating-point rounding (especially inside beam-group
+    // proportional spacing) can drift slightly. 1.0 font unit ≈ 1/250 of a
+    // staff space, far smaller than any meaningful musical separation.
+    const X_MATCH_TOLERANCE: f64 = 1.0;
+
     for (elem_idx, elem) in additional.elements.iter().enumerate() {
-        let add_positions = element_staff_positions(&elem.element);
-        if add_positions.is_empty() {
-            continue;
-        }
-
-        // Find the primary voice element at approximately the same x-position.
-        // Tolerance: within 1.0 font unit (elements at the "same beat" are
-        // assigned exactly matching x by the layout system, but floating-point
-        // rounding could differ slightly).
-        let matching_primary = primary_positions
-            .iter()
-            .find(|(px, _)| (px - elem.x).abs() < 1.0);
-
-        let Some((_, primary_pos)) = matching_primary else {
-            continue;
-        };
-
-        // Check for collisions between any additional-voice note and any
-        // primary-voice note at this x-position.
-        let collision = detect_collision(&add_positions, primary_pos);
-
-        if let Some(offset) = collision {
-            // Determine direction: additional voice is typically voice 1 (stems down)
-            // so its noteheads shift right when colliding.
-            let add_dir = element_stem_direction(&elem.element);
-            let x_mult = match add_dir {
-                Some(StemDirection::Down) | None => 1.0,  // shift right
-                Some(StemDirection::Up) => -1.0,           // shift left (rare)
-            };
-
-            offsets.push(VoiceCollisionOffset {
-                element_index: elem_idx,
-                x_offset_noteheads: x_mult * offset,
-            });
+        match &elem.element {
+            MeasureElement::BeamGroup(bg) => {
+                let durations: Vec<u8> = bg.notes.iter().map(|n| n.duration_log2).collect();
+                let local_offsets = beam_group_note_x_offsets(&durations, elem.width);
+                let group_dir = bg.stem_direction;
+                for (note_idx, note) in bg.notes.iter().enumerate() {
+                    let note_x = elem.x + local_offsets[note_idx];
+                    if let Some(offset) = collision_at_x(
+                        note_x,
+                        &[note.staff_position],
+                        &primary_positions,
+                        X_MATCH_TOLERANCE,
+                    ) {
+                        offsets.push(VoiceCollisionOffset {
+                            element_index: elem_idx,
+                            x_offset_noteheads: offset_shift_direction(group_dir) * offset,
+                            inner_note_index: Some(note_idx),
+                        });
+                    }
+                }
+            }
+            MeasureElement::TupletGroup(tg) => {
+                let durations: Vec<u8> =
+                    tg.beam_group.notes.iter().map(|n| n.duration_log2).collect();
+                let local_offsets = beam_group_note_x_offsets(&durations, elem.width);
+                let group_dir = tg.beam_group.stem_direction;
+                for (note_idx, note) in tg.beam_group.notes.iter().enumerate() {
+                    let note_x = elem.x + local_offsets[note_idx];
+                    if let Some(offset) = collision_at_x(
+                        note_x,
+                        &[note.staff_position],
+                        &primary_positions,
+                        X_MATCH_TOLERANCE,
+                    ) {
+                        offsets.push(VoiceCollisionOffset {
+                            element_index: elem_idx,
+                            x_offset_noteheads: offset_shift_direction(group_dir) * offset,
+                            inner_note_index: Some(note_idx),
+                        });
+                    }
+                }
+            }
+            _ => {
+                let add_positions = element_staff_positions(&elem.element);
+                if add_positions.is_empty() {
+                    continue;
+                }
+                if let Some(offset) = collision_at_x(
+                    elem.x,
+                    &add_positions,
+                    &primary_positions,
+                    X_MATCH_TOLERANCE,
+                ) {
+                    let add_dir = element_stem_direction(&elem.element);
+                    offsets.push(VoiceCollisionOffset {
+                        element_index: elem_idx,
+                        x_offset_noteheads: offset_shift_direction(add_dir) * offset,
+                        inner_note_index: None,
+                    });
+                }
+            }
         }
     }
 
     offsets
+}
+
+/// Look up the primary voice's notes at approximately `x` and return the
+/// collision magnitude (in notehead widths) if any additional-voice
+/// position collides. Encapsulates the find-by-x + detect_collision pair
+/// so beam-group per-note and standalone-element paths share one logic.
+fn collision_at_x(
+    x: f64,
+    add_positions: &[StaffPosition],
+    primary_positions: &[(f64, Vec<StaffPosition>)],
+    tolerance: f64,
+) -> Option<f64> {
+    let (_, primary_pos) = primary_positions
+        .iter()
+        .find(|(px, _)| (px - x).abs() < tolerance)?;
+    detect_collision(add_positions, primary_pos)
+}
+
+/// Direction multiplier for the collision shift. The additional voice's
+/// stem direction dictates which side of the stem the displaced notehead
+/// lands on: stems-down voices (the common odd-numbered additional voice
+/// case) shift right; the rarer stems-up additional voice shifts left.
+/// Unknown direction (e.g. a beam group with `stem_direction = None` where
+/// the renderer auto-picks at draw time) defaults to "shift right" to
+/// match the typical voice-2 convention.
+fn offset_shift_direction(dir: Option<StemDirection>) -> f64 {
+    match dir {
+        Some(StemDirection::Down) | None => 1.0,
+        Some(StemDirection::Up) => -1.0,
+    }
 }
 
 /// Check if any note position in `voice_a` collides with any note in `voice_b`.
@@ -195,6 +297,59 @@ mod tests {
         }
     }
 
+    fn beamed_eighth(pos: i8) -> NoteEvent {
+        NoteEvent {
+            staff_position: pos,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        }
+    }
+
+    fn beam_group_element(
+        positions: Vec<i8>,
+        dir: Option<StemDirection>,
+    ) -> MeasureElement {
+        use crate::layout::measure::BeamGroupEvent;
+        MeasureElement::BeamGroup(BeamGroupEvent {
+            notes: positions.into_iter().map(beamed_eighth).collect(),
+            stem_direction: dir,
+        })
+    }
+
+    fn tuplet_group_element(
+        positions: Vec<i8>,
+        dir: Option<StemDirection>,
+        tuplet_number: u32,
+    ) -> MeasureElement {
+        use crate::layout::measure::{BeamGroupEvent, TupletGroupEvent};
+        MeasureElement::TupletGroup(TupletGroupEvent {
+            beam_group: BeamGroupEvent {
+                notes: positions.into_iter().map(beamed_eighth).collect(),
+                stem_direction: dir,
+            },
+            tuplet_number,
+        })
+    }
+
+    fn layout_with_widths(
+        elements: Vec<(f64, MeasureElement, f64)>,
+    ) -> MeasureLayout {
+        MeasureLayout {
+            elements: elements
+                .into_iter()
+                .map(|(x, element, width)| PositionedElement {
+                    x,
+                    element,
+                    width,
+                })
+                .collect(),
+            total_width: 1000.0,
+        }
+    }
+
     #[test]
     fn no_collision_when_positions_far_apart() {
         let primary = layout_with(vec![(100.0, note_element(8, Some(StemDirection::Up)))]);
@@ -211,6 +366,10 @@ mod tests {
         assert_eq!(offsets.len(), 1);
         assert_eq!(offsets[0].element_index, 0);
         assert_eq!(offsets[0].x_offset_noteheads, 1.0); // down-stem shifts right
+        assert_eq!(
+            offsets[0].inner_note_index, None,
+            "standalone note collision is per-element, not per-inner-note"
+        );
     }
 
     #[test]
@@ -322,5 +481,169 @@ mod tests {
         let additional = layout_with(vec![]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert!(offsets.is_empty());
+    }
+
+    // --- Per-note collision detection within beam groups ---
+
+    #[test]
+    fn beam_group_first_note_collides_only_first_note_offset() {
+        // Primary: two quarter notes at x=100, 500. The first lines up with
+        // beat 0; the second is at beat 2 of a 4-eighth additional beam group
+        // (so beat 0 of the second pair).
+        //
+        // Additional: beam group of 4 eighths starting at x=100, width 400.
+        // With equal durations, local offsets are 0, 100, 200, 300. So note
+        // 0 is at x=100 (collides), note 2 is at x=300 (no primary), note 3
+        // is at x=400 (no primary). Note 1 at x=200 is also unmatched.
+        let primary = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Up)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![4, 6, 4, 6], Some(StemDirection::Down)),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(
+            offsets.len(),
+            1,
+            "only the first note of the beam group lines up with primary"
+        );
+        assert_eq!(offsets[0].element_index, 0);
+        assert_eq!(offsets[0].inner_note_index, Some(0));
+        assert_eq!(offsets[0].x_offset_noteheads, 1.0);
+    }
+
+    #[test]
+    fn beam_group_middle_note_collides_per_note_offset() {
+        // Primary at x=300 only. Additional: 4-eighth beam at x=100, width=400.
+        // Equal-duration offsets: 0, 100, 200, 300 → absolute xs: 100, 200,
+        // 300, 400. Only note index 2 (x=300) lines up with primary.
+        let primary = layout_with(vec![(300.0, note_element(4, Some(StemDirection::Up)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![6, 6, 4, 6], Some(StemDirection::Down)),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].inner_note_index, Some(2));
+        assert_eq!(offsets[0].x_offset_noteheads, 1.0);
+    }
+
+    #[test]
+    fn beam_group_no_collisions_emits_no_offsets() {
+        // Same beam group but primary's staff position is a sixth away from
+        // every beam group note (positions 4 vs 10). No collisions anywhere.
+        let primary = layout_with(vec![(100.0, note_element(10, Some(StemDirection::Down)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![4, 4, 4, 4], Some(StemDirection::Down)),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert!(
+            offsets.is_empty(),
+            "positions 6 apart should never collide, got {:?}",
+            offsets
+        );
+    }
+
+    #[test]
+    fn beam_group_multiple_notes_collide_multiple_offsets() {
+        // Primary: three quarter notes at the same x's as beam notes 0, 2, 3.
+        // At those x's the additional voice's position equals the primary's,
+        // producing unison collisions. Note 1 at x=200 doesn't align.
+        let primary = layout_with(vec![
+            (100.0, note_element(4, Some(StemDirection::Up))),
+            (300.0, note_element(4, Some(StemDirection::Up))),
+            (400.0, note_element(6, Some(StemDirection::Up))), // unison with note 3 (pos 6)
+        ]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![4, 6, 4, 6], Some(StemDirection::Down)),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 3);
+        let mut inner: Vec<_> = offsets.iter().map(|o| o.inner_note_index).collect();
+        inner.sort();
+        assert_eq!(inner, vec![Some(0), Some(2), Some(3)]);
+        for o in &offsets {
+            assert_eq!(o.element_index, 0);
+            assert_eq!(o.x_offset_noteheads, 1.0);
+        }
+    }
+
+    #[test]
+    fn beam_group_up_stem_additional_voice_shifts_left() {
+        // Additional voice with explicit up-stems: collision shifts noteheads
+        // left rather than right. Direction lives on the beam group, not the
+        // individual notes.
+        let primary = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Down)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![4, 6], Some(StemDirection::Up)),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].inner_note_index, Some(0));
+        assert_eq!(offsets[0].x_offset_noteheads, -1.0);
+    }
+
+    #[test]
+    fn beam_group_none_stem_direction_defaults_to_right_shift() {
+        // When the beam group has stem_direction = None (auto), additional
+        // voices still shift right by convention so the standard "voice 2
+        // displaces toward voice 1's side" rule holds at draw time.
+        let primary = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Up)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![4, 6], None),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].x_offset_noteheads, 1.0);
+    }
+
+    #[test]
+    fn tuplet_group_per_note_collision_matches_beam_group() {
+        // Tuplets wrap a beam group; collision detection should treat the
+        // inner notes the same way (per-note offsets keyed off the inner
+        // index inside the beam_group).
+        let primary = layout_with(vec![(200.0, note_element(4, Some(StemDirection::Up)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            tuplet_group_element(vec![6, 4, 6], Some(StemDirection::Down), 3),
+            300.0,
+        )]);
+        // Three equal eighth-notes in a triplet: local offsets 0, 100, 200.
+        // Note 1 lands at x=200 → collides with primary's pos 4.
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].inner_note_index, Some(1));
+        assert_eq!(offsets[0].x_offset_noteheads, 1.0);
+    }
+
+    #[test]
+    fn beam_group_in_primary_voice_detects_per_note_collision_from_additional() {
+        // Symmetric case: when the *primary* voice contains the beam group
+        // and the *additional* voice has a single note matching one inner
+        // note's x, the collision detector must see that beam-group note.
+        // This exercises `collect_voice_positions` expanding the primary's
+        // beam-group into per-note x positions.
+        let primary = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![4, 6, 4, 6], Some(StemDirection::Up)),
+            400.0,
+        )]);
+        let additional = layout_with(vec![(300.0, note_element(4, Some(StemDirection::Down)))]);
+        // Beam local offsets 0,100,200,300 → primary note index 2 sits at
+        // x=300, position 4. Additional sits at x=300, position 4. Unison.
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        // Additional voice element is the simple Note → inner_note_index None.
+        assert_eq!(offsets[0].inner_note_index, None);
+        assert_eq!(offsets[0].x_offset_noteheads, 1.0);
     }
 }

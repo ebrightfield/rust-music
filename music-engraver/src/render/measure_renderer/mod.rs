@@ -184,12 +184,19 @@ pub fn draw_additional_voices(
             crate::layout::voice_collision::compute_voice_collision_offsets(primary_layout, voice_layout);
 
         for (elem_idx, positioned) in voice_layout.elements.iter().enumerate() {
-            let collision_shift = collision_offsets
+            // Element-level offset (inner_note_index = None): applies to
+            // standalone Note/Chord — shift the whole event by one notehead
+            // width via `elem_x`. Per-note offsets (inner_note_index = Some(i))
+            // live on BeamGroup/TupletGroup and bypass `elem_x` entirely;
+            // they're handed to the beam/tuplet renderer as a per-note shift
+            // slice so only the colliding noteheads move and the stems and
+            // beam line stay anchored at the original beat positions.
+            let element_collision_shift = collision_offsets
                 .iter()
-                .find(|o| o.element_index == elem_idx)
+                .find(|o| o.element_index == elem_idx && o.inner_note_index.is_none())
                 .map(|o| o.x_offset_noteheads * notehead_width)
                 .unwrap_or(0.0);
-            let elem_x = x_offset + positioned.x + collision_shift;
+            let elem_x = x_offset + positioned.x + element_collision_shift;
 
             match &positioned.element {
                 // Skip non-rhythmic elements — the primary voice already drew them.
@@ -209,7 +216,13 @@ pub fn draw_additional_voices(
                     draw_chord_event(svg, staff, font, config, elem_x, chord)?;
                 }
                 MeasureElement::BeamGroup(bg) => {
-                    draw_beam_group_event(
+                    let per_note_shifts = per_note_shifts_for_group(
+                        &collision_offsets,
+                        elem_idx,
+                        bg.notes.len(),
+                        notehead_width,
+                    );
+                    draw_beam_group_event_with_offsets(
                         svg,
                         staff,
                         font,
@@ -217,10 +230,17 @@ pub fn draw_additional_voices(
                         elem_x,
                         positioned.width,
                         bg,
+                        &per_note_shifts,
                     )?;
                 }
                 MeasureElement::TupletGroup(tg) => {
-                    draw_tuplet_group_event(
+                    let per_note_shifts = per_note_shifts_for_group(
+                        &collision_offsets,
+                        elem_idx,
+                        tg.beam_group.notes.len(),
+                        notehead_width,
+                    );
+                    draw_tuplet_group_event_with_offsets(
                         svg,
                         staff,
                         font,
@@ -228,6 +248,7 @@ pub fn draw_additional_voices(
                         elem_x,
                         positioned.width,
                         tg,
+                        &per_note_shifts,
                     )?;
                 }
                 MeasureElement::Rest(rest) => {
@@ -246,6 +267,36 @@ pub fn draw_additional_voices(
         }
     }
     Ok(())
+}
+
+/// Build a per-note x-shift slice for a beam/tuplet group from the flat
+/// list of [`VoiceCollisionOffset`]s. Returns an empty `Vec` if no per-note
+/// offset targets this element, allowing the renderer to skip per-note
+/// dispatch entirely (and so preserve the byte-identical render when there
+/// are no collisions inside the group).
+fn per_note_shifts_for_group(
+    collision_offsets: &[crate::layout::voice_collision::VoiceCollisionOffset],
+    elem_idx: usize,
+    note_count: usize,
+    notehead_width: f64,
+) -> Vec<f64> {
+    let group_offsets: Vec<&crate::layout::voice_collision::VoiceCollisionOffset> =
+        collision_offsets
+            .iter()
+            .filter(|o| o.element_index == elem_idx && o.inner_note_index.is_some())
+            .collect();
+    if group_offsets.is_empty() {
+        return Vec::new();
+    }
+    let mut shifts = vec![0.0; note_count];
+    for o in &group_offsets {
+        // Safety: `inner_note_index` is guaranteed `Some` by the filter above.
+        let i = o.inner_note_index.unwrap();
+        if i < note_count {
+            shifts[i] = o.x_offset_noteheads * notehead_width;
+        }
+    }
+    shifts
 }
 
 /// Notehead kind from log2 duration: 0=whole, 1=half, 2+=filled.
@@ -760,42 +811,67 @@ fn draw_beam_group_event(
     total_width: f64,
     bg: &BeamGroupEvent,
 ) -> Result<(), FontError> {
+    draw_beam_group_event_with_offsets(svg, staff, font, config, group_x, total_width, bg, &[])
+}
+
+/// Beam-group renderer with per-note horizontal offsets for cross-voice
+/// collision avoidance. `per_note_x_shift` is a slice of length `notes.len()`
+/// (or empty for "no shifts"); `per_note_x_shift[i]` is the absolute x-shift
+/// in font units applied to note i's notehead, accidental, ledger lines, and
+/// augmentation dots.
+///
+/// Stems and the beam line itself stay at the unshifted note positions —
+/// only the notehead and its directly-attached glyphs move. This matches the
+/// engraving convention for second/unison collisions inside a beamed voice:
+/// the colliding notehead displaces to the opposite side of its stem while
+/// the stem-and-beam skeleton remains undisturbed.
+#[allow(clippy::too_many_arguments)]
+fn draw_beam_group_event_with_offsets(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    group_x: f64,
+    total_width: f64,
+    bg: &BeamGroupEvent,
+    per_note_x_shift: &[f64],
+) -> Result<(), FontError> {
     let n = bg.notes.len();
     if n == 0 {
         return Ok(());
     }
 
-    // Compute x-positions for each note within the group using proportional spacing.
-    // The shortest note gets factor 1.0; each doubling gets `ratio` more.
-    let shortest_log2 = bg.notes.iter().map(|n| n.duration_log2).max().unwrap_or(3);
-    let spacing_ratio = 1.6_f64;
+    // Proportional spacing: longer notes consume more width. Shared with the
+    // cross-voice collision detector so both compute identical per-note xs.
+    let durations: Vec<u8> = bg.notes.iter().map(|note| note.duration_log2).collect();
+    let local_offsets = crate::layout::beam::beam_group_note_x_offsets(&durations, total_width);
+    let note_xs: Vec<f64> = local_offsets.iter().map(|dx| group_x + dx).collect();
 
-    let factors: Vec<f64> = bg
-        .notes
-        .iter()
-        .map(|note| {
-            let steps = shortest_log2 as f64 - note.duration_log2 as f64;
-            spacing_ratio.powf(steps)
-        })
-        .collect();
-    let total_factor: f64 = factors.iter().sum();
-
-    // Distribute total_width across notes proportionally
-    let mut note_xs = Vec::with_capacity(n);
-    let mut x = 0.0_f64;
-    for factor in &factors {
-        note_xs.push(group_x + x);
-        x += total_width * factor / total_factor;
-    }
+    // Per-note shift lookup: empty slice → 0.0 for every note; non-empty
+    // requires matching length so a caller can't silently misalign.
+    let shift_for = |i: usize| -> f64 {
+        if per_note_x_shift.is_empty() {
+            0.0
+        } else {
+            per_note_x_shift[i]
+        }
+    };
+    assert!(
+        per_note_x_shift.is_empty() || per_note_x_shift.len() == n,
+        "per_note_x_shift length must match beam group note count"
+    );
 
     // Get notehead advance width
     let notehead_glyph = NoteheadKind::Filled.glyph();
     let outline = font.glyph_outline(notehead_glyph)?;
     let advance = outline.advance_width as f64;
 
-    // Draw noteheads, accidentals, ledger lines, and dots for each note
+    // Draw noteheads, accidentals, ledger lines, and dots for each note.
+    // Each note's `nx` includes the per-note collision shift; the unshifted
+    // `note_xs[i]` is fed into the beam/stem layout below so the beam line
+    // stays straight and the stem retains its original beat-anchored x.
     for (i, note) in bg.notes.iter().enumerate() {
-        let nx = note_xs[i];
+        let nx = note_xs[i] + shift_for(i);
 
         // Accidental
         if let Some(acc_glyph) = note.accidental {
@@ -860,8 +936,38 @@ fn draw_tuplet_group_event(
     total_width: f64,
     tg: &TupletGroupEvent,
 ) -> Result<(), FontError> {
+    draw_tuplet_group_event_with_offsets(
+        svg, staff, font, config, group_x, total_width, tg, &[],
+    )
+}
+
+/// Tuplet-group renderer with per-note horizontal offsets for cross-voice
+/// collision avoidance. See [`draw_beam_group_event_with_offsets`] for the
+/// per-note shift semantics; the tuplet bracket itself does *not* shift —
+/// it frames the original beam-group rhythmic positions, not the
+/// collision-displaced noteheads.
+#[allow(clippy::too_many_arguments)]
+fn draw_tuplet_group_event_with_offsets(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    group_x: f64,
+    total_width: f64,
+    tg: &TupletGroupEvent,
+    per_note_x_shift: &[f64],
+) -> Result<(), FontError> {
     // Draw the underlying beam group (noteheads, stems, beams)
-    draw_beam_group_event(svg, staff, font, config, group_x, total_width, &tg.beam_group)?;
+    draw_beam_group_event_with_offsets(
+        svg,
+        staff,
+        font,
+        config,
+        group_x,
+        total_width,
+        &tg.beam_group,
+        per_note_x_shift,
+    )?;
 
     if tg.beam_group.notes.is_empty() {
         return Ok(());

@@ -3032,3 +3032,459 @@ fn no_collision_at_third_no_offset() {
         "notes a third apart should not be offset (no collision)"
     );
 }
+
+// --- Per-note collision detection inside additional-voice beam groups ---
+
+fn quarter_note(pos: i8, dir: StemDirection) -> MeasureElement {
+    MeasureElement::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: Some(dir),
+        annotations: NoteAnnotations::default(),
+    })
+}
+
+fn beamed_eighth_note(pos: i8) -> NoteEvent {
+    NoteEvent {
+        staff_position: pos,
+        duration_log2: 3,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations::default(),
+    }
+}
+
+fn rescale_to_match(target_width: f64, layout: &mut MeasureLayout) {
+    let scale = target_width / layout.total_width;
+    for elem in &mut layout.elements {
+        elem.x *= scale;
+        elem.width *= scale;
+    }
+    layout.total_width = target_width;
+}
+
+#[test]
+fn beam_group_no_collisions_renders_byte_identical_to_no_detection() {
+    // Voice 1 is a beam group of four eighths at positions 0..6 (far from
+    // primary's position 10) — no collisions anywhere. The collision-aware
+    // renderer must produce byte-identical SVG to the collision-blind one,
+    // proving that "no collision → empty per-note offsets → identical
+    // render" holds. Locks the byte-equivalence promise of the new code.
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let primary_elements = vec![quarter_note(10, StemDirection::Up)];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    let bg_elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+        notes: vec![
+            beamed_eighth_note(0),
+            beamed_eighth_note(2),
+            beamed_eighth_note(4),
+            beamed_eighth_note(6),
+        ],
+        stem_direction: Some(StemDirection::Down),
+    })];
+    let mut voice_layout = layout_measure(&bg_elements, &cfg);
+    rescale_to_match(primary_layout.total_width, &mut voice_layout);
+
+    let mut svg_with = make_svg();
+    draw_measure(&mut svg_with, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(
+        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+    ).unwrap();
+
+    let mut svg_without = make_svg();
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    draw_measure(&mut svg_without, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_additional_voices(
+        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
+    ).unwrap();
+
+    assert_eq!(
+        svg_with.to_svg(),
+        svg_without.to_svg(),
+        "non-colliding beam-group voice must render byte-identical regardless of collision detection"
+    );
+}
+
+#[test]
+fn beam_group_per_note_collision_changes_only_one_notehead_path() {
+    // Primary has a single quarter at the same x as the first beam-group note.
+    // The remaining three beam-group notes do not align with any primary
+    // element. Result: exactly one notehead in the beam group shifts; the
+    // other three render at their original x.
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Primary: just one note at the same beat as beam-group note index 0.
+    let primary_elements = vec![quarter_note(4, StemDirection::Up)];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    // Additional voice: a beam group whose first note (pos 4) collides at
+    // unison with primary; notes 1..3 sit elsewhere on the staff and at
+    // different x's so no further collisions occur.
+    let bg_elements_collide = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+        notes: vec![
+            beamed_eighth_note(4),  // <— collides with primary at beat 0
+            beamed_eighth_note(6),
+            beamed_eighth_note(8),
+            beamed_eighth_note(10),
+        ],
+        stem_direction: Some(StemDirection::Down),
+    })];
+    let mut voice_layout = layout_measure(&bg_elements_collide, &cfg);
+    rescale_to_match(primary_layout.total_width, &mut voice_layout);
+
+    // Render WITH primary (collision active for note 0 only).
+    let mut svg_with = make_svg();
+    draw_additional_voices(
+        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+    ).unwrap();
+    let svg_with_str = svg_with.to_svg();
+
+    // Render WITHOUT primary (no collision applied).
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let mut svg_without = make_svg();
+    draw_additional_voices(
+        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
+    ).unwrap();
+    let svg_without_str = svg_without.to_svg();
+
+    // The two renderings must differ — note index 0's notehead has shifted.
+    assert_ne!(
+        svg_with_str, svg_without_str,
+        "per-note collision must alter the SVG output"
+    );
+
+    // Both should still have the same number of notehead paths (4) and
+    // stems (4) and one or more beam polygons — the topology is unchanged,
+    // only one notehead's x-position differs.
+    assert_eq!(
+        svg_with_str.matches("<path ").count(),
+        svg_without_str.matches("<path ").count(),
+        "notehead path count preserved through per-note collision shift"
+    );
+    assert_eq!(
+        svg_with_str.matches("<line ").count(),
+        svg_without_str.matches("<line ").count(),
+        "stem count preserved — stems do not shift with the colliding notehead"
+    );
+}
+
+#[test]
+fn beam_group_per_note_collision_preserves_stem_line_positions() {
+    // The crux invariant: a per-note collision shifts only the notehead,
+    // not the stem. If the implementation accidentally shifted the stem,
+    // the <line> SVG attributes would differ between the with/without
+    // renders, since the stem line is anchored at the unshifted note x.
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let primary_elements = vec![quarter_note(4, StemDirection::Up)];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    let bg_elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+        notes: vec![
+            beamed_eighth_note(4),
+            beamed_eighth_note(6),
+        ],
+        stem_direction: Some(StemDirection::Down),
+    })];
+    let mut voice_layout = layout_measure(&bg_elements, &cfg);
+    rescale_to_match(primary_layout.total_width, &mut voice_layout);
+
+    let mut svg_with = make_svg();
+    draw_additional_voices(
+        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+    ).unwrap();
+
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let mut svg_without = make_svg();
+    draw_additional_voices(
+        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
+    ).unwrap();
+
+    // Per-note collision shifts noteheads (path elements) but stems (lines)
+    // remain at their original positions.
+    let svg_with_str = svg_with.to_svg();
+    let svg_without_str = svg_without.to_svg();
+
+    // Every <line that exists in svg_without should appear in svg_with
+    // verbatim (stems unchanged).
+    let lines_without: Vec<&str> = svg_without_str.matches("<line ").collect();
+    let lines_with: Vec<&str> = svg_with_str.matches("<line ").collect();
+    assert_eq!(
+        lines_with.len(),
+        lines_without.len(),
+        "stem-line count must be identical with and without collision"
+    );
+    // Match full <line .../> tags by extracting them via indices
+    let extract_lines = |svg: &str| -> Vec<String> {
+        let mut out = Vec::new();
+        let mut search_from = 0usize;
+        while let Some(start_rel) = svg[search_from..].find("<line ") {
+            let start = search_from + start_rel;
+            let after = &svg[start..];
+            if let Some(close_rel) = after.find("/>") {
+                out.push(svg[start..start + close_rel + 2].to_string());
+                search_from = start + close_rel + 2;
+            } else {
+                break;
+            }
+        }
+        out
+    };
+    let lw = extract_lines(&svg_without_str);
+    let lc = extract_lines(&svg_with_str);
+    assert_eq!(
+        lw, lc,
+        "stem-line tags (including coordinates) must match byte-for-byte; stems must not move when only noteheads shift"
+    );
+}
+
+#[test]
+fn beam_group_per_note_collision_shifts_notehead_by_notehead_width() {
+    // The shift magnitude is one notehead width per the collision rule.
+    // We verify by comparing notehead path `translate(x, y)` x-values
+    // between the colliding and non-colliding renders for the first note.
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let primary_elements = vec![quarter_note(4, StemDirection::Up)];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    let bg_elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+        notes: vec![
+            beamed_eighth_note(4),
+            beamed_eighth_note(6),
+        ],
+        stem_direction: Some(StemDirection::Down),
+    })];
+    let mut voice_layout = layout_measure(&bg_elements, &cfg);
+    rescale_to_match(primary_layout.total_width, &mut voice_layout);
+
+    let mut svg_with = make_svg();
+    draw_additional_voices(
+        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+    ).unwrap();
+
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let mut svg_without = make_svg();
+    draw_additional_voices(
+        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
+    ).unwrap();
+
+    let extract_first_translate_x = |svg: &str| -> Option<f64> {
+        // Find the first `translate(` and parse the x coordinate.
+        let idx = svg.find("translate(")?;
+        let after = &svg[idx + "translate(".len()..];
+        let end = after.find(',')?;
+        after[..end].trim().parse::<f64>().ok()
+    };
+
+    let x_with = extract_first_translate_x(&svg_with.to_svg())
+        .expect("with-collision SVG should have a translate()");
+    let x_without = extract_first_translate_x(&svg_without.to_svg())
+        .expect("without-collision SVG should have a translate()");
+
+    let notehead_width = font
+        .glyph_outline(smufl::Glyph::NoteheadBlack)
+        .unwrap()
+        .advance_width as f64;
+
+    assert!(
+        (x_with - x_without - notehead_width).abs() < 1e-6,
+        "first-notehead x must shift right by exactly one notehead width ({notehead_width}); got with={x_with}, without={x_without}, diff={}",
+        x_with - x_without,
+    );
+}
+
+#[test]
+fn beam_group_per_note_collision_does_not_shift_non_colliding_noteheads() {
+    // The non-colliding note (index 1) inside the beam group must render at
+    // the same x in both the with-primary and without-primary cases. Walk
+    // both renders' second `translate(` and compare.
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    let primary_elements = vec![quarter_note(4, StemDirection::Up)];
+    let primary_layout = layout_measure(&primary_elements, &cfg);
+
+    // Three beamed eighths — only note 0 lines up with primary.
+    let bg_elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
+        notes: vec![
+            beamed_eighth_note(4),
+            beamed_eighth_note(6),
+            beamed_eighth_note(8),
+        ],
+        stem_direction: Some(StemDirection::Down),
+    })];
+    let mut voice_layout = layout_measure(&bg_elements, &cfg);
+    rescale_to_match(primary_layout.total_width, &mut voice_layout);
+
+    let mut svg_with = make_svg();
+    draw_additional_voices(
+        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+    ).unwrap();
+
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let mut svg_without = make_svg();
+    draw_additional_voices(
+        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
+    ).unwrap();
+
+    // Collect all translate( x values from each SVG. The non-colliding
+    // notes' x values must appear in both.
+    let collect_translate_xs = |svg: &str| -> Vec<f64> {
+        let mut out = Vec::new();
+        let mut from = 0usize;
+        while let Some(rel) = svg[from..].find("translate(") {
+            let start = from + rel + "translate(".len();
+            let after = &svg[start..];
+            if let Some(comma) = after.find(',') {
+                if let Ok(v) = after[..comma].trim().parse::<f64>() {
+                    out.push(v);
+                }
+                from = start + comma;
+            } else {
+                break;
+            }
+        }
+        out
+    };
+
+    let xs_with = collect_translate_xs(&svg_with.to_svg());
+    let xs_without = collect_translate_xs(&svg_without.to_svg());
+
+    assert_eq!(
+        xs_with.len(),
+        xs_without.len(),
+        "translate count preserved across collision"
+    );
+
+    // For notes index 1 and 2, the x value must be unchanged. The renderer
+    // emits noteheads in index order so xs_with[i] / xs_without[i] correspond.
+    // Note: ledger-line lines and stem lines come via <line>, not <path
+    // translate>; only notehead/accidental/dot are translate-based.
+    let notehead_width = font
+        .glyph_outline(smufl::Glyph::NoteheadBlack)
+        .unwrap()
+        .advance_width as f64;
+    assert!(
+        (xs_with[0] - xs_without[0] - notehead_width).abs() < 1e-6,
+        "note 0 shifts by one notehead width: with={}, without={}",
+        xs_with[0], xs_without[0],
+    );
+    for i in 1..xs_with.len() {
+        assert!(
+            (xs_with[i] - xs_without[i]).abs() < 1e-6,
+            "translate index {i} must not shift (got with={}, without={})",
+            xs_with[i], xs_without[i]
+        );
+    }
+}
+
+#[test]
+fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
+    // Symmetric test for TupletGroup: the inner beam group should pick up
+    // per-note collisions identically. We use a triplet of three eighths
+    // and place the primary at the same x as the middle note.
+    use crate::layout::measure::{PositionedElement, TupletGroupEvent};
+    let (font, config, staff) = setup();
+    let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
+
+    // Layout: a triplet alone fills the measure. Place primary at the same
+    // x as the middle triplet note.
+    let triplet = MeasureElement::TupletGroup(TupletGroupEvent {
+        beam_group: BeamGroupEvent {
+            notes: vec![
+                beamed_eighth_note(2),
+                beamed_eighth_note(4),
+                beamed_eighth_note(6),
+            ],
+            stem_direction: Some(StemDirection::Down),
+        },
+        tuplet_number: 3,
+    });
+    let voice_layout = layout_measure(&[triplet], &cfg);
+
+    // Build a primary measure-layout with one note at the middle triplet's
+    // absolute x. Equal-duration triplet → local offsets at 0, w/3, 2w/3
+    // (approximately, since the helper distributes equally). Middle note
+    // sits at voice_layout.elements[0].x + voice_layout.elements[0].width/3.
+    let group_x = voice_layout.elements[0].x;
+    let group_w = voice_layout.elements[0].width;
+    let middle_x = group_x + group_w / 3.0;
+
+    // Insert a synthetic primary note at the middle x so the matcher fires.
+    let primary_layout = MeasureLayout {
+        elements: vec![PositionedElement {
+            x: middle_x,
+            element: quarter_note(4, StemDirection::Up),
+            width: 250.0,
+        }],
+        total_width: voice_layout.total_width,
+    };
+
+    let mut svg_with = make_svg();
+    draw_additional_voices(
+        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+    ).unwrap();
+
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let mut svg_without = make_svg();
+    draw_additional_voices(
+        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
+    ).unwrap();
+
+    // The two renders must differ (middle notehead shifted).
+    assert_ne!(svg_with.to_svg(), svg_without.to_svg());
+
+    let collect_translate_xs = |svg: &str| -> Vec<f64> {
+        let mut out = Vec::new();
+        let mut from = 0usize;
+        while let Some(rel) = svg[from..].find("translate(") {
+            let start = from + rel + "translate(".len();
+            let after = &svg[start..];
+            if let Some(comma) = after.find(',') {
+                if let Ok(v) = after[..comma].trim().parse::<f64>() {
+                    out.push(v);
+                }
+                from = start + comma;
+            } else {
+                break;
+            }
+        }
+        out
+    };
+
+    let xs_with = collect_translate_xs(&svg_with.to_svg());
+    let xs_without = collect_translate_xs(&svg_without.to_svg());
+    assert_eq!(xs_with.len(), xs_without.len());
+
+    let notehead_width = font
+        .glyph_outline(smufl::Glyph::NoteheadBlack)
+        .unwrap()
+        .advance_width as f64;
+
+    // Note 0 unchanged.
+    assert!(
+        (xs_with[0] - xs_without[0]).abs() < 1e-6,
+        "tuplet note 0 must not shift (no collision)"
+    );
+    // Note 1 shifted by exactly one notehead width.
+    assert!(
+        (xs_with[1] - xs_without[1] - notehead_width).abs() < 1e-6,
+        "tuplet middle note must shift by one notehead width: with={}, without={}",
+        xs_with[1], xs_without[1]
+    );
+    // Note 2 unchanged.
+    assert!(
+        (xs_with[2] - xs_without[2]).abs() < 1e-6,
+        "tuplet note 2 must not shift (no collision)"
+    );
+}
