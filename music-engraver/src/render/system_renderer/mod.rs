@@ -800,6 +800,18 @@ pub(crate) struct TrillExtensionNoteInfo {
     /// (no cross-system propagation, since the explicit length specifies
     /// a definite endpoint).
     pub explicit_length_ss: Option<f64>,
+    /// Optional explicit end-anchor expressed as an offset into the
+    /// system's flat note sequence — the wiggle terminates at the note
+    /// `n` positions past the trilled note (1 = next, 2 = two-after, ...).
+    /// Filtered the same way as `bracket`: only carries through when
+    /// `has_trill_extension == true`. `None` selects the default
+    /// "extend to immediately following note" behavior. An offset that
+    /// walks past the end of the system collapses to the system-edge
+    /// fallback (same as a trilled last note). When both
+    /// [`explicit_length_ss`](Self::explicit_length_ss) and this field
+    /// are set, the explicit length wins at draw time — see the
+    /// annotation field's docstring for the rationale.
+    pub to_note_offset: Option<usize>,
     /// Optional multi-speed ramp spec for this trill. Filtered the same
     /// way as `bracket`: only carries through when
     /// `has_trill_extension == true`. `None` selects the single-speed
@@ -848,6 +860,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     } else {
                         None
                     };
+                    let to_note_offset = if has_ext {
+                        n.annotations.trill_extension_to_note_offset
+                    } else {
+                        None
+                    };
                     let speed_ramp = if has_ext {
                         n.annotations.trill_speed_ramp
                     } else {
@@ -863,6 +880,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         bracket_length_ss,
                         wiggle_speed,
                         explicit_length_ss,
+                        to_note_offset,
                         speed_ramp,
                     });
                 }
@@ -898,6 +916,11 @@ pub(crate) fn collect_trill_extension_note_info(
                     } else {
                         None
                     };
+                    let to_note_offset = if has_ext {
+                        c.annotations.trill_extension_to_note_offset
+                    } else {
+                        None
+                    };
                     let speed_ramp = if has_ext {
                         c.annotations.trill_speed_ramp
                     } else {
@@ -913,6 +936,7 @@ pub(crate) fn collect_trill_extension_note_info(
                         bracket_length_ss,
                         wiggle_speed,
                         explicit_length_ss,
+                        to_note_offset,
                         speed_ramp,
                     });
                 }
@@ -990,10 +1014,19 @@ fn draw_system_trill_extensions(
         let trill_advance = font.glyph_advance(ornament_kind.glyph())? as f64;
         let start_x = trill_x + trill_advance + TRILL_EXTENSION_GLYPH_GAP_SS * staff_space;
 
-        // End at the next note's left edge — or, if this is the last note
-        // in the system, at the system's right edge (just inside the final
-        // barline). This is the cross-system convention: a trilled note at
-        // the end of a system extends its wiggle to the system break.
+        // End at the target note's left edge — by default the
+        // immediately following note (offset = 1), or at the note
+        // `to_note_offset` positions past the trilled note when the user
+        // requested a specific anchor. If the trilled note is the last
+        // note in its system (or the requested offset walks past the end
+        // of the system), the wiggle extends instead to the right edge of
+        // the system (just inside the final barline). The cross-system
+        // convention only applies to the *natural* last-note case
+        // (i.e. `i + 1` is past the end with no explicit offset); an
+        // explicit offset that walks past the end terminates at the
+        // system edge but does NOT propagate across the system break —
+        // an offset is a definite anchor request, not a "let it flow"
+        // signal.
         //
         // When the user supplied an explicit length, clamp the natural
         // end_x with `start_x + length_ss * staff_space`. The clamp is
@@ -1001,11 +1034,32 @@ fn draw_system_trill_extensions(
         // endpoint), so an explicit length larger than the natural span is
         // a no-op rather than an overrun. A positive explicit length also
         // disables cross-system propagation: the trill terminates within
-        // this system at the requested point, regardless of position.
-        let natural_end_x = match notes.get(i + 1) {
-            Some(target) => system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space,
-            None => system_x + system.staff_width
-                - TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS * staff_space,
+        // this system at the requested point, regardless of position. The
+        // explicit length wins over the to-note offset when both are set
+        // (per the annotation field's documented precedence).
+        let target_offset = note.to_note_offset.unwrap_or(1);
+        let (natural_end_x, natural_cross_system) = if target_offset == 0 {
+            // Zero offset is degenerate: target is the trilled note
+            // itself. Collapse end_x to start_x so layout_trill_extension
+            // suppresses the wiggle.
+            (start_x, false)
+        } else {
+            match notes.get(i + target_offset) {
+                Some(target) => (
+                    system_x + target.x - TRILL_EXTENSION_NOTE_GAP_SS * staff_space,
+                    false,
+                ),
+                None => {
+                    let edge = system_x + system.staff_width
+                        - TRILL_EXTENSION_SYSTEM_EDGE_GAP_SS * staff_space;
+                    // Cross-system propagation is reserved for the
+                    // *natural* last-note case (no explicit offset). An
+                    // explicit offset is treated as a definite anchor.
+                    let cross = note.to_note_offset.is_none()
+                        && notes.get(i + 1).is_none();
+                    (edge, cross)
+                }
+            }
         };
         let (end_x, cross_system) = match note.explicit_length_ss {
             Some(len_ss) if len_ss > 0.0 => {
@@ -1017,7 +1071,7 @@ fn draw_system_trill_extensions(
             // returns None (span < segment_advance), matching the
             // documented fail-safe.
             Some(_) => (start_x, false),
-            None => (natural_end_x, notes.get(i + 1).is_none()),
+            None => (natural_end_x, natural_cross_system),
         };
 
         // Dispatch: multi-speed (ramp present) supersedes single-speed.

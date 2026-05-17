@@ -692,6 +692,53 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a trill ornament with a *note-anchored* wavy-line extension to
+    /// the most recently added note or chord. The wiggle terminates at the
+    /// note `note_offset` positions past the trilled note in the system's
+    /// flat note sequence — `note_offset = 1` is the immediately following
+    /// note (byte-equivalent to [`trill_with_extension`](Self::trill_with_extension)),
+    /// `note_offset = 2` is the note after that, and so on. Use this when
+    /// the trill should visibly hold across one or more intervening notes
+    /// before releasing into a specific later note, without having to
+    /// compute the staff-space distance by hand the way
+    /// [`trill_with_extension_length_ss`](Self::trill_with_extension_length_ss)
+    /// requires.
+    ///
+    /// An offset that walks past the end of the system falls back to the
+    /// "extend to system right edge" behavior (same as a trilled last
+    /// note). Cross-system propagation is reserved for the *natural*
+    /// last-note case — an explicit offset that overshoots terminates at
+    /// the system edge but does NOT continue into the next system, because
+    /// an explicit offset is a definite anchor request, not a
+    /// "let it flow" signal.
+    ///
+    /// `note_offset = 0` is degenerate (the target is the trilled note
+    /// itself) and produces no wiggle, matching the renderer's fail-safe
+    /// for spans too short to fit one tile.
+    ///
+    /// Sets three flags: `ornament == Some(Ornament::Trill)`,
+    /// `trill_extension == true`,
+    /// `trill_extension_to_note_offset == Some(note_offset)`. No-op if the
+    /// last event was a rest.
+    ///
+    /// **Interaction with [`trill_with_extension_length_ss`](Self::trill_with_extension_length_ss):**
+    /// the explicit length wins when both are set (the length field is
+    /// the more specific termination — an exact staff-space distance vs.
+    /// a "stretch to note N" hint). The to-note offset still travels with
+    /// the annotation, so a future caller can read it back, but it has no
+    /// effect on the rendered wiggle while a positive length is in force.
+    pub fn trill_with_extension_to(mut self, note_offset: usize) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.ornament = Some(Ornament::Trill);
+            annotations.trill_extension = true;
+            annotations.trill_extension_to_note_offset = Some(note_offset);
+        }
+        self
+    }
+
     /// Attach a precomposed trill-with-mordent ornament + wavy-line extension
     /// to the most recently added note or chord. The compound glyph
     /// (`OrnamentPrecompTrillWithMordent`) reads as "trill, then a mordent

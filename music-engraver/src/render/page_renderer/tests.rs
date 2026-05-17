@@ -3011,6 +3011,107 @@ fn cross_system_multi_speed_trill_explicit_length_suppresses_continuation() {
 }
 
 #[test]
+fn cross_system_trill_to_note_offset_suppresses_cross_system_continuation() {
+    // A `to_note_offset` is a definite end-anchor request from the user.
+    // The within-system pass terminates the wiggle at the offset target
+    // (or at the system edge for overshoots) with cross_system=false; the
+    // cross-system pass must mirror that decision and NOT draw an incoming
+    // wiggle on system N+1. Without the page-renderer mirror, the source
+    // system would correctly suppress propagation but system N+1 would
+    // still get an unattributable incoming wiggle.
+    //
+    // We use offset=99 (overshoots) on the last note of system 1. The
+    // source pass falls back to the system-edge formula but keeps
+    // cross_system=false because to_note_offset.is_some(). The
+    // page-renderer mirror catches that and returns None from
+    // compute_cross_system_trill_continuation, suppressing the incoming
+    // wiggle on system 2 — so the render must NOT contain more paths than
+    // a no-trill baseline on the second system side.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let with_to_offset_evt = MeasureEvent::Note(NoteEvent {
+        staff_position: 8,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_to_note_offset: Some(99),
+            ..NoteAnnotations::default()
+        },
+    });
+    let with_to_offset_score = vec![
+        MeasureContent {
+            events: vec![with_to_offset_evt],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    // The "natural" comparison: same first-system trilled note WITHOUT
+    // the to_note_offset annotation. The page-renderer continues the
+    // wiggle onto system 2.
+    let natural_score = vec![
+        MeasureContent {
+            events: vec![trill_ext_whole_note(8)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![whole_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+
+    let p_to = layout_page(
+        &prefix(),
+        &with_to_offset_score,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_nat = layout_page(
+        &prefix(),
+        &natural_score,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    assert_eq!(p_to.systems.len(), 2, "test requires two systems");
+    assert_eq!(p_nat.systems.len(), 2, "test requires two systems");
+
+    let out_to = draw_page(&font, &config, &p_to).unwrap().to_svg();
+    let out_nat = draw_page(&font, &config, &p_nat).unwrap().to_svg();
+
+    // The natural variant has more paths than the to_note_offset variant
+    // because it adds an incoming wiggle on system 2 that the
+    // to_note_offset variant suppresses. A regression that re-engaged
+    // cross-system propagation under to_note_offset would equalize the
+    // two counts (or even make them match exactly).
+    let to_paths = out_to.matches("<path ").count();
+    let nat_paths = out_nat.matches("<path ").count();
+    assert!(
+        to_paths < nat_paths,
+        "to_note_offset must suppress cross-system continuation: \
+         to_offset={to_paths}, natural={nat_paths}"
+    );
+}
+
+#[test]
 fn cross_system_multi_speed_trill_bracket_end_adds_one_hook_on_target_system() {
     // End bracket on a multi-speed trill's last source-system note: no
     // hook on N (suppressed by within-system pass), one hook on N+1 at

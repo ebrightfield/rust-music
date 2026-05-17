@@ -1344,6 +1344,14 @@ fn find_unresolved_trill_extension(
     if matches!(last.explicit_length_ss, Some(len) if len > 0.0) {
         return None;
     }
+    // A `to_note_offset` is an explicit, definite end-anchor request —
+    // the source system terminates the wiggle at the offset target (or
+    // at the system edge for overshoots), with `cross_system = false`.
+    // Mirroring that here suppresses any cross-system continuation so
+    // the page renderer doesn't fight the system renderer's gate.
+    if last.to_note_offset.is_some() {
+        return None;
+    }
     // Recompute the source ornament y the same way system_renderer does,
     // then strip the staff's absolute y so the offset is portable across
     // systems on the same page.

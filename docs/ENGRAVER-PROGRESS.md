@@ -2021,3 +2021,224 @@
   sub-bracketed score — for the single new `sub_brackets_score` golden the
   current viewBox is visibly fine. Documented here so the question doesn't
   resurface.
+
+## 2026-05-17 — Post-v1, `.trill_with_extension_to(note_offset)` note-anchored trill terminus
+
+- Did: Closed one of the recurring trill-polish leftovers from prior
+  "Next" lists. The existing trill extension API exposed two endpoint
+  models: (a) "extend to the immediately following note" (the implicit
+  default of `trill_with_extension()`) and (b) "extend N staff-spaces
+  past the trill glyph" via `trill_with_extension_length_ss(N)`. Missing
+  was a *note-anchored* endpoint: "extend until note N positions ahead
+  in the system's note sequence." Useful when a trill should visibly
+  hold across one or more intervening notes before releasing into a
+  specific successor — without forcing the caller to compute the
+  staff-space distance by hand.
+
+  Layout (`src/layout/measure.rs`):
+  - New field `NoteAnnotations.trill_extension_to_note_offset:
+    Option<usize>`. Defaulted to `None` via existing `#[derive(Default)]`
+    — no constructor changes required. Docstring spells out: (a) `None`
+    is byte-equivalent to "extend to next note"; (b) `Some(n)` with
+    `n >= 1` extends to the note `n` positions past the trilled note;
+    (c) `Some(0)` is degenerate and produces no wiggle (target IS the
+    trilled note, so start_x == end_x); (d) offsets walking past the
+    end of the system fall back to the system-edge formula, and the
+    explicit-offset path NEVER engages cross-system propagation (only
+    the natural last-note case does); (e) when both this field and
+    `trill_extension_length_ss` are set, the explicit length wins —
+    "definite length specifies a definite endpoint" supersedes the
+    softer "stretch to note N" hint.
+
+  Render (`src/render/system_renderer/mod.rs`):
+  - New `to_note_offset: Option<usize>` slot on `TrillExtensionNoteInfo`.
+    Filtered the same way as `bracket`/`explicit_length_ss`: only carries
+    through when `has_trill_extension == true`. Catches stale annotations
+    on notes whose extension flag is off.
+  - `collect_trill_extension_note_info`'s Note and Chord branches both
+    copy the new field. The Chord branch — easy to forget — gets its
+    own dedicated test (`to_note_offset_in_chord_collector_propagates`).
+  - `draw_system_trill_extensions` rewritten end-anchor computation:
+    `target_offset = note.to_note_offset.unwrap_or(1)`; `target_offset
+    == 0` collapses end_x to start_x (degenerate → no wiggle);
+    `notes.get(i + target_offset)` looks up the target's x; falling off
+    the end uses the staff-width-minus-edge-gap formula. Cross-system
+    propagation is *gated* on `note.to_note_offset.is_none() &&
+    notes.get(i + 1).is_none()` — i.e. reserved for the truly-natural
+    last-note case. An explicit offset that overshoots terminates at
+    the system edge but does NOT propagate, locking in the documented
+    "explicit offset is a definite anchor" semantic.
+  - Existing `explicit_length_ss` branch still wins when both fields
+    are set (the natural_end_x path computes via the new offset logic;
+    the explicit length then clamps against that, which is correct —
+    if both are set and the length is small, the length wins; if both
+    are set and the length is huge, the offset's natural_end_x wins via
+    the existing `requested.min(natural_end_x)` clamp).
+
+  Score (`src/score/mod.rs`):
+  - New builder method `ScoreBuilder::trill_with_extension_to(note_offset:
+    usize) -> Self`. Sets the three coupled fields
+    (`ornament=Trill`, `trill_extension=true`,
+    `trill_extension_to_note_offset=Some(n)`). No-op when the last event
+    is a rest, matching every other ornament-attaching builder.
+    Docstring documents the offset=1-is-default, offset=0-is-degenerate,
+    overshoot-falls-back-to-edge, and precedence-with-explicit-length
+    contracts.
+
+  Page renderer (`src/render/page_renderer/mod.rs`):
+  - `compute_cross_system_trill_continuation` now mirrors the
+    system-renderer's "no cross-system propagation under an explicit
+    end-anchor" gate: returns `None` early when
+    `last.to_note_offset.is_some()`. Without this mirror, a trill on the
+    last note of system N with `to_note_offset = Some(N)` would
+    correctly terminate at the system N edge (per system_renderer's
+    cross_system=false branch) but the page renderer would still draw an
+    unattributable incoming wiggle on system N+1. The mirror keeps the
+    two pass decisions in lockstep.
+
+- Tests (+18 net):
+
+  Score builder (`score::tests`, +8):
+  1. `trill_with_extension_to_sets_all_three_annotation_fields` —
+     locks the three coupled writes AND that the unrelated extension
+     fields (`length_ss`, `bracket`, `wiggle_speed`) stay unset. The
+     "additive, not destructive" canary.
+  2. `trill_with_extension_to_offset_one_byte_equivalent_to_trill_with_extension`
+     — offset=1 must produce SVG byte-identical to the implicit default.
+     This is the "offset=1 IS the default" contract; a regression in
+     the `unwrap_or(1)` fallback would fire here.
+  3. `trill_with_extension_to_offset_two_extends_past_next_note` —
+     offset=2 must render *strictly more* paths than offset=1 in a
+     3-note system (since the wiggle covers a longer horizontal span
+     by reaching the *second* note ahead, not the first).
+  4. `trill_with_extension_to_offset_zero_drops_wiggle` — offset=0 must
+     render the same path count as an ornament-only plain trill (no
+     wiggle). Locks the degenerate-target → no-wiggle branch.
+  5. `trill_with_extension_to_offset_overshoot_extends_to_system_edge`
+     — offset=99 on note 1 of a 3-note system must yield strictly more
+     paths than offset=1 in the same layout. Catches a regression where
+     the fallback panics on the index or emits no wiggle.
+  6. `trill_with_extension_to_on_rest_is_noop` — byte-identical render
+     when applied to a rest. The standard ornament-builder no-op contract.
+  7. `trill_with_extension_to_on_chord_renders_extended_wiggle` — chord
+     builder must also accept the call and route through the Chord
+     collector branch; verifies more paths than the default extension.
+  8. `trill_with_extension_to_length_ss_takes_precedence_when_both_set`
+     — when both annotation fields are set with mutually-disagreeing
+     values (length=1.0 ss vs. offset=5), the rendering must be
+     byte-identical to the length-only variant. Locks the documented
+     precedence (length wins).
+
+  System renderer (`render::system_renderer::tests`, +9):
+  1. `collector_propagates_to_note_offset_when_trill_extension_active`
+     — Note branch of the collector: new field travels through into the
+     info record.
+  2. `collector_drops_to_note_offset_when_trill_extension_inactive` —
+     filtering: stale offset on a note with `trill_extension=false`
+     must be dropped, matching the rule for `explicit_length_ss`.
+  3. `to_note_offset_two_renders_more_paths_than_offset_one` — renderer
+     end-to-end: offset=2 yields strictly more paths than offset=1 on
+     the same layout (with widened `min_note_spacing` to ensure the
+     extra span is meaningful). The headline behaviour test.
+  4. `to_note_offset_one_byte_equivalent_to_natural_default` — at the
+     renderer layer (not just the score builder), offset=1 renders
+     byte-identically to the no-offset default.
+  5. `to_note_offset_zero_drops_wiggle` — degenerate-target → no-wiggle
+     branch, verified at the renderer layer.
+  6. `to_note_offset_overshoot_falls_back_to_system_edge` — offset=99
+     on a non-last note renders strictly more paths than offset=1.
+  7. `to_note_offset_overshoot_renders_byte_identical_to_last_note_natural`
+     — **the cross-cutting canary**: overshoot offset on the only note
+     in a system and a trill-on-the-last-note (no offset) reach the
+     SAME system-edge formula → byte-identical render. Locks the
+     "fallback uses the same edge formula" invariant.
+  8. `to_note_offset_in_chord_collector_propagates` — Chord branch of
+     the collector: easy to forget, gets a dedicated test.
+  9. `to_note_offset_yields_to_explicit_length_when_both_set` —
+     precedence test at the renderer layer: both fields set →
+     byte-identical to length-only.
+
+  Page renderer (`render::page_renderer::tests`, +1):
+  1. `cross_system_trill_to_note_offset_suppresses_cross_system_continuation`
+     — two-system page render with offset=99 on the last note of system 1
+     vs. the same score WITHOUT the offset (the natural cross-system
+     case). The offset variant must yield strictly fewer paths because
+     the page-renderer suppresses the incoming wiggle on system 2. A
+     regression that drops the `to_note_offset.is_some()` early-return
+     in `compute_cross_system_trill_continuation` would re-engage
+     cross-system propagation and equalize the two counts. Pairs with
+     the existing `cross_system_multi_speed_trill_explicit_length_suppresses_continuation`
+     test, locking the same pass-decision invariant for the new field.
+
+  Naming rationale: the score-builder tests use the public API name
+  (`trill_with_extension_to_*`), while the renderer tests use the
+  internal field name (`to_note_offset_*`). This mirrors the existing
+  `trill_with_extension_length_ss_*` / `explicit_length_ss_*` naming
+  split between the same two modules. The byte-identical-equivalence
+  tests at both layers are the strongest available "the implementation
+  computes the same end_x as the no-offset default" canary —
+  approximate path-count assertions can't catch a small numerical
+  drift, but byte equality catches everything.
+
+  No new examples or goldens. The end-anchor change is invisible in any
+  golden that doesn't use `trill_extension_to_note_offset` (which is
+  none of them — the field defaults to `None`), and the rendering
+  behaviour for offset=1 is byte-identical to the existing default. A
+  golden specifically exercising offset=2 or overshoot could be added
+  later if visual proofing becomes valuable; for now the +17 mechanical
+  tests cover the relevant contracts.
+
+- Verified: `cargo check -p music-engraver` passes. `cargo check
+  --workspace` passes. `cargo clippy -p music-engraver --all-targets` —
+  0 new warnings (1 pre-existing in `score/multi_staff.rs:394`,
+  unchanged). `cargo test -p music-engraver --lib` — **2439 unit tests
+  pass** (+18 vs prior recorded 2421: 8 new in `score::tests`, 9 new in
+  `render::system_renderer::tests`, 1 new in
+  `render::page_renderer::tests`). `cargo test -p music-engraver
+  --test golden_svg` — **69 golden tests pass, all byte-identical** (no
+  golden uses the new field; offset=1 default is byte-identical to
+  no-offset and the page renderer's new early-return only fires when
+  `to_note_offset.is_some()`). `cargo test -p music-engraver --test
+  svg_glyph_render` — 3 integration tests pass. `cargo test -p
+  music-engraver --doc` — 13 doc tests pass, 1 ignored. `cargo build -p
+  music-engraver --examples` builds all 93 examples.
+
+- Next: Remaining post-v1 candidates: **cross-system church rests**
+  (multi-measure rest cluster that breaks across systems — currently
+  confined to one measure so no break logic exists); **per-note
+  collision detection in beamed additional voices** (open issue from
+  prior trill work); **line breaking quality improvements** (Gourlay
+  extension or Bellini & Nesi line-cost model on top of existing
+  Knuth-Plass DP); **golden-SVG corpus PHASH-based visual regression**
+  (text-diff already exists; PHASH would catch glyph-data regressions
+  that produce equivalent text); **`HookDirection::Up` standalone
+  builder** (already reachable through `trill_with_extension_bracketed_custom`
+  and `TrillBracketOptions::with_direction`, but a one-liner convenience
+  method could be added — judgment call). Trill polish remaining:
+  per-segment `WiggleTrillFast` variant selection from a single-speed
+  annotation (currently the ramp path handles per-segment variation but
+  the single-speed `trill_wiggle_speed` is uniform across the wiggle).
+
+- Open issues: When both `trill_extension_length_ss` and
+  `trill_extension_to_note_offset` are set, the implementation computes
+  `natural_end_x` via the offset logic, then clamps via the explicit
+  length. In every test case (length=1.0, offset=5) the length value is
+  smaller than the natural span so the length wins via the existing
+  `requested.min(natural_end_x)` clamp. If a future caller sets
+  *length=huge* and *offset=1*, the explicit-length branch still uses
+  the offset's `natural_end_x` (correctly) — but a future "length wins
+  unconditionally" semantic refactor would need to ignore the offset
+  entirely, not clamp against it. The current behaviour matches the
+  docstring ("the explicit length wins when both are set") for all
+  practical cases but technically the offset's `natural_end_x` is still
+  used as the clamp upper bound. Documented here so the semantics
+  question doesn't resurface. The cross-system gate for an
+  *overshooting* explicit offset is the strictest interpretation: even
+  on the truly-last-note case, an overshoot offset terminates at the
+  system edge without crossing. A future refinement could allow
+  cross-system propagation when *all* of: (a) offset is set, (b) offset
+  walks past the end, AND (c) the trilled note IS the last note in the
+  system; right now only the no-offset case enables cross-system. The
+  current behaviour is the safer choice — an explicit offset is a
+  user assertion of intent, not a "let it flow" signal — but worth
+  noting.

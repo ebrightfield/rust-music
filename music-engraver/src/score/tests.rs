@@ -8549,6 +8549,300 @@
         assert_eq!(neg, zero, "negative explicit length must render byte-identically to zero");
     }
 
+    // --- trill_with_extension_to (note-anchored end) ---
+
+    #[test]
+    fn trill_with_extension_to_sets_all_three_annotation_fields() {
+        // Builder must set the three coupled flags: ornament=Trill,
+        // trill_extension=true, AND populate trill_extension_to_note_offset.
+        // Catches a regression that silently drops the new field write.
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_to(3);
+
+        let last = builder.current_events.last().expect("note pushed");
+        match &last.1 {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(annotations.ornament, Some(Ornament::Trill));
+                assert!(annotations.trill_extension);
+                assert_eq!(annotations.trill_extension_to_note_offset, Some(3));
+                // The other extension fields must remain unset — the builder
+                // is additive, not destructive. Locks in field isolation
+                // against an accidental cross-write.
+                assert_eq!(annotations.trill_extension_length_ss, None);
+                assert_eq!(annotations.trill_bracket, None);
+                assert_eq!(annotations.trill_wiggle_speed, None);
+            }
+            _ => panic!("expected last event to be a Note"),
+        }
+    }
+
+    #[test]
+    fn trill_with_extension_to_offset_one_byte_equivalent_to_trill_with_extension() {
+        // Offset = 1 means "extend to the next note" which is the implicit
+        // default of trill_with_extension(). Both renderings must produce
+        // byte-identical SVG. Locks in the "offset = 1 is the default"
+        // contract; a regression that changes the offset=1 end_x formula
+        // would fire this test.
+        let via_default = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension()
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let via_offset_one = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_to(1)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            via_default, via_offset_one,
+            "trill_with_extension_to(1) must be byte-equivalent to \
+             trill_with_extension() — both terminate at the next note"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_to_offset_two_extends_past_next_note() {
+        // Offset = 2 means the wiggle extends past the next note to the
+        // note after that. With three notes in a row (trilled + two more),
+        // offset=2 must yield strictly MORE wiggle paths than offset=1
+        // because the wiggle covers a longer horizontal span.
+        let to_one = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .trill_with_extension_to(1)
+            .note(p("F", 4), Duration::QTR)
+            .note(p("G", 4), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let to_two = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::QTR)
+            .trill_with_extension_to(2)
+            .note(p("F", 4), Duration::QTR)
+            .note(p("G", 4), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let to_one_paths = to_one.matches("<path").count();
+        let to_two_paths = to_two.matches("<path").count();
+        assert!(
+            to_two_paths > to_one_paths,
+            "trill_with_extension_to(2) must render strictly more wiggle paths \
+             than to(1): to(1)={to_one_paths}, to(2)={to_two_paths}"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_to_offset_zero_drops_wiggle() {
+        // Offset = 0 is degenerate (the target is the trilled note itself);
+        // the renderer must produce no wiggle, matching the explicit-length
+        // <= 0 fail-safe. Path count must equal that of an ornament-only
+        // "tr" glyph rendering.
+        let plain_trill = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .ornament(Ornament::Trill)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let zero_offset = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("E", 4), Duration::WHOLE)
+            .trill_with_extension_to(0)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            zero_offset.matches("<path").count(),
+            plain_trill.matches("<path").count(),
+            "trill_with_extension_to(0) must produce the same path count as \
+             a plain trill (no wiggle, only the 'tr' glyph)"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_to_offset_overshoot_extends_to_system_edge() {
+        // An offset that walks past the last note in the system must fall
+        // back to the system-edge behavior (the wiggle extends to the
+        // system's right edge rather than panicking or producing no
+        // wiggle). With the trilled note as note 1 of a 3-note system and
+        // offset=99 (no 99-notes-after exists), the wiggle covers more
+        // horizontal span than offset=1 (next note only) — so the
+        // overshoot variant must yield strictly more wiggle paths.
+        //
+        // This is the renderer's `notes.get(i + 99) → None` branch that
+        // falls back to the staff-width-minus-edge-gap formula. Without
+        // that fallback, the renderer would either panic on the index or
+        // emit no wiggle at all.
+        let overshoot = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .trill_with_extension_to(99)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let next_note_only = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .trill_with_extension_to(1)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let overshoot_paths = overshoot.matches("<path").count();
+        let next_only_paths = next_note_only.matches("<path").count();
+        assert!(
+            overshoot_paths > next_only_paths,
+            "overshooting offset must extend past the next note to the system edge — \
+             more paths than offset=1: overshoot={overshoot_paths}, next_only={next_only_paths}"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_to_on_rest_is_noop() {
+        // Builder must be a no-op when the last event is a rest, matching
+        // the convention of every other ornament-attaching builder. The
+        // rendered SVG must be byte-identical to the same score without
+        // the builder call.
+        let plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let with_to = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::WHOLE)
+            .trill_with_extension_to(2)
+            .end_barline()
+            .note(p("F", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            plain, with_to,
+            "trill_with_extension_to on a rest must be a no-op"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_to_on_chord_renders_extended_wiggle() {
+        // Builder must accept chords as well as notes — same coupling
+        // contract as trill_with_extension_length_ss_on_chord. A chord
+        // trilled with offset=2 must render strictly more paths than the
+        // same chord with the default extension (offset=1 implicit).
+        let natural_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .trill_with_extension()
+            .note(p("F", 4), Duration::QTR)
+            .note(p("A", 4), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let extended_chord = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .trill_with_extension_to(2)
+            .note(p("F", 4), Duration::QTR)
+            .note(p("A", 4), Duration::HALF)
+            .end_barline()
+            .render_svg();
+
+        let natural_paths = natural_chord.matches("<path").count();
+        let extended_paths = extended_chord.matches("<path").count();
+        assert!(
+            extended_paths > natural_paths,
+            "chord trill with offset=2 must render strictly more paths than the \
+             default offset=1: natural={natural_paths}, extended={extended_paths}"
+        );
+    }
+
+    #[test]
+    fn trill_with_extension_to_length_ss_takes_precedence_when_both_set() {
+        // When both length_ss AND to_note_offset are set, the explicit
+        // length wins at draw time (per the annotation field's documented
+        // precedence). Construct a Note annotation with both fields set
+        // to mutually-disagreeing values and verify the rendering matches
+        // the length-only variant, not the offset-only variant.
+        let length_then_offset_event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_extension_length_ss: Some(1.0),
+                trill_extension_to_note_offset: Some(5),
+                ..NoteAnnotations::default()
+            },
+        };
+        let length_only_event = ScoreEvent::Note {
+            pitch: p("E", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                ornament: Some(Ornament::Trill),
+                trill_extension: true,
+                trill_extension_length_ss: Some(1.0),
+                ..NoteAnnotations::default()
+            },
+        };
+
+        let make_render = |trilled_event: ScoreEvent| {
+            let mut builder = ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4);
+            builder.current_events.push((0, trilled_event));
+            builder
+                .note(p("F", 4), Duration::QTR)
+                .note(p("G", 4), Duration::HALF)
+                .end_barline()
+                .render_svg()
+        };
+
+        let both_set = make_render(length_then_offset_event);
+        let length_only = make_render(length_only_event);
+
+        assert_eq!(
+            both_set, length_only,
+            "when both trill_extension_length_ss and trill_extension_to_note_offset \
+             are set, the explicit length wins — rendering must match length-only \
+             variant byte-identically"
+        );
+    }
+
     // --- TrillBracketOptions::extension_length_ss through the score builder ---
 
     #[test]

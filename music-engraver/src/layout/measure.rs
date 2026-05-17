@@ -149,6 +149,35 @@ pub struct NoteAnnotations {
     /// Non-positive values produce no wiggle (the renderer's same
     /// fail-safe as for spans too short to fit one tile).
     pub trill_extension_length_ss: Option<f64>,
+    /// Optional explicit end-anchor for the trill wavy-line extension,
+    /// expressed as a positive note offset (in the system's flat note
+    /// sequence) from the trilled note. Has no effect unless
+    /// `trill_extension == true`. `None` (the default) terminates the
+    /// wiggle at the *immediately following* note (offset = 1 implicitly)
+    /// or at the system's right edge if this is the last note. `Some(n)`
+    /// with `n >= 1` terminates the wiggle at the note `n` positions after
+    /// the trilled note — useful when the trill should visibly hold across
+    /// one or more intervening notes before releasing into a specific
+    /// successor.
+    ///
+    /// Offsets that walk past the end of the system fall back to the
+    /// "extend to system right edge" behavior (same as a trilled last
+    /// note), and the trill propagates across the system break only when
+    /// `n` walks past the *last* note (i.e. the natural last-note case);
+    /// any other walk-past-end terminates at the system edge without
+    /// cross-system continuation.
+    ///
+    /// `Some(0)` is rejected at the renderer's fail-safe as no wiggle (a
+    /// zero-offset target is the trilled note itself, so start_x ==
+    /// end_x — same suppression as a non-positive `trill_extension_length_ss`).
+    ///
+    /// Independent of [`trill_extension_length_ss`](Self::trill_extension_length_ss):
+    /// when both are set, the explicit length wins (the length field is
+    /// the more specific termination). This matches the documented
+    /// "explicit length specifies a definite endpoint" semantic of the
+    /// length field; the to-note offset is a softer "stretch to note N"
+    /// hint that yields to the explicit length when both are present.
+    pub trill_extension_to_note_offset: Option<usize>,
     /// Optional multi-speed ramp spec for the trill wavy-line extension.
     /// Has no effect unless `trill_extension == true`. `None` (the default)
     /// renders a single-speed wiggle using `trill_wiggle_speed` (or the

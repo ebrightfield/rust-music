@@ -3531,3 +3531,377 @@ fn explicit_length_with_end_bracket_anchors_at_shortened_terminus() {
         "explicit-length End-bracketed trill must render distinctly from natural-length"
     );
 }
+
+// --- trill_extension_to_note_offset (note-anchored end) ---
+
+fn trill_ext_to_note(pos: i8, offset: usize) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_to_note_offset: Some(offset),
+            ..NoteAnnotations::default()
+        },
+    })
+}
+
+#[test]
+fn collector_propagates_to_note_offset_when_trill_extension_active() {
+    // Collector must thread the new offset field through into the info
+    // record's `to_note_offset` slot. Catches a regression in the
+    // collector's field-copy that silently drops the new annotation.
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 2), quarter_note(6), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let (_font, _config, mcfg) = setup();
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(info[0].has_trill_extension);
+    assert_eq!(info[0].to_note_offset, Some(2));
+}
+
+#[test]
+fn collector_drops_to_note_offset_when_trill_extension_inactive() {
+    // Matches the filtering rule for `explicit_length_ss`: the offset
+    // only travels when `trill_extension == true`. A stale offset on a
+    // note with the extension flag off must be filtered out so the
+    // renderer can't see it.
+    let stale_offset = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: false,
+            trill_extension_to_note_offset: Some(2),
+            ..NoteAnnotations::default()
+        },
+    });
+    let measures = vec![MeasureContent {
+        events: vec![stale_offset, quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let (_font, _config, mcfg) = setup();
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(!info[0].has_trill_extension);
+    assert_eq!(info[0].to_note_offset, None);
+}
+
+#[test]
+fn to_note_offset_two_renders_more_paths_than_offset_one() {
+    // A trill anchored to the note 2 positions ahead must cover a longer
+    // horizontal span than a trill anchored to the immediately following
+    // note — strictly more wiggle paths. The wider min_note_spacing
+    // ensures a meaningful difference in span; otherwise both spans
+    // round down to the same per-tile count.
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 12.0 * config.staff_space;
+
+    let to_one = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 1), quarter_note(6), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let to_two = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 2), quarter_note(6), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_one = layout_system(&treble_prefix(), &to_one, &mcfg, None);
+    let sys_two = layout_system(&treble_prefix(), &to_two, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_one, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_two, 0.0, 0.0).unwrap();
+    let one_paths = svg_a.to_svg().matches("<path").count();
+    let two_paths = svg_b.to_svg().matches("<path").count();
+    assert!(
+        two_paths > one_paths,
+        "offset=2 must render strictly more paths than offset=1: \
+         one={one_paths}, two={two_paths}"
+    );
+}
+
+#[test]
+fn to_note_offset_one_byte_equivalent_to_natural_default() {
+    // Offset = 1 means "extend to the next note" which is the implicit
+    // default of `trill_extension = true` with no offset set. The two
+    // renders must be byte-identical — locks in the "offset=1 is the
+    // implicit default" contract.
+    let (font, config, mcfg) = setup();
+
+    let with_offset_one = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 1), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let natural = vec![MeasureContent {
+        events: vec![trill_ext_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_off = layout_system(&treble_prefix(), &with_offset_one, &mcfg, None);
+    let sys_nat = layout_system(&treble_prefix(), &natural, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_off, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_nat, 0.0, 0.0).unwrap();
+    assert_eq!(
+        svg_a.to_svg(),
+        svg_b.to_svg(),
+        "to_note_offset=Some(1) must render byte-identically to the natural \
+         default (no offset set)"
+    );
+}
+
+#[test]
+fn to_note_offset_zero_drops_wiggle() {
+    // Offset = 0 is degenerate (the target is the trilled note itself).
+    // The renderer's branch sets `end_x = start_x` so layout_trill_extension
+    // returns None — same suppression as non-positive explicit lengths.
+    let (font, config, mcfg) = setup();
+
+    let zero_offset = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 0), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let plain_trill_ornament = vec![MeasureContent {
+        events: vec![
+            MeasureEvent::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 0,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations {
+                    ornament: Some(Ornament::Trill),
+                    trill_extension: false,
+                    ..NoteAnnotations::default()
+                },
+            }),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_zero = layout_system(&treble_prefix(), &zero_offset, &mcfg, None);
+    let sys_plain = layout_system(&treble_prefix(), &plain_trill_ornament, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_zero, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_plain, 0.0, 0.0).unwrap();
+    let zero_paths = svg_a.to_svg().matches("<path").count();
+    let plain_paths = svg_b.to_svg().matches("<path").count();
+    assert_eq!(
+        zero_paths, plain_paths,
+        "offset=0 must drop the wiggle — same path count as an ornament-only \
+         trill: zero={zero_paths}, plain={plain_paths}"
+    );
+}
+
+#[test]
+fn to_note_offset_overshoot_falls_back_to_system_edge() {
+    // An offset that walks past the last note in the system (`notes.get(i +
+    // 99) → None`) must reach the system-edge fallback, NOT panic on the
+    // index. The fallback yields the same end_x as a trilled last note —
+    // so an overshoot offset on note 1 of a 3-note system covers from the
+    // trilled note all the way to the staff-right-edge minus the system
+    // edge gap. Strictly more paths than offset=1 in the same layout.
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 12.0 * config.staff_space;
+
+    let overshoot = vec![MeasureContent {
+        events: vec![
+            trill_ext_to_note(4, 99),
+            quarter_note(6),
+            quarter_note(8),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let to_one = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 1), quarter_note(6), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_overshoot = layout_system(&treble_prefix(), &overshoot, &mcfg, None);
+    let sys_one = layout_system(&treble_prefix(), &to_one, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_overshoot, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_one, 0.0, 0.0).unwrap();
+    let overshoot_paths = svg_a.to_svg().matches("<path").count();
+    let one_paths = svg_b.to_svg().matches("<path").count();
+    assert!(
+        overshoot_paths > one_paths,
+        "overshoot offset must extend to the system edge — more paths than \
+         offset=1: overshoot={overshoot_paths}, one={one_paths}"
+    );
+}
+
+#[test]
+fn to_note_offset_overshoot_renders_byte_identical_to_last_note_natural() {
+    // Critical anchor canary: when the offset overshoots, the end_x
+    // formula is `staff_width - SYSTEM_EDGE_GAP_SS * staff_space`. A
+    // trill on the LAST note of the same system with the default
+    // (no-offset) extension uses exactly the same formula. With the same
+    // trilled-note x-position, the two renders must be byte-identical.
+    //
+    // To pin the trilled note at the same x in both scores, we trill the
+    // SAME note (position 4 at index 0) in both — but in the overshoot
+    // version the offset is huge, and in the "natural last-note" version
+    // we put the trilled note as the only note in its measure with no
+    // following note. Both reach the system-edge fallback for end_x.
+    let (font, config, mcfg) = setup();
+
+    let overshoot = vec![MeasureContent {
+        events: vec![trill_ext_to_note(4, 99)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let last_note_natural = vec![MeasureContent {
+        events: vec![trill_ext_note(4)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_overshoot = layout_system(&treble_prefix(), &overshoot, &mcfg, None);
+    let sys_natural = layout_system(&treble_prefix(), &last_note_natural, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_overshoot, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_natural, 0.0, 0.0).unwrap();
+    let overshoot_paths = svg_a.to_svg().matches("<path").count();
+    let natural_paths = svg_b.to_svg().matches("<path").count();
+    assert_eq!(
+        overshoot_paths, natural_paths,
+        "overshoot offset and natural last-note must reach the same system-edge \
+         end_x — same path count: overshoot={overshoot_paths}, natural={natural_paths}"
+    );
+}
+
+#[test]
+fn to_note_offset_in_chord_collector_propagates() {
+    // The chord branch of the collector must also propagate the new
+    // field. Mirrors `explicit_length_in_chord_collector_propagates` for
+    // the offset field. Catches a regression that wires through the
+    // Note branch but forgets the Chord branch.
+    use crate::layout::measure::ChordEvent;
+
+    let chord_with_offset = MeasureEvent::Chord(ChordEvent {
+        staff_positions: vec![2, 4, 6],
+        duration_log2: 0,
+        dots: 0,
+        accidentals: vec![None, None, None],
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_to_note_offset: Some(2),
+            ..NoteAnnotations::default()
+        },
+    });
+    let measures = vec![MeasureContent {
+        events: vec![chord_with_offset, quarter_note(7), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let (_font, _config, mcfg) = setup();
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let info = collect_trill_extension_note_info(&system);
+    assert!(info[0].has_trill_extension, "chord trill must be flagged");
+    assert_eq!(
+        info[0].to_note_offset,
+        Some(2),
+        "chord-level to_note_offset must travel through the collector"
+    );
+    // Top-of-chord anchoring: the system_renderer pins the wiggle's y to
+    // the highest chord note.
+    assert_eq!(info[0].staff_position, 6);
+}
+
+#[test]
+fn to_note_offset_yields_to_explicit_length_when_both_set() {
+    // The documented precedence: when both `trill_extension_length_ss`
+    // and `trill_extension_to_note_offset` are set, the explicit length
+    // wins at draw time. Verify by rendering a note with both fields
+    // set vs. just the length field — the SVGs must be byte-identical.
+    let (font, config, mut mcfg) = setup();
+    mcfg.min_note_spacing = 12.0 * config.staff_space;
+
+    let both_set = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_length_ss: Some(1.0),
+            trill_extension_to_note_offset: Some(2),
+            ..NoteAnnotations::default()
+        },
+    });
+    let length_only = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 0,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            ornament: Some(Ornament::Trill),
+            trill_extension: true,
+            trill_extension_length_ss: Some(1.0),
+            ..NoteAnnotations::default()
+        },
+    });
+    let measures_both = vec![MeasureContent {
+        events: vec![both_set, quarter_note(6), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let measures_length = vec![MeasureContent {
+        events: vec![length_only, quarter_note(6), quarter_note(8)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_both = layout_system(&treble_prefix(), &measures_both, &mcfg, None);
+    let sys_length = layout_system(&treble_prefix(), &measures_length, &mcfg, None);
+    let mut svg_a = make_svg();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_a, &font, &config, &sys_both, 0.0, 0.0).unwrap();
+    draw_system(&mut svg_b, &font, &config, &sys_length, 0.0, 0.0).unwrap();
+    assert_eq!(
+        svg_a.to_svg(),
+        svg_b.to_svg(),
+        "when both explicit length and to_note_offset are set, the explicit \
+         length wins — render must be byte-identical to length-only"
+    );
+}
