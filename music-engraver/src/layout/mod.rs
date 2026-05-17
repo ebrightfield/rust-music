@@ -96,7 +96,7 @@ pub use multi_measure_rest::{
 };
 pub use multi_staff::{
     layout_multi_staff, staff_layouts_from_multi, BraceLayout, BracketLayout, ConnectorKind,
-    MultiStaffLayout, StaffGroup,
+    MultiStaffLayout, StaffGroup, SubBracket, SubBracketLayout,
 };
 pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
 pub use breath::{layout_breath_mark, BreathMark, BreathMarkLayout, BREATH_MARK_ABOVE_STAFF_SS, BREATH_MARK_RIGHT_PADDING_SS};

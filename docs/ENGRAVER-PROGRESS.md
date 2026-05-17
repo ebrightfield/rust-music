@@ -1801,3 +1801,223 @@
 - Next: With both brace and bracket-scroll anchoring now font-agnostic via metadata, the metric-driven pattern is established. Candidate next chunks: **sub-brackets** (the SMuFL `subBracketThickness` engraving default for nested two-deep grouping — Bravura value 0.16 sp; Lilypond renders this as a thinner inner bracket inside the section bracket); **cross-system church rests** (multi-measure rest cluster that breaks across systems); **per-note collision detection in beamed additional voices** (open from prior trill work); **line breaking** (Gourlay extension or Bellini & Nesi); **golden-SVG corpus PHASH harness** (text-diff already exists; PHASH would catch glyph-data regressions that produce equivalent text).
 
 - Open issues: The synthetic-font tests construct `MusicFont` from Bravura's OTF combined with custom JSON metadata. This is a useful test pattern that should generalize — it lets the engraver assert "the renderer respects metadata X" without bundling a second OTF. Worth extracting to a `test_support` module if more such tests appear. The horizontal-anchor formula `tx = bracket.x - bbox.x_left` keeps the *glyph's left edge* aligned with `bracket.x` (the line's left edge); a future enhancement could optionally align the *glyph's inner edge* (where the scroll wraps around the line) instead, but defining "inner edge" precisely requires either a font-supplied anchor point (SMuFL's `glyphsWithAnchors` includes some anchors but not for bracket scrolls) or path-bbox parsing. For Bravura the left-edge alignment is correct because the scroll's curl extends rightward over the line, so the alignment we have is faithful to the published convention.
+
+## 2026-05-15 — Post-v1, sub-brackets (two-deep section grouping)
+
+- Did: Implemented nested sub-bracket support — the SMuFL `subBracketThickness` engraving default (0.16 sp in Bravura) renders as a thinner inner bracket inside a parent section bracket, per the published convention (Behind Bars; Lilypond's `StaffGroup`-in-`StaffGroup` rendering) for two-deep grouping (e.g. Violin I + Violin II share an inner bracket within the larger string-section bracket).
+
+  Layout (`src/layout/multi_staff.rs`):
+  - New `SubBracket` struct: `{ start_index, staff_count }` — a contiguous range of staves within the parent group, 0-based.
+  - New field `StaffGroup.sub_brackets: Vec<SubBracket>`. Each existing constructor (`grand_staff`, `section`, `independent`) defaults this to `Vec::new()` so existing callers stay byte-identical. Builder method `StaffGroup::with_sub_brackets(vec![...])` for the chained-construction style.
+  - New `SubBracketLayout` struct: `{ x, y_top, y_bottom, thickness }` — pure geometric intent; the renderer emits a thin stroked line, no scrolls (Lilypond's inner-bracket convention).
+  - New constants: `SUB_BRACKET_THICKNESS_SS = 0.16` (SMuFL default; matches `engraving_config.sub_bracket_thickness`), `SUB_BRACKET_GAP_SS = 0.3` (horizontal gap between main bracket's right edge and sub-bracket's left edge, large enough to not visually merge).
+  - `MultiStaffLayout` gains `sub_brackets: Vec<SubBracketLayout>`. Always present (possibly empty) — keeps the field non-`Option`al since the empty case is the no-cost default.
+  - `layout_multi_staff` now:
+    - Filters `group.sub_brackets` to entries that fit inside the parent (staff_count ≥ 2, start_index < parent count, range doesn't overshoot). Invalid entries silently drop.
+    - **When valid sub-brackets are present**, shifts the main bracket's `x` left by `(SUB_BRACKET_GAP_SS + SUB_BRACKET_THICKNESS_SS + SUB_BRACKET_GAP_SS) * staff_space` (= 0.76 sp) to make room for the sub-bracket between the main bracket's right edge and the staff origin. With no sub-brackets, the main bracket's `x` is unchanged from the previous chunk (preserves byte-identical goldens).
+    - Computes each sub-bracket's `x` as `main_right_edge + SUB_BRACKET_GAP_SS * staff_space`, its y range as `[staff_y_origins[first], staff_y_origins[last] + staff_height]`.
+
+  Render (`src/render/multi_staff_renderer.rs`):
+  - New `pub fn draw_sub_bracket(svg, sub: &SubBracketLayout)` — emits a single stroked line at `(sub.x + sub.thickness/2, sub.y_top) → (..., sub.y_bottom)` with `stroke-width = sub.thickness`. No SMuFL glyph dependency — Bravura has no separate thin-bracket scroll variant, and the convention is to omit scrolls on the inner bracket so the nesting reads hierarchically.
+  - `draw_multi_staff_connectors` extended to iterate `layout.sub_brackets` after the main bracket pass.
+
+  Score (`src/score/multi_staff.rs`): the existing `StaffGroup { ... }` literal at line 309 picks up `sub_brackets: Vec::new()` — no behavior change at the score level (the `MultiStaffScore` API doesn't currently expose sub-bracket configuration; that's a follow-up if needed).
+
+  Example (`examples/sub_brackets.rs`): 6-staff section with two nested sub-brackets (staves 0..1 and 3..5). Output: 3437 bytes, 2 paths (main bracket scrolls), 34 lines (30 staff + 1 main bracket vertical + 2 sub-bracket verticals + 1 joined barline). The example asserts exact path/line counts.
+
+- Tests (+15 net):
+
+  Layout (`layout/multi_staff::tests`, +9):
+  1. `no_sub_brackets_emitted_when_group_has_none` — baseline that `layout.sub_brackets` is empty for a plain `section(N)`.
+  2. `sub_brackets_ignored_for_non_bracket_connector` — `with_sub_brackets(...)` on a Brace or None group is silently dropped (sub-brackets are a Bracket-only feature).
+  3. `sub_bracket_emitted_for_valid_range` — single sub-bracket inside `section(5)`, asserts y_top and y_bottom exactly match the spanned staves' top and bottom.
+  4. `sub_bracket_thickness_matches_smufl_default` — locks `sub.thickness = 0.16 * SS` AND asserts `sub.thickness < main.thickness` (visual hierarchy invariant).
+  5. `sub_bracket_sits_inside_main_bracket` — **the key geometric canary**: pins exact x-positions of main and sub brackets and asserts the gap between them equals `SUB_BRACKET_GAP_SS * SS` exactly. Would fire on any regression that drops the leftward main-bracket shift or changes the gap.
+  6. `main_bracket_x_unchanged_when_no_sub_brackets` — anti-regression for the conditional shift: ensures plain `section(N)` keeps its previous x position so goldens stay byte-identical.
+  7. `multiple_sub_brackets_each_produce_one_layout` — two sub-brackets in a 6-staff group; asserts y_top/y_bottom for both, that they share x, and that their y ranges are distinct.
+  8. `invalid_sub_brackets_silently_dropped` — three invalid entries (count=1, start out of range, overshoots) + one valid → only the valid one survives.
+  9. `sub_bracket_full_span_equals_parent_bracket_span` — a sub-bracket covering all parent staves must produce identical y_top/y_bottom to the main bracket.
+
+  Render (`render/multi_staff_renderer::tests`, +6):
+  1. `draw_sub_bracket_produces_one_thin_line` — exact `line_count == 1 && path_count == 0` (no scrolls, no serifs). Catches regressions that attach scroll glyphs or extra serifs to the inner bracket.
+  2. `draw_sub_bracket_uses_sub_bracket_thickness` — `stroke-width="{sub.thickness}"` substring + numeric assertion that `sub.thickness = SUB_BRACKET_THICKNESS_SS * SS`.
+  3. `draw_sub_bracket_line_spans_y_range` — asserts all four `x1/y1/x2/y2` SVG attribute substrings against the layout's exact values AND verifies y range matches the spanned staves (staves 1..3 inside section(4)).
+  4. `draw_multi_staff_connectors_renders_main_and_sub_brackets` — end-to-end: exact `line_count == 2 && path_count == 2` for a bracket + 1 sub-bracket. Locks the count delta (1 extra line vs the no-sub-brackets baseline).
+  5. `draw_multi_staff_connectors_two_sub_brackets_emit_two_thin_lines` — `line_count == 3` for bracket + 2 sub-brackets; asserts each sub-bracket's distinct y1 substring appears.
+  6. `main_bracket_x_shifts_left_when_sub_bracket_present_end_to_end` — **the cross-cutting canary**: renders the same `section(3)` group with and without sub-brackets, asserts the SVGs use different main-bracket centre-x substrings, AND the nested SVG does NOT contain the plain (unshifted) centre. Anti-regression for the shift behavior end-to-end.
+
+- Verified: `cargo check -p music-engraver` passes. `cargo check --workspace` passes. `cargo clippy -p music-engraver --all-targets` — 0 new warnings (1 pre-existing in `score/multi_staff.rs:344`, line drifted +1 from prior log due to the `sub_brackets: Vec::new()` literal addition). `cargo test -p music-engraver --lib` — **2414 unit tests pass** (+15 vs prior recorded 2399: 9 layout + 6 renderer). `cargo test -p music-engraver --test golden_svg` — **68 golden tests pass, ALL byte-identical** (the `MultiStaffScore` API doesn't yet expose sub-brackets, so no golden score exercises the new shift; existing scores keep `sub_brackets: Vec::new()` and the conditional bypasses the leftward shift). `cargo test -p music-engraver --test svg_glyph_render` — 3 integration tests pass. `cargo test -p music-engraver --doc` — 12 doc tests pass, 1 ignored. `cargo build -p music-engraver --examples` builds all 90 examples. `cargo run -p music-engraver --example sub_brackets` writes 3437-byte SVG with 2 paths + 34 lines. SVG inspection confirms main-bracket centre at x=-252.5 (= -315 + 125/2, shifted left), sub-bracket centres at x=-95 (= -115 + 40/2), main-scroll translates at (-315, 100) and (-315, 13600), gap between main right edge (-190) and sub left edge (-115) = 75 fu = 0.3 sp.
+
+- Next: With sub-brackets in the layout/render layer, the score-level surface (`MultiStaffScore`) doesn't yet expose them — adding a `with_sub_brackets(...)` builder to `MultiStaffScore` would let users author scores with nested grouping (and would generate a golden to lock the end-to-end rendering). Beyond that: **cross-system church rests** (multi-measure rest cluster that breaks across systems); **per-note collision detection in beamed additional voices**; **line breaking** (Gourlay extension or Bellini & Nesi); **golden-SVG corpus PHASH harness**; **PNG export** behind the `png` feature (resvg + tiny-skia + fontdb, already in `Cargo.toml`).
+
+- Open issues: The sub-bracket renders as a simple stroked line — no scroll decoration, no horizontal serifs. This matches Lilypond's convention but some published scores show small flat caps at top/bottom of inner brackets; if visual fidelity to such scores becomes important, a future chunk could add optional caps (likely thin horizontal segments matching the sub-bracket thickness extending rightward by ~0.4 sp). The `SUB_BRACKET_GAP_SS = 0.3` constant is empirical (engraved scores vary 0.25–0.5 sp); a future enhancement could tie it to a font-supplied value if SMuFL ever standardizes one. The shift-when-sub-brackets-present convention assumes the example's caller knows to widen the viewBox to accommodate the leftward-shifted main bracket — the example does this by setting `vb_x = -500` (vs. -300 in `grand_staff.rs`); the `MultiStaffScore` API will need a parallel adjustment when sub-brackets are exposed there. The shift conditional means the same `section(3)` group renders at two different x positions depending on `sub_brackets.is_empty()` — if a caller toggles sub-brackets at runtime, the staff origin x=0 stays fixed but the bracket position moves; this is the engraving-correct behavior but worth documenting if it surprises anyone.
+
+## 2026-05-17 — Post-v1, score-level `MultiStaffScore::with_sub_brackets(...)` builder
+
+- Did: Exposed sub-brackets at the score level. The prior chunk landed the
+  layout + render plumbing (`StaffGroup.sub_brackets`, `SubBracketLayout`,
+  `draw_sub_bracket`, the conditional leftward shift of the main bracket
+  when sub-brackets are present), but the high-level `MultiStaffScore` API
+  still hard-coded `sub_brackets: Vec::new()` in its `StaffGroup` literal —
+  callers using the score builder couldn't author nested grouping without
+  dropping down to the layout layer. This chunk wires the surface API
+  through end-to-end and locks the result with a golden.
+
+  Score (`src/score/multi_staff.rs`):
+  - New field `MultiStaffScore.sub_brackets: Vec<SubBracket>`. Initialized
+    to `Vec::new()` in all four constructors (`grand_staff`, `section`,
+    `independent`, `guitar_tab`) so existing callers stay byte-identical.
+  - New builder method `with_sub_brackets(self, Vec<SubBracket>) -> Self`
+    with doc explaining the bracket-only honour rule, the silently-dropped
+    invalid-entry contract (`staff_count < 2`, `start_index` out of range,
+    overshoot), the leftward shift behavior, and a complete usage example.
+    Doc note about which connectors ignore the list (brace, independent,
+    guitar+tab) preempts the obvious user confusion.
+  - The `StaffGroup` literal in `try_render_svg` now passes
+    `sub_brackets: self.sub_brackets.clone()` (was `Vec::new()`).
+  - Import added: `SubBracket` from `crate::layout::multi_staff`.
+
+  Layout re-exports (`src/layout/mod.rs`):
+  - Added `SubBracket, SubBracketLayout` to the `pub use multi_staff::{...}`
+    line so users importing from `music_engraver::layout::multi_staff` (or
+    the parent `music_engraver::layout`) don't have to dig into the nested
+    module path. The score-level doc example uses
+    `music_engraver::layout::multi_staff::SubBracket`.
+
+  Example (`examples/sub_brackets_score.rs`, new):
+  - Five-staff string-section layout (V1, V2, Va, Vc, Cb) with two nested
+    sub-brackets (staves 0..2 and 2..5) under the main section bracket.
+    Built through `MultiStaffScore::section(...).with_sub_brackets(...)`
+    — no layout-layer imports needed. Output: 22454 bytes, 37 paths,
+    66 lines. Asserts `<svg` prefix, `</svg>` suffix, presence of the
+    post-shift main-bracket scroll translate at `x=-315`, and at least
+    2 thin lines at `stroke-width="40"` (= SUB_BRACKET_THICKNESS_SS × 250).
+  - Used Clef::Treble for the viola line because `music::notation::clef::Clef`
+    has only Treble/Treble8va/Treble8ba/Bass variants — no Alto clef
+    exists in the music crate. Noted in passing; adding C-clef variants
+    is a separate music-crate concern outside the engraver port's scope.
+
+- Tests (+7 net, all in `score::multi_staff::tests`):
+
+  1. `section_with_sub_brackets_adds_thin_lines_for_each_sub_bracket` —
+     end-to-end count delta: a `section(4)` with 2 sub-brackets must
+     produce *exactly* 2 more `<line>` elements than the same score with
+     no sub-brackets, AND zero additional `<path>` elements (sub-brackets
+     carry no scroll glyphs). The exact-equality assertions are the canary
+     against (a) accidentally double-emitting sub-bracket lines, or
+     (b) regressing the inner bracket back to a scroll-decorated variant.
+
+  2. `section_with_sub_brackets_shifts_main_bracket_left` — the cross-
+     cutting geometric canary: asserts the baseline section's main
+     bracket scrolls anchor at `translate(-125,...)` (pre-shift x =
+     -BRACKET_THICKNESS_SS × 250), and the nested-bracket variant's
+     scrolls anchor at `translate(-315,...)` (post-shift x = -125 - 190,
+     where 190 = 0.76 sp × 250 = the gap+thickness+gap shift), AND the
+     nested SVG does NOT contain `translate(-125,`. The anti-needle
+     assertion is the direct anti-regression: a code change that drops
+     the conditional shift would put the pre-shift translate back into
+     the nested SVG and fire this test.
+
+  3. `brace_with_sub_brackets_is_silently_ignored` — invariant: calling
+     `.with_sub_brackets(...)` on a `MultiStaffScore::grand_staff(...)` must
+     produce SVG byte-identical to the same score without the call.
+     Asserts `assert_eq!(plain, with_subs)`. Locks the layout-side
+     conditional that filters sub-brackets out for non-Bracket connectors
+     all the way through to the rendered SVG.
+
+  4. `independent_staves_with_sub_brackets_is_silently_ignored` — same
+     invariant for `MultiStaffScore::independent(...)`. Byte-identical
+     assertion.
+
+  5. `section_with_no_sub_brackets_is_unchanged` — anti-regression for
+     the conditional leftward shift: a `section(N)` without sub-brackets
+     must render identically to the same `section(N)` with an *explicit*
+     empty `with_sub_brackets(vec![])`. Both paths should produce no shift.
+     Byte-identical assertion.
+
+  6. `section_with_invalid_sub_brackets_renders_same_as_no_sub_brackets`
+     — all-invalid entries (staff_count=1, start out of range, overshoots
+     end) must be filtered out at layout time AND produce no leftward
+     shift. Byte-identical to the no-sub-brackets case. This locks the
+     layout-side `has_sub_brackets = !resolved_sub_brackets.is_empty()`
+     check against a regression that bases the shift on the unfiltered
+     list (which would shift even when all entries are ultimately dropped).
+
+  7. `guitar_tab_with_sub_brackets_is_silently_ignored` — same invariant
+     for `MultiStaffScore::guitar_tab(...)`. A guitar+tab score has 1
+     notation staff, so even a `staff_count=2` sub-bracket overshoots and
+     is filtered out — the layout pass should drop it and the SVG must
+     stay byte-identical to the no-sub-brackets case.
+
+  Naming rationale: the `_is_silently_ignored` suffix repeats across
+  tests 3/4/7 because all three cover the same invariant (sub-brackets
+  dropped for non-Bracket connectors) but on different connector
+  variants. Keeping the names parallel makes the test set's coverage
+  matrix easy to read at a glance and easy to extend if a new connector
+  variant lands.
+
+  Golden (`tests/golden_svg.rs`, +1 frozen baseline):
+  - New `build_sub_brackets_score()` factory (helper inside the test file,
+    not the score module) builds the same 5-staff section as the example
+    but uses the test file's local `p(name, octave)` helper. Generated
+    `tests/golden/sub_brackets_score.svg` (22454 bytes) via
+    `GOLDEN_UPDATE=1`. New `golden_sub_brackets_score` test asserts
+    against the frozen baseline AND adds three structural guards
+    alongside the golden diff: (a) `translate(-315,` present (shift
+    happened), (b) `translate(-125,` absent (no pre-shift residue),
+    (c) `stroke-width="40"` appears ≥2× (one per sub-bracket), and
+    (d) `stroke-width="125"` appears ≥1× (main bracket vertical). The
+    "structural alongside golden" pattern follows the convention
+    established by `golden_lyrics`, `golden_chord_symbols_with_accidentals`
+    etc. — the golden text-diff catches general drift, the structural
+    asserts catch the specific bug pattern this chunk is supposed to
+    prevent.
+
+- Verified: `cargo check -p music-engraver` passes. `cargo check --workspace`
+  passes. `cargo clippy -p music-engraver --all-targets` — 0 new warnings
+  (1 pre-existing in `score/multi_staff.rs:394`; line drifted +50 from the
+  prior log's `:344` due to this chunk's added field + builder method).
+  `cargo test -p music-engraver --lib` — **2421 unit tests pass** (+7 vs
+  prior recorded 2414, all 7 in `score::multi_staff::tests`). `cargo test
+  -p music-engraver --test golden_svg` — **69 golden tests pass** (+1 new
+  `golden_sub_brackets_score`; the other 68 are byte-identical since none
+  of them use `.with_sub_brackets(...)` and the `Vec::new()` default
+  preserves prior behavior). `cargo test -p music-engraver --test
+  svg_glyph_render` — 3 integration tests pass. `cargo test -p
+  music-engraver --doc` — 13 doc tests pass, 1 ignored (+1 new doc test
+  for `MultiStaffScore::with_sub_brackets` — the docstring's example
+  compiles). `cargo build -p music-engraver --examples` builds all 93
+  examples (+1 vs prior recorded 90: this chunk added `sub_brackets_score`
+  and two earlier post-v1 chunks added two examples not reflected in the
+  earlier count). `cargo run -p music-engraver --example
+  sub_brackets_score` writes 22454-byte SVG with 37 paths + 66 lines;
+  example asserts pass.
+
+- Next: With sub-brackets now reachable through the high-level score API,
+  the natural follow-ups remain the same: **cross-system church rests**
+  (a multi-measure rest cluster that breaks across systems — currently
+  confined to one measure so no break logic exists); **per-note collision
+  detection in beamed additional voices** (open from prior trill work);
+  **line breaking** quality improvements (Gourlay extension or Bellini &
+  Nesi line-cost model on top of the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression** (text-diff already
+  exists; PHASH would catch glyph-data regressions that produce equivalent
+  text). The earlier "Next" list mentioned **PNG export** as a candidate;
+  per `Cargo.toml`'s `[features] png = [...]` and the existing
+  `examples/png_export.rs` + `src/render/png.rs`, PNG is already wired up
+  and tested; it can be struck from the candidate list.
+
+- Open issues: The shift-when-sub-brackets-present behavior makes the
+  default viewBox slightly tight for sub-bracket scores — the
+  `MultiStaffScore::try_render_svg` computes `vb_x = -vb_margin -
+  left_margin` where `left_margin = 2.0 * staff_space` for brackets, and
+  the shifted main-bracket scroll anchors at `x = -315` (= -1.26 sp).
+  With `staff_space = 250`, `left_margin = 500` and `vb_margin = 250`, so
+  `vb_x = -750` — comfortably to the left of the shifted scroll. The
+  margin is adequate for the current shift amount (190 fu) but is *not*
+  parametrized on `sub_brackets.is_empty()`. A future enhancement could
+  conditionally widen `left_margin` by the shift amount when sub-brackets
+  are present, but this would require regenerating any golden that uses a
+  sub-bracketed score — for the single new `sub_brackets_score` golden the
+  current viewBox is visibly fine. Documented here so the question doesn't
+  resurface.

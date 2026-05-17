@@ -23,6 +23,7 @@ use music_engraver::layout::glissando::GlissandoStyle;
 use music_engraver::layout::grace::GraceNoteKind;
 use music_engraver::layout::hairpin::HairpinType;
 use music_engraver::layout::key_signature::KeySignature;
+use music_engraver::layout::multi_staff::SubBracket;
 use music_engraver::layout::navigation::NavigationSign;
 use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::ottava::OttavaKind;
@@ -695,6 +696,34 @@ fn build_grand_staff() -> String {
     MultiStaffScore::grand_staff(treble, bass).render_svg()
 }
 
+/// Five-staff section with two nested sub-brackets (Violin I + Violin II
+/// share one inner bracket; Viola + Cello + Bass share another), under a
+/// single outer section bracket. Exercises the score-level
+/// `MultiStaffScore::with_sub_brackets(...)` builder end-to-end and locks
+/// the SVG output against unintended layout/render drift.
+fn build_sub_brackets_score() -> String {
+    fn line(clef: Clef, pitches: &[(&str, u8)]) -> ScoreBuilder {
+        let mut b = ScoreBuilder::new().clef(clef).time_signature(4, 4);
+        for (n, oct) in pitches {
+            b = b.note(p(n, *oct), Duration::QTR);
+        }
+        b.end_barline()
+    }
+
+    let v1 = line(Clef::Treble, &[("E", 5), ("G", 5), ("A", 5), ("B", 5)]);
+    let v2 = line(Clef::Treble, &[("C", 5), ("E", 5), ("F", 5), ("G", 5)]);
+    let va = line(Clef::Treble, &[("G", 4), ("A", 4), ("B", 4), ("C", 5)]);
+    let vc = line(Clef::Bass, &[("E", 3), ("G", 3), ("A", 3), ("B", 3)]);
+    let cb = line(Clef::Bass, &[("E", 2), ("E", 2), ("E", 2), ("E", 2)]);
+
+    MultiStaffScore::section(vec![v1, v2, va, vc, cb])
+        .with_sub_brackets(vec![
+            SubBracket { start_index: 0, staff_count: 2 },
+            SubBracket { start_index: 2, staff_count: 3 },
+        ])
+        .render_svg()
+}
+
 /// Lyrics: syllables with hyphens and extenders under notes.
 fn build_lyrics() -> String {
     ScoreBuilder::new()
@@ -1298,6 +1327,47 @@ fn golden_optimal_breaks() {
 #[test]
 fn golden_grand_staff() {
     assert_golden("grand_staff", &build_grand_staff());
+}
+
+#[test]
+fn golden_sub_brackets_score() {
+    let svg = build_sub_brackets_score();
+
+    // Structural guards alongside the frozen baseline. These would have
+    // caught the bugs that the score-level `with_sub_brackets(...)` builder
+    // is specifically introduced to prevent.
+
+    // The main bracket is shifted left by 0.76 sp = 190 fu to make room
+    // for the sub-brackets, so the scroll glyphs anchor at x = -315
+    // (= -125 - 190). A regression that loses the shift would put the
+    // scroll back at x = -125.
+    assert!(
+        svg.contains("translate(-315,"),
+        "main bracket scrolls should anchor at x=-315 after the leftward shift"
+    );
+    assert!(
+        !svg.contains("translate(-125,"),
+        "main bracket scrolls must NOT anchor at the pre-shift x=-125"
+    );
+
+    // Sub-brackets render as thin <line> elements with the SMuFL
+    // `subBracketThickness` engraving default (0.16 sp = 40 fu). The
+    // baseline must contain at least 2 such lines (one per sub-bracket).
+    let thin_count = svg.matches("stroke-width=\"40\"").count();
+    assert!(
+        thin_count >= 2,
+        "expected ≥2 sub-bracket lines at stroke-width=40, got {thin_count}"
+    );
+
+    // The main bracket's thick line is at stroke-width = 125 fu
+    // (BRACKET_THICKNESS_SS=0.5 × 250). One main bracket → at least 1 hit.
+    let main_count = svg.matches("stroke-width=\"125\"").count();
+    assert!(
+        main_count >= 1,
+        "expected ≥1 main-bracket thick line at stroke-width=125, got {main_count}"
+    );
+
+    assert_golden("sub_brackets_score", &svg);
 }
 
 #[test]

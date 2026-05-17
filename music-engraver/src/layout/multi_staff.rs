@@ -36,6 +36,25 @@ pub struct StaffGroup {
     pub connector: ConnectorKind,
     /// Whether barlines are drawn continuously through all staves in the group.
     pub joined_barlines: bool,
+    /// Inner sub-bracket groupings, each spanning a contiguous range of staves
+    /// within this group. Drawn as a thinner inner bracket sitting just to the
+    /// right of the main bracket — the standard published-engraving convention
+    /// (Gould, Behind Bars; Lilypond's `StaffGroup` ↔ `GrandStaff` nesting)
+    /// for two-deep section grouping (e.g. Violin I + Violin II share an
+    /// inner bracket within the larger string-section bracket). Only honoured
+    /// when `connector == ConnectorKind::Bracket`; ignored otherwise.
+    pub sub_brackets: Vec<SubBracket>,
+}
+
+/// A nested sub-bracket grouping a contiguous range of staves within a parent
+/// [`StaffGroup`]. Indexes are 0-based and refer to staves in the parent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SubBracket {
+    /// Index of the first staff (0-based, within the parent group).
+    pub start_index: usize,
+    /// Number of staves spanned. Must be >= 2 to produce visible output;
+    /// values of 0 or 1 are silently dropped by [`layout_multi_staff`].
+    pub staff_count: usize,
 }
 
 impl StaffGroup {
@@ -45,6 +64,7 @@ impl StaffGroup {
             staff_count: 2,
             connector: ConnectorKind::Brace,
             joined_barlines: true,
+            sub_brackets: Vec::new(),
         }
     }
 
@@ -54,6 +74,7 @@ impl StaffGroup {
             staff_count,
             connector: ConnectorKind::Bracket,
             joined_barlines: true,
+            sub_brackets: Vec::new(),
         }
     }
 
@@ -63,7 +84,15 @@ impl StaffGroup {
             staff_count,
             connector: ConnectorKind::None,
             joined_barlines: false,
+            sub_brackets: Vec::new(),
         }
+    }
+
+    /// Replace this group's sub-bracket list. Convenience for the builder
+    /// style: `StaffGroup::section(5).with_sub_brackets(vec![...])`.
+    pub fn with_sub_brackets(mut self, sub_brackets: Vec<SubBracket>) -> Self {
+        self.sub_brackets = sub_brackets;
+        self
     }
 }
 
@@ -71,8 +100,18 @@ impl StaffGroup {
 pub const INTER_STAFF_GAP_SS: f64 = 6.0;
 /// Brace glyph placement offset from the staff edge, in staff spaces.
 pub const BRACE_LEFT_OFFSET_SS: f64 = 0.5;
-/// Bracket line thickness, in staff spaces.
+/// Bracket line thickness, in staff spaces. Matches Bravura's
+/// `bracketThickness` engraving default.
 pub const BRACKET_THICKNESS_SS: f64 = 0.5;
+/// Sub-bracket line thickness, in staff spaces. Matches Bravura's
+/// `subBracketThickness` engraving default; thinner than the main bracket so
+/// nested grouping reads visually subordinate.
+pub const SUB_BRACKET_THICKNESS_SS: f64 = 0.16;
+/// Horizontal gap between the right edge of the main bracket's thick line
+/// and the left edge of the inner sub-bracket, in staff spaces. Empirical
+/// engraving convention — large enough that the two brackets do not visually
+/// merge, small enough that the nested pair reads as one structure.
+pub const SUB_BRACKET_GAP_SS: f64 = 0.3;
 
 /// Computed geometry for a brace connector.
 ///
@@ -141,6 +180,29 @@ pub struct BracketLayout {
     pub bottom_glyph: Glyph,
 }
 
+/// Computed geometry for a nested sub-bracket.
+///
+/// Rendered as a thin vertical line (no scroll decoration — Lilypond's
+/// convention for two-deep section grouping) sitting just to the right of
+/// the parent bracket's thick line. The renderer draws a single stroked
+/// line; no SMuFL glyph is required at the sub-bracket size (Bravura
+/// provides scroll glyphs for the main bracket only, and conventional
+/// engraving omits scrolls on the inner bracket so the nesting reads
+/// hierarchically).
+#[derive(Clone, Debug)]
+pub struct SubBracketLayout {
+    /// X position of the sub-bracket's thin vertical line (left edge of the
+    /// stroked region).
+    pub x: f64,
+    /// Y of the top of the line (top of the first staff in the sub-group).
+    pub y_top: f64,
+    /// Y of the bottom of the line (bottom of the last staff in the sub-group).
+    pub y_bottom: f64,
+    /// Thickness of the line, in font design units. From SMuFL's
+    /// `subBracketThickness` engraving default.
+    pub thickness: f64,
+}
+
 /// Computed vertical positions for staves in a multi-staff system.
 #[derive(Clone, Debug)]
 pub struct MultiStaffLayout {
@@ -154,6 +216,11 @@ pub struct MultiStaffLayout {
     pub brace: Option<BraceLayout>,
     /// Optional bracket geometry (if connector is `Bracket`).
     pub bracket: Option<BracketLayout>,
+    /// Inner sub-bracket geometries, one per valid `SubBracket` in the parent
+    /// group. Empty unless the group is bracketed AND supplied sub-brackets.
+    /// A `SubBracket` with `staff_count < 2` or that overshoots the parent's
+    /// range is silently dropped here rather than turned into a layout entry.
+    pub sub_brackets: Vec<SubBracketLayout>,
 }
 
 impl MultiStaffLayout {
@@ -209,12 +276,43 @@ pub fn layout_multi_staff(
         None
     };
 
+    // Sub-brackets are honoured only inside a Bracket-connected group.
+    // Resolve valid entries first; the resolved list both shapes the main
+    // bracket's x-offset (so it shifts left to make room) and populates the
+    // returned layout.
+    let resolved_sub_brackets: Vec<&SubBracket> = if group.connector == ConnectorKind::Bracket {
+        group
+            .sub_brackets
+            .iter()
+            .filter(|sb| {
+                sb.staff_count >= 2
+                    && sb.start_index < group.staff_count
+                    && sb.start_index + sb.staff_count <= group.staff_count
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let has_sub_brackets = !resolved_sub_brackets.is_empty();
+
+    // The main bracket's left edge sits at -bracket_thickness when no
+    // sub-brackets are present (its right edge meets the staff at x=0). With
+    // sub-brackets, the main bracket shifts left by enough to accommodate
+    // (gap + sub_bracket_thickness + gap) — leaving the sub-bracket nested
+    // between the main bracket's right edge and the staff origin.
+    let main_bracket_x = if has_sub_brackets {
+        -(BRACKET_THICKNESS_SS + SUB_BRACKET_GAP_SS + SUB_BRACKET_THICKNESS_SS + SUB_BRACKET_GAP_SS)
+            * staff_space
+    } else {
+        -BRACKET_THICKNESS_SS * staff_space
+    };
+
     let bracket = if group.connector == ConnectorKind::Bracket && group.staff_count >= 2 {
         let y_top = staff_y_origins[0];
         let y_bottom = staff_y_origins[group.staff_count - 1] + staff_height;
 
         Some(BracketLayout {
-            x: -BRACKET_THICKNESS_SS * staff_space,
+            x: main_bracket_x,
             y_top,
             y_bottom,
             thickness: BRACKET_THICKNESS_SS * staff_space,
@@ -225,12 +323,41 @@ pub fn layout_multi_staff(
         None
     };
 
+    // Sub-bracket geometry: each sub-bracket spans `staff_count` staves
+    // starting at `start_index`. Its line sits one gap to the right of the
+    // main bracket's right edge — `main_bracket_x + bracket_thickness + gap`
+    // (the SUB_BRACKET_GAP_SS just inside the sub-bracket; another gap exists
+    // between sub-bracket and staff origin, baked into `main_bracket_x`).
+    let sub_bracket_layouts: Vec<SubBracketLayout> = if has_sub_brackets {
+        let main_right_edge = main_bracket_x + BRACKET_THICKNESS_SS * staff_space;
+        let sub_x = main_right_edge + SUB_BRACKET_GAP_SS * staff_space;
+        let sub_thickness = SUB_BRACKET_THICKNESS_SS * staff_space;
+        resolved_sub_brackets
+            .iter()
+            .map(|sb| {
+                let first = sb.start_index;
+                let last = sb.start_index + sb.staff_count - 1;
+                let y_top = staff_y_origins[first];
+                let y_bottom = staff_y_origins[last] + staff_height;
+                SubBracketLayout {
+                    x: sub_x,
+                    y_top,
+                    y_bottom,
+                    thickness: sub_thickness,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     MultiStaffLayout {
         staff_y_origins,
         inter_staff_gap: gap,
         staff_space,
         brace,
         bracket,
+        sub_brackets: sub_bracket_layouts,
     }
 }
 
@@ -406,6 +533,7 @@ mod tests {
             staff_count: 1,
             connector: ConnectorKind::Brace,
             joined_barlines: false,
+            sub_brackets: Vec::new(),
         };
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
 
@@ -519,5 +647,202 @@ mod tests {
             "bracket.x: expected {expected_x}, got {}",
             bracket.x
         );
+    }
+
+    #[test]
+    fn no_sub_brackets_emitted_when_group_has_none() {
+        let group = StaffGroup::section(4);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        assert!(layout.sub_brackets.is_empty());
+    }
+
+    #[test]
+    fn sub_brackets_ignored_for_non_bracket_connector() {
+        // Sub-brackets only render inside a Bracket-connected group. Setting
+        // them on a Brace or None group is a no-op rather than an error.
+        let group = StaffGroup::grand_staff()
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        assert!(
+            layout.sub_brackets.is_empty(),
+            "Brace-connected group must drop sub-brackets, got {:?}",
+            layout.sub_brackets
+        );
+
+        let group_none = StaffGroup::independent(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout_none = layout_multi_staff(&group_none, 0.0, SS, 5000.0);
+        assert!(layout_none.sub_brackets.is_empty());
+    }
+
+    #[test]
+    fn sub_bracket_emitted_for_valid_range() {
+        // A single sub-bracket spanning staves 0..2 within a 5-staff bracket
+        // group (e.g. Violin I + Violin II within a string section).
+        let group = StaffGroup::section(5)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+
+        assert_eq!(layout.sub_brackets.len(), 1);
+        let sb = &layout.sub_brackets[0];
+        // y_top matches the first spanned staff's origin (staff 0 → y_start).
+        assert_eq!(sb.y_top, 0.0);
+        // y_bottom matches the last spanned staff's bottom (staff 1).
+        let staff_height = SS * 4.0;
+        let expected_bottom = layout.staff_y_origins[1] + staff_height;
+        assert!(
+            (sb.y_bottom - expected_bottom).abs() < 1e-6,
+            "sub_bracket.y_bottom: expected {expected_bottom}, got {}",
+            sb.y_bottom
+        );
+    }
+
+    #[test]
+    fn sub_bracket_thickness_matches_smufl_default() {
+        let group = StaffGroup::section(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let sb = &layout.sub_brackets[0];
+        // Bravura's `subBracketThickness` is 0.16 staff-spaces.
+        let expected = SUB_BRACKET_THICKNESS_SS * SS;
+        assert!(
+            (sb.thickness - expected).abs() < 1e-6,
+            "sub_bracket.thickness: expected {expected}, got {}",
+            sb.thickness
+        );
+        // Sub-bracket is meaningfully thinner than the main bracket so the
+        // nesting hierarchy is visually unambiguous.
+        let main_thickness = BRACKET_THICKNESS_SS * SS;
+        assert!(
+            sb.thickness < main_thickness,
+            "sub_bracket thickness {} must be < main bracket thickness {}",
+            sb.thickness, main_thickness
+        );
+    }
+
+    #[test]
+    fn sub_bracket_sits_inside_main_bracket() {
+        // When sub-brackets are present, the main bracket shifts left to make
+        // room and the sub-bracket sits between the main bracket's right edge
+        // and the staff origin (x=0). This test pins the exact x-positions
+        // against the SS-scaled engraving-default constants so a regression
+        // that drops the shift or the gap fires.
+        let group = StaffGroup::section(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let main = layout.bracket.as_ref().unwrap();
+        let sb = &layout.sub_brackets[0];
+
+        // Main bracket x shifts left by (gap + sub_thickness + gap):
+        // x = -(0.5 + 0.3 + 0.16 + 0.3) * SS = -1.26 * SS.
+        let expected_main_x =
+            -(BRACKET_THICKNESS_SS + SUB_BRACKET_GAP_SS + SUB_BRACKET_THICKNESS_SS
+                + SUB_BRACKET_GAP_SS)
+                * SS;
+        assert!(
+            (main.x - expected_main_x).abs() < 1e-6,
+            "main bracket.x with sub-brackets: expected {expected_main_x}, got {}",
+            main.x
+        );
+        // Sub-bracket x = main_right_edge + gap = -(sub_thickness + gap) * SS.
+        let expected_sb_x = -(SUB_BRACKET_THICKNESS_SS + SUB_BRACKET_GAP_SS) * SS;
+        assert!(
+            (sb.x - expected_sb_x).abs() < 1e-6,
+            "sub_bracket.x: expected {expected_sb_x}, got {}",
+            sb.x
+        );
+        // Verify the geometric relationships: main is left of sub; sub is
+        // left of the staff origin; there's a gap between them.
+        assert!(main.x < sb.x, "main bracket must be left of sub-bracket");
+        assert!(sb.x + sb.thickness < 0.0, "sub-bracket must end before staff origin");
+        let gap_between = sb.x - (main.x + main.thickness);
+        let expected_gap = SUB_BRACKET_GAP_SS * SS;
+        assert!(
+            (gap_between - expected_gap).abs() < 1e-6,
+            "gap between main bracket right edge and sub-bracket left edge: \
+             expected {expected_gap}, got {gap_between}"
+        );
+    }
+
+    #[test]
+    fn main_bracket_x_unchanged_when_no_sub_brackets() {
+        // Anti-regression for the conditional shift: a section bracket with
+        // no sub-brackets must keep its previous x position so existing
+        // visual baselines (e.g. the `grand_staff` golden, the
+        // `multi_staff_cross_system` golden) stay byte-identical.
+        let group = StaffGroup::section(3);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let main = layout.bracket.as_ref().unwrap();
+        let expected = -BRACKET_THICKNESS_SS * SS;
+        assert!(
+            (main.x - expected).abs() < 1e-6,
+            "main bracket.x without sub-brackets: expected {expected}, got {}",
+            main.x
+        );
+    }
+
+    #[test]
+    fn multiple_sub_brackets_each_produce_one_layout() {
+        // 6 staves: two nested sub-brackets covering staves 0..2 and 3..5.
+        // Mirrors a string section with Violin I/II grouped + Viola/Cello
+        // grouped inside a single Bracket.
+        let group = StaffGroup::section(6).with_sub_brackets(vec![
+            SubBracket { start_index: 0, staff_count: 2 },
+            SubBracket { start_index: 3, staff_count: 3 },
+        ]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        assert_eq!(layout.sub_brackets.len(), 2);
+
+        let staff_height = SS * 4.0;
+        // First sub-bracket spans staves 0..1.
+        let sb0 = &layout.sub_brackets[0];
+        assert_eq!(sb0.y_top, layout.staff_y_origins[0]);
+        assert!(
+            (sb0.y_bottom - (layout.staff_y_origins[1] + staff_height)).abs() < 1e-6
+        );
+        // Second sub-bracket spans staves 3..5.
+        let sb1 = &layout.sub_brackets[1];
+        assert_eq!(sb1.y_top, layout.staff_y_origins[3]);
+        assert!(
+            (sb1.y_bottom - (layout.staff_y_origins[5] + staff_height)).abs() < 1e-6
+        );
+        // Both sub-brackets share x (they sit in the same vertical column
+        // just inside the main bracket).
+        assert!((sb0.x - sb1.x).abs() < 1e-6);
+        // And neither is identical: they cover different vertical ranges.
+        assert_ne!(sb0.y_top, sb1.y_top);
+    }
+
+    #[test]
+    fn invalid_sub_brackets_silently_dropped() {
+        // 4-staff group with three invalid sub-bracket entries and one
+        // valid one. Only the valid entry should produce a layout. The
+        // invalid cases: (a) staff_count = 1 (single staff is not a group),
+        // (b) start_index out of range, (c) range overshoots parent.
+        let group = StaffGroup::section(4).with_sub_brackets(vec![
+            SubBracket { start_index: 0, staff_count: 1 },  // too small
+            SubBracket { start_index: 4, staff_count: 2 },  // start out of range
+            SubBracket { start_index: 2, staff_count: 5 },  // overshoots end
+            SubBracket { start_index: 0, staff_count: 2 },  // valid
+        ]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        assert_eq!(
+            layout.sub_brackets.len(),
+            1,
+            "only the one valid sub-bracket should produce a layout entry"
+        );
+    }
+
+    #[test]
+    fn sub_bracket_full_span_equals_parent_bracket_span() {
+        // A sub-bracket covering the entire parent group should span exactly
+        // the same y range as the main bracket. Confirms y math agrees.
+        let group = StaffGroup::section(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 3 }]);
+        let layout = layout_multi_staff(&group, 50.0, SS, 5000.0);
+        let main = layout.bracket.as_ref().unwrap();
+        let sb = &layout.sub_brackets[0];
+        assert!((sb.y_top - main.y_top).abs() < 1e-6);
+        assert!((sb.y_bottom - main.y_bottom).abs() < 1e-6);
     }
 }

@@ -3,7 +3,7 @@
 //! Draws the visual connectors that group staves at the left edge of a system.
 
 use crate::font::{FontError, MusicFont};
-use crate::layout::multi_staff::{BraceLayout, BracketLayout, MultiStaffLayout};
+use crate::layout::multi_staff::{BraceLayout, BracketLayout, MultiStaffLayout, SubBracketLayout};
 use crate::render::SvgWriter;
 
 /// Draw a brace connector (curly brace for piano/keyboard).
@@ -179,9 +179,34 @@ fn bracket_anchor(
     }
 }
 
+/// Draw a nested sub-bracket as a thin vertical line.
+///
+/// Sub-brackets indicate two-deep grouping within a section bracket (e.g.
+/// Violin I + Violin II nested inside a string-section bracket). Per the
+/// engraving convention adopted here (Behind Bars; Lilypond's `StaffGroup`
+/// inside `StaffGroup` rendering), the inner bracket has **no scroll
+/// decoration** — only a thinner vertical line sized by SMuFL's
+/// `subBracketThickness` engraving default. This keeps the nesting reading
+/// as visually subordinate to the main bracket's scrolled outline.
+///
+/// Stroke geometry mirrors the main bracket's: the line is drawn centred at
+/// `sub.x + sub.thickness / 2.0`, so the stroked region extends from
+/// `sub.x` (left edge) to `sub.x + sub.thickness` (right edge).
+pub fn draw_sub_bracket(svg: &mut SvgWriter, sub: &SubBracketLayout) {
+    svg.add_line(
+        sub.x + sub.thickness / 2.0,
+        sub.y_top,
+        sub.x + sub.thickness / 2.0,
+        sub.y_bottom,
+        "black",
+        sub.thickness,
+    );
+}
+
 /// Draw all connectors for a multi-staff layout.
 ///
-/// Dispatches to [`draw_brace`] or [`draw_bracket`] based on the layout.
+/// Dispatches to [`draw_brace`] / [`draw_bracket`] / [`draw_sub_bracket`]
+/// based on the layout's optional fields and sub-bracket list.
 pub fn draw_multi_staff_connectors(
     svg: &mut SvgWriter,
     font: &MusicFont,
@@ -192,6 +217,9 @@ pub fn draw_multi_staff_connectors(
     }
     if let Some(ref bracket) = layout.bracket {
         draw_bracket(svg, font, bracket)?;
+    }
+    for sub in &layout.sub_brackets {
+        draw_sub_bracket(svg, sub);
     }
     Ok(())
 }
@@ -214,7 +242,9 @@ pub fn draw_joined_barline(
 mod tests {
     use super::*;
     use crate::font::bravura_font;
-    use crate::layout::multi_staff::{layout_multi_staff, StaffGroup};
+    use crate::layout::multi_staff::{
+        layout_multi_staff, StaffGroup, SubBracket, SUB_BRACKET_THICKNESS_SS,
+    };
 
     const SS: f64 = 250.0;
 
@@ -837,6 +867,204 @@ mod tests {
         assert!(
             output.contains(&bot_needle),
             "fallback bottom translate `{bot_needle}` not found; SVG:\n{output}"
+        );
+    }
+
+    // ---------- Sub-bracket rendering ----------
+
+    #[test]
+    fn draw_sub_bracket_produces_one_thin_line() {
+        // A sub-bracket should render as a single thin vertical line — no
+        // scroll glyphs, no serifs. Catches a regression that accidentally
+        // attaches scroll paths or extra horizontal serifs to the inner
+        // bracket (defeating the engraving convention that the inner bracket
+        // reads as subordinate).
+        let group = StaffGroup::section(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let sub = &layout.sub_brackets[0];
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 4000.0);
+        draw_sub_bracket(&mut svg, sub);
+        let output = svg.to_svg();
+
+        let path_count = output.matches("<path").count();
+        let line_count = output.matches("<line").count();
+        assert_eq!(line_count, 1, "sub-bracket: exactly 1 line, got {line_count}");
+        assert_eq!(path_count, 0, "sub-bracket: no paths (no scrolls), got {path_count}");
+    }
+
+    #[test]
+    fn draw_sub_bracket_uses_sub_bracket_thickness() {
+        // Stroke width must equal `sub.thickness` (≈ 0.16 ss). A regression
+        // that hard-coded `bracket_thickness` (0.5 ss) for the inner bracket
+        // would visually merge with the outer one.
+        let group = StaffGroup::section(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let sub = &layout.sub_brackets[0];
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 4000.0);
+        draw_sub_bracket(&mut svg, sub);
+        let output = svg.to_svg();
+
+        let needle = format!("stroke-width=\"{}\"", sub.thickness);
+        assert!(
+            output.contains(&needle),
+            "sub-bracket must use stroke-width={}; SVG:\n{output}",
+            sub.thickness
+        );
+        // Sanity: the thickness substring corresponds to the SMuFL
+        // `subBracketThickness` default (0.16 ss × SS = 40 design units).
+        let expected = SUB_BRACKET_THICKNESS_SS * SS;
+        assert!(
+            (sub.thickness - expected).abs() < 1e-6,
+            "sub.thickness layout drift: expected {expected}, got {}",
+            sub.thickness
+        );
+    }
+
+    #[test]
+    fn draw_sub_bracket_line_spans_y_range() {
+        // The drawn line's `y1`/`y2` SVG attributes must match the layout's
+        // `y_top`/`y_bottom`. A regression that swaps the endpoints (or only
+        // draws half the line) is caught here. The x coordinate is the
+        // stroke centre — sub.x + thickness/2.
+        let group = StaffGroup::section(4)
+            .with_sub_brackets(vec![SubBracket { start_index: 1, staff_count: 3 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let sub = &layout.sub_brackets[0];
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 6000.0);
+        draw_sub_bracket(&mut svg, sub);
+        let output = svg.to_svg();
+
+        let x_centre = sub.x + sub.thickness / 2.0;
+        // SvgWriter::add_line emits attributes in the order x1, y1, x2, y2.
+        let needle_x1 = format!("x1=\"{}\"", x_centre);
+        let needle_y1 = format!("y1=\"{}\"", sub.y_top);
+        let needle_x2 = format!("x2=\"{}\"", x_centre);
+        let needle_y2 = format!("y2=\"{}\"", sub.y_bottom);
+        assert!(output.contains(&needle_x1), "missing {needle_x1}; SVG:\n{output}");
+        assert!(output.contains(&needle_y1), "missing {needle_y1}; SVG:\n{output}");
+        assert!(output.contains(&needle_x2), "missing {needle_x2}; SVG:\n{output}");
+        assert!(output.contains(&needle_y2), "missing {needle_y2}; SVG:\n{output}");
+        // Sanity: the y range matches the staves the sub-bracket spans
+        // (staves 1..3, i.e. staves 1, 2, 3 inclusive).
+        let staff_height = SS * 4.0;
+        let expected_y_top = layout.staff_y_origins[1];
+        let expected_y_bottom = layout.staff_y_origins[3] + staff_height;
+        assert!(
+            (sub.y_top - expected_y_top).abs() < 1e-6,
+            "sub.y_top: expected {expected_y_top}, got {}", sub.y_top
+        );
+        assert!(
+            (sub.y_bottom - expected_y_bottom).abs() < 1e-6,
+            "sub.y_bottom: expected {expected_y_bottom}, got {}", sub.y_bottom
+        );
+    }
+
+    #[test]
+    fn draw_multi_staff_connectors_renders_main_and_sub_brackets() {
+        // End-to-end: a bracket group with one sub-bracket should emit:
+        //   * 1 main-bracket thick line + 2 scroll paths
+        //   * 1 sub-bracket thin line
+        // → total 2 lines + 2 paths. This locks the count delta added by
+        // sub-brackets specifically (compare with the no-sub-brackets
+        // baseline test `draw_multi_staff_connectors_bracket` which asserts
+        // 1 line + 2 paths).
+        let group = StaffGroup::section(3)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let font = bravura_font();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 4000.0);
+        draw_multi_staff_connectors(&mut svg, &font, &layout).unwrap();
+
+        let output = svg.to_svg();
+        let line_count = output.matches("<line").count();
+        let path_count = output.matches("<path").count();
+        assert_eq!(line_count, 2, "main thick + sub thin = 2 lines, got {line_count}");
+        assert_eq!(path_count, 2, "2 scroll-glyph paths, got {path_count}");
+    }
+
+    #[test]
+    fn draw_multi_staff_connectors_two_sub_brackets_emit_two_thin_lines() {
+        // With N sub-brackets the connector pass must emit exactly N
+        // additional thin lines over the main-bracket baseline. Locks the
+        // 1:1 layout→render mapping for sub-brackets.
+        let group = StaffGroup::section(6).with_sub_brackets(vec![
+            SubBracket { start_index: 0, staff_count: 2 },
+            SubBracket { start_index: 3, staff_count: 3 },
+        ]);
+        let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
+        let font = bravura_font();
+
+        let mut svg = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 8000.0, 6000.0);
+        draw_multi_staff_connectors(&mut svg, &font, &layout).unwrap();
+
+        let output = svg.to_svg();
+        let line_count = output.matches("<line").count();
+        // 1 main thick line + 2 sub thin lines = 3.
+        assert_eq!(line_count, 3, "expected 3 lines; SVG:\n{output}");
+        // Each of the two sub-brackets must contribute its own y-range.
+        let sub0_y1 = format!("y1=\"{}\"", layout.sub_brackets[0].y_top);
+        let sub1_y1 = format!("y1=\"{}\"", layout.sub_brackets[1].y_top);
+        assert!(output.contains(&sub0_y1), "missing sub-bracket 0 y1; SVG:\n{output}");
+        assert!(output.contains(&sub1_y1), "missing sub-bracket 1 y1; SVG:\n{output}");
+        // The two y1 substrings must be distinct strings (the two sub-brackets
+        // start at different y-coordinates by construction).
+        assert_ne!(sub0_y1, sub1_y1);
+    }
+
+    #[test]
+    fn main_bracket_x_shifts_left_when_sub_bracket_present_end_to_end() {
+        // Render the same section group twice — once without sub-brackets,
+        // once with — and verify the SVGs differ in the main-bracket
+        // vertical-line x position. The presence of a sub-bracket must
+        // push the main bracket leftward in the rendered output (not just
+        // in the layout).
+        let font = bravura_font();
+        let staff_count = 3;
+
+        let plain = StaffGroup::section(staff_count);
+        let plain_layout = layout_multi_staff(&plain, 0.0, SS, 5000.0);
+        let mut svg_plain = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 4000.0);
+        draw_multi_staff_connectors(&mut svg_plain, &font, &plain_layout).unwrap();
+        let out_plain = svg_plain.to_svg();
+
+        let nested = StaffGroup::section(staff_count)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let nested_layout = layout_multi_staff(&nested, 0.0, SS, 5000.0);
+        let mut svg_nested = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 4000.0);
+        draw_multi_staff_connectors(&mut svg_nested, &font, &nested_layout).unwrap();
+        let out_nested = svg_nested.to_svg();
+
+        // The plain SVG must contain the unshifted main-bracket stroke centre
+        // (at -BRACKET_THICKNESS_SS/2 * SS = -62.5).
+        let plain_centre = format!(
+            "x1=\"{}\"",
+            plain_layout.bracket.as_ref().unwrap().x
+                + plain_layout.bracket.as_ref().unwrap().thickness / 2.0
+        );
+        assert!(out_plain.contains(&plain_centre), "plain centre missing");
+
+        // The nested SVG must contain the shifted main-bracket stroke centre
+        // — strictly further left than the plain centre — AND must NOT contain
+        // the plain (unshifted) centre.
+        let nested_main = nested_layout.bracket.as_ref().unwrap();
+        let nested_centre = format!("x1=\"{}\"", nested_main.x + nested_main.thickness / 2.0);
+        assert!(out_nested.contains(&nested_centre), "nested centre missing");
+        assert!(
+            !out_nested.contains(&plain_centre),
+            "regression: nested-bracket SVG must NOT keep the plain centre x"
+        );
+        // Numeric verification of the leftward shift.
+        assert!(
+            nested_main.x < plain_layout.bracket.as_ref().unwrap().x,
+            "expected nested main.x ({}) < plain main.x ({})",
+            nested_main.x,
+            plain_layout.bracket.as_ref().unwrap().x,
         );
     }
 }

@@ -6,7 +6,7 @@
 use crate::font::bravura_font;
 use crate::layout::measure::MeasureLayoutConfig;
 use crate::layout::multi_staff::{
-    layout_multi_staff, ConnectorKind, StaffGroup,
+    layout_multi_staff, ConnectorKind, StaffGroup, SubBracket,
 };
 use crate::layout::page::{break_measures_auto, break_measures_optimal, PageSystem, SystemBreaking};
 use crate::layout::staff::StaffLayout;
@@ -76,6 +76,13 @@ pub struct MultiStaffScore {
     show_measure_numbers: bool,
     /// Optional tablature stave rendered below the standard notation staves.
     tab_stave: Option<TabScoreBuilder>,
+    /// Nested sub-bracket groupings within a [`ConnectorKind::Bracket`]
+    /// connector. Only honoured when the connector is a bracket; ignored
+    /// (silently dropped at layout time) for braces, independent staves,
+    /// and guitar+tab scores. The empty default means the score renders
+    /// identically to one without sub-brackets, preserving golden parity
+    /// for all existing scores.
+    sub_brackets: Vec<SubBracket>,
 }
 
 impl MultiStaffScore {
@@ -93,6 +100,7 @@ impl MultiStaffScore {
             optimal_breaks: false,
             show_measure_numbers: false,
             tab_stave: None,
+            sub_brackets: Vec::new(),
         }
     }
 
@@ -108,6 +116,7 @@ impl MultiStaffScore {
             optimal_breaks: false,
             show_measure_numbers: false,
             tab_stave: None,
+            sub_brackets: Vec::new(),
         }
     }
 
@@ -123,6 +132,7 @@ impl MultiStaffScore {
             optimal_breaks: false,
             show_measure_numbers: false,
             tab_stave: None,
+            sub_brackets: Vec::new(),
         }
     }
 
@@ -165,6 +175,7 @@ impl MultiStaffScore {
             optimal_breaks: false,
             show_measure_numbers: false,
             tab_stave: Some(tab),
+            sub_brackets: Vec::new(),
         }
     }
 
@@ -215,6 +226,45 @@ impl MultiStaffScore {
     /// above the top staff. Only the topmost stave displays numbers.
     pub fn show_measure_numbers(mut self) -> Self {
         self.show_measure_numbers = true;
+        self
+    }
+
+    /// Replace the score's nested sub-bracket list — inner brackets drawn
+    /// just to the right of the main section bracket, grouping contiguous
+    /// ranges of staves into instrument families (e.g. Violin I + Violin II
+    /// share a sub-bracket inside the larger string-section bracket).
+    ///
+    /// Each [`SubBracket`] specifies a `start_index` (0-based, into the
+    /// notation staves of this score) and a `staff_count`. Entries with
+    /// `staff_count < 2`, `start_index >= staves.len()`, or that overshoot
+    /// the end are silently dropped at layout time.
+    ///
+    /// Only honoured for [`MultiStaffScore::section`] (i.e. a bracket
+    /// connector). On a grand-staff, independent staves, or guitar+tab
+    /// score this list is set but ignored by the layout pass — the
+    /// generated SVG is identical to the no-sub-brackets case.
+    ///
+    /// When at least one valid sub-bracket is present, the main bracket
+    /// shifts left by `(SUB_BRACKET_GAP_SS + SUB_BRACKET_THICKNESS_SS +
+    /// SUB_BRACKET_GAP_SS)` staff-spaces to make room for the inner
+    /// bracket between its right edge and the staff origin.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use music_engraver::layout::multi_staff::SubBracket;
+    /// use music_engraver::score::multi_staff::MultiStaffScore;
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// let staves: Vec<ScoreBuilder> = (0..5).map(|_| ScoreBuilder::new()).collect();
+    /// let _svg = MultiStaffScore::section(staves)
+    ///     .with_sub_brackets(vec![
+    ///         SubBracket { start_index: 0, staff_count: 2 },
+    ///         SubBracket { start_index: 2, staff_count: 3 },
+    ///     ])
+    ///     .render_svg();
+    /// ```
+    pub fn with_sub_brackets(mut self, sub_brackets: Vec<SubBracket>) -> Self {
+        self.sub_brackets = sub_brackets;
         self
     }
 
@@ -310,6 +360,7 @@ impl MultiStaffScore {
             staff_count: notation_staff_count,
             connector: self.connector,
             joined_barlines: self.joined_barlines,
+            sub_brackets: self.sub_brackets.clone(),
         };
 
         let multi_layout = layout_multi_staff(&group, 0.0, staff_space, sys_width);
@@ -787,6 +838,177 @@ mod tests {
         assert!(
             !svg.contains("scale(1,"),
             "independent should have no brace"
+        );
+    }
+
+    // Helper for sub-bracket score-level tests: 4 identical treble staves
+    // arranged as a section group. Compact enough that the rendered SVG
+    // count deltas are dominated by the bracket connectors.
+    fn four_staff_section() -> Vec<ScoreBuilder> {
+        (0..4)
+            .map(|_| {
+                ScoreBuilder::new()
+                    .clef(Clef::Treble)
+                    .time_signature(4, 4)
+                    .note(pitch(Note::C, 5), Duration::WHOLE)
+                    .end_barline()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn section_with_sub_brackets_adds_thin_lines_for_each_sub_bracket() {
+        let baseline = MultiStaffScore::section(four_staff_section()).render_svg();
+        let nested = MultiStaffScore::section(four_staff_section())
+            .with_sub_brackets(vec![
+                SubBracket { start_index: 0, staff_count: 2 },
+                SubBracket { start_index: 2, staff_count: 2 },
+            ])
+            .render_svg();
+
+        // Each valid sub-bracket adds exactly one thin vertical <line>; no
+        // extra <path> elements (sub-brackets carry no scrolls).
+        let baseline_lines = baseline.matches("<line").count();
+        let baseline_paths = baseline.matches("<path").count();
+        let nested_lines = nested.matches("<line").count();
+        let nested_paths = nested.matches("<path").count();
+
+        assert_eq!(
+            nested_lines - baseline_lines,
+            2,
+            "two sub-brackets should add exactly 2 lines (baseline={baseline_lines}, nested={nested_lines})"
+        );
+        assert_eq!(
+            nested_paths, baseline_paths,
+            "sub-brackets must not change <path> count (baseline={baseline_paths}, nested={nested_paths})"
+        );
+    }
+
+    #[test]
+    fn section_with_sub_brackets_shifts_main_bracket_left() {
+        // When sub-brackets are present the layout pass shifts the main
+        // bracket left by `(SUB_BRACKET_GAP_SS + SUB_BRACKET_THICKNESS_SS
+        // + SUB_BRACKET_GAP_SS) * staff_space` = 0.76 sp. The shifted x
+        // appears in the scroll-glyph `translate(...)` substring; the
+        // pre-shift x does not.
+        let baseline = MultiStaffScore::section(four_staff_section()).render_svg();
+        let nested = MultiStaffScore::section(four_staff_section())
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }])
+            .render_svg();
+
+        // The pre-shift bracket scroll appears at x = -125 (= -BRACKET_THICKNESS_SS * ss).
+        assert!(
+            baseline.contains("translate(-125,"),
+            "baseline bracket scroll should anchor at x=-125, SVG: {baseline}"
+        );
+        // After shift x = -125 - 190 = -315 (190 = 0.76 sp * 250 fu).
+        assert!(
+            nested.contains("translate(-315,"),
+            "nested-bracket scroll should anchor at x=-315 after leftward shift"
+        );
+        assert!(
+            !nested.contains("translate(-125,"),
+            "nested SVG must not still carry the unshifted x=-125 scroll translate"
+        );
+    }
+
+    #[test]
+    fn brace_with_sub_brackets_is_silently_ignored() {
+        // Sub-brackets are a bracket-only feature; on a brace (grand
+        // staff) connector the layout pass drops them. The score's SVG
+        // must therefore be byte-identical to the same grand-staff
+        // score with no sub-brackets configured.
+        let plain = MultiStaffScore::grand_staff(simple_treble(), simple_bass()).render_svg();
+        let with_subs = MultiStaffScore::grand_staff(simple_treble(), simple_bass())
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }])
+            .render_svg();
+        assert_eq!(
+            plain, with_subs,
+            "sub-brackets must not affect a brace-connector score"
+        );
+    }
+
+    #[test]
+    fn independent_staves_with_sub_brackets_is_silently_ignored() {
+        // Same invariant as the brace case, for the no-connector variant.
+        let staves: Vec<ScoreBuilder> = (0..3).map(|_| simple_treble()).collect();
+        let staves_again: Vec<ScoreBuilder> = (0..3).map(|_| simple_treble()).collect();
+        let plain = MultiStaffScore::independent(staves).render_svg();
+        let with_subs = MultiStaffScore::independent(staves_again)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 3 }])
+            .render_svg();
+        assert_eq!(
+            plain, with_subs,
+            "sub-brackets must not affect an independent-staves score"
+        );
+    }
+
+    #[test]
+    fn section_with_no_sub_brackets_is_unchanged() {
+        // Anti-regression for the conditional shift in `layout_multi_staff`:
+        // a section bracket WITHOUT sub-brackets must not pick up the leftward
+        // shift. The plain `section(...)` SVG must remain byte-identical
+        // whether or not `with_sub_brackets(...)` was called with an empty
+        // vec (it being the default).
+        let plain = MultiStaffScore::section(four_staff_section()).render_svg();
+        let empty_subs = MultiStaffScore::section(four_staff_section())
+            .with_sub_brackets(Vec::new())
+            .render_svg();
+        assert_eq!(
+            plain, empty_subs,
+            "explicit empty sub-bracket list must equal the default"
+        );
+    }
+
+    #[test]
+    fn section_with_invalid_sub_brackets_renders_same_as_no_sub_brackets() {
+        // All-invalid sub-bracket entries (count < 2, overshoot) are silently
+        // dropped at layout time — the resulting SVG must equal the no-
+        // sub-bracket case (no leftward shift, no thin lines).
+        let plain = MultiStaffScore::section(four_staff_section()).render_svg();
+        let invalid_only = MultiStaffScore::section(four_staff_section())
+            .with_sub_brackets(vec![
+                SubBracket { start_index: 0, staff_count: 1 }, // too small
+                SubBracket { start_index: 4, staff_count: 2 }, // out of range
+                SubBracket { start_index: 2, staff_count: 5 }, // overshoots
+            ])
+            .render_svg();
+        assert_eq!(
+            plain, invalid_only,
+            "all-invalid sub-brackets must render identically to no sub-brackets"
+        );
+    }
+
+    #[test]
+    fn guitar_tab_with_sub_brackets_is_silently_ignored() {
+        // Guitar+tab is a 1-staff (notation) + 1-tab layout. Sub-brackets
+        // need >= 2 notation staves to be valid; on guitar+tab the layout
+        // pass drops them as invalid. Therefore the SVG must be byte-identical
+        // to the same guitar+tab score with no sub-brackets configured.
+        let notation = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::E, 4), Duration::QTR)
+            .end_barline();
+        let tab = TabScoreBuilder::guitar()
+            .quarter().fret(1, 0)
+            .end_barline();
+        let plain = MultiStaffScore::guitar_tab(notation, tab).render_svg();
+
+        let notation2 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(pitch(Note::E, 4), Duration::QTR)
+            .end_barline();
+        let tab2 = TabScoreBuilder::guitar()
+            .quarter().fret(1, 0)
+            .end_barline();
+        let with_subs = MultiStaffScore::guitar_tab(notation2, tab2)
+            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }])
+            .render_svg();
+        assert_eq!(
+            plain, with_subs,
+            "sub-brackets must not affect a guitar+tab score"
         );
     }
 
