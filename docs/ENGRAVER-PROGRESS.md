@@ -2594,3 +2594,145 @@
   `auto_stem_direction(p) = if p >= 4 { Down } else { Up }`;
   `auto_stem_direction_chord` ties to Down for equidistant cases.
   Both are consistent with the renderer.
+
+## 2026-05-17 — Post-v1, bow-stroke articulations (UpBow / DownBow)
+
+- Did: Added string bow-stroke articulations as a third category in the
+  articulation system, alongside normal articulations and the fermata
+  family. The new variants integrate end-to-end through ScoreBuilder.
+
+  `layout/articulation.rs`:
+  - Added `Articulation::UpBow` and `Articulation::DownBow` variants.
+    SMuFL ships a single glyph for each (`StringsUpBow`,
+    `StringsDownBow`); the `glyph()` placement argument is accepted
+    for API uniformity but does not change the returned glyph — there
+    is no above/below pair to flip.
+  - Added `is_bow_stroke(self) -> bool` helper, mirroring
+    `is_fermata`. Used by the stacker to partition the input.
+  - `default_placement` now treats bow strokes as "always above" (in
+    addition to fermatas). Engraving convention (Gould, Behind Bars):
+    bow markings sit on the bow-side, conventionally above the staff,
+    regardless of stem direction.
+  - `layout_articulation_stack` now partitions input into three
+    buckets and emits them in convention order from notehead outward:
+    `normal` (stem-opposite) → `bow_strokes` (always above) →
+    `fermatas` (always above, outermost). Extracted a small closure
+    `next_above_base_y` to compute "next y for an always-above element
+    given the layouts already placed" — used by both bow strokes and
+    fermatas so they share the cascading-spacing rule.
+
+  Tests (+22 in `layout::articulation::tests`, +2 in
+  `render::articulation_renderer::tests`):
+
+  Layout-level (`layout::articulation::tests`):
+  1. `up_bow_glyph_is_strings_up_bow` — glyph mapping check for both
+     Above and Below placement args; both must return `StringsUpBow`.
+     Locks the "single-glyph regardless of placement" contract.
+  2. `down_bow_glyph_is_strings_down_bow` — same for `DownBow` /
+     `StringsDownBow`.
+  3. `up_bow_and_down_bow_use_distinct_glyphs` — regression guard
+     against a typo collapsing both variants onto one glyph.
+  4. `bow_strokes_recognized_by_is_bow_stroke` — predicate sanity.
+  5. `non_bow_articulations_not_flagged_by_is_bow_stroke` — exhaustive
+     check against the 7 non-bow variants.
+  6. `bow_strokes_not_flagged_by_is_fermata` — defensive: bow strokes
+     must not collide with the fermata bucket inside the stacker.
+  7. `bow_strokes_always_default_to_above` — both stem directions
+     return Above for both variants.
+  8. `bow_stroke_alone_lays_out_above_note` — single-bow layout has
+     placement=Above, glyph=StringsUpBow, y < note_y. Crucial: a
+     stem-up, middle-line note would normally drag a normal
+     articulation below; the bow must override that.
+  9. `stack_bow_stroke_with_staccato_stem_up_separates_placement` —
+     stem-up staccato + down-bow → staccato below, bow above. Locks
+     opposite-side placement for the standard string-articulation
+     stack on a stem-up note.
+  10. `stack_bow_stroke_with_staccato_stem_down_stacks_outward` —
+      stem-down staccato + up-bow → both above, bow further from note
+      by exactly one `ARTICULATION_STACK_SPACING_SS × staff_space`.
+      Tight tolerance (1e-6).
+  11. `stack_bow_then_fermata_orders_fermata_outermost` — bow + plain
+      fermata both above, fermata outer. Exact-spacing assert.
+  12. `stack_full_triple_stems_up_orders_correctly` — three-tier stack
+      with stem-up: staccato (below), down-bow (above-1), fermata
+      (above-2). Verifies (a) input order preserved per bucket and
+      (b) bucket emit order normal→bow→fermata.
+  13. `stack_full_triple_stems_down_orders_correctly` — same triple
+      with stem-down (all three Above). Asserts uniform 1-spacing
+      between every adjacent pair with FermataLong variant to also
+      cover non-plain-fermata in the outer slot.
+  14. `stack_two_bow_strokes_stacked_outward` — two bow strokes on
+      one note (rare but legal in critical editions reconciling
+      multiple sources). Both above, second further out.
+  15. `stack_bow_only_matches_single_layout_y` — calling
+      `layout_articulation_stack` with a single bow stroke must
+      produce identical x/y/glyph/placement to calling
+      `layout_articulation` directly. Guards against the stacker
+      introducing accidental offset for the singleton case.
+
+  Render-level (`render::articulation_renderer::tests`):
+  16. `up_bow_and_down_bow_produce_distinct_path_data` — extracts the
+      `d="..."` path data and asserts up-bow vs down-bow paths differ
+      after going through the Bravura outline extractor. Catches a
+      Glyph wiring regression that would silently render both as the
+      same shape.
+  17. `bow_stroke_path_differs_from_articulation_glyphs` — bow path
+      must differ from all 6 standard articulations' paths. Tight
+      regression net against an enum-arm swap.
+
+  Example (`examples/bow_strokes.rs`): 4-measure score covering all
+  three stacking scenarios — alternating bow phrase (single bow per
+  note), bow-on-low-notes (auto stems up, bow still above), bow +
+  normal articulation stack (opposite placement), full triple stack
+  (staccato + bow + fermata, ordered outward). Writes
+  `examples/output/bow_strokes.svg` (15 119 bytes, 34 paths) and
+  asserts >= 25 paths to catch a renderer regression.
+
+- Verified: `cargo check --workspace` passes (0 errors). `cargo check
+  -p music-engraver` passes. `cargo clippy -p music-engraver --lib` —
+  0 new warnings (1 pre-existing in `score/multi_staff.rs:394`,
+  unchanged from prior entry). `cargo test -p music-engraver --lib`
+  — **2492 unit tests pass** (vs 2475 prior; +17 net new tests from
+  this chunk: +15 layout, +2 renderer). `cargo test -p
+  music-engraver --test golden_svg` — **69 golden tests pass,
+  byte-identical** (no existing golden uses bow strokes, so adding
+  the variants is golden-neutral). `cargo test -p music-engraver
+  --test svg_glyph_render` — 3 integration tests pass. `cargo test
+  -p music-engraver --doc` — 13 doc tests pass, 1 ignored. `cargo
+  build -p music-engraver --examples` — 95 examples build
+  (+1 = bow_strokes). `cargo run -p music-engraver --example
+  bow_strokes` runs cleanly and writes the SVG.
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression**; **a golden
+  test covering bow strokes** (this chunk added unit + renderer
+  coverage but no golden — adding one would lock the full SVG
+  encoding for the bow-stroke stack); **`HookDirection::Up`
+  standalone builder** (judgment call); trill polish (per-segment
+  `WiggleTrillFast` variant selection from a single-speed
+  annotation); SMuFL accent extensions (soft/stress/unstressed
+  accent — same pattern as bow strokes, distinct glyphs but
+  identical placement rules); auto-resolved low-staff beam-group
+  collision golden (still requires ScoreBuilder opt-out for
+  force-stems, deferred).
+
+- Open issues: Bow strokes inherit the same flat one-notehead-width
+  offset from collision detection (they're treated as "always
+  above" markings, not subject to the cross-voice collision shift
+  rule). If a voice-1 bow stroke ever needs to shift to avoid a
+  voice-0 articulation above the staff, this is not yet handled —
+  but real scores virtually never stack bow strokes from multiple
+  voices on the same beat, so this is theoretical. The stacker
+  emits buckets in fixed order (normal→bow→fermata) regardless of
+  the input order; a user passing `[Fermata, DownBow]` gets the
+  same output as `[DownBow, Fermata]`. This matches engraving
+  convention (bow always inside fermata) and is documented by the
+  test `stack_bow_then_fermata_orders_fermata_outermost`. The
+  `glyph()` method's placement arg is dead-arg for bow strokes
+  (always returns the same glyph regardless of placement); kept
+  for trait-uniformity with other articulations, but a future
+  refactor could route bow strokes through a separate
+  glyph-without-placement path if the dead-arg becomes confusing.

@@ -222,4 +222,78 @@ mod tests {
             "SVG should contain the x-coordinate 567"
         );
     }
+
+    #[test]
+    fn up_bow_and_down_bow_produce_distinct_path_data() {
+        // The two bow glyphs must render as visually distinct shapes —
+        // otherwise the up/down distinction collapses to one symbol.
+        let font = test_font();
+        let staff = test_staff();
+        let up_layout = layout_articulation(
+            Articulation::UpBow,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let down_layout = layout_articulation(
+            Articulation::DownBow,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+
+        let mut w_up = test_writer();
+        draw_articulation(&mut w_up, &font, &up_layout).unwrap();
+        let up_svg = w_up.to_svg();
+        let up_d = path_d_data(&up_svg);
+
+        let mut w_down = test_writer();
+        draw_articulation(&mut w_down, &font, &down_layout).unwrap();
+        let down_svg = w_down.to_svg();
+        let down_d = path_d_data(&down_svg);
+
+        assert!(!up_d.is_empty(), "up-bow d-data should be non-empty");
+        assert!(!down_d.is_empty(), "down-bow d-data should be non-empty");
+        assert_ne!(up_d, down_d, "up-bow and down-bow paths must differ");
+    }
+
+    #[test]
+    fn bow_stroke_path_differs_from_articulation_glyphs() {
+        // Bow strokes must not silently alias to any standard articulation
+        // path — a Glyph wiring regression would otherwise be invisible.
+        let font = test_font();
+        let staff = test_staff();
+        let bow_layout = layout_articulation(
+            Articulation::UpBow,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let mut bow_writer = test_writer();
+        draw_articulation(&mut bow_writer, &font, &bow_layout).unwrap();
+        let bow_d = path_d_data(&bow_writer.to_svg());
+        assert!(!bow_d.is_empty());
+
+        for artic in [
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+            Articulation::Fermata,
+        ] {
+            let layout =
+                layout_articulation(artic, 100.0, 4, StemDirection::Up, &staff);
+            let mut writer = test_writer();
+            draw_articulation(&mut writer, &font, &layout).unwrap();
+            let d = path_d_data(&writer.to_svg());
+            assert_ne!(
+                d, bow_d,
+                "bow-stroke path should differ from {artic:?} path",
+            );
+        }
+    }
 }

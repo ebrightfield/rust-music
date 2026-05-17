@@ -49,6 +49,14 @@ pub enum Articulation {
     /// Henze short fermata — bracket-style alternative to `FermataShort`,
     /// named after Hans Werner Henze.
     FermataHenzeShort,
+    /// Up bow — string articulation indicating the bow moves upward (from
+    /// frog toward tip). SMuFL provides a single glyph; conventionally
+    /// placed above the staff regardless of stem direction.
+    UpBow,
+    /// Down bow — string articulation indicating the bow moves downward
+    /// (from tip toward frog). SMuFL provides a single glyph; conventionally
+    /// placed above the staff regardless of stem direction.
+    DownBow,
 }
 
 /// Whether an articulation appears above or below the notehead.
@@ -106,6 +114,12 @@ impl Articulation {
             (Self::FermataHenzeShort, ArticulationPlacement::Below) => {
                 Glyph::FermataShortHenzeBelow
             }
+            // SMuFL ships a single glyph for each bow stroke (no above/below
+            // pair). Bow strokes are conventionally placed above the staff;
+            // the placement arg is accepted for API uniformity but does not
+            // change the glyph.
+            (Self::UpBow, _) => Glyph::StringsUpBow,
+            (Self::DownBow, _) => Glyph::StringsDownBow,
         }
     }
 
@@ -126,13 +140,23 @@ impl Articulation {
         )
     }
 
+    /// Whether this articulation is a bow stroke (up-bow or down-bow). Bow
+    /// strokes share placement rules (always above) and stack between normal
+    /// articulations and fermatas — they're closer to the note than fermata
+    /// but on the bow-marking-conventional "above" side.
+    pub fn is_bow_stroke(self) -> bool {
+        matches!(self, Self::UpBow | Self::DownBow)
+    }
+
     /// Default placement relative to stem direction.
     ///
     /// Convention: articulations go on the opposite side from the stem.
-    /// Fermata (and all its duration variants) is an exception — it is
-    /// always placed above.
+    /// Exceptions:
+    /// - Fermata (and all its duration variants) is always placed above.
+    /// - Bow strokes (up-bow, down-bow) are always placed above per the
+    ///   Gould convention for string-articulation markings.
     pub fn default_placement(self, stem_dir: StemDirection) -> ArticulationPlacement {
-        if self.is_fermata() {
+        if self.is_fermata() || self.is_bow_stroke() {
             return ArticulationPlacement::Above;
         }
         match stem_dir {
@@ -235,14 +259,19 @@ pub fn layout_articulation_stack(
         return Vec::new();
     }
 
-    // Separate fermata(s) from other articulations since fermata always goes
-    // above. All fermata variants (long, short, very-long, very-short, Henze
-    // long/short) share this rule — they only differ in glyph.
+    // Partition into three buckets by stacking convention:
+    //   1. normal     — stem-opposite (below for stem-up, above for stem-down)
+    //   2. bow strokes — always above, slotted between normal-above and fermata
+    //   3. fermatas   — always above, outermost
+    // Bow strokes sit closer to the note than fermata (Gould convention).
     let mut normal: Vec<Articulation> = Vec::new();
+    let mut bow_strokes: Vec<Articulation> = Vec::new();
     let mut fermatas: Vec<Articulation> = Vec::new();
     for &a in articulations {
         if a.is_fermata() {
             fermatas.push(a);
+        } else if a.is_bow_stroke() {
+            bow_strokes.push(a);
         } else {
             normal.push(a);
         }
@@ -274,30 +303,50 @@ pub fn layout_articulation_stack(
         }
     }
 
-    // Place fermata(s) above, stacked above any above-placement articulations
-    if !fermatas.is_empty() {
-        // Find the topmost y already used (smallest y value for Above placement)
-        let topmost_above = result
+    // Helper: y for the next "always-above" element. If any above-placement
+    // layouts already exist, stack one spacing further above the topmost; if
+    // none exist, fall back to the conventional above-side position.
+    let next_above_base_y = |layouts: &[ArticulationLayout]| -> f64 {
+        let topmost_above = layouts
             .iter()
             .filter(|l| l.placement == ArticulationPlacement::Above)
             .map(|l| l.y)
             .fold(f64::INFINITY, f64::min);
-
-        let fermata_base_y = if topmost_above.is_finite() {
-            // Stack above existing above-articulations
+        if topmost_above.is_finite() {
             topmost_above - stack_spacing
         } else {
-            // No above articulations yet — use the normal layout position
-            let fl = layout_articulation(
+            // No above articulations yet — use the conventional above-side
+            // position. Choose any "always above" articulation as the probe
+            // since they share placement rules.
+            let probe = layout_articulation(
                 Articulation::Fermata,
                 notehead_x,
                 note_staff_position,
                 stem_dir,
                 staff,
             );
-            fl.y
-        };
+            probe.y
+        }
+    };
 
+    // Place bow strokes above any normal-above articulations, before fermata.
+    if !bow_strokes.is_empty() {
+        let base_y = next_above_base_y(&result);
+        for (i, &b) in bow_strokes.iter().enumerate() {
+            let glyph = b.glyph(ArticulationPlacement::Above);
+            result.push(ArticulationLayout {
+                x: notehead_x,
+                y: base_y - (i as f64) * stack_spacing,
+                glyph,
+                placement: ArticulationPlacement::Above,
+            });
+        }
+    }
+
+    // Place fermata(s) above bow strokes and any other above-placement
+    // articulations.
+    if !fermatas.is_empty() {
+        let fermata_base_y = next_above_base_y(&result);
         for (i, &f) in fermatas.iter().enumerate() {
             let glyph = f.glyph(ArticulationPlacement::Above);
             result.push(ArticulationLayout {
@@ -946,5 +995,302 @@ mod tests {
         assert_eq!(stack.len(), 1);
         assert_eq!(stack[0].placement, ArticulationPlacement::Above);
         assert!((stack[0].y - single.y).abs() < 0.001);
+    }
+
+    // --- Bow stroke tests ---
+
+    #[test]
+    fn up_bow_glyph_is_strings_up_bow() {
+        // SMuFL has only one glyph for each bow stroke; the placement argument
+        // is accepted for API uniformity but does not change the glyph.
+        assert_eq!(
+            Articulation::UpBow.glyph(ArticulationPlacement::Above),
+            Glyph::StringsUpBow
+        );
+        assert_eq!(
+            Articulation::UpBow.glyph(ArticulationPlacement::Below),
+            Glyph::StringsUpBow
+        );
+    }
+
+    #[test]
+    fn down_bow_glyph_is_strings_down_bow() {
+        assert_eq!(
+            Articulation::DownBow.glyph(ArticulationPlacement::Above),
+            Glyph::StringsDownBow
+        );
+        assert_eq!(
+            Articulation::DownBow.glyph(ArticulationPlacement::Below),
+            Glyph::StringsDownBow
+        );
+    }
+
+    #[test]
+    fn up_bow_and_down_bow_use_distinct_glyphs() {
+        // Regression: a typo would otherwise let both variants share the same
+        // glyph and collapse the up/down distinction visually.
+        assert_ne!(
+            Articulation::UpBow.glyph(ArticulationPlacement::Above),
+            Articulation::DownBow.glyph(ArticulationPlacement::Above)
+        );
+    }
+
+    #[test]
+    fn bow_strokes_recognized_by_is_bow_stroke() {
+        assert!(Articulation::UpBow.is_bow_stroke());
+        assert!(Articulation::DownBow.is_bow_stroke());
+    }
+
+    #[test]
+    fn non_bow_articulations_not_flagged_by_is_bow_stroke() {
+        for &a in &[
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+            Articulation::Fermata,
+            Articulation::FermataLong,
+        ] {
+            assert!(!a.is_bow_stroke(), "{a:?} should not be flagged as bow stroke");
+        }
+    }
+
+    #[test]
+    fn bow_strokes_not_flagged_by_is_fermata() {
+        // Defensive: bow strokes must not collide with the fermata bucket.
+        assert!(!Articulation::UpBow.is_fermata());
+        assert!(!Articulation::DownBow.is_fermata());
+    }
+
+    #[test]
+    fn bow_strokes_always_default_to_above() {
+        for &b in &[Articulation::UpBow, Articulation::DownBow] {
+            assert_eq!(
+                b.default_placement(StemDirection::Up),
+                ArticulationPlacement::Above,
+                "{b:?} should default to Above with stem up"
+            );
+            assert_eq!(
+                b.default_placement(StemDirection::Down),
+                ArticulationPlacement::Above,
+                "{b:?} should default to Above with stem down"
+            );
+        }
+    }
+
+    #[test]
+    fn bow_stroke_alone_lays_out_above_note() {
+        let staff = test_staff();
+        // Stem-up, middle-line note: a normal articulation would go below.
+        // A bow stroke must go above instead.
+        let up_bow = layout_articulation(
+            Articulation::UpBow,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(up_bow.placement, ArticulationPlacement::Above);
+        assert_eq!(up_bow.glyph, Glyph::StringsUpBow);
+        let note_y = staff.y_of(4);
+        assert!(
+            up_bow.y < note_y,
+            "above-placement should have lower y than note: {} < {}",
+            up_bow.y,
+            note_y
+        );
+    }
+
+    #[test]
+    fn stack_bow_stroke_with_staccato_stem_up_separates_placement() {
+        // Stem-up: staccato goes below, bow stroke goes above.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::DownBow],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsDownBow);
+        // The bow stroke (above) must sit higher than the staccato (below).
+        assert!(stack[1].y < stack[0].y);
+    }
+
+    #[test]
+    fn stack_bow_stroke_with_staccato_stem_down_stacks_outward() {
+        // Stem-down: staccato goes above, bow stroke goes above above the
+        // staccato (further from note).
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::UpBow],
+            100.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoAbove);
+        assert_eq!(stack[1].glyph, Glyph::StringsUpBow);
+        // Bow stroke must sit further from note (lower y) than the staccato.
+        assert!(stack[1].y < stack[0].y);
+        // Spacing equals one ARTICULATION_STACK_SPACING_SS × staff_space.
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let actual_gap = stack[0].y - stack[1].y;
+        assert!(
+            (actual_gap - expected_gap).abs() < 1e-6,
+            "bow-stacks-above-staccato gap {actual_gap} should match expected {expected_gap}"
+        );
+    }
+
+    #[test]
+    fn stack_bow_then_fermata_orders_fermata_outermost() {
+        // Engraving convention: from notehead outward, normal articulations →
+        // bow strokes → fermata. Locks that ordering.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::UpBow, Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].glyph, Glyph::StringsUpBow);
+        assert_eq!(stack[1].glyph, Glyph::FermataAbove);
+        // Both above. Fermata must sit further out (smaller y).
+        assert_eq!(stack[0].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert!(stack[1].y < stack[0].y);
+        // Spacing is one stack-step.
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let actual_gap = stack[0].y - stack[1].y;
+        assert!(
+            (actual_gap - expected_gap).abs() < 1e-6,
+            "fermata-stacks-above-bow gap {actual_gap} should match expected {expected_gap}"
+        );
+    }
+
+    #[test]
+    fn stack_full_triple_stems_up_orders_correctly() {
+        // Full three-tier stack: staccato (below), down-bow (above), fermata
+        // (above, outermost). With stem up, the staccato lands below; the bow
+        // and fermata both land above with the fermata further out.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[
+                Articulation::Staccato,
+                Articulation::DownBow,
+                Articulation::Fermata,
+            ],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 3);
+        // Order: input order preserved within each bucket, but buckets are
+        // emitted normal → bow → fermata.
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsDownBow);
+        assert_eq!(stack[2].glyph, Glyph::FermataAbove);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[2].placement, ArticulationPlacement::Above);
+        // Bow above note (smaller y); fermata above bow.
+        let note_y = staff.y_of(4);
+        assert!(stack[0].y > note_y, "staccato below note");
+        assert!(stack[1].y < note_y, "bow above note");
+        assert!(stack[2].y < stack[1].y, "fermata above bow");
+    }
+
+    #[test]
+    fn stack_full_triple_stems_down_orders_correctly() {
+        // Stem-down: staccato goes above, bow stroke goes above-above, fermata
+        // outermost. The three above-placement layouts must be in stacking
+        // order: staccato closest to note, bow next, fermata furthest.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[
+                Articulation::Staccato,
+                Articulation::UpBow,
+                Articulation::FermataLong,
+            ],
+            100.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 3);
+        for l in &stack {
+            assert_eq!(l.placement, ArticulationPlacement::Above);
+        }
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoAbove);
+        assert_eq!(stack[1].glyph, Glyph::StringsUpBow);
+        assert_eq!(stack[2].glyph, Glyph::FermataLongAbove);
+        // Strict outward monotonic y.
+        assert!(stack[1].y < stack[0].y, "bow above staccato");
+        assert!(stack[2].y < stack[1].y, "fermata above bow");
+        // Uniform spacing.
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let gap1 = stack[0].y - stack[1].y;
+        let gap2 = stack[1].y - stack[2].y;
+        assert!((gap1 - expected_gap).abs() < 1e-6);
+        assert!((gap2 - expected_gap).abs() < 1e-6);
+    }
+
+    #[test]
+    fn stack_two_bow_strokes_stacked_outward() {
+        // Pathological but legal: two bow strokes on the same note (e.g.
+        // multi-edition reconciliations). Both above, second further out.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::DownBow, Articulation::UpBow],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].glyph, Glyph::StringsDownBow);
+        assert_eq!(stack[1].glyph, Glyph::StringsUpBow);
+        for l in &stack {
+            assert_eq!(l.placement, ArticulationPlacement::Above);
+        }
+        assert!(stack[1].y < stack[0].y);
+    }
+
+    #[test]
+    fn stack_bow_only_matches_single_layout_y() {
+        // A single bow stroke through the stack helper must position
+        // identically to calling layout_articulation directly — no
+        // unintended offset just because the stacker is involved.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::UpBow],
+            150.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        let direct = layout_articulation(
+            Articulation::UpBow,
+            150.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0].x, direct.x);
+        assert!((stack[0].y - direct.y).abs() < 1e-9);
+        assert_eq!(stack[0].glyph, direct.glyph);
+        assert_eq!(stack[0].placement, direct.placement);
     }
 }
