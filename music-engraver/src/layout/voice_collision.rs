@@ -1,7 +1,7 @@
 use crate::layout::beam::beam_group_note_x_offsets;
 use crate::layout::measure::{MeasureElement, MeasureLayout};
 use crate::layout::staff::StaffPosition;
-use crate::layout::stem::StemDirection;
+use crate::layout::stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
 
 /// X-offset to apply to an additional voice's notehead to avoid collision
 /// with the primary voice.
@@ -78,11 +78,53 @@ fn element_staff_positions(element: &MeasureElement) -> Vec<StaffPosition> {
     }
 }
 
-/// Get the stem direction of a measure element, if it has one.
-fn element_stem_direction(element: &MeasureElement) -> Option<StemDirection> {
+/// Resolve the stem direction for a note-bearing element using the same
+/// rule the renderer applies when the explicit `stem_direction` is `None`.
+///
+/// The collision-shift direction must match where the renderer will
+/// actually place the stem: shifting an additional voice's notehead "to
+/// the opposite side of its stem" only works if the detector and renderer
+/// agree on which side that is. Previously a beam group with
+/// `stem_direction = None` was passed straight to `offset_shift_direction`,
+/// which defaulted to "shift right" — correct for the common voice-2 case
+/// where the group sits high and auto-resolves to stems-down, but wrong
+/// when the same group sits low and the renderer auto-resolves to
+/// stems-up. Resolving here closes that gap.
+///
+/// Returns `None` only for elements without note-bearing staff positions
+/// (rests, etc.) — those are filtered out by `element_staff_positions`
+/// upstream, so callers in this module never see a `None` for a colliding
+/// element.
+fn resolved_element_stem_direction(element: &MeasureElement) -> Option<StemDirection> {
     match element {
-        MeasureElement::Note(n) => n.stem_direction,
-        MeasureElement::Chord(c) => c.stem_direction,
+        MeasureElement::Note(n) => {
+            Some(n.stem_direction.unwrap_or_else(|| auto_stem_direction(n.staff_position)))
+        }
+        MeasureElement::Chord(c) => Some(
+            c.stem_direction
+                .unwrap_or_else(|| auto_stem_direction_chord(&c.staff_positions)),
+        ),
+        MeasureElement::BeamGroup(bg) => {
+            let positions: Vec<StaffPosition> =
+                bg.notes.iter().map(|n| n.staff_position).collect();
+            Some(
+                bg.stem_direction
+                    .unwrap_or_else(|| auto_stem_direction_chord(&positions)),
+            )
+        }
+        MeasureElement::TupletGroup(tg) => {
+            let positions: Vec<StaffPosition> = tg
+                .beam_group
+                .notes
+                .iter()
+                .map(|n| n.staff_position)
+                .collect();
+            Some(
+                tg.beam_group
+                    .stem_direction
+                    .unwrap_or_else(|| auto_stem_direction_chord(&positions)),
+            )
+        }
         _ => None,
     }
 }
@@ -121,7 +163,10 @@ pub fn compute_voice_collision_offsets(
             MeasureElement::BeamGroup(bg) => {
                 let durations: Vec<u8> = bg.notes.iter().map(|n| n.duration_log2).collect();
                 let local_offsets = beam_group_note_x_offsets(&durations, elem.width);
-                let group_dir = bg.stem_direction;
+                // Resolve direction once: auto-resolution applies the same
+                // farthest-from-middle-line rule the renderer uses, so the
+                // shift side here matches the side the stem will draw on.
+                let group_dir = resolved_element_stem_direction(&elem.element);
                 for (note_idx, note) in bg.notes.iter().enumerate() {
                     let note_x = elem.x + local_offsets[note_idx];
                     if let Some(offset) = collision_at_x(
@@ -142,7 +187,7 @@ pub fn compute_voice_collision_offsets(
                 let durations: Vec<u8> =
                     tg.beam_group.notes.iter().map(|n| n.duration_log2).collect();
                 let local_offsets = beam_group_note_x_offsets(&durations, elem.width);
-                let group_dir = tg.beam_group.stem_direction;
+                let group_dir = resolved_element_stem_direction(&elem.element);
                 for (note_idx, note) in tg.beam_group.notes.iter().enumerate() {
                     let note_x = elem.x + local_offsets[note_idx];
                     if let Some(offset) = collision_at_x(
@@ -170,7 +215,7 @@ pub fn compute_voice_collision_offsets(
                     &primary_positions,
                     X_MATCH_TOLERANCE,
                 ) {
-                    let add_dir = element_stem_direction(&elem.element);
+                    let add_dir = resolved_element_stem_direction(&elem.element);
                     offsets.push(VoiceCollisionOffset {
                         element_index: elem_idx,
                         x_offset_noteheads: offset_shift_direction(add_dir) * offset,
@@ -204,9 +249,11 @@ fn collision_at_x(
 /// stem direction dictates which side of the stem the displaced notehead
 /// lands on: stems-down voices (the common odd-numbered additional voice
 /// case) shift right; the rarer stems-up additional voice shifts left.
-/// Unknown direction (e.g. a beam group with `stem_direction = None` where
-/// the renderer auto-picks at draw time) defaults to "shift right" to
-/// match the typical voice-2 convention.
+///
+/// Callers in this module always pass `Some(_)` because
+/// `resolved_element_stem_direction` resolves auto-direction up front (see
+/// its docstring for why); the `None` arm is a defensive fallback that
+/// preserves the historical "shift right" convention.
 fn offset_shift_direction(dir: Option<StemDirection>) -> f64 {
     match dir {
         Some(StemDirection::Down) | None => 1.0,
@@ -591,10 +638,14 @@ mod tests {
     }
 
     #[test]
-    fn beam_group_none_stem_direction_defaults_to_right_shift() {
-        // When the beam group has stem_direction = None (auto), additional
-        // voices still shift right by convention so the standard "voice 2
-        // displaces toward voice 1's side" rule holds at draw time.
+    fn beam_group_none_stem_direction_resolves_via_auto_rule_high_shifts_right() {
+        // Beam group with stem_direction = None at high staff positions
+        // (max=6, min=4) auto-resolves to stems-down (farthest-above wins
+        // when tied or above), so the additional voice's notehead shifts
+        // RIGHT (+1.0). This exercises the resolution path: the detector
+        // must apply the same farthest-from-middle rule the renderer
+        // applies at draw time, otherwise the shift would land on the
+        // wrong side of the (still-to-be-drawn) stem.
         let primary = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Up)))]);
         let additional = layout_with_widths(vec![(
             100.0,
@@ -604,6 +655,155 @@ mod tests {
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert_eq!(offsets.len(), 1);
         assert_eq!(offsets[0].x_offset_noteheads, 1.0);
+    }
+
+    #[test]
+    fn beam_group_none_stem_direction_resolves_via_auto_rule_low_shifts_left() {
+        // Companion to the high-staff case: when the beam group sits below
+        // the middle line (positions -2, 0), auto-resolution picks
+        // stems-UP, so the additional voice's collided notehead shifts
+        // LEFT (-1.0). This is the case that motivated the fix: before
+        // resolution was added, this beam group would also shift right
+        // (the historical None-defaults-to-right fallback), placing the
+        // displaced notehead on the wrong side of the auto-up stem.
+        //
+        // Geometry: beam group at x=100 with width 400, two equal
+        // eighths → local offsets 0, 200 → absolute xs 100, 300. Note 1
+        // (pos 0) lands at x=300, where the primary's pos 0 sits.
+        let primary = layout_with(vec![(300.0, note_element(0, Some(StemDirection::Down)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            beam_group_element(vec![-2, 0], None),
+            400.0,
+        )]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].inner_note_index, Some(1));
+        assert_eq!(
+            offsets[0].x_offset_noteheads, -1.0,
+            "auto-resolved Up stem must shift colliding notehead LEFT"
+        );
+    }
+
+    #[test]
+    fn tuplet_group_none_stem_direction_auto_resolves_low_shifts_left() {
+        // Same auto-resolution must apply to a tuplet wrapping a beam
+        // group with stem_direction = None. Positions -4, -2, 0 sit fully
+        // below the middle line — auto-direction = Up → shift LEFT.
+        let primary = layout_with(vec![(200.0, note_element(-2, Some(StemDirection::Down)))]);
+        let additional = layout_with_widths(vec![(
+            100.0,
+            tuplet_group_element(vec![-4, -2, 0], None, 3),
+            300.0,
+        )]);
+        // Triplet of equal eighths: local offsets 0, 100, 200; note 1
+        // lands at x=200, staff_position -2 → unison with primary.
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].inner_note_index, Some(1));
+        assert_eq!(offsets[0].x_offset_noteheads, -1.0);
+    }
+
+    #[test]
+    fn note_none_stem_direction_auto_resolves_low_shifts_left() {
+        // Standalone note with stem_direction = None at position 0 (below
+        // the middle line) auto-resolves to Up via `auto_stem_direction`.
+        // Before the fix this fell through to the None-defaults-to-right
+        // path and incorrectly shifted RIGHT.
+        let primary = layout_with(vec![(100.0, note_element(0, Some(StemDirection::Down)))]);
+        let additional = layout_with(vec![(100.0, note_element(0, None))]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].inner_note_index, None);
+        assert_eq!(
+            offsets[0].x_offset_noteheads, -1.0,
+            "auto-up note must shift colliding notehead LEFT, not right"
+        );
+    }
+
+    #[test]
+    fn note_none_stem_direction_auto_resolves_high_shifts_right() {
+        // Companion: note at staff_position 5 (above middle, ≥4) →
+        // auto-direction Down → shift RIGHT. Confirms the auto-rule
+        // boundary at position 4 (middle line resolves to Down).
+        let primary = layout_with(vec![(100.0, note_element(5, Some(StemDirection::Up)))]);
+        let additional = layout_with(vec![(100.0, note_element(5, None))]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].x_offset_noteheads, 1.0);
+    }
+
+    #[test]
+    fn chord_none_stem_direction_auto_resolves_low_shifts_left() {
+        // Chord at positions [-1, 1] sits entirely below middle: max=1,
+        // min=-1, dist_above = -3, dist_below = 5 → auto Up → shift LEFT.
+        let primary =
+            layout_with(vec![(100.0, chord_element(vec![-1, 1], Some(StemDirection::Down)))]);
+        let additional = layout_with(vec![(100.0, chord_element(vec![-1, 1], None))]);
+        let offsets = compute_voice_collision_offsets(&primary, &additional);
+        assert_eq!(offsets.len(), 1);
+        assert_eq!(offsets[0].x_offset_noteheads, -1.0);
+    }
+
+    // --- Direct resolution helper tests ---
+
+    #[test]
+    fn resolved_direction_note_explicit_wins_over_auto() {
+        let n = note_element(0, Some(StemDirection::Down)); // low pos, would auto-up
+        assert_eq!(resolved_element_stem_direction(&n), Some(StemDirection::Down));
+    }
+
+    #[test]
+    fn resolved_direction_note_auto_low_returns_up() {
+        let n = note_element(0, None);
+        assert_eq!(resolved_element_stem_direction(&n), Some(StemDirection::Up));
+    }
+
+    #[test]
+    fn resolved_direction_note_auto_high_returns_down() {
+        // Position 4 = middle line; auto_stem_direction picks Down at >=4.
+        let n = note_element(4, None);
+        assert_eq!(resolved_element_stem_direction(&n), Some(StemDirection::Down));
+    }
+
+    #[test]
+    fn resolved_direction_chord_auto_uses_farthest_from_middle() {
+        // Chord [-2, 6]: dist_above = 2, dist_below = 6 → Up.
+        let c = chord_element(vec![-2, 6], None);
+        assert_eq!(resolved_element_stem_direction(&c), Some(StemDirection::Up));
+    }
+
+    #[test]
+    fn resolved_direction_chord_auto_ties_go_down() {
+        // Equidistant: [2, 6] → dist_above = 2, dist_below = 2 → Down by
+        // the equidistant tiebreak.
+        let c = chord_element(vec![2, 6], None);
+        assert_eq!(resolved_element_stem_direction(&c), Some(StemDirection::Down));
+    }
+
+    #[test]
+    fn resolved_direction_beam_group_auto_low_returns_up() {
+        let bg = beam_group_element(vec![-2, 0, 2], None);
+        assert_eq!(resolved_element_stem_direction(&bg), Some(StemDirection::Up));
+    }
+
+    #[test]
+    fn resolved_direction_beam_group_auto_high_returns_down() {
+        let bg = beam_group_element(vec![4, 6, 8], None);
+        assert_eq!(resolved_element_stem_direction(&bg), Some(StemDirection::Down));
+    }
+
+    #[test]
+    fn resolved_direction_tuplet_group_inherits_beam_group_rule() {
+        // Tuplet wrapping a low-sitting beam group must resolve to Up,
+        // same as the bare beam group case.
+        let tg = tuplet_group_element(vec![-2, 0, 2], None, 3);
+        assert_eq!(resolved_element_stem_direction(&tg), Some(StemDirection::Up));
+    }
+
+    #[test]
+    fn resolved_direction_rest_returns_none() {
+        assert_eq!(resolved_element_stem_direction(&rest_element()), None);
     }
 
     #[test]

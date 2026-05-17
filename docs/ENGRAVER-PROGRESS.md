@@ -2456,3 +2456,141 @@
   to this one in the April logs) is still deferred — the detection
   layer is now per-note aware, but slur layout doesn't yet consult
   it.
+
+## 2026-05-17 — Post-v1, auto-stem-direction resolution in voice-collision detector
+
+- Did: Closed the open issue carried from the previous entry: the
+  cross-voice collision detector's shift direction depended on
+  `BeamGroupEvent.stem_direction` / `Note.stem_direction` as `Option`,
+  and the `None` arm of `offset_shift_direction` defaulted to "shift
+  right" — correct for the *typical* voice-2 case where the additional
+  voice sits high enough to auto-resolve to stems-down, but **silently
+  wrong** when the same element auto-resolves to stems-up (low-sitting
+  beam group, low standalone note, low chord). In that case the
+  detector would emit a `+1.0` shift, displacing the colliding notehead
+  onto the same side as the auto-up stem rather than the opposite side
+  the engraving convention requires.
+
+  Fix (`src/layout/voice_collision.rs`):
+  - Added `resolved_element_stem_direction(&MeasureElement) ->
+    Option<StemDirection>`: returns the explicit direction when set;
+    otherwise applies the same auto-rule the renderer uses at draw time
+    (`auto_stem_direction` for `Note`, `auto_stem_direction_chord` for
+    `Chord`, `BeamGroup`, and `TupletGroup`). The detector and renderer
+    now agree on which side the stem will land on.
+  - `compute_voice_collision_offsets` calls the resolved variant for
+    BeamGroup, TupletGroup, and the standalone Note/Chord fallthrough.
+    No more `bg.stem_direction` raw passthrough.
+  - The old `element_stem_direction` helper is gone (only one call
+    site); `offset_shift_direction`'s `None` arm is now documented as a
+    defensive fallback that callers in this module never trigger.
+  - Removed `auto_stem_direction` / `auto_stem_direction_chord` from
+    the layout::stem-only import path: voice_collision.rs now imports
+    both alongside `StemDirection`.
+
+  Tests (+14 in `layout::voice_collision::tests`, all new are real
+  assertions on specific numeric shift values, not booleans):
+
+  Integration tests (collision behaviour):
+  1. `beam_group_none_stem_direction_resolves_via_auto_rule_high_shifts_right`
+     — renamed from `beam_group_none_stem_direction_defaults_to_right_shift`;
+     same fixture (positions [4, 6], None direction) but the comment now
+     names the auto-rule path (max=6, min=4, dist_above=2, dist_below=0
+     → Down → right shift) instead of the now-defunct "defaults right
+     by convention" framing. Behavioural assertion unchanged.
+  2. `beam_group_none_stem_direction_resolves_via_auto_rule_low_shifts_left`
+     — the bug case: beam group at positions [-2, 0] with None
+     direction collides with a primary at the *right* x of the beam
+     (x=300, the second-note absolute x given local offsets [0, 200]
+     for two equal eighths in width 400). Before the fix this asserted
+     `+1.0`; the fix yields `-1.0`. Locks the canonical broken case.
+  3. `tuplet_group_none_stem_direction_auto_resolves_low_shifts_left`
+     — tuplet wrapper inherits the same resolution: triplet positions
+     [-4, -2, 0] at x=100, width 300 → note 1 lands at x=200 → -1.0.
+  4. `note_none_stem_direction_auto_resolves_low_shifts_left` — single
+     note at position 0 (below middle line), None direction. Before
+     fix: +1.0. After: -1.0. The single-note auto-rule
+     (`auto_stem_direction`) uses staff_position >= 4 → Down rather
+     than the chord rule's farthest-from-middle, so this exercises a
+     distinct code path inside `resolved_element_stem_direction`.
+  5. `note_none_stem_direction_auto_resolves_high_shifts_right` —
+     position 5 (above middle), None direction → Down → +1.0.
+     Locks the auto-rule boundary at position 4 (middle line resolves
+     to Down).
+  6. `chord_none_stem_direction_auto_resolves_low_shifts_left` —
+     chord [-1, 1] with None direction. max=1, min=-1, dist_above=-3,
+     dist_below=5 → Up → -1.0.
+
+  Direct helper tests for `resolved_element_stem_direction`:
+  7. `resolved_direction_note_explicit_wins_over_auto` — Note(0, Down)
+     returns `Some(Down)` even though auto-rule would pick Up. Locks
+     the "explicit wins" invariant.
+  8. `resolved_direction_note_auto_low_returns_up` — Note(0, None) →
+     Up via single-note auto-rule.
+  9. `resolved_direction_note_auto_high_returns_down` — Note(4, None)
+     → Down. Boundary case at the middle line.
+  10. `resolved_direction_chord_auto_uses_farthest_from_middle` —
+      chord [-2, 6] with None → Up (dist_below=6 > dist_above=2).
+  11. `resolved_direction_chord_auto_ties_go_down` — chord [2, 6]
+      with None → Down via the equidistant tiebreak.
+  12. `resolved_direction_beam_group_auto_low_returns_up` — beam
+      group [-2, 0, 2] with None → Up.
+  13. `resolved_direction_beam_group_auto_high_returns_down` — beam
+      group [4, 6, 8] with None → Down.
+  14. `resolved_direction_tuplet_group_inherits_beam_group_rule` —
+      tuplet wrapping [-2, 0, 2] with None → Up. Confirms tuplets use
+      the same chord rule (via the inner beam_group's positions).
+  15. `resolved_direction_rest_returns_none` — sanity: non-note-bearing
+      elements return None (filtered upstream so this is never reached
+      in the detector loop, but documents the helper's contract).
+
+  Original `beam_group_none_stem_direction_defaults_to_right_shift`
+  was renamed to `..._resolves_via_auto_rule_high_shifts_right` (net
+  test count diff: +14 since one rename keeps the same line, plus 14
+  new). The old name is gone; if a grep elsewhere references it, that
+  reference would have already been wrong.
+
+- Verified: `cargo check --workspace` passes (0 errors). `cargo clippy
+  -p music-engraver --lib` — 0 new warnings (1 pre-existing in
+  `score/multi_staff.rs:394`, unchanged from prior entry). `cargo test
+  -p music-engraver --lib` — **2475 unit tests pass** (vs 2455 prior;
+  +14 from this chunk plus +6 unrelated drift from intervening counter
+  refresh — the absolute count is the source of truth). `cargo test -p
+  music-engraver --test golden_svg` — **69 golden tests pass,
+  byte-identical**: the resolution change only affects shift direction
+  *magnitude/sign* in the collision detector, and every existing
+  golden either uses explicit stem direction or sits at a position
+  where auto-resolution yields the same direction as the old
+  None-defaults-right fallback (high-staff additional voice with
+  Down auto = +1.0 same as before). Any golden that *would* have
+  differed has not been written yet — adding one is a separate chunk.
+  `cargo test -p music-engraver --test svg_glyph_render` — 3
+  integration tests pass. `cargo test -p music-engraver --doc` —
+  13 doc tests pass, 1 ignored.
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression** (text-diff
+  already exists; PHASH would catch glyph-data regressions that
+  produce equivalent text); **`HookDirection::Up` standalone
+  builder** (judgment call). Trill polish: per-segment
+  `WiggleTrillFast` variant selection from a single-speed annotation.
+  Also: a golden specifically demonstrating auto-resolved low-staff
+  beam-group collision (would lock the rendering side of this fix,
+  not just the detector) — promising small chunk for the next run.
+  Cross-voice tie/slur consultation of the detector is still
+  deferred.
+
+- Open issues: The shift magnitude is still a flat one-notehead-width
+  even for unison-same-kind cases where strict engraving would share
+  a notehead. The detection layer is now direction-correct but
+  magnitude-blunt. A future refinement could propagate notehead-kind
+  into `detect_collision` to distinguish "same-kind unison →
+  share notehead, zero shift" from "different-kind unison → 1.0
+  shift" — out of scope here. The middle-line tiebreak (position 4,
+  None direction on a single note) resolves to Down via
+  `auto_stem_direction(p) = if p >= 4 { Down } else { Up }`;
+  `auto_stem_direction_chord` ties to Down for equidistant cases.
+  Both are consistent with the renderer.
