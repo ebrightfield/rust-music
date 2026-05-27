@@ -6105,3 +6105,148 @@
   drawn earlier on the source system (multi-end-flag pattern)
   is a separate concern and not currently triggerable from the
   ScoreBuilder API.
+
+## 2026-05-27 — Post-v1, golden tests for cresc-text via ScoreBuilder
+
+- Did: Froze visual baselines for the dashed-text dynamic markings
+  (`cresc. - - -`, `decresc. - - -`, `dim. - - -`) at the
+  `ScoreBuilder` surface. Two prior runs landed the layout +
+  renderer (within- and cross-system) and plumbed them through the
+  score-event chain, but the cross-system render had no frozen
+  visual baseline and the within-system one wasn't exercised at the
+  integration-test level either. This run adds both — closing the
+  "natural follow-up" item flagged on the cross-system continuation
+  entry above.
+
+  Concrete changes (all in
+  `music-engraver/tests/golden_svg.rs` — no production code
+  touched):
+  - New import: `use music_engraver::layout::cresc_text::CrescTextKind;`
+    so the cross-system fixture can call
+    `.cresc_text_start(CrescTextKind::Crescendo)` explicitly. The
+    within-system fixture uses the three convenience wrappers
+    (`.cresc_text()`, `.decresc_text()`, `.dim_text()`) to keep
+    the high-level API surface covered.
+  - Four new fixture builders, paired in
+    delta-baseline-and-fixture style (the same pattern
+    `build_cross_system_hairpins` / `_baseline` already use):
+    - `build_cresc_text()` — single system, 3 measures of 4
+      quarter notes each, one `CrescTextKind` per measure
+      (Crescendo → Decrescendo → Diminuendo).
+    - `build_cresc_text_baseline()` — same notes, no markings.
+    - `build_cross_system_cresc_text()` — 4 measures at 2
+      measures/system, a `Crescendo` marking that starts on the
+      first note of system 1 and ends on the first note of
+      system 2, forcing the page renderer's
+      `draw_cross_system_cresc_texts` path.
+    - `build_cross_system_cresc_text_baseline()` — same notes,
+      no markings.
+  - Two new `#[test]` functions
+    (`golden_cresc_text`, `golden_cross_system_cresc_text`),
+    each pinning structural invariants on the rendered SVG via
+    a fixture-vs-baseline delta:
+
+    Within-system (`golden_cresc_text`):
+    - `<line ` delta over baseline = exactly +3 (one dashed
+      continuation line per kind).
+    - `stroke-dasharray` count = exactly 3 (one per dashed line);
+      baseline must have 0 (leak guard for the delta assertion).
+    - `>cresc.</text>`, `>decresc.</text>`, `>dim.</text>` each
+      appear exactly once. The `>cresc.</text>` substring is the
+      *closing-tag-bound* form so it does NOT accidentally match
+      inside the longer `>decresc.</text>` label (a normal
+      `.contains("cresc.")` would over-count by 2).
+    - `font-style="italic"` delta over baseline ≥ +3 (at least
+      one italic-styled label per kind).
+
+    Cross-system (`golden_cross_system_cresc_text`):
+    - `<line ` delta over baseline = exactly +2 (one trailing
+      dashed half on system 1 + one incoming dashed half on
+      system 2).
+    - `stroke-dasharray` count = exactly 2.
+    - `>cresc.</text>` count = exactly 1 — the label MUST live
+      only on the source system. If the incoming half
+      accidentally calls `layout_cresc_text` (which sets
+      `has_label = true`) instead of `layout_cresc_text_continuation`,
+      this assertion catches a 2-label render. If the
+      cross-system path is silently skipped (regression to the
+      pre-plumbing fail-safe state), this assertion catches a
+      0-label render.
+    - `>decresc.</text>` and `>dim.</text>` absent (negative
+      controls — we requested `Crescendo` kind explicitly).
+  - Two new golden SVG baselines written via
+    `GOLDEN_UPDATE=1 cargo test`:
+    `music-engraver/tests/golden/cresc_text.svg` (8627 bytes)
+    and
+    `music-engraver/tests/golden/cross_system_cresc_text.svg`
+    (10202 bytes). Both pinned per the standard
+    `assert_golden` flow.
+
+  Test-design choice — separate fixtures per kind vs. one fixture
+  with all three markings: the score-level path uses
+  `layout_page` with the default `PageLayoutConfig`, which
+  stretches each measure to the full justified width. The
+  longest label is `cresc.` (~962fu minimum span). At 4
+  quarters per measure and the default page width, each
+  marking has comfortable room for its label + dashed line
+  *within its own measure*, so three independent markings
+  side-by-side reliably emit 3 labels + 3 lines without
+  triggering the `layout_cresc_text` `x_line_start >= x_end`
+  label-only fail-safe. This is the same observation noted in
+  the "plumb cresc-text into the score-event chain" entry —
+  the unit-test scenarios in `system_renderer/tests.rs` use
+  the bare `from_staff_space` config and can't fit `cresc.`
+  on 4 quarter notes; the ScoreBuilder/`layout_page` path can.
+
+  Test-design choice — Crescendo-only on the cross-system
+  golden: the page-renderer-level unit tests already cover
+  kind routing (`cross_system_cresc_text_dim_kind_uses_dim_label`
+  and `_decresc_kind_uses_decresc_label`), so the golden's job
+  is to lock the *visual* baseline, not re-test dispatch. One
+  kind keeps the SVG small and the delta-baseline diff trivial
+  to read. The within-system golden carries the kind-coverage
+  invariant on the visual side.
+
+- Verified:
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors (no cross-crate
+    regression).
+  - `cargo build -p music-engraver` → succeeds.
+  - `cargo test -p music-engraver --lib` → **2836 passed, 0
+    failed** (unchanged from prior run — no production-code
+    changes, so the lib-test count is stable).
+  - `cargo test -p music-engraver --test golden_svg` → **75
+    passed, 0 failed** (was 73; +2 new tests — the two new
+    `golden_cresc_text` / `golden_cross_system_cresc_text`
+    `#[test]` functions). All pre-existing goldens remain
+    byte-identical — no baseline-side leakage from the new
+    fixtures.
+  - First run with `GOLDEN_UPDATE=1` wrote the two new
+    baselines and passed; second run without the env var
+    confirmed both fixtures byte-match their frozen baselines.
+
+- Next: PNG export via the `png` feature (`resvg` +
+  `tiny-skia` + `fontdb`) — still the largest deferred
+  post-v1 chunk and has no in-progress prerequisites;
+  cross-system church rests (multi-measure rest cluster
+  breaking across systems); line-breaking quality
+  improvements (Gourlay extension or Bellini & Nesi);
+  golden-SVG corpus PHASH-based visual regression (the
+  per-test golden coverage is now broad enough that
+  consolidating into a PHASH-tolerant comparator would be a
+  natural next step); auto-resolved low-staff beam-group
+  collision golden (still requires ScoreBuilder opt-out for
+  force-stems, deferred); cross-voice tie/slur consultation
+  of the collision detector (deferred); plumbing of
+  niente/dashed hairpin constructors through the score →
+  system_renderer → page_renderer chain (mirror of this
+  chunk's plumbing-then-golden pattern, currently the only
+  remaining hairpin-surface deferral).
+
+- Open issues: None. The change is purely additive at the
+  test-only surface: one new import, four new fixture
+  builders, two new `#[test]` functions, two new SVG
+  baselines under `tests/golden/`. No production code
+  touched. The pre-existing
+  `multi_staff.rs:394` and other clippy warnings noted on
+  prior entries remain unaddressed (out of scope).

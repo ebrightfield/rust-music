@@ -18,6 +18,7 @@ use music::note::pitch::Pitch;
 use music_engraver::layout::arpeggio::ArpeggioDirection;
 use music_engraver::layout::breath::BreathMark;
 use music_engraver::layout::articulation::Articulation;
+use music_engraver::layout::cresc_text::CrescTextKind;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::glissando::GlissandoStyle;
 use music_engraver::layout::grace::GraceNoteKind;
@@ -1081,6 +1082,153 @@ fn build_cross_system_hairpins() -> String {
 /// hairpin golden can assert *exactly* how many extra `<line>` elements the
 /// hairpins contribute.
 fn build_cross_system_hairpins_baseline() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("G", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        .note(p("B", 4), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("C", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+/// Dashed-text dynamic markings via `ScoreBuilder`: exercises all three
+/// `CrescTextKind` variants (`Crescendo`, `Decrescendo`, `Diminuendo`) on
+/// distinct note spans within a single system. Each kind produces one
+/// italic label (`>cresc.</text>`, `>decresc.</text>`, `>dim.</text>`) plus
+/// one dashed continuation line, so the rendered SVG must add exactly
+/// 3 dashed lines and 3 italic-styled `<text>` elements over the matching
+/// no-marking baseline (`build_cresc_text_baseline`).
+///
+/// Layout: 3 measures of 4 quarters each at 4 measures/system (default).
+/// Each marking lives entirely within its own measure so the three labels
+/// + dashed continuations sit side-by-side along the staff baseline. No
+/// system break is forced; the cross-system continuation path is covered
+/// by `build_cross_system_cresc_text` instead.
+fn build_cresc_text() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        // Measure 1: cresc. spans notes 1..4
+        .note(p("C", 4), Duration::QTR)
+        .cresc_text()
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .cresc_text_end()
+        .barline()
+        // Measure 2: decresc. spans notes 1..4
+        .note(p("G", 4), Duration::QTR)
+        .decresc_text()
+        .note(p("F", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .cresc_text_end()
+        .barline()
+        // Measure 3: dim. spans notes 1..4
+        .note(p("C", 4), Duration::QTR)
+        .dim_text()
+        .note(p("B", 3), Duration::QTR)
+        .note(p("A", 3), Duration::QTR)
+        .note(p("G", 3), Duration::QTR)
+        .cresc_text_end()
+        .end_barline()
+        .render_svg()
+}
+
+/// Same notes/structure as `build_cresc_text` with every `cresc_text_*`
+/// call removed. Used as a delta baseline so the within-system cresc-text
+/// golden can assert *exactly* how many extra `<line>` / `<text>` /
+/// `stroke-dasharray` elements the three markings contribute over the
+/// underlying staff/clef/barline rendering.
+fn build_cresc_text_baseline() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .barline()
+        .note(p("C", 4), Duration::QTR)
+        .note(p("B", 3), Duration::QTR)
+        .note(p("A", 3), Duration::QTR)
+        .note(p("G", 3), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
+/// Cross-system dashed-text crescendo: a `cresc.` marking whose start
+/// lands on system 1 and whose end lands on system 2. The engraved
+/// convention (mirrored by `layout_cresc_text_continuation`) is that
+/// the italic label lives on the *source* (start) side only, with a
+/// dashed continuation line spanning each half — so the page renderer
+/// must emit exactly 1 label and 2 dashed lines for the cross-system
+/// pair, not 2 labels.
+///
+/// Layout: 4 measures of 4 quarters each at 2 measures/system → 2
+/// systems. The cresc. starts on measure 1 and ends on measure 3 (first
+/// note of system 2), forcing the page renderer's
+/// `draw_cross_system_cresc_texts` code path.
+fn build_cross_system_cresc_text() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // System 1, measure 1: cresc. starts here
+        .note(p("C", 4), Duration::QTR)
+        .cresc_text_start(CrescTextKind::Crescendo)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        // System 1, measure 2: cresc. continues across system break
+        .note(p("G", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        // System 2, measure 3: cresc. ends on the first note
+        .note(p("B", 4), Duration::QTR)
+        .cresc_text_end()
+        .note(p("A", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        // System 2, measure 4: final plain phrase
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("C", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same notes/structure as `build_cross_system_cresc_text` but with the
+/// `cresc_text_start` / `cresc_text_end` calls removed. Used as a delta
+/// baseline so the cross-system cresc-text golden can pin the exact
+/// label / dashed-line contribution of the cross-system path.
+fn build_cross_system_cresc_text_baseline() -> String {
     ScoreBuilder::new()
         .clef(Clef::Treble)
         .key_signature(KeySignature::Open)
@@ -2269,6 +2417,155 @@ fn golden_cross_system_hairpins() {
     );
 
     assert_golden("cross_system_hairpins", &svg);
+}
+
+#[test]
+fn golden_cresc_text() {
+    let svg = build_cresc_text();
+    let baseline = build_cresc_text_baseline();
+
+    // Delta-baseline assertions: stripping the three `cresc_text_*` calls
+    // gives the underlying staff/clef/notes/barlines rendering. The
+    // marking contribution must be *exactly*:
+    //
+    //   3 dashed continuation lines (one per kind — `cresc.`, `decresc.`,
+    //                                 `dim.`)
+    //   3 italic `<text>` labels    (one per kind, label content distinct)
+    //
+    // Anything else means a regression — e.g. dropping the label
+    // emission (no extra text), duplicating the dashed line, or letting
+    // the wedgeless renderer leak `<line>` elements that should not exist
+    // on a no-marking baseline.
+
+    let svg_lines = svg.matches("<line ").count();
+    let base_lines = baseline.matches("<line ").count();
+    assert_eq!(
+        svg_lines,
+        base_lines + 3,
+        "cresc-text adds exactly 3 dashed lines over baseline (got delta \
+         {}, expected 3)",
+        svg_lines as i64 - base_lines as i64
+    );
+
+    let svg_dasharray = svg.matches("stroke-dasharray").count();
+    let base_dasharray = baseline.matches("stroke-dasharray").count();
+    assert_eq!(
+        base_dasharray, 0,
+        "no-marking baseline must not contain stroke-dasharray; a leak \
+         here would invalidate the delta assertion"
+    );
+    assert_eq!(
+        svg_dasharray, 3,
+        "cresc-text must emit exactly 3 stroke-dasharray attributes \
+         (one per dashed continuation line), got {svg_dasharray}"
+    );
+
+    // Each kind's italic label appears exactly once in the SVG. The
+    // `decresc.` label is a superstring of `cresc.`, so we use the
+    // closing-tag-bound substring `>cresc.</text>` (matches the bare
+    // `cresc.` label only, not the `decresc.` label) to disambiguate.
+    let cresc_labels = svg.matches(">cresc.</text>").count();
+    let decresc_labels = svg.matches(">decresc.</text>").count();
+    let dim_labels = svg.matches(">dim.</text>").count();
+    assert_eq!(
+        cresc_labels, 1,
+        "expected exactly 1 '>cresc.</text>' label, got {cresc_labels}"
+    );
+    assert_eq!(
+        decresc_labels, 1,
+        "expected exactly 1 '>decresc.</text>' label, got {decresc_labels}"
+    );
+    assert_eq!(
+        dim_labels, 1,
+        "expected exactly 1 '>dim.</text>' label, got {dim_labels}"
+    );
+
+    // Italic styling: each cresc-text label carries `font-style="italic"`.
+    // The baseline has no italic text (clef/notes/barlines are all glyph
+    // paths or plain text); count delta must be at least 3 (one per label).
+    let svg_italic = svg.matches("font-style=\"italic\"").count();
+    let base_italic = baseline.matches("font-style=\"italic\"").count();
+    assert!(
+        svg_italic >= base_italic + 3,
+        "italic-styling delta must be at least 3 (one per kind label); \
+         got {} vs baseline {}",
+        svg_italic,
+        base_italic
+    );
+
+    assert_golden("cresc_text", &svg);
+}
+
+#[test]
+fn golden_cross_system_cresc_text() {
+    let svg = build_cross_system_cresc_text();
+    let baseline = build_cross_system_cresc_text_baseline();
+
+    // The cross-system `cresc.` marking is rendered by
+    // `draw_cross_system_cresc_texts` in `page_renderer/mod.rs`. The
+    // engraved convention (mirror of cross-system ottava and trill
+    // extensions) is:
+    //
+    //   source half (system 1): italic label + dashed continuation line
+    //   target half (system 2): dashed continuation line ONLY (label
+    //                            suppressed via
+    //                            `layout_cresc_text_continuation`)
+    //
+    // So a cross-system pair contributes exactly:
+    //   - 1 `>cresc.</text>` label   (lives on the source side only)
+    //   - 2 dashed lines             (1 trailing + 1 incoming)
+    //   - 2 `stroke-dasharray`       (one per dashed line)
+    //
+    // If the incoming half accidentally calls `layout_cresc_text` instead
+    // of the continuation variant, we'd get 2 labels — caught here.
+    // If the cross-system path is silently skipped, we'd get 0 labels —
+    // also caught here.
+
+    let svg_lines = svg.matches("<line ").count();
+    let base_lines = baseline.matches("<line ").count();
+    assert_eq!(
+        svg_lines,
+        base_lines + 2,
+        "cross-system cresc-text adds exactly 2 dashed lines (1 trailing \
+         + 1 incoming) over baseline; got delta {}",
+        svg_lines as i64 - base_lines as i64
+    );
+
+    let svg_dasharray = svg.matches("stroke-dasharray").count();
+    let base_dasharray = baseline.matches("stroke-dasharray").count();
+    assert_eq!(
+        base_dasharray, 0,
+        "no-marking baseline must not contain stroke-dasharray"
+    );
+    assert_eq!(
+        svg_dasharray, 2,
+        "cross-system cresc-text must emit exactly 2 stroke-dasharray \
+         attributes (one per dashed half), got {svg_dasharray}"
+    );
+
+    // Exactly one `cresc.` label across both systems — the continuation
+    // half on system 2 must NOT repeat the label.
+    let cresc_labels = svg.matches(">cresc.</text>").count();
+    assert_eq!(
+        cresc_labels, 1,
+        "cross-system cresc-text must emit exactly 1 '>cresc.</text>' \
+         label (label lives on the source system only, NOT duplicated \
+         on the target/continuation half); got {cresc_labels}"
+    );
+    // The other two label variants must not appear — Crescendo kind is
+    // requested explicitly, so `decresc.` / `dim.` are negative controls.
+    assert!(
+        !svg.contains(">decresc.</text>"),
+        "'>decresc.</text>' must not appear in a `Crescendo`-kind cross-\
+         system cresc-text render"
+    );
+    assert!(
+        !svg.contains(">dim.</text>"),
+        "'>dim.</text>' must not appear in a `Crescendo`-kind cross-\
+         system cresc-text render"
+    );
+
+    assert_golden("cross_system_cresc_text", &svg);
 }
 
 #[test]
