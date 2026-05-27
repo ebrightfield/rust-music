@@ -5013,3 +5013,233 @@
   new tests and verified visually in the example output. The
   pre-existing `multi_staff.rs:394` clippy warning persists (out
   of scope, noted across prior progress entries).
+
+## 2026-05-27 — Post-v1, "cresc. / decresc. / dim." dashed-text dynamic markings
+
+- Did: Added the engraving-standard "cresc. - - -" / "decresc. - - -" /
+  "dim. - - -" *text* dynamic — italic label + dashed continuation
+  line, the conventional wedgeless alternative to a long hairpin (Gould,
+  *Behind Bars*, ch. "Hairpins; cresc., dim. with dashed lines"). New
+  layout and renderer modules; nothing else touched. Two new files,
+  three small mod-wiring edits:
+
+  1. `music-engraver/src/layout/cresc_text.rs` (new) —
+     - `pub enum CrescTextKind { Crescendo, Decrescendo, Diminuendo }`,
+       each with a `label()` method returning `"cresc."`, `"decresc."`,
+       and `"dim."` respectively. (Decrescendo and Diminuendo are
+       distinct kinds rather than aliases because they carry different
+       text — composers/editors choose between them and the choice is
+       semantic, not stylistic.)
+     - `pub struct CrescTextLayout { kind, label, x_start, x_end,
+       x_line_start, y_baseline, label_x, label_y, font_size,
+       line_thickness, dash_length, dash_gap }` — flat field layout
+       matching the existing ottava/dynamics/expression patterns.
+     - `pub fn layout_cresc_text(kind, x_start, x_end, staff,
+       staff_space) -> CrescTextLayout` — places the marking at
+       `CRESC_TEXT_BELOW_STAFF_SS = 3.5` staff spaces below the bottom
+       line (the same band as hairpins, deliberately — locked by
+       `baseline_aligns_with_hairpin_y_center` against
+       `HAIRPIN_BELOW_STAFF_SS`). Label width is estimated as
+       `char_count * 0.6 SS` with a 0.25 SS padding before the dashed
+       line begins.
+     - Engraving constants are module-public (`pub const`) so external
+       code can pin against them in tests:
+       `CRESC_TEXT_BELOW_STAFF_SS = 3.5`,
+       `CRESC_TEXT_FONT_SIZE_SS = 1.4`,
+       `CRESC_TEXT_LABEL_WIDTH_PER_CHAR_SS = 0.6`,
+       `CRESC_TEXT_LABEL_PADDING_SS = 0.25`,
+       `CRESC_TEXT_LINE_THICKNESS_SS = 0.12`,
+       `CRESC_TEXT_DASH_LENGTH_SS = 0.8` (matches `OTTAVA_DASH_LENGTH_SS`),
+       `CRESC_TEXT_DASH_GAP_SS = 0.4` (matches `OTTAVA_DASH_GAP_SS`).
+
+  2. `music-engraver/src/render/cresc_text_renderer.rs` (new) —
+     - `pub fn draw_cresc_text(svg, layout)` emits exactly two SVG
+       elements: a `<text>` (italic serif, `font-weight=normal`,
+       `text-anchor=start`, left-edge anchored on `label_x`) and one
+       `<line stroke-dasharray=...>` from `x_line_start` to `x_end` on
+       the label baseline.
+     - The dashed continuation line is *suppressed* entirely when
+       `x_end <= x_line_start` (degenerate case — label alone, no room
+       for a continuation). Locked by two renderer tests.
+
+  3. `music-engraver/src/layout/mod.rs` — added `pub mod cresc_text;`
+     in alphabetical position between `clef` and `dot`.
+
+  4. `music-engraver/src/render/mod.rs` — added `pub mod
+     cresc_text_renderer;` and `pub use cresc_text_renderer::draw_cresc_text;`
+     in alphabetical positions.
+
+  Design choice — italic-only, NOT bold-italic: ottava brackets use
+  bold-italic ("8va") because that's their established 19th-century
+  engraving convention; cresc./dim. text follows the *dynamics*
+  convention (italic only, never bold) because it belongs to the
+  dynamic axis. Gould §"Cresc., dim. with dashed lines" shows italic.
+  The renderer sets `font-weight="normal"` explicitly so a regression
+  to `TextStyle::italic()` (which would also be `normal` weight by
+  default) is still observably different from a regression to
+  `TextStyle::bold()` or a hand-rolled bold-italic spec. Locked by
+  `label_is_not_bold` (asserts presence of `font-weight="normal"` AND
+  absence of `font-weight="bold"`).
+
+  Design choice — `Decrescendo` and `Diminuendo` are distinct kinds:
+  the user could ask for "decresc." text *or* "dim." text; both mean
+  the same musical thing but carry different surface text. Modeling
+  them as separate enum variants (rather than e.g. a `kind: ...,
+  spelling: Short | Long` pair) keeps the constructor a single
+  positional argument and matches how Lilypond handles `\cresc` vs
+  `\decresc` vs `\dim` — three orthogonal commands.
+
+  Design choice — no public API plumbing through `system_renderer` /
+  `page_renderer` / `ScoreBuilder` yet: this matches the current
+  expression/ottava pattern in the codebase. The layout + renderer
+  modules are the new public surface; downstream wiring is a separate
+  chunk (the same shape as the deferred "plumb niente/dashed
+  constructors through score → system_renderer → page_renderer chain"
+  follow-up listed in the previous progress entry). Keeping this
+  chunk to layout + renderer + tests keeps it reviewable.
+
+  Design choice — variable label width via `char_count * per_char_SS`:
+  the existing ottava layout hardcodes `OTTAVA_LABEL_WIDTH_SS = 2.5`
+  for a 3-char label ("8va"). That works because ottava labels are
+  fixed-length. cresc./decresc./dim. have variable lengths (6/8/4
+  chars) so a per-char estimate is necessary. The 0.6 SS/char value
+  is a deliberate over-estimate (italic serif at 1.4 SS body
+  averages ~0.55 SS/char, so 0.6 leaves a touch of margin) — keeps
+  the dashed line from creeping under the trailing period of
+  "cresc." or "dim.". Locked by `longer_label_pushes_line_start_further_right`
+  which asserts the difference between dim/cresc/decresc line-starts
+  equals exactly `2 * per_char_SS` (the character-count delta).
+
+  Tests added (38 total — 18 layout + 20 renderer):
+
+  - `cresc_text.rs` layout (18):
+    - `label_crescendo_is_cresc_dot`, `label_decrescendo_is_decresc_dot`,
+      `label_diminuendo_is_dim_dot` — three label-content pins.
+    - `all_three_kinds_have_distinct_labels` — pairwise non-equality.
+    - `label_field_matches_kind` — single test verifying the
+      `CrescTextLayout.label` field carries the same text as
+      `kind.label()` for all three variants.
+    - `x_coordinates_preserved` — `x_start`, `x_end`, `label_x` pass
+      through unchanged.
+    - `baseline_is_below_bottom_staff_line` — `y_baseline > staff.y_of(0)`
+      AND `y_baseline == bottom + CRESC_TEXT_BELOW_STAFF_SS * SS` to
+      1e-9 (locks the exact offset constant).
+    - `label_and_dashed_line_share_baseline` — `label_y == y_baseline`
+      to bit-equality.
+    - `dashed_line_starts_after_label` — `x_line_start ==
+      x_start + 6*per_char_SS + padding` exactly (locks the per-char
+      estimate + padding formula).
+    - `longer_label_pushes_line_start_further_right` — three-way
+      ordering (`dim < cresc < decresc`) AND exact delta
+      (`(cresc - dim) == 2*per_char`, `(decresc - cresc) == 2*per_char`).
+      A regression that hardcoded a label width would surface as a
+      non-zero delta different from the expected character-count delta.
+    - `font_size_matches_const_times_staff_space`,
+      `font_size_scales_with_staff_space` — value-match and 2× scaling.
+    - `dash_constants_match_consts` — `dash_length`, `dash_gap`,
+      `line_thickness` all equal the SS-scaled constants.
+    - `dash_constants_scale_with_staff_space` — 2× scaling for all three.
+    - `baseline_aligns_with_hairpin_y_center` — `CRESC_TEXT_BELOW_STAFF_SS
+      == HAIRPIN_BELOW_STAFF_SS` to 1e-12. Pins the cross-module
+      contract that the dashed-text marking lives on the same
+      horizontal axis as hairpins (so a mixed phrase reads as one
+      dynamic stream).
+    - `empty_range_yields_x_line_start_past_x_end` — degenerate
+      `x_end == x_start` case: `x_line_start > x_end` (so the renderer
+      will suppress the line).
+    - `negative_x_start_handled` — geometry-agnostic; negative
+      coordinates pass through (engraver uses arbitrary viewBox).
+    - `x_end_preserved_independently_of_kind` — `x_end` doesn't
+      depend on the kind variant.
+
+  - `cresc_text_renderer.rs` (20):
+    - `renders_one_text_element` — exactly 1 `<text` substring.
+    - `cresc_label_text_content`, `decresc_label_text_content`,
+      `dim_label_text_content` — three string-content pins for the
+      label text inside `<text>...</text>`.
+    - `label_is_italic` — `font-style="italic"` present.
+    - `label_is_not_bold` — `font-weight="normal"` present AND
+      `font-weight="bold"` absent. Two-sided assertion.
+    - `label_is_left_anchored` — `text-anchor="start"` present.
+    - `emits_dashed_continuation_line` — `stroke-dasharray` present
+      when there's room.
+    - `dashed_line_count_is_exactly_one` — count of `stroke-dasharray`
+      substrings is exactly 1 (catches a regression that double-
+      emits the line).
+    - `dasharray_value_matches_layout_constants` — exact string match
+      against the formatted `stroke-dasharray="<dash_length>,<dash_gap>"`
+      computed from `CRESC_TEXT_DASH_LENGTH_SS * SS` and
+      `CRESC_TEXT_DASH_GAP_SS * SS`. A regression to a hardcoded
+      dash spec or a different constant would surface here.
+    - `no_dashed_line_when_x_end_equals_x_start` — degenerate range:
+      `stroke-dasharray` is absent BUT `<text>` is still present
+      (label-only mode).
+    - `no_dashed_line_when_x_end_inside_label_region` — `x_end`
+      between `x_start` and `x_line_start` (the label region itself):
+      precondition-asserts `layout.x_end < layout.x_line_start` then
+      asserts no `stroke-dasharray` in the output.
+    - `dashed_line_starts_at_x_line_start` — emitted SVG contains
+      `x1="<x_line_start>"` for the dashed line.
+    - `dashed_line_ends_at_x_end` — `x2="<x_end>"` present.
+    - `label_text_x_matches_layout_label_x` — `x="<label_x>"` present
+      in the `<text>` element.
+    - `different_kinds_produce_different_svg` — three pairwise
+      inequalities for cresc/decresc/dim outputs.
+    - `different_endpoints_produce_different_svg` — same start, two
+      different `x_end` values → different SVG.
+    - `emits_no_path_elements` — count of `<path` is exactly 0
+      (cresc.-text uses text + line only; no glyph paths).
+    - `emits_exactly_one_line_when_room_for_continuation` — exactly
+      1 `<line ` element when the dashed line is emitted.
+    - `emits_zero_lines_when_no_room_for_continuation` — degenerate
+      range: 0 `<line ` elements.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors, no
+  cresc_text-related warnings).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2780 tests
+  passing, 0 failing** (up from 2742 by exactly the 38 new tests).
+  `cargo test -p music-engraver --lib cresc_text` runs the 38 new
+  tests in isolation — all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings —
+  only the pre-existing `multi_staff.rs:394` warning persists (out
+  of scope, noted across prior progress entries).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests**; **line breaking quality
+  improvements** (Gourlay extension or Bellini & Nesi line-cost
+  model atop the existing Knuth-Plass DP); **golden-SVG corpus
+  PHASH-based visual regression**; auto-resolved low-staff
+  beam-group collision golden (still requires ScoreBuilder opt-out
+  for force-stems, deferred); cross-voice tie/slur consultation of
+  the collision detector (deferred). Natural follow-ups on the
+  cresc-text surface itself:
+  - Plumb the new `draw_cresc_text` into the score-event /
+    system_renderer / page_renderer chain so `ScoreBuilder` callers
+    can request "cresc. - - -" text instead of a hairpin (parallel
+    to how hairpins, ottavas, dynamics are exposed today).
+  - Cross-system handling: when a cresc.-text marking breaks across
+    a system boundary, the trailing half should drop the label
+    (just a dashed line) and the incoming half should *also* drop
+    the label (just a continuation dashed line) — mirroring the
+    cross-system ottava/trill-extension/hairpin pattern.
+  - A small `examples/cresc_text.rs` exercising the marking
+    visually so a reviewer can eyeball the placement and the
+    italic+dashed combination.
+  - Plumb the three niente/dashed constructors through the score →
+    system_renderer → page_renderer chain so a `ScoreBuilder`
+    caller can request any combination (closed-end-niente,
+    open-end-niente, dashed-only, dashed+niente at either end) for
+    *within-system* wedges as well. (Carried over from the
+    previous chunk — orthogonal to cresc.-text but in the same
+    plumbing pass.)
+  - Add a cross-system-hairpin golden test (carried over).
+
+- Open issues: None. The change is purely additive — no public API
+  altered, no existing module touched beyond two `mod.rs`
+  declarations (one in `layout/mod.rs`, one in `render/mod.rs` plus
+  one `pub use` re-export). The pre-existing `multi_staff.rs:394`
+  clippy warning persists (out of scope, noted across prior
+  progress entries). No score-event wiring; no example added; no
+  golden baseline regenerated.

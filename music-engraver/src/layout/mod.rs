@@ -15,6 +15,7 @@ pub mod beam;
 pub mod chord;
 pub mod chord_symbol;
 pub mod clef;
+pub mod cresc_text;
 pub mod dot;
 pub mod dynamics;
 pub mod expression;
