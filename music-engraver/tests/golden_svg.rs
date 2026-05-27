@@ -22,7 +22,7 @@ use music_engraver::layout::cresc_text::CrescTextKind;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::glissando::GlissandoStyle;
 use music_engraver::layout::grace::GraceNoteKind;
-use music_engraver::layout::hairpin::HairpinType;
+use music_engraver::layout::hairpin::{HairpinType, NientePlacement};
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::multi_staff::SubBracket;
 use music_engraver::layout::navigation::NavigationSign;
@@ -1250,6 +1250,87 @@ fn build_cross_system_cresc_text_baseline() -> String {
         .note(p("E", 4), Duration::QTR)
         .note(p("D", 4), Duration::QTR)
         .note(p("C", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+/// Combined hairpin styling: dashed wedge + niente "o" circle, exercising
+/// both [`NientePlacement`] variants on a within-system score. Mirrors the
+/// `build_cresc_text` pattern (multiple variants laid out per-measure so the
+/// SVG element-count deltas pin each variant's contribution).
+///
+/// Layout: 2 measures of 4 quarters each at 4 measures/system (default), so
+/// both hairpins fit within a single system — within-system wedge geometry
+/// only (no cross-system continuation, which is exercised by
+/// `build_cross_system_hairpins`).
+///
+/// Per measure: one full hairpin (start → end) plus a `hairpin_dashed()` and
+/// a `hairpin_niente*()` call on the start note. The renderer must produce
+/// (over the no-marking baseline):
+///   - exactly 2 `<circle>` elements (one niente "o" per hairpin), both with
+///     `fill="none"` and NO `stroke-dasharray` (engraved convention: the
+///     circle stays solid even on a dashed wedge);
+///   - exactly 4 `stroke-dasharray` attributes (each within-system dashed
+///     wedge = 2 lines × 2 hairpins);
+///   - exactly 4 extra `<line>` elements (each within-system wedge = 2
+///     lines × 2 hairpins).
+///
+/// Variants per measure:
+///   1. Crescendo + `hairpin_dashed` + `hairpin_niente()` (ClosedEnd
+///      convenience): circle at the closed (pointy) tip = wedge start.
+///   2. Decrescendo + `hairpin_dashed` + `hairpin_niente_start(OpenEnd)`:
+///      circle at the open (wide) tip = wedge start (modern convention).
+fn build_hairpin_niente_dashed() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        // Measure 1: crescendo + dashed + closed-end niente.
+        .note(p("C", 4), Duration::QTR)
+        .dynamic(Dynamic::Pp)
+        .hairpin_start(HairpinType::Crescendo)
+        .hairpin_dashed()
+        .hairpin_niente()
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .hairpin_end()
+        .dynamic(Dynamic::Forte)
+        .barline()
+        // Measure 2: decrescendo + dashed + open-end niente.
+        .note(p("G", 4), Duration::QTR)
+        .dynamic(Dynamic::Forte)
+        .hairpin_start(HairpinType::Decrescendo)
+        .hairpin_dashed()
+        .hairpin_niente_start(NientePlacement::OpenEnd)
+        .note(p("F", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .hairpin_end()
+        .dynamic(Dynamic::Pp)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same notes/structure as `build_hairpin_niente_dashed` with every
+/// `hairpin_*` / `dynamic` call removed. Used as a delta baseline so the
+/// golden can assert exactly how many extra `<line>`, `<circle>`, and
+/// `stroke-dasharray` elements the combo markings contribute over the
+/// underlying staff/clef/notes/barline rendering.
+fn build_hairpin_niente_dashed_baseline() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
         .end_barline()
         .render_svg()
 }
@@ -2566,6 +2647,141 @@ fn golden_cross_system_cresc_text() {
     );
 
     assert_golden("cross_system_cresc_text", &svg);
+}
+
+#[test]
+fn golden_hairpin_niente_dashed() {
+    let svg = build_hairpin_niente_dashed();
+    let baseline = build_hairpin_niente_dashed_baseline();
+
+    // The combo (dashed wedge + niente circle) contributes a fixed,
+    // structurally-pinned set of elements over the no-marking baseline.
+    // Each of the 2 within-system hairpins emits:
+    //   - 2 dashed `<line>` elements (upper + lower wedge arm), each with
+    //     `stroke-dasharray`
+    //   - 1 `<circle>` element with `fill="none"` and NO `stroke-dasharray`
+    //     (engraved convention: niente "o" stays solid even on a dashed
+    //     wedge)
+    // The baseline has no hairpins → no wedge lines, no dasharray, no
+    // circles, so the deltas pin the entire combo path.
+
+    // ---- Wedge line delta: 2 hairpins × 2 lines = 4 extra lines. ----
+    let svg_lines = svg.matches("<line ").count();
+    let base_lines = baseline.matches("<line ").count();
+    assert_eq!(
+        svg_lines,
+        base_lines + 4,
+        "two within-system dashed hairpins add exactly 4 wedge lines (2 per \
+         hairpin: upper + lower arm); got delta {} expected 4",
+        svg_lines as i64 - base_lines as i64
+    );
+
+    // ---- Dashed-wedge dasharray count: 4 attributes total. ----
+    let svg_dasharray = svg.matches("stroke-dasharray").count();
+    let base_dasharray = baseline.matches("stroke-dasharray").count();
+    assert_eq!(
+        base_dasharray, 0,
+        "no-marking baseline must not contain stroke-dasharray; a leak here \
+         would invalidate the delta assertion"
+    );
+    assert_eq!(
+        svg_dasharray, 4,
+        "two dashed wedges × 2 lines each = exactly 4 stroke-dasharray \
+         attributes; got {svg_dasharray}"
+    );
+
+    // ---- Niente circle delta: 2 hairpins → exactly 2 circles. ----
+    // Engraver emits no `<circle>` elements for any other element, so a
+    // count of 2 is a tight pin on the combo path.
+    let svg_circles = svg.matches("<circle ").count();
+    let base_circles = baseline.matches("<circle ").count();
+    assert_eq!(
+        base_circles, 0,
+        "no-marking baseline must not contain <circle> elements; a leak \
+         here would invalidate the delta assertion"
+    );
+    assert_eq!(
+        svg_circles, 2,
+        "two hairpins each with hairpin_niente* set must emit exactly 2 \
+         <circle> elements (one per niente); got {svg_circles}"
+    );
+
+    // ---- Per-circle engraving invariants: open ring + solid stroke. ----
+    // Each niente circle must carry `fill="none"` (open "o", not filled
+    // disk) AND must NOT carry `stroke-dasharray` (the dashed-wedge style
+    // does not propagate to the circle — engraved convention).
+    let mut circle_count = 0;
+    let mut fill_none_count = 0;
+    let mut dashed_circle_count = 0;
+    for line in svg.lines() {
+        if line.contains("<circle ") {
+            circle_count += 1;
+            if line.contains(r#"fill="none""#) {
+                fill_none_count += 1;
+            }
+            if line.contains("stroke-dasharray") {
+                dashed_circle_count += 1;
+            }
+        }
+    }
+    assert_eq!(
+        circle_count, 2,
+        "line-scan circle count must match substring count; got {circle_count}"
+    );
+    assert_eq!(
+        fill_none_count, 2,
+        "both niente circles must carry fill=\"none\" (engraved open ring); \
+         got {fill_none_count}"
+    );
+    assert_eq!(
+        dashed_circle_count, 0,
+        "niente circles must NOT carry stroke-dasharray even when the wedge \
+         is dashed (engraved convention: circle stays solid); got {dashed_circle_count}"
+    );
+
+    // ---- Counter-example: removing the niente flag must drop both circles. ----
+    // This pins the implication: `<circle>` count = 2 ⇒ both niente flags
+    // are reaching the renderer. If the niente flag silently dropped, the
+    // dashed wedges would still render (4 lines, 4 dasharray) but the
+    // circle count would fall to 0.
+    let no_niente = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .hairpin_start(HairpinType::Crescendo)
+        .hairpin_dashed()
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .hairpin_end()
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .hairpin_start(HairpinType::Decrescendo)
+        .hairpin_dashed()
+        .note(p("F", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .hairpin_end()
+        .end_barline()
+        .render_svg();
+    assert_eq!(
+        no_niente.matches("<circle ").count(),
+        0,
+        "stripping the hairpin_niente* calls must drop both circles; any \
+         residual <circle> means the niente render path is firing on the \
+         wrong flag"
+    );
+    // Same structure must still emit 4 dashed-wedge lines and 4 dasharrays
+    // — the dashed-wedge path is independent of the niente flag.
+    assert_eq!(
+        no_niente.matches("stroke-dasharray").count(),
+        4,
+        "no-niente variant must still carry the 4 dashed-wedge dasharray \
+         attrs (dashed path is independent of niente)"
+    );
+
+    assert_golden("hairpin_niente_dashed", &svg);
 }
 
 #[test]

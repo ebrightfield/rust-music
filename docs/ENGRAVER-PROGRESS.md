@@ -6673,3 +6673,112 @@
   test. The pre-existing `multi_staff.rs:394` and other
   clippy warnings noted on prior entries remain
   unaddressed (out of scope).
+
+## 2026-05-27 — Phase 8, hairpin niente + dashed score-level golden
+- Did: Added `golden_hairpin_niente_dashed` to
+  `music-engraver/tests/golden_svg.rs`, the natural
+  follow-up golden flagged on prior run's "Next" list —
+  freezes the visual baseline of the niente + dashed combo
+  path through the page renderer at the `ScoreBuilder`
+  surface. Mirrors the within-system `cresc_text` golden
+  pattern (build + baseline pair with delta assertions
+  layered on top of `assert_golden`).
+
+  Fixture (`build_hairpin_niente_dashed`): two
+  within-system hairpins on a single-system, two-measure
+  4/4 score.
+    - M1: crescendo + `hairpin_dashed()` +
+      `hairpin_niente()` (ClosedEnd convenience).
+    - M2: decrescendo + `hairpin_dashed()` +
+      `hairpin_niente_start(NientePlacement::OpenEnd)`.
+  Baseline (`build_hairpin_niente_dashed_baseline`): same
+  notes/structure with every `hairpin_*` and `dynamic`
+  call stripped. Baseline emits zero `<line>` wedges, zero
+  `stroke-dasharray`, and zero `<circle>` elements — so
+  the deltas pin the full combo contribution cleanly.
+
+  Assertions on the rendered SVG (over the baseline):
+    - `<line>` delta = +4 (2 hairpins × 2 wedge arms).
+    - `stroke-dasharray` count = 4 (every wedge arm is
+      dashed; baseline 0).
+    - `<circle>` count = 2 (one niente "o" per hairpin;
+      baseline 0).
+    - Both circles carry `fill="none"` (engraved open
+      ring, not filled disk).
+    - Neither circle carries `stroke-dasharray` (engraved
+      convention: niente stays solid even on a dashed
+      wedge).
+  Counter-example (in-test): same fixture with the
+  `hairpin_niente*` calls stripped but the
+  `hairpin_dashed()` calls kept → 0 `<circle>` and still
+  4 `stroke-dasharray`. This pins implication directions
+  in both ways: circles count = 2 ⇒ both niente flags
+  reached the renderer; dasharray count = 4 is
+  independent of niente.
+
+  Test-design choices:
+    - **Two placements crossed with two hairpin
+      directions** (ClosedEnd+Crescendo, OpenEnd+Decresc.)
+      so any regression that swaps the (kind, placement) →
+      tip mapping moves the cx of one circle but not the
+      other, perturbing the byte-frozen golden SVG.
+    - **Within-system only.** The cross-system niente
+      ownership / cy-flip behavior is already covered by
+      the page-renderer unit tests
+      (`cross_system_niente_*` in
+      `render/page_renderer/tests.rs`); a cross-system
+      golden here would duplicate that contract without
+      adding signal at the score-level surface.
+    - **Line-scan circle parse** (not just substring
+      counts) for the per-circle invariants (`fill="none"`,
+      no `stroke-dasharray`) — substring counts conflate
+      attribute-on-circle vs. attribute-on-line-elsewhere.
+    - **Dynamics included in the fixture.** Niente
+      hairpins idiomatically bracket between explicit
+      dynamic letters (e.g. `pp ⟨` and `⟩ pp`), so the
+      golden exercises that realistic context. Dynamic
+      markings render as glyph paths, not as `<line>` or
+      `<circle>`, so they don't perturb the delta counts.
+
+- Verified:
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors.
+  - `cargo build -p music-engraver` → succeeds.
+  - `cargo test -p music-engraver --offline --tests` →
+    **76 + 3 = 79 passed, 0 failed** (was 75 + 3 = 78;
+    +1 new `golden_hairpin_niente_dashed`). No existing
+    golden baseline moved.
+  - `cargo test -p music-engraver --offline --lib` →
+    **2870 passed, 0 failed** (unchanged — change is
+    test-only).
+  - New golden file:
+    `music-engraver/tests/golden/hairpin_niente_dashed.svg`
+    (40 lines, 21 `<line>`, 4 `stroke-dasharray`, 2
+    `<circle>` with `fill="none"` and no
+    `stroke-dasharray`).
+
+- Next: Multi-staff systems / grand-staff brackets
+  (`StaveConnector` equivalent) — the largest remaining
+  Phase-8/post-v1 chunk that requires structural layout
+  work. PNG export via the `png` feature
+  (`resvg` + `tiny-skia` + `fontdb`) — still the largest
+  deferred post-v1 chunk and has no in-progress
+  prerequisites. Cross-system church rests
+  (multi-measure rest cluster breaking across systems).
+  Line-breaking quality improvements (Gourlay extension
+  or Bellini & Nesi). Golden-SVG corpus PHASH-based
+  visual regression. Tablature polish beyond Phase 7
+  (the tab_* goldens are broad; further surface-level
+  features like tab-stem styling or per-string bend
+  presets remain post-v1).
+
+- Open issues: None. The change is purely additive: one
+  new build/baseline pair + one new `#[test]` in
+  `golden_svg.rs`, one new golden SVG file. No production
+  code modified, no existing baselines moved, no existing
+  tests touched. The new golden is byte-frozen so future
+  regressions in the niente + dashed combo path through
+  the page renderer will show up as a line-level SVG diff
+  in `assert_golden`'s panic output. The pre-existing
+  `multi_staff.rs:394` and other clippy warnings noted on
+  prior entries remain unaddressed (out of scope).
