@@ -3571,3 +3571,107 @@
   Pre-existing clippy warnings in `music/src/notation/rhythm/meter.rs`
   and `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, examples/laissez_vibrer.rs
+
+- Did: Added a focused worked example
+  `music-engraver/examples/laissez_vibrer.rs` that demonstrates the
+  `Articulation::LaissezVibrer` ("l.v.", let-ring) variant in isolation
+  via the `ScoreBuilder` API. Closes the last remaining "worked examples
+  for post-v1 articulation families" follow-up: alongside
+  `examples/combined_articulations.rs` (4 combined-glyph variants),
+  `examples/accent_extensions.rs` (4 accent-extension variants), and
+  `examples/bow_strokes.rs` (2 bow-stroke variants), the four post-v1
+  articulation families now each have at least one human-readable
+  walkthrough in `examples/`. The l.v. dedicated walkthrough exists so
+  a reader searching for the let-ring curve in particular (harp /
+  piano / mallet / arco-string users) finds a single-articulation
+  example, not just the four-variant accent-extension grid.
+
+  Structure (treble clef, open key, 4/4, two measures per system, four
+  measures = two systems):
+  - Measure 1: four low quarter notes (C4 D4 E4 F4), each carrying
+    `LaissezVibrer`. Low pitches → stems auto-up → l.v. glyph placed
+    below the notehead (the `ArticLaissezVibrerBelow` arm). Four
+    independent l.v. emissions, one per note.
+  - Measure 2: four high quarter notes (C5 D5 E5 F5), each carrying
+    `LaissezVibrer`. High pitches → stems auto-down → l.v. glyph
+    placed above the notehead (the `ArticLaissezVibrerAbove` arm).
+    Together M1 and M2 exercise both glyph arms on the same canvas.
+  - Measure 3: canonical harp/piano final-chord use case — a `WHOLE`
+    C-major triad (C4 E4 G4) with a single `LaissezVibrer` on the
+    chord. Verifies that l.v. attaches to a chord as one glyph (not
+    per-notehead) and routes to the `Below` arm.
+  - Measure 4: end-of-piece marking — a high `WHOLE` C-major triad
+    (C5 E5 G5) stacked with `LaissezVibrer + Fermata`. The stack
+    splitter puts the fermata in the always-above bucket and the
+    l.v. in the normal bucket, so even though both glyphs end up
+    above the chord (high WHOLE → notional stem down → l.v. above)
+    they stack outward in distinct buckets. A regression that
+    misrouted l.v. into the fermata bucket would collapse the two
+    glyphs into a single bucket and lose the outward stacking.
+
+  Assertions:
+  - `svg.starts_with("<svg")` and `svg.contains("</svg>")` —
+    structural sanity.
+  - `path_count >= 27`: 2 clefs (one per system) + 4+4+3+3 = 14
+    noteheads + 4+4+1+1 = 10 l.v. glyphs + 1 fermata = 27 minimum.
+    Lower bound rather than equality so unrelated renderer additions
+    (e.g. extra ledger lines) don't trip the example; tight enough
+    that a regression silently dropping any of the 10 l.v. or 1
+    fermata emissions would fail.
+  - `line_count >= 3`: at least three `<line>` elements (barlines,
+    stems, or staff segments) — a structural floor that catches a
+    catastrophic SVG emitter regression. M3 and M4 are WHOLE notes
+    with no stems, so the floor only relies on barlines + staff
+    segments, not stems.
+  - `path_count > 2`: trivially distinguishes "every glyph beyond the
+    clefs vanished" (which would be 2) from a working render.
+  - Distinct `<path d="...">` count >= 3: an l.v.-specific guard. The
+    `Above` and `Below` SMuFL glyphs are *distinct outlines* (not a
+    draw-time flip of a single glyph). If a regression collapsed
+    `glyph(Above)` and `glyph(Below)` onto the same enum arm, M1 and
+    M2 would emit identical path `d` strings, dropping the distinct
+    count. Floors at 3 (clef + at least one notehead + at least one
+    articulation glyph) to keep the assertion robust against
+    cosmetic SVG changes.
+  - Writes `music-engraver/examples/output/laissez_vibrer.svg` for
+    visual inspection (matches the convention used by all other
+    example outputs tracked in git).
+
+- Verified: `cargo check -p music-engraver --example laissez_vibrer`
+  passes (0 errors). `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver --example laissez_vibrer` succeeds.
+  `cargo run -p music-engraver --example laissez_vibrer` runs to
+  completion, prints `laissez_vibrer.svg: 12213 bytes, 29 paths`,
+  and produces a 12213-byte SVG starting with `<svg xmlns="..."` and
+  containing the expected 29 `<path>` elements (above the assertion
+  floor of 27 — 2 clefs + 14 noteheads + 11 articulation glyphs = 27
+  guaranteed, plus an extra 2 from background renderer paths).
+  Existing `golden_accent_extensions` byte-exact regression (which
+  covers all four accent-extension variants including LaissezVibrer)
+  continues to pass — the example and the golden test build distinct
+  scores, so they are independent. `cargo clippy -p music-engraver
+  --example laissez_vibrer` reports only the pre-existing
+  `music-engraver/src/score/multi_staff.rs:394` and
+  `music/src/notation/rhythm/meter.rs` warnings — the new file is
+  clippy-clean.
+
+- Next: With the four post-v1 articulation families (combined,
+  accent-extension, bow-stroke, laissez-vibrer) all now covered by
+  worked examples on disk, the next candidate post-v1 chunks are:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; trill polish (per-segment `WiggleTrillFast` variant
+  selection from a single-speed annotation); auto-resolved low-staff
+  beam-group collision golden (still requires ScoreBuilder opt-out
+  for force-stems, deferred); cross-voice tie/slur consultation of
+  the collision detector (deferred).
+
+- Open issues: None. The example file is additive — no library code
+  changed, no golden baseline regenerated, no existing test affected.
+  Pre-existing clippy warnings in `music/src/notation/rhythm/meter.rs`
+  and `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
+  (out of scope for this chunk).
