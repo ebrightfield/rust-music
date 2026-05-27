@@ -6936,3 +6936,118 @@
   pre-existing `multi_staff.rs:394` and other clippy
   warnings noted on prior entries remain unaddressed (out
   of scope).
+
+## 2026-05-27 — Phase 8, golden test: all four pedal variants
+- Did: Added a new golden SVG test
+  `golden_all_pedal_marks` (in
+  `music-engraver/tests/golden_svg.rs`) that exercises all
+  four `PedalMark` variants (Down, Up, Half, Sost) in a
+  single score render. This is the natural follow-up the
+  previous entry flagged as Next: the existing
+  `golden_pedal_marks` only covers the original Down/Up
+  pair, so the newer Half/Sost variants did not have a
+  byte-frozen visual baseline at the page-renderer
+  surface. They had unit-level coverage in
+  `layout::pedal::tests`, `render::pedal_renderer::tests`,
+  and `score::tests` (22 tests added in the prior entry),
+  but no end-to-end golden until now.
+
+  New fixture `build_all_pedal_marks`:
+    - 8 quarter notes across 2 measures.
+    - Measure 1: C4(pedal_down), E4, G4, C5(pedal_up) —
+      the original pair.
+    - Measure 2: G4(pedal_half), E4, C4, G3(pedal_sost) —
+      the new variants.
+    - Open key signature, treble clef, 4/4 — the same
+      "uncluttered" context as `build_pedal_marks` so the
+      delta against a no-pedal baseline is structural,
+      not coincidental.
+
+  Test-design choices (per the
+  "would fail if implementation were removed" bar):
+    - **Path-count delta = +4 over a no-pedal baseline.**
+      Each `PedalMark` renders as exactly one `<path>`
+      with no decoration; a regression that emitted any
+      extra path per mark (bracket, extension line) or
+      dropped a mark entirely would move the delta. The
+      baseline is constructed inline using the same note
+      sequence, so the delta isolates the pedal-rendering
+      path.
+    - **Counter-example A: all-Down.** Build the same
+      8-note score but replace `pedal_up`/`pedal_half`/
+      `pedal_sost` with `pedal_down`, and assert
+      `svg != all_down_svg`. A regression that
+      copy-pasted the `PedalMark::Down` arm into the
+      other arms of `PedalMark::glyph()` (the
+      most-likely refactor accident) would collapse all
+      four glyphs onto KeyboardPedalPed and make the two
+      SVGs byte-identical. Also asserts `all_down`
+      itself adds +4 paths over the baseline — a sanity
+      check on the delta arithmetic.
+    - **Counter-example B: all-Half.** Same shape, with
+      `pedal_half` in every slot. A regression that
+      mapped Down/Up/Sost → Half would be caught here
+      but not by A. Together A and B cover every
+      "single-glyph collapse" regression for the four
+      variants (Down/Half are the two glyphs in the
+      counter-example set; if both pass, no other
+      variant is collapsing to them either, because
+      the all-variants render must still differ from
+      both).
+    - **Distinctness from `build_pedal_marks`.** Assert
+      `svg != build_pedal_marks()`. Catches a
+      regression where the new fixture accidentally
+      produces byte-identical output to the old one
+      (different number of marks, different measure
+      count) — a defense against the fixture being
+      a copy that didn't actually use the new builder
+      methods.
+    - **Byte-frozen golden via `assert_golden`.** The
+      `all_pedal_marks.svg` baseline is 37 lines, 15
+      `<path>` total (11 from base notation + 4 pedal
+      glyphs), and pins the four pedal-glyph
+      translates at y=2750 (the below-staff pedal
+      axis) at four distinct x positions (≈ 2705,
+      5389, 6306, 8527 EM units). Future regressions
+      in pedal glyph routing, advance-width centering,
+      or y-band placement will surface as a
+      line-level diff in `assert_golden`'s panic
+      output.
+
+- Verified:
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors.
+  - `cargo build -p music-engraver` → succeeds.
+  - `cargo test -p music-engraver --offline --test golden_svg`
+    → **77 passed, 0 failed** (was 76; +1 new
+    `golden_all_pedal_marks`). No existing golden
+    baseline moved.
+  - `cargo test -p music-engraver --offline --lib` →
+    **2892 passed, 0 failed** (unchanged — change is
+    test-only).
+  - New golden file:
+    `music-engraver/tests/golden/all_pedal_marks.svg`
+    (37 lines, 15 `<path>`, 4 of them at
+    `translate(*, 2750)` — the pedal axis below
+    staff).
+
+- Next: Multi-staff systems / grand-staff brackets
+  (`StaveConnector` equivalent) — the largest remaining
+  Phase-8/post-v1 chunk that requires structural layout
+  work. PNG export via the `png` feature (`resvg` +
+  `tiny-skia` + `fontdb`) — still the largest deferred
+  post-v1 chunk and has no in-progress prerequisites.
+  Cross-system church rests (multi-measure rest cluster
+  breaking across systems). Line-breaking quality
+  improvements (Gourlay extension or Bellini & Nesi).
+  Golden-SVG corpus PHASH-based visual regression.
+  Tablature polish beyond Phase 7 (per-string bend
+  presets, tab-stem styling).
+
+- Open issues: None. Change is purely additive: one new
+  fixture function + one new `#[test]` in
+  `golden_svg.rs`, one new byte-frozen golden SVG file.
+  No production code modified, no existing baselines
+  moved, no existing tests touched. The pre-existing
+  `multi_staff.rs:394` and other clippy warnings noted
+  on prior entries remain unaddressed (out of scope).

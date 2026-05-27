@@ -3244,6 +3244,148 @@ fn golden_pedal_marks() {
     assert_golden("pedal_marks", &svg);
 }
 
+/// Score that exercises **all four** pedal variants (Down, Up, Half, Sost)
+/// in a single page render. The previous `golden_pedal_marks` fixture
+/// only covers the original Down/Up pair; this one freezes the visual
+/// baseline of the newer `PedalMark::Half` and `PedalMark::Sost`
+/// variants through the full page-renderer pipeline.
+///
+/// Layout: 8 quarter notes across 2 measures.
+///   M1: C4-pedal_down, E4, G4, C5-pedal_up
+///   M2: G4-pedal_half, E4, C4, G3-pedal_sost
+fn build_all_pedal_marks() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        // Measure 1: Down + Up (the original pair)
+        .note(p("C", 4), Duration::QTR)
+        .pedal_down()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .pedal_up()
+        .barline()
+        // Measure 2: Half + Sost (the new variants)
+        .note(p("G", 4), Duration::QTR)
+        .pedal_half()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("G", 3), Duration::QTR)
+        .pedal_sost()
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_all_pedal_marks() {
+    let svg = build_all_pedal_marks();
+
+    // ---- Path delta: 4 pedal marks add exactly 4 paths. ----
+    // Each PedalMark variant renders as one <path> (glyph outline) with no
+    // additional decoration (no extension lines, no bracket). This pins
+    // the contract that every variant is structurally a single glyph.
+    let base_svg = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("G", 3), Duration::QTR)
+        .end_barline()
+        .render_svg();
+    let with_pedal = svg.matches("<path").count();
+    let no_pedal = base_svg.matches("<path").count();
+    assert_eq!(
+        with_pedal,
+        no_pedal + 4,
+        "all-four-variants score must add exactly 4 paths (one per pedal \
+         mark); got delta {}",
+        with_pedal as i64 - no_pedal as i64
+    );
+
+    // ---- Variant distinctness: must differ from same-variant scores. ----
+    // If a regression collapsed Half → Down (e.g. a copy-paste of the Down
+    // branch in PedalMark::glyph()), the all-four-variants SVG would
+    // become byte-identical to an all-Down score. Same logic for Sost.
+    // These assertions pin variant-specific glyph routing through the
+    // entire builder → layout → renderer pipeline.
+    let all_down = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .pedal_down()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .pedal_down()
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .pedal_down()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("G", 3), Duration::QTR)
+        .pedal_down()
+        .end_barline()
+        .render_svg();
+    assert_ne!(
+        svg, all_down,
+        "all-four-variants SVG must differ from all-Down SVG; if equal, the \
+         Up/Half/Sost branches are silently mapping to Down (regression in \
+         PedalMark::glyph or builder)"
+    );
+    assert_eq!(
+        all_down.matches("<path").count(),
+        no_pedal + 4,
+        "all-Down score must also add exactly 4 paths (sanity check on \
+         the delta arithmetic above)"
+    );
+
+    let all_half = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .pedal_half()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("C", 5), Duration::QTR)
+        .pedal_half()
+        .barline()
+        .note(p("G", 4), Duration::QTR)
+        .pedal_half()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("G", 3), Duration::QTR)
+        .pedal_half()
+        .end_barline()
+        .render_svg();
+    assert_ne!(
+        svg, all_half,
+        "all-four-variants SVG must differ from all-Half SVG; if equal, the \
+         Down/Up/Sost branches are silently mapping to Half"
+    );
+
+    // ---- Distinctness from the existing Down/Up-only fixture. ----
+    // build_pedal_marks() uses only Down + Up across 1 measure; this
+    // fixture spans 2 measures with all four variants. They must differ.
+    assert_ne!(
+        svg,
+        build_pedal_marks(),
+        "all-four-variants golden must differ from the original Down/Up-only \
+         pedal_marks golden (different fixture, different mark set)"
+    );
+
+    assert_golden("all_pedal_marks", &svg);
+}
+
 fn build_tab_pre_bends() -> String {
     TabScoreBuilder::guitar()
         .measures_per_system(2)
