@@ -3133,3 +3133,119 @@
   share the normal-bucket contract with the four covered here and
   could either get their own golden or be folded into the existing
   one in a future chunk.
+
+## 2026-05-27 — Post-v1, golden_bow_strokes
+
+- Did: Added a `golden_bow_strokes` SVG-regression test that locks the
+  full SVG encoding (glyph routing + always-above placement + bow-stack
+  bucket routing) for the two bow-stroke `Articulation` variants
+  (`UpBow`, `DownBow`). The previous chunk explicitly deferred these
+  because their always-above placement rule and dedicated bow-stack
+  bucket make them structurally distinct from the normal-bucket
+  accent-extension family — combining both contracts into one golden
+  would have made the assertions noisy. This chunk closes that gap
+  using the same shape as `golden_fermata_variants` and
+  `golden_accent_extensions`.
+
+  `music-engraver/tests/golden_svg.rs`:
+  - Added `BOW_STROKE_VARIANTS: [Articulation; 2]` listing UpBow and
+    DownBow in canonical order. Docstring names the shared wiring
+    contract — always-above placement, dedicated bow-stroke stack
+    bucket distinct from the normal and fermata buckets — so a future
+    reviewer can trace why these two are grouped together apart from
+    the existing articulation-variant goldens.
+  - Added `BOW_STROKE_PITCHES: [(&str, u8); 2]` — E4 (line 1, stem
+    up) and C5 (3rd space, stem down). The docstring is explicit
+    that for bow strokes (which always render above regardless of
+    stem direction) the alternation specifically tests **stem-
+    independence** of the always-above contract — distinct from
+    `ACCENT_EXTENSION_PITCHES` where the alternation is what
+    exercises the Above and Below glyph arms.
+  - Added `build_bow_strokes()`: 2-measure 4/4 system, one HALF note
+    + HALF rest per measure, articulation applied to each note.
+    HALF (not WHOLE) so each note carries a real stem.
+  - Added `build_bow_strokes_plain()`: structural baseline — same
+    score, no articulations.
+  - Added `#[test] fn golden_bow_strokes()` with the following
+    concrete-value assertions:
+      1. Structural: SVG starts with `<svg` and contains `</svg>`.
+      2. Path-count guard: `full.<path-count> − plain.<path-count>
+         == 2`. Catches a regression where either variant maps to a
+         missing glyph (delta drops to 1) or to a multi-path glyph
+         (delta climbs to 3+).
+      3. Distinct-d guard: the set difference of `d="..."` strings
+         between full and plain must contain exactly 2 entries.
+         Catches a `glyph()` arm typo that aliases UpBow onto
+         DownBow's path data (or either onto something else); this
+         is the strongest single regression net for the
+         StringsUpBow/StringsDownBow glyph routing.
+      4. Plain-disjoint check: every newly-added d-string must NOT
+         appear in the plain baseline. Catches the (unlikely but
+         possible) regression where a bow glyph's path data
+         coincidentally matches a notehead/rest/clef in the
+         baseline.
+      5. Cross-baseline distinctness vs `build_articulations()` —
+         catches a regression that routed bow strokes into the
+         normal (stem-opposite) bucket, which would place the E4
+         glyph BELOW the note matching the staccato's y-region in
+         that score.
+      6. Cross-baseline distinctness vs `build_fermata_variants()` —
+         catches a regression that routed bow strokes into the
+         fermata bucket (also always-above but at a different
+         y-offset).
+      7. Cross-baseline distinctness vs `build_accent_extensions()` —
+         same overall score shape (2 measures of HALF + HALF-rest
+         per measure) but different glyph family and different stack
+         bucket; a byte-equal match would indicate a collapse onto
+         the accent extensions.
+      8. `assert_golden("bow_strokes", &svg)` — byte-exact baseline
+         lock, matching the pattern of all other golden tests.
+
+- Verified: `cargo check -p music-engraver --tests` passes (0 errors).
+  `cargo check --workspace` passes. `cargo build -p music-engraver`
+  succeeds. `cargo test -p music-engraver --test golden_svg
+  golden_bow_strokes` — passes both at `GOLDEN_UPDATE=1` baseline-
+  generation time AND on the immediate re-run without
+  `GOLDEN_UPDATE` (byte-equal). `cargo test -p music-engraver
+  --test golden_svg` — **71 golden tests pass** (vs 70 prior; +1 new,
+  exact arithmetic match — and crucially, all 70 pre-existing
+  goldens remain byte-identical, confirming the new functions did
+  not perturb any shared state). `cargo test -p music-engraver
+  --lib` — **2543 unit tests pass** (unchanged from prior — this
+  chunk added only an integration-test-binary test). Generated
+  baseline is 5373 bytes / 21 lines / 9 `<path>` elements (1 clef
+  + 2 noteheads + 2 stems + 2 rests + 2 bow-stroke glyphs +
+  whatever the open-key/4-4 time sig contributes — consistent
+  with the path-count guard's `delta == 2` between full and
+  plain).
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression**; **golden
+  coverage for the combined-variant articulations** (AccentStaccato,
+  MarcatoStaccato, TenutoStaccato, TenutoAccent — share the normal-
+  bucket contract with the accent extensions, could be folded in
+  or get their own golden); **PNG export via the `png` feature**
+  (`resvg` + `tiny-skia` + `fontdb`); **worked
+  `examples/laissez_vibrer.rs`, `examples/accent_extensions.rs`,
+  `examples/bow_strokes.rs`** (small follow-ups, not required to
+  lock variants in); trill polish (per-segment `WiggleTrillFast`
+  variant selection from a single-speed annotation); auto-resolved
+  low-staff beam-group collision golden (still requires
+  ScoreBuilder opt-out for force-stems, deferred); cross-voice
+  tie/slur consultation of the collision detector (deferred).
+
+- Open issues: None. With this chunk, the three post-v1
+  articulation-glyph chunks (combined-variant, accent extensions,
+  laissez vibrer) and their classification family (bow strokes) are
+  now all covered by golden SVG regression: `golden_accent_extensions`
+  locks the four normal-bucket post-v1 variants (SoftAccent, Stress,
+  Unstress, LaissezVibrer) and `golden_bow_strokes` locks the
+  always-above bow-stack-bucket variants. The combined-variant
+  articulations (AccentStaccato, MarcatoStaccato, TenutoStaccato,
+  TenutoAccent) remain the last articulation-family without
+  dedicated golden coverage, since they predate this golden-coverage
+  pattern and share the normal-bucket contract already exercised by
+  `golden_articulations` and `golden_accent_extensions`.

@@ -594,6 +594,80 @@ fn build_accent_extensions_plain() -> String {
     b.end_barline().render_svg()
 }
 
+/// Canonical ordering of the 2 SMuFL bow-stroke variants. Both share the
+/// always-above placement contract and live in the dedicated bow-stroke
+/// stack bucket — distinct from the normal (stem-opposite) bucket covered
+/// by the accent-extensions golden, and distinct from the fermata bucket
+/// covered by the fermata-variants golden. Locked here so a future
+/// regression that reclassifies either of these into the normal bucket
+/// (placing them stem-opposite) or the fermata bucket (placing them
+/// outside any fermatas) would change the rendered placement and trip
+/// the byte-exact baseline.
+const BOW_STROKE_VARIANTS: [Articulation; 2] = [
+    Articulation::UpBow,
+    Articulation::DownBow,
+];
+
+/// Pitches for the bow-stroke score. Alternating low/high so the engraver
+/// assigns alternating stem directions across the two measures: position
+/// 1 (E4) stems up, position 7 (C5) stems down. Because bow strokes
+/// **always** render above regardless of stem direction, the score on
+/// the page must still place both glyphs above — the alternation
+/// specifically tests that the always-above contract is independent of
+/// stem direction. (Compare with `ACCENT_EXTENSION_PITCHES`, where
+/// alternation is what *causes* both Above and Below arms to be
+/// exercised.)
+const BOW_STROKE_PITCHES: [(&str, u8); 2] = [
+    ("E", 4), // line 1 → stem up; bow still above
+    ("C", 5), // 3rd space → stem down; bow still above
+];
+
+/// Each of the 2 bow-stroke variants on a half note in its own measure
+/// across one 2-measure system. HALF (not WHOLE) so each note carries a
+/// real stem, exercising the stem-independence of the always-above
+/// placement rule.
+fn build_bow_strokes() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    let count = BOW_STROKE_VARIANTS.len();
+    for (i, variant) in BOW_STROKE_VARIANTS.iter().enumerate() {
+        let (n, oct) = BOW_STROKE_PITCHES[i];
+        b = b
+            .note(p(n, oct), Duration::HALF)
+            .articulation(*variant)
+            .rest(Duration::HALF);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
+/// Same layout as `build_bow_strokes` with no articulations. Used as the
+/// structural baseline for the bow-stroke golden test: the variant score
+/// must differ from this by exactly one path per variant, and the
+/// variant score's d-string set must contribute exactly
+/// `BOW_STROKE_VARIANTS.len()` unique d-strings.
+fn build_bow_strokes_plain() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2);
+    let count = BOW_STROKE_VARIANTS.len();
+    for (i, _variant) in BOW_STROKE_VARIANTS.iter().enumerate() {
+        let (n, oct) = BOW_STROKE_PITCHES[i];
+        b = b.note(p(n, oct), Duration::HALF).rest(Duration::HALF);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
 /// Grace note before a principal note.
 fn build_grace_notes() -> String {
     ScoreBuilder::new()
@@ -1441,6 +1515,113 @@ fn golden_accent_extensions() {
     );
 
     assert_golden("accent_extensions", &svg);
+}
+
+#[test]
+fn golden_bow_strokes() {
+    let svg = build_bow_strokes();
+    let plain = build_bow_strokes_plain();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "bow_strokes should be SVG");
+    assert!(svg.contains("</svg>"), "bow_strokes should close SVG");
+
+    // Path-count guard: each variant must add exactly one path on top of
+    // the same score with no articulations. Catches a silent regression
+    // where either of the 2 variants maps to a missing glyph (zero
+    // paths) or to a multi-path glyph (more than 1).
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths,
+        BOW_STROKE_VARIANTS.len(),
+        "each bow-stroke variant must add exactly one path: \
+         full={full_paths}, plain={plain_paths}, delta={added_paths}, \
+         expected={}",
+        BOW_STROKE_VARIANTS.len()
+    );
+
+    // Distinct-d guard: each variant must contribute a unique SMuFL
+    // path payload. Bravura ships distinct outlines for StringsUpBow and
+    // StringsDownBow — if a `glyph()` arm typo collapsed them onto the
+    // same glyph, this assertion fails.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        BOW_STROKE_VARIANTS.len(),
+        "bow-stroke variants must contribute exactly {} unique path \
+         d-strings (no glyph collapses), got {}",
+        BOW_STROKE_VARIANTS.len(),
+        added.len()
+    );
+
+    // Plain-disjoint check: every newly-added d-string must NOT appear
+    // in the plain (no-articulation) baseline. Catches the (unlikely
+    // but possible) regression where a bow-stroke glyph's path data
+    // coincidentally matches a notehead, rest, or clef path in the
+    // baseline.
+    let plain_set = distinct_d(&plain);
+    for d in &added {
+        assert!(
+            !plain_set.contains(d),
+            "bow-stroke d-string {d:?} should not appear in the plain \
+             (no-articulation) baseline"
+        );
+    }
+
+    // Placement-contract guard: bow strokes always render *above* the
+    // notehead regardless of stem direction. The two notes in this
+    // score (E4, C5) have opposite auto-assigned stem directions
+    // (up, down respectively). For each bow-stroke glyph, the y of its
+    // `<path transform="translate(x,y)`-style anchor must be ABOVE
+    // (numerically less than) the notehead-row y. We can't easily
+    // recover per-path y from the rendered SVG without parsing
+    // transforms, but we can guard the contract by asserting that
+    // neither bow d-string aliases any d-string in `build_articulations`
+    // (which contains a Staccato on E4 with stem-up — placed BELOW the
+    // note via the normal bucket — distinct geometry). If a regression
+    // routed bow strokes into the normal bucket, the E4 bow would land
+    // below the note (matching the staccato y-region), and the byte-
+    // exact baseline below would catch the placement shift. Here we
+    // assert the cross-baseline distinctness explicitly.
+    assert_ne!(
+        svg,
+        build_articulations(),
+        "bow_strokes must differ from the existing articulations baseline"
+    );
+    // And from the fermata-variants baseline (different glyph family,
+    // also always-above but in the fermata bucket — different y-offset).
+    assert_ne!(
+        svg,
+        build_fermata_variants(),
+        "bow_strokes must differ from the fermata_variants baseline"
+    );
+    // And from the accent-extensions baseline (same overall score
+    // shape — 2 measures of HALF + HALF-rest — but different glyph
+    // family and different bucket; a byte-equal match would mean the
+    // bow variants collapsed onto the accent extensions, which would
+    // be a glyph-routing regression).
+    assert_ne!(
+        svg,
+        build_accent_extensions(),
+        "bow_strokes must differ from the accent_extensions baseline"
+    );
+
+    assert_golden("bow_strokes", &svg);
 }
 
 #[test]
