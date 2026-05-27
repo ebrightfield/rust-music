@@ -47,7 +47,7 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::cresc_text::CrescTextKind;
 use crate::layout::grace::GraceNoteKind;
-use crate::layout::hairpin::HairpinType;
+use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::key_signature::KeySignature;
@@ -352,6 +352,43 @@ impl ScoreBuilder {
             annotations.hairpin_dashed = true;
         }
         self
+    }
+
+    /// Attach a niente "o" circle to the hairpin starting at the most recently
+    /// added note or chord, at the [`NientePlacement`] tip of the wedge.
+    ///
+    /// Use after a `hairpin_start` / `cresc()` / `decresc()` call on the same
+    /// note. The circle marks "to/from silence":
+    /// - [`NientePlacement::ClosedEnd`] — circle at the pointy tip
+    ///   ("al niente" / "dal niente", standard convention)
+    /// - [`NientePlacement::OpenEnd`] — circle at the wide tip (rare modern
+    ///   variant, Lachenmann / Sciarrino)
+    ///
+    /// Combines with [`Self::hairpin_dashed`]: the wedge dashes but the
+    /// circle stays solid per engraved convention. Cross-system hairpins
+    /// place the circle on whichever half (trailing on the source system or
+    /// incoming on the target system) contains the anchor tip.
+    ///
+    /// Must be called immediately after `.note()` or `.chord()` — i.e.
+    /// alongside the `hairpin_start` call. Has no effect if the last event
+    /// is not a note or chord, and (silently) no visible effect if the last
+    /// event has no `hairpin_start` set.
+    pub fn hairpin_niente_start(mut self, placement: NientePlacement) -> Self {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
+            annotations.hairpin_niente = Some(placement);
+        }
+        self
+    }
+
+    /// Convenience: attach a closed-end niente "o" (the common
+    /// "al niente" / "dal niente" convention) to the hairpin starting at the
+    /// most recent note.
+    ///
+    /// Equivalent to `hairpin_niente_start(NientePlacement::ClosedEnd)`. Use
+    /// `hairpin_niente_start(NientePlacement::OpenEnd)` for the rarer
+    /// modern-notation variant.
+    pub fn hairpin_niente(self) -> Self {
+        self.hairpin_niente_start(NientePlacement::ClosedEnd)
     }
 
     /// Mark the start of a dashed-text crescendo / diminuendo marking

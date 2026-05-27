@@ -1,7 +1,7 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::cresc_text::{layout_cresc_text, CrescTextKind};
 use crate::layout::glissando::{layout_glissando, GlissandoStyle};
-use crate::layout::hairpin::{layout_hairpin, layout_hairpin_dashed, HairpinType};
+use crate::layout::hairpin::{layout_hairpin_styled, HairpinType, NientePlacement};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
@@ -355,6 +355,11 @@ pub(crate) struct HairpinNoteInfo {
     /// `MeasureElement::Note` and `MeasureElement::Chord` annotations so that
     /// `draw_system_hairpins` and the cross-system splitter both see it.
     pub(crate) hairpin_dashed: bool,
+    /// Mirror of `NoteAnnotations::hairpin_niente`. When `Some`, the wedge
+    /// starting at this note carries an open "o" circle at the tip selected
+    /// by the [`NientePlacement`]. `None` on notes that aren't a hairpin
+    /// start, or on plain hairpins.
+    pub(crate) hairpin_niente: Option<NientePlacement>,
 }
 
 pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
@@ -369,6 +374,7 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         hairpin_start: n.annotations.hairpin_start,
                         hairpin_end: n.annotations.hairpin_end,
                         hairpin_dashed: n.annotations.hairpin_dashed,
+                        hairpin_niente: n.annotations.hairpin_niente,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -378,6 +384,7 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         hairpin_start: c.annotations.hairpin_start,
                         hairpin_end: c.annotations.hairpin_end,
                         hairpin_dashed: c.annotations.hairpin_dashed,
+                        hairpin_niente: c.annotations.hairpin_niente,
                     });
                 }
                 _ => {}
@@ -427,25 +434,16 @@ fn draw_system_hairpins(
         // Use staff line thickness as hairpin stroke width
         let stroke_width = config.staff_line_thickness_fu();
 
-        let hp_layout = if info.hairpin_dashed {
-            layout_hairpin_dashed(
-                hairpin_type,
-                hp_x_start,
-                hp_x_end,
-                staff.bottom_y(),
-                config.staff_space,
-                stroke_width,
-            )
-        } else {
-            layout_hairpin(
-                hairpin_type,
-                hp_x_start,
-                hp_x_end,
-                staff.bottom_y(),
-                config.staff_space,
-                stroke_width,
-            )
-        };
+        let hp_layout = layout_hairpin_styled(
+            hairpin_type,
+            hp_x_start,
+            hp_x_end,
+            staff.bottom_y(),
+            config.staff_space,
+            stroke_width,
+            info.hairpin_niente,
+            info.hairpin_dashed,
+        );
         draw_hairpin(svg, &hp_layout);
     }
 

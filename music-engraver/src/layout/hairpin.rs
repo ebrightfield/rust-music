@@ -7,6 +7,24 @@ pub enum HairpinType {
     Decrescendo,
 }
 
+/// Which tip of the wedge carries the niente "o" circle.
+///
+/// Drives the choice between [`layout_hairpin_with_niente`] (closed-end —
+/// the common "al niente" / "dal niente" convention) and
+/// [`layout_hairpin_with_niente_at_open_end`] (rare modern-notation variant
+/// used by Lachenmann, Sciarrino, etc).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum NientePlacement {
+    /// Niente "o" sits at the closed (pointy) tip of the wedge. Standard
+    /// engraving convention for "from silence" (crescendo) or "to silence"
+    /// (decrescendo).
+    ClosedEnd,
+    /// Niente "o" sits at the open (wide) tip of the wedge. Used in
+    /// contemporary scores where the silence is at the wide side — e.g. a
+    /// crescendo opening out into silence.
+    OpenEnd,
+}
+
 /// Open circle drawn at the closed (pointy) end of a hairpin, indicating
 /// "to/from silence" (niente / al niente / dal niente).
 ///
@@ -247,6 +265,61 @@ pub fn layout_hairpin_dashed(
         dash_length: HAIRPIN_DASH_LENGTH_SS * staff_space,
         gap_length: HAIRPIN_GAP_LENGTH_SS * staff_space,
     });
+    layout
+}
+
+/// Compute the layout for a hairpin in any of the four supported styles.
+///
+/// Single entry point for the score-event chain: callers pass the optional
+/// niente placement and the dashed flag and get back a fully-styled
+/// [`HairpinLayout`]. Equivalent to choosing among
+/// [`layout_hairpin`], [`layout_hairpin_dashed`],
+/// [`layout_hairpin_with_niente`], and [`layout_hairpin_with_niente_at_open_end`]
+/// based on the flags — but written once, so the system renderer and the
+/// cross-system splitter on the page renderer don't have to duplicate the
+/// combinatorics.
+///
+/// Wedge geometry (x_start, x_end, y_center, half_opening, stroke_width) is
+/// byte-identical to [`layout_hairpin`] for the same arguments regardless of
+/// the niente / dashed flags. The niente "o" circle, when present, sits at
+/// the tip selected by [`NientePlacement`] and remains solid even when
+/// `dashed = true` — engraved convention treats the niente as a definite
+/// symbol independent of the wedge's dashed/solid style.
+pub fn layout_hairpin_styled(
+    kind: HairpinType,
+    x_start: f64,
+    x_end: f64,
+    staff_bottom_y: f64,
+    staff_space: f64,
+    stroke_width: f64,
+    niente: Option<NientePlacement>,
+    dashed: bool,
+) -> HairpinLayout {
+    let mut layout = match niente {
+        Some(NientePlacement::ClosedEnd) => layout_hairpin_with_niente(
+            kind,
+            x_start,
+            x_end,
+            staff_bottom_y,
+            staff_space,
+            stroke_width,
+        ),
+        Some(NientePlacement::OpenEnd) => layout_hairpin_with_niente_at_open_end(
+            kind,
+            x_start,
+            x_end,
+            staff_bottom_y,
+            staff_space,
+            stroke_width,
+        ),
+        None => layout_hairpin(kind, x_start, x_end, staff_bottom_y, staff_space, stroke_width),
+    };
+    if dashed {
+        layout.dashed = Some(HairpinDashStyle {
+            dash_length: HAIRPIN_DASH_LENGTH_SS * staff_space,
+            gap_length: HAIRPIN_GAP_LENGTH_SS * staff_space,
+        });
+    }
     layout
 }
 
@@ -820,5 +893,168 @@ mod tests {
         let d = h.dashed.unwrap();
         assert!((d.dash_length - 80.0).abs() < 1e-12);
         assert!((d.gap_length - 40.0).abs() < 1e-12);
+    }
+
+    // ---- layout_hairpin_styled (unified entry point) ----
+    //
+    // These tests pin the contract that the unified helper is exactly
+    // equivalent to the individual constructors for every (niente × dashed)
+    // combination — same geometry, same niente anchor, same dash pattern.
+    // The score-event chain (system_renderer + page_renderer cross-system
+    // splitter) routes through this single helper; if the equivalence
+    // breaks, a downstream golden delta will catch the visual change but
+    // these unit tests pin the layer at its source.
+
+    #[test]
+    fn styled_no_niente_no_dash_equals_plain_hairpin() {
+        let s = layout_hairpin_styled(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW, None, false,
+        );
+        let p = layout_hairpin(HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW);
+        assert!(s.niente.is_none(), "no niente requested → none in layout");
+        assert!(s.dashed.is_none(), "no dashed requested → none in layout");
+        assert!((s.x_start - p.x_start).abs() < 1e-12);
+        assert!((s.x_end - p.x_end).abs() < 1e-12);
+        assert!((s.y_center - p.y_center).abs() < 1e-12);
+        assert!((s.half_opening - p.half_opening).abs() < 1e-12);
+        assert_eq!(s.kind, p.kind);
+    }
+
+    #[test]
+    fn styled_dashed_no_niente_equals_layout_hairpin_dashed() {
+        let s = layout_hairpin_styled(
+            HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW, None, true,
+        );
+        let p = layout_hairpin_dashed(HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW);
+        let ds = s.dashed.expect("styled dashed=true → Some");
+        let dp = p.dashed.expect("layout_hairpin_dashed → Some");
+        assert!((ds.dash_length - dp.dash_length).abs() < 1e-12);
+        assert!((ds.gap_length - dp.gap_length).abs() < 1e-12);
+        assert!((ds.dash_length - HAIRPIN_DASH_LENGTH_SS * SS).abs() < 1e-12);
+        assert!((ds.gap_length - HAIRPIN_GAP_LENGTH_SS * SS).abs() < 1e-12);
+        assert!(s.niente.is_none());
+    }
+
+    #[test]
+    fn styled_closed_niente_no_dash_anchors_at_closed_tip() {
+        let s = layout_hairpin_styled(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+            Some(NientePlacement::ClosedEnd), false,
+        );
+        let p = layout_hairpin_with_niente(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        );
+        assert!(s.dashed.is_none());
+        let ns = s.niente.expect("closed niente requested → Some");
+        let np = p.niente.expect("layout_hairpin_with_niente → Some");
+        // Crescendo closed tip is at x_start = 100.
+        assert!((ns.cx - 100.0).abs() < 1e-12);
+        assert!((ns.cx - np.cx).abs() < 1e-12);
+        assert!((ns.cy - np.cy).abs() < 1e-12);
+        assert!((ns.radius - np.radius).abs() < 1e-12);
+        assert!((ns.stroke_width - np.stroke_width).abs() < 1e-12);
+    }
+
+    #[test]
+    fn styled_open_niente_no_dash_anchors_at_open_tip() {
+        let s = layout_hairpin_styled(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+            Some(NientePlacement::OpenEnd), false,
+        );
+        let p = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        );
+        assert!(s.dashed.is_none());
+        let ns = s.niente.expect("open niente requested → Some");
+        let np = p.niente.expect("layout_hairpin_with_niente_at_open_end → Some");
+        // Crescendo open tip is at x_end = 600.
+        assert!((ns.cx - 600.0).abs() < 1e-12);
+        assert!((ns.cx - np.cx).abs() < 1e-12);
+    }
+
+    #[test]
+    fn styled_decrescendo_closed_niente_anchors_at_x_end() {
+        // For a decrescendo, the closed (pointy) end is the right tip.
+        let s = layout_hairpin_styled(
+            HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+            Some(NientePlacement::ClosedEnd), false,
+        );
+        let n = s.niente.unwrap();
+        assert!(
+            (n.cx - 600.0).abs() < 1e-12,
+            "decrescendo closed-end niente should anchor at x_end (600.0); got {}",
+            n.cx
+        );
+    }
+
+    #[test]
+    fn styled_decrescendo_open_niente_anchors_at_x_start() {
+        // Mirror of the previous test: decrescendo open tip is the left tip.
+        let s = layout_hairpin_styled(
+            HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+            Some(NientePlacement::OpenEnd), false,
+        );
+        let n = s.niente.unwrap();
+        assert!(
+            (n.cx - 100.0).abs() < 1e-12,
+            "decrescendo open-end niente should anchor at x_start (100.0); got {}",
+            n.cx
+        );
+    }
+
+    #[test]
+    fn styled_dashed_with_closed_niente_carries_both() {
+        // The combinator path: both flags set → layout has both `dashed`
+        // and `niente` populated. This is the contract that lets the
+        // ScoreBuilder request a dashed wedge with a niente "o" via a
+        // single helper call.
+        let s = layout_hairpin_styled(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+            Some(NientePlacement::ClosedEnd), true,
+        );
+        let n = s.niente.expect("dashed + closed niente → niente populated");
+        assert!((n.cx - 100.0).abs() < 1e-12);
+        let d = s.dashed.expect("dashed + closed niente → dashed populated");
+        assert!((d.dash_length - HAIRPIN_DASH_LENGTH_SS * SS).abs() < 1e-12);
+        assert!((d.gap_length - HAIRPIN_GAP_LENGTH_SS * SS).abs() < 1e-12);
+    }
+
+    #[test]
+    fn styled_dashed_with_open_niente_carries_both() {
+        let s = layout_hairpin_styled(
+            HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+            Some(NientePlacement::OpenEnd), true,
+        );
+        let n = s.niente.expect("dashed + open niente → niente populated");
+        // Decrescendo open tip is at x_start.
+        assert!((n.cx - 100.0).abs() < 1e-12);
+        assert!(s.dashed.is_some(), "dashed + open niente → dashed populated");
+    }
+
+    #[test]
+    fn styled_geometry_independent_of_niente_and_dashed() {
+        // All four combinations on the same arguments share identical
+        // wedge geometry — niente and dashed are purely additive overlays.
+        let args = (HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW);
+        let cases = [
+            layout_hairpin_styled(args.0, args.1, args.2, args.3, args.4, args.5, None, false),
+            layout_hairpin_styled(args.0, args.1, args.2, args.3, args.4, args.5, None, true),
+            layout_hairpin_styled(
+                args.0, args.1, args.2, args.3, args.4, args.5,
+                Some(NientePlacement::ClosedEnd), false,
+            ),
+            layout_hairpin_styled(
+                args.0, args.1, args.2, args.3, args.4, args.5,
+                Some(NientePlacement::OpenEnd), true,
+            ),
+        ];
+        let r = &cases[0];
+        for c in &cases[1..] {
+            assert!((c.x_start - r.x_start).abs() < 1e-12);
+            assert!((c.x_end - r.x_end).abs() < 1e-12);
+            assert!((c.y_center - r.y_center).abs() < 1e-12);
+            assert!((c.half_opening - r.half_opening).abs() < 1e-12);
+            assert_eq!(c.kind, r.kind);
+        }
     }
 }

@@ -4446,3 +4446,493 @@ fn cross_system_dashed_hairpin_trailing_half_uses_dasharray_layout_constants() {
          SVG:\n{output}"
     );
 }
+
+// ---- niente "o" propagation (NoteAnnotations::hairpin_niente) ----
+//
+// Exercises the full chain through `collect_hairpin_note_info` and the
+// cross-system splitter on the page renderer:
+//   start-note NoteAnnotations → HairpinNoteInfo → UnresolvedHairpin →
+//   layout_hairpin_styled (within-system path)
+//                            → trailing_half_owns_niente() + layout_hairpin_styled
+//                              (cross-system path, niente routed to exactly one half)
+// Each test asserts on the SVG: presence/absence of `<circle>` elements,
+// their `cy` y-coordinate (to verify which system the circle belongs to in
+// the cross-system case), and the within-system anchor `cx` against the
+// expected layout constant.
+//
+// The niente "o" element is the single discriminator: no other glyph the
+// engraver emits uses `<circle>`, so a count of `<circle>` substrings is
+// exact for hairpin niente.
+
+use crate::layout::hairpin::NientePlacement;
+
+fn cresc_start_niente_note(pos: i8, placement: NientePlacement) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            hairpin_start: Some(HairpinType::Crescendo),
+            hairpin_niente: Some(placement),
+            ..Default::default()
+        },
+    })
+}
+
+fn decresc_start_niente_note(pos: i8, placement: NientePlacement) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            hairpin_start: Some(HairpinType::Decrescendo),
+            hairpin_niente: Some(placement),
+            ..Default::default()
+        },
+    })
+}
+
+/// Parse the `cy` attribute out of a single `<circle ...>` payload. The
+/// renderer always emits cy, so an absent attribute is a regression.
+fn parse_cy_attr(circle_attrs: &str) -> f64 {
+    circle_attrs
+        .split("cy=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or_else(|| panic!("no cy in circle attrs: {circle_attrs:?}"))
+}
+
+/// Parse the `cx` attribute (companion to `parse_cy_attr`).
+fn parse_cx_attr(circle_attrs: &str) -> f64 {
+    circle_attrs
+        .split("cx=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or_else(|| panic!("no cx in circle attrs: {circle_attrs:?}"))
+}
+
+/// Collect every `<circle ...>` element payload from an SVG string.
+fn circle_elements(svg: &str) -> Vec<&str> {
+    svg.split("<circle ").skip(1).map(|s| s.split('>').next().unwrap_or("")).collect()
+}
+
+#[test]
+fn within_system_niente_closed_end_emits_one_circle() {
+    // A within-system crescendo with closed-end niente emits exactly one
+    // `<circle>`; the baseline (no niente flag) emits zero. Catches a
+    // regression where the niente flag is collected but ignored in
+    // `draw_system_hairpins`.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_niente_note(4, NientePlacement::ClosedEnd)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1, "expected single-system layout");
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    let plain_measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let plain_page = layout_page(&prefix(), &plain_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let plain_output = draw_page(&font, &config, &plain_page).unwrap().to_svg();
+
+    assert_eq!(output.matches("<circle ").count(), 1);
+    assert_eq!(
+        plain_output.matches("<circle ").count(),
+        0,
+        "baseline must emit zero circles — niente is the only `<circle>` source"
+    );
+    // Wedge lines unchanged — niente is purely additive over the wedge.
+    assert_eq!(
+        output.matches("<line ").count(),
+        plain_output.matches("<line ").count(),
+    );
+}
+
+#[test]
+fn within_system_niente_radius_matches_layout_constant() {
+    // The circle's radius must equal `HAIRPIN_NIENTE_RADIUS_SS * staff_space`,
+    // the exact value `layout_hairpin_with_niente` produces. Catches a
+    // regression where the page renderer hard-codes a different radius.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let expected_radius = crate::layout::hairpin::HAIRPIN_NIENTE_RADIUS_SS * ss;
+    let expected_r_attr = format!(r#"r="{expected_radius}""#);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_niente_note(4, NientePlacement::ClosedEnd)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    let circle_line = output
+        .lines()
+        .find(|l| l.contains("<circle "))
+        .expect("must emit one circle");
+    assert!(
+        circle_line.contains(&expected_r_attr),
+        "circle radius must equal HAIRPIN_NIENTE_RADIUS_SS * ss = {expected_radius}; \
+         circle was: {circle_line}"
+    );
+    // Open ring — engraving requires fill="none".
+    assert!(
+        circle_line.contains(r#"fill="none""#),
+        "niente circle must be drawn as an open ring (fill=\"none\"); circle was: {circle_line}"
+    );
+}
+
+/// Build a within-system fixture page with the given start note (drives the
+/// (kind, niente placement) combinatorics) and return its SVG. The shape is
+/// always the same — 2 quarter notes one apart in a single system — so the
+/// only variable across tests is which tip the niente anchors to.
+fn within_system_niente_svg(start_note: MeasureEvent) -> String {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![start_note],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1);
+    draw_page(&font, &config, &page).unwrap().to_svg()
+}
+
+#[test]
+fn within_system_niente_crescendo_closed_anchors_at_start_tip() {
+    // For a crescendo, the wedge's start tip (x_start) is the closed tip.
+    // Closed-end niente therefore anchors at x_start. Open-end niente
+    // anchors at x_end. The within-system layout is identical between
+    // these two fixtures (same notes, same metrics) — only the niente
+    // tip flips — so cx_closed < cx_open is a sharp invariant of the
+    // routing logic that doesn't depend on absolute layout coordinates.
+    let svg_closed = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::ClosedEnd));
+    let svg_open = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::OpenEnd));
+
+    let circles_closed = circle_elements(&svg_closed);
+    let circles_open = circle_elements(&svg_open);
+    assert_eq!(circles_closed.len(), 1);
+    assert_eq!(circles_open.len(), 1);
+    let cx_closed = parse_cx_attr(circles_closed[0]);
+    let cx_open = parse_cx_attr(circles_open[0]);
+
+    assert!(
+        cx_closed < cx_open,
+        "crescendo: closed-end niente (cx={cx_closed}) must anchor at the wedge's start tip, \
+         strictly left of the open-end niente (cx={cx_open}) which anchors at the end tip"
+    );
+}
+
+#[test]
+fn within_system_niente_decrescendo_closed_anchors_at_end_tip() {
+    // For a decrescendo, the wedge's end tip (x_end) is the closed tip
+    // and x_start is the open tip — mirror of the crescendo. Same
+    // relative-comparison contract: cx_closed > cx_open. Catches a
+    // regression where the renderer routes the niente by direction
+    // alone, ignoring the placement enum.
+    let svg_closed = within_system_niente_svg(decresc_start_niente_note(4, NientePlacement::ClosedEnd));
+    let svg_open = within_system_niente_svg(decresc_start_niente_note(4, NientePlacement::OpenEnd));
+
+    let circles_closed = circle_elements(&svg_closed);
+    let circles_open = circle_elements(&svg_open);
+    assert_eq!(circles_closed.len(), 1);
+    assert_eq!(circles_open.len(), 1);
+    let cx_closed = parse_cx_attr(circles_closed[0]);
+    let cx_open = parse_cx_attr(circles_open[0]);
+
+    assert!(
+        cx_closed > cx_open,
+        "decrescendo: closed-end niente (cx={cx_closed}) must anchor at the wedge's end tip, \
+         strictly right of the open-end niente (cx={cx_open}) which anchors at the start tip"
+    );
+}
+
+#[test]
+fn within_system_niente_open_end_renders_distinct_circle_from_closed() {
+    // Direct visual contract: for the same notes, closed-end and open-end
+    // niente produce circles at different x coordinates (because they
+    // anchor to opposite tips of the same wedge). The byte-level SVG
+    // therefore differs between the two configurations. Catches a
+    // regression where the placement flag is dropped before reaching the
+    // layout helper — a regression that would silently produce identical
+    // SVG for both placements.
+    let svg_closed = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::ClosedEnd));
+    let svg_open = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::OpenEnd));
+    assert_ne!(
+        svg_closed, svg_open,
+        "closed-end and open-end niente must produce visually distinct SVG"
+    );
+    // Both produce exactly one circle (same wedge geometry, only the niente cx flips).
+    assert_eq!(svg_closed.matches("<circle ").count(), 1);
+    assert_eq!(svg_open.matches("<circle ").count(), 1);
+    // Same number of wedge lines either way — niente is purely additive.
+    assert_eq!(
+        svg_closed.matches("<line ").count(),
+        svg_open.matches("<line ").count(),
+    );
+}
+
+#[test]
+fn within_system_niente_combined_with_dashed_keeps_circle_solid() {
+    // Combo: dashed wedge + niente. Wedge lines carry stroke-dasharray;
+    // the niente `<circle>` element must NOT — engraved convention.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let combined_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            hairpin_start: Some(HairpinType::Crescendo),
+            hairpin_dashed: true,
+            hairpin_niente: Some(NientePlacement::ClosedEnd),
+            ..Default::default()
+        },
+    });
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![combined_note],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    assert_eq!(output.matches("<circle ").count(), 1);
+    let circle_line = output
+        .lines()
+        .find(|l| l.contains("<circle "))
+        .expect("combined dashed+niente must emit one circle");
+    assert!(
+        !circle_line.contains("stroke-dasharray"),
+        "niente circle must remain solid (no stroke-dasharray) on a dashed wedge; \
+         circle was: {circle_line}"
+    );
+    assert_eq!(
+        output.matches("stroke-dasharray").count(),
+        2,
+        "dashed wedge half of the combo must emit dasharray on both wedge lines"
+    );
+}
+
+#[test]
+fn cross_system_niente_crescendo_closed_circle_on_source_system() {
+    // Cross-system routing rule: closed-end niente on a crescendo lives at
+    // the wedge's start tip → trailing half on the source (top) system.
+    // The incoming half on the target (bottom) system gets no circle.
+    //
+    // Verifies via the circle's cy: source-system cy must be smaller (lower
+    // numeric y) than target-system cy, since the target system sits below.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Crescendo cross-system: should put 1 circle on the source system.
+    let measures_c = vec![
+        MeasureContent {
+            events: vec![cresc_start_niente_note(4, NientePlacement::ClosedEnd)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page_c = layout_page(&prefix(), &measures_c, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page_c.systems.len(), 2, "Fixed(1) → two-system layout");
+    let out_c = draw_page(&font, &config, &page_c).unwrap().to_svg();
+    let circles_c = circle_elements(&out_c);
+    assert_eq!(
+        circles_c.len(), 1,
+        "cross-system cresc+closed niente must emit exactly one circle (trailing only)"
+    );
+    let cy_c = parse_cy_attr(circles_c[0]);
+
+    // Decrescendo cross-system: same staff_position, same systems, but
+    // closed-end niente flips to incoming half → circle on target system,
+    // which has a strictly larger cy than the source-system circle above.
+    let measures_d = vec![
+        MeasureContent {
+            events: vec![decresc_start_niente_note(4, NientePlacement::ClosedEnd)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page_d = layout_page(&prefix(), &measures_d, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let out_d = draw_page(&font, &config, &page_d).unwrap().to_svg();
+    let circles_d = circle_elements(&out_d);
+    assert_eq!(
+        circles_d.len(), 1,
+        "cross-system decresc+closed niente must emit exactly one circle (incoming only)"
+    );
+    let cy_d = parse_cy_attr(circles_d[0]);
+
+    // Target system sits strictly below source system; the niente's y
+    // tracks the wedge's y_center on its owning system. The numeric
+    // difference is large enough that no floating-point fuzz can flip it.
+    assert!(
+        cy_d > cy_c,
+        "cross-system closed-end niente must place crescendo circle on the source \
+         system (smaller cy) and decrescendo circle on the target system (larger cy); \
+         got cresc.cy={cy_c}, decresc.cy={cy_d}"
+    );
+}
+
+#[test]
+fn cross_system_niente_open_end_flips_owning_half() {
+    // OpenEnd flips the rule: a crescendo with OpenEnd has its niente at
+    // the wedge's open right tip → incoming half on the target system.
+    // ClosedEnd on the same direction owned the source (above). With
+    // OpenEnd, the circle's cy should sit on the target system, strictly
+    // larger than the closed-end cy. Catches a regression where the
+    // open-end branch routes to the wrong half.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    // Closed-end crescendo: niente on source system.
+    let measures_closed = vec![
+        MeasureContent {
+            events: vec![cresc_start_niente_note(4, NientePlacement::ClosedEnd)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page_closed = layout_page(&prefix(), &measures_closed, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let out_closed = draw_page(&font, &config, &page_closed).unwrap().to_svg();
+    let cy_closed = parse_cy_attr(circle_elements(&out_closed)[0]);
+
+    // Open-end crescendo: niente on target system.
+    let measures_open = vec![
+        MeasureContent {
+            events: vec![cresc_start_niente_note(4, NientePlacement::OpenEnd)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page_open = layout_page(&prefix(), &measures_open, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let out_open = draw_page(&font, &config, &page_open).unwrap().to_svg();
+    let circles_open = circle_elements(&out_open);
+    assert_eq!(circles_open.len(), 1);
+    let cy_open = parse_cy_attr(circles_open[0]);
+
+    assert!(
+        cy_open > cy_closed,
+        "open-end cross-system cresc niente must live on the target system (larger cy) \
+         while the closed-end variant lives on the source system (smaller cy); \
+         got closed.cy={cy_closed}, open.cy={cy_open}"
+    );
+}
+
+#[test]
+fn cross_system_niente_no_niente_emits_zero_circles() {
+    // Negative control: a cross-system hairpin without the niente flag
+    // emits zero `<circle>` elements anywhere in the SVG. Sharp guard
+    // against an accidental always-render of the niente on the
+    // cross-system path.
+    let output = cross_system_hairpin_page(HairpinType::Crescendo);
+    assert_eq!(
+        output.matches("<circle ").count(),
+        0,
+        "plain cross-system hairpin must not emit any circle; SVG:\n{output}"
+    );
+}

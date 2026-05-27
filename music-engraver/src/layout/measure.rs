@@ -7,7 +7,7 @@ use crate::layout::cresc_text::CrescTextKind;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
-use crate::layout::hairpin::HairpinType;
+use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::navigation::NavigationSign;
@@ -59,6 +59,23 @@ pub struct NoteAnnotations {
     /// always dashed regardless of this flag (engraved convention for
     /// cross-system continuations).
     pub hairpin_dashed: bool,
+    /// Optional niente "o" circle on the hairpin starting at this note/chord.
+    /// `None` for a plain hairpin; `Some(ClosedEnd)` for the standard
+    /// engraving convention ("al niente" / "dal niente" — circle at the
+    /// pointy tip); `Some(OpenEnd)` for the rarer modern-notation variant
+    /// (circle at the wide tip).
+    ///
+    /// Has no effect unless `hairpin_start` is `Some`. Combines freely with
+    /// `hairpin_dashed`: the wedge lines dash but the niente "o" stays solid
+    /// per engraved convention (the circle is a definite symbol).
+    ///
+    /// Cross-system hairpins propagate the niente to whichever half (trailing
+    /// on the source system or incoming on the target system) contains the
+    /// anchor tip. For a crescendo with `ClosedEnd`, the niente sits at the
+    /// closed left tip → trailing half on the source system. For a
+    /// decrescendo with `ClosedEnd`, the niente sits at the closed right tip
+    /// → incoming half on the target system. `OpenEnd` flips both rules.
+    pub hairpin_niente: Option<NientePlacement>,
     /// Optional rehearsal mark displayed above the staff at this note/chord's position.
     /// Tuple of (text content, enclosure style).
     pub rehearsal_mark: Option<(String, RehearsalStyle)>,

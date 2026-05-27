@@ -1,7 +1,7 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::cresc_text::{layout_cresc_text, layout_cresc_text_continuation, CrescTextKind};
 use crate::layout::glissando::{layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle};
-use crate::layout::hairpin::{layout_hairpin, layout_hairpin_dashed};
+use crate::layout::hairpin::{layout_hairpin_styled, HairpinType, NientePlacement};
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
@@ -531,7 +531,7 @@ struct UnresolvedHairpin {
     /// Absolute x of the note's right edge plus spacing.
     x_right: f64,
     /// Hairpin type (crescendo or decrescendo).
-    kind: crate::layout::hairpin::HairpinType,
+    kind: HairpinType,
     /// Right edge of the system's staff lines (absolute x).
     staff_right: f64,
     /// Y of the bottom staff line (absolute).
@@ -542,6 +542,29 @@ struct UnresolvedHairpin {
     /// The incoming half on the next system is always dashed regardless of
     /// this flag — engraved convention for cross-system continuations.
     dashed: bool,
+    /// Mirror of `HairpinNoteInfo::hairpin_niente`. When `Some`, exactly one
+    /// of the two halves (trailing on source / incoming on target) carries
+    /// the niente "o" circle — whichever half contains the tip selected by
+    /// the [`NientePlacement`] for this `kind`. The other half stays plain.
+    niente: Option<NientePlacement>,
+}
+
+/// Determine whether the trailing (source-system) half of a cross-system
+/// wedge contains the niente "o" tip.
+///
+/// The closed-end niente sits at the wedge's pointy tip; the open-end niente
+/// sits at the wide tip. For a crescendo the pointy tip is the start
+/// (leftmost x of the full wedge), so it lives on the trailing half. For a
+/// decrescendo the pointy tip is the end, so it lives on the incoming half.
+/// `OpenEnd` flips both rules. The result is `true` iff the trailing half
+/// owns the circle.
+fn trailing_half_owns_niente(kind: HairpinType, placement: NientePlacement) -> bool {
+    match (kind, placement) {
+        (HairpinType::Crescendo, NientePlacement::ClosedEnd) => true,
+        (HairpinType::Crescendo, NientePlacement::OpenEnd) => false,
+        (HairpinType::Decrescendo, NientePlacement::ClosedEnd) => false,
+        (HairpinType::Decrescendo, NientePlacement::OpenEnd) => true,
+    }
 }
 
 /// A note at the start of the next system that has `hairpin_end = true`.
@@ -601,6 +624,7 @@ fn find_unresolved_hairpins(
             staff_right: page_system.x + system.staff_width,
             staff_bottom_y: staff.bottom_y(),
             dashed: info.hairpin_dashed,
+            niente: info.hairpin_niente,
         });
     }
 
@@ -674,6 +698,17 @@ pub(crate) fn draw_cross_system_hairpins(
         let targets = find_incoming_hairpin_targets(config, &systems[i + 1]);
 
         for hp_src in &unresolved {
+            // Niente "o" placement on a cross-system wedge: the circle sits
+            // at exactly one tip of the full wedge. That tip belongs to one
+            // half — the other half gets no circle. The `trailing_half_owns_niente`
+            // rule decides which half owns it for the given (kind, placement).
+            let trailing_niente = hp_src
+                .niente
+                .filter(|p| trailing_half_owns_niente(hp_src.kind, *p));
+            let incoming_niente = hp_src
+                .niente
+                .filter(|p| !trailing_half_owns_niente(hp_src.kind, *p));
+
             // Trailing half-hairpin at the end of the source system: solid by
             // default. This half reads as the natural continuation of the
             // within-system wedge — the reader sees an unbroken line
@@ -684,25 +719,16 @@ pub(crate) fn draw_cross_system_hairpins(
             // so the source system's marking stays internally consistent.
             // The incoming half on the next system is unconditionally dashed
             // either way (engraved convention for cross-system resumptions).
-            let right_layout = if hp_src.dashed {
-                layout_hairpin_dashed(
-                    hp_src.kind,
-                    hp_src.x_right,
-                    hp_src.staff_right,
-                    hp_src.staff_bottom_y,
-                    config.staff_space,
-                    stroke_width,
-                )
-            } else {
-                layout_hairpin(
-                    hp_src.kind,
-                    hp_src.x_right,
-                    hp_src.staff_right,
-                    hp_src.staff_bottom_y,
-                    config.staff_space,
-                    stroke_width,
-                )
-            };
+            let right_layout = layout_hairpin_styled(
+                hp_src.kind,
+                hp_src.x_right,
+                hp_src.staff_right,
+                hp_src.staff_bottom_y,
+                config.staff_space,
+                stroke_width,
+                trailing_niente,
+                hp_src.dashed,
+            );
             draw_hairpin(svg, &right_layout);
 
             // Incoming half-hairpin at the start of the target system: dashed.
@@ -713,13 +739,15 @@ pub(crate) fn draw_cross_system_hairpins(
             // already used for cross-system ottava brackets and trill
             // extensions in this codebase.
             if let Some(tgt) = targets.first() {
-                let left_layout = layout_hairpin_dashed(
+                let left_layout = layout_hairpin_styled(
                     hp_src.kind,
                     tgt.staff_left,
                     tgt.x_left,
                     tgt.staff_bottom_y,
                     config.staff_space,
                     stroke_width,
+                    incoming_niente,
+                    true,
                 );
                 draw_hairpin(svg, &left_layout);
             }

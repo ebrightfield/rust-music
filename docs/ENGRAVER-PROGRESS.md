@@ -6411,3 +6411,265 @@
   Combined dashed + niente at the ScoreBuilder surface
   will be enabled by that next chunk; the layout layer
   already supports the combination.
+
+## 2026-05-27 — Post-v1, plumb hairpin niente (closed/open) through the score-event chain
+
+- Did: Plumbed the niente "o" circle (both closed-end and
+  open-end variants) from the `ScoreBuilder` API down through
+  `NoteAnnotations`, the within-system renderer, and the
+  cross-system splitter on the page renderer. This is the
+  "deferred to the next chunk" item flagged by the previous
+  `hairpin_dashed` plumbing entry, and it closes the last
+  remaining hairpin-surface deferral on the score-event chain.
+
+  The layout layer already supported both placements via
+  `layout_hairpin_with_niente` and
+  `layout_hairpin_with_niente_at_open_end`, and supported
+  combination with dashed via field mutation
+  (`dashed_hairpin_with_niente_keeps_circle_solid`). Before
+  this run the ScoreBuilder could not request either variant,
+  and the cross-system splitter had no concept of which half
+  (trailing on source / incoming on target) should carry the
+  circle when a niente wedge crossed a system break.
+
+  Concrete changes:
+  - `layout/hairpin.rs` — new public enum
+    `NientePlacement { ClosedEnd, OpenEnd }` and a new public
+    unified constructor `layout_hairpin_styled` that takes
+    `niente: Option<NientePlacement>` and `dashed: bool` and
+    returns a fully-styled `HairpinLayout` (replaces the
+    cartesian product of constructor calls that would
+    otherwise be needed at three call sites). Doc explains
+    the niente-stays-solid-on-dashed engraving invariant
+    (the circle remains solid even when `dashed=true`).
+    9 new layout-level unit tests pin the equivalence
+    contract: every (niente × dashed) combination matches
+    the corresponding individual constructor field-for-field;
+    geometry is identical across all four combinations;
+    each (kind, placement) pair anchors `niente.cx` to the
+    correct tip.
+  - `layout/mod.rs` — re-exports `NientePlacement` and
+    `layout_hairpin_styled`.
+  - `layout/measure.rs` — `NoteAnnotations` gains
+    `hairpin_niente: Option<NientePlacement>`. Defaults to
+    `None` via `#[derive(Default)]`; no existing fixture
+    breaks because all sites use struct-update syntax or
+    `default()`. Doc comment explains the field's role and
+    the cross-system propagation rule (which half owns the
+    circle for the given `(kind, placement)`).
+  - `render/system_renderer/mod.rs` — `HairpinNoteInfo`
+    gains `hairpin_niente`; both `MeasureElement::Note`
+    and `MeasureElement::Chord` arms of
+    `collect_hairpin_note_info` propagate it.
+    `draw_system_hairpins` now routes through the single
+    `layout_hairpin_styled` helper instead of the previous
+    if/else on `hairpin_dashed`, so the niente and dashed
+    flags compose without duplicated logic.
+  - `render/page_renderer/mod.rs` — `UnresolvedHairpin`
+    gains `niente: Option<NientePlacement>`; new helper
+    `trailing_half_owns_niente(kind, placement) -> bool`
+    encodes the cross-system ownership rule:
+      - `(Crescendo, ClosedEnd) → true`  (start tip → trailing)
+      - `(Crescendo, OpenEnd) → false`   (end tip → incoming)
+      - `(Decrescendo, ClosedEnd) → false` (end tip → incoming)
+      - `(Decrescendo, OpenEnd) → true`  (start tip → trailing)
+    `draw_cross_system_hairpins` filters the per-half
+    niente by this rule before passing it to
+    `layout_hairpin_styled`. The trailing half also routes
+    through `layout_hairpin_styled` so the dashed/solid
+    branching collapses to a single call site here too.
+  - `score/mod.rs` — two new public methods on
+    `ScoreBuilder`:
+    - `hairpin_niente_start(placement: NientePlacement)`
+      — full API; sets `annotations.hairpin_niente =
+      Some(placement)`.
+    - `hairpin_niente()` — convenience for the common
+      `ClosedEnd` case (the standard "al niente" / "dal
+      niente" convention).
+    Both no-op on rests / barlines / multi-measure rests
+    (mirroring the existing per-note modifier pattern) and
+    silently no-op visually if `hairpin_start` is unset
+    (no wedge to attach the circle to).
+
+  Test-design choice — relative cx assertions for
+  within-system anchor: the first attempt at
+  `within_system_niente_crescendo_closed_anchors_at_start_tip`
+  used a midpoint comparison (`cx < 8000/2`). It failed
+  empirically because the actual within-system layout puts
+  the first measure's note at ~5087fu on an 8000fu page
+  (prefix + measure-internal spacing eats more of the
+  budget than the midpoint heuristic assumed). Rewrote the
+  three within-system anchor tests as pairwise comparisons
+  between ClosedEnd and OpenEnd fixtures on the same notes:
+  `cx_closed < cx_open` for a crescendo, `cx_closed > cx_open`
+  for a decrescendo. These hold regardless of the absolute
+  layout coordinates and remain sharp catches for a
+  regression where the placement enum is dropped before
+  reaching `layout_hairpin_styled`.
+
+  Test-design choice — cy-based cross-system ownership
+  test: `<circle>` count alone can't distinguish trailing
+  vs incoming (both place exactly one circle). Used the
+  vertical-stacking invariant instead: target system's
+  staff_bottom_y sits strictly below source system's, so
+  the niente's cy on the target half is strictly greater
+  than on the source half. The two cross-system tests
+  drive this via `(kind, placement)` switches expected to
+  flip the owning half:
+    - `cross_system_niente_crescendo_closed_circle_on_source_system`
+      compares Crescendo+Closed (source) vs Decrescendo+Closed
+      (target) and asserts decresc.cy > cresc.cy.
+    - `cross_system_niente_open_end_flips_owning_half`
+      compares Cresc+Closed (source) vs Cresc+Open (target)
+      and asserts open.cy > closed.cy.
+  Together they exercise both axes of the four-way
+  `trailing_half_owns_niente` truth table.
+
+- Verified:
+  - `cargo check -p music-engraver` → 0 errors.
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors (no cross-crate
+    regression).
+  - `cargo build -p music-engraver` → succeeds.
+  - `cargo test -p music-engraver --offline --lib` →
+    **2870 passed, 0 failed** (was 2845 last run; +25 new
+    tests: 9 layout-level styled-helper equivalence tests
+    in `layout::hairpin::tests`, 9 page-renderer-level
+    plumbing tests in `render::page_renderer::tests`, 7
+    score-level ScoreBuilder surface tests in
+    `score::tests`).
+  - `cargo test -p music-engraver --offline --tests` →
+    75 (`golden_svg.rs`) + 3 (`svg_glyph_render.rs`) =
+    **78 passed, 0 failed** (unchanged from prior run —
+    no production-code default behavior changed, so no
+    golden baseline moved; existing fixtures don't set
+    the niente flag).
+
+  New tests (25 total):
+  - `layout::hairpin::tests` (9 new):
+    - `styled_no_niente_no_dash_equals_plain_hairpin` —
+      `(None, false)` returns geometry identical to
+      `layout_hairpin`.
+    - `styled_dashed_no_niente_equals_layout_hairpin_dashed` —
+      `(None, true)` returns dash style identical to
+      `layout_hairpin_dashed`, including the staff-space-scaled
+      dash/gap lengths.
+    - `styled_closed_niente_no_dash_anchors_at_closed_tip`,
+      `styled_open_niente_no_dash_anchors_at_open_tip` —
+      `(Some(_), false)` matches the corresponding direct
+      constructor field-for-field.
+    - `styled_decrescendo_closed_niente_anchors_at_x_end`,
+      `styled_decrescendo_open_niente_anchors_at_x_start` —
+      decrescendo flips the tip→cx mapping, covered for
+      both placements.
+    - `styled_dashed_with_closed_niente_carries_both`,
+      `styled_dashed_with_open_niente_carries_both` —
+      combo case (dashed + niente) returns both fields
+      populated correctly.
+    - `styled_geometry_independent_of_niente_and_dashed` —
+      all four (niente × dashed) combinations on the
+      same args share identical wedge geometry; niente
+      and dashed are purely additive overlays.
+  - `score::tests` (7 new):
+    - `hairpin_niente_convenience_sets_closed_end_annotation`
+      — `.hairpin_niente()` sets `Some(ClosedEnd)` and
+      preserves `hairpin_start`.
+    - `hairpin_niente_start_open_end_sets_open_end_annotation`
+      — `.hairpin_niente_start(OpenEnd)` sets `Some(OpenEnd)`.
+    - `hairpin_niente_renders_open_circle` — end-to-end:
+      ScoreBuilder → SVG must emit exactly one
+      `<circle ` element (delta over no-niente baseline =
+      +1) and the circle must carry `fill="none"` (the
+      engraved open "o" reading). Wedge line count
+      unchanged — niente is purely additive.
+    - `hairpin_niente_with_dashed_keeps_circle_solid` —
+      combo at the ScoreBuilder surface: two
+      stroke-dasharray attrs on the wedge, exactly one
+      circle, and that circle's `<circle ` element
+      carries NO stroke-dasharray (per engraving
+      convention).
+    - `hairpin_niente_without_hairpin_start_renders_no_circle`
+      — lone `.hairpin_niente()` after a plain note is
+      silently no-op visually (no wedge → no circle);
+      SVG byte-identical to the no-niente render.
+    - `hairpin_niente_on_rest_is_noop` — mirror of the
+      `hairpin_dashed_on_rest_is_noop` test for niente.
+    - `hairpin_niente_decrescendo_also_renders_circle` —
+      direction-agnostic: decresc + niente also emits the
+      circle.
+  - `render::page_renderer::tests` (9 new):
+    - `within_system_niente_closed_end_emits_one_circle` —
+      one `<circle>` with the flag; zero without. Baseline
+      assertion required because the engraver emits no
+      circles for any other element — the `<circle>` count
+      is exclusive to niente.
+    - `within_system_niente_radius_matches_layout_constant`
+      — the `r=` attribute equals
+      `HAIRPIN_NIENTE_RADIUS_SS * staff_space`; circle
+      carries `fill="none"`.
+    - `within_system_niente_crescendo_closed_anchors_at_start_tip`,
+      `within_system_niente_decrescendo_closed_anchors_at_end_tip`
+      — pairwise cx comparisons between Closed and Open
+      placements on the same fixture (so the contract is
+      coordinate-independent).
+    - `within_system_niente_open_end_renders_distinct_circle_from_closed`
+      — Closed and Open placements on identical notes
+      produce byte-distinct SVG; both emit exactly one
+      circle and identical wedge line counts.
+    - `within_system_niente_combined_with_dashed_keeps_circle_solid`
+      — combo at the page-renderer surface: dashed wedge
+      + niente circle on a within-system hairpin; circle
+      lacks stroke-dasharray.
+    - `cross_system_niente_crescendo_closed_circle_on_source_system`
+      — Crescendo+Closed vs Decrescendo+Closed both emit
+      exactly one circle; decrescendo's cy is strictly
+      greater than crescendo's cy (i.e. on the target system).
+    - `cross_system_niente_open_end_flips_owning_half` —
+      Crescendo+Closed (source-owned) vs Crescendo+Open
+      (target-owned); open's cy is strictly greater than
+      closed's cy.
+    - `cross_system_niente_no_niente_emits_zero_circles` —
+      negative control: cross-system hairpin without the
+      flag emits zero circles.
+
+- Next: Multi-staff systems / grand-staff brackets
+  (`StaveConnector` equivalent) — the largest remaining
+  Phase-8/post-v1 chunk that requires structural layout
+  work rather than annotation plumbing; the hairpin
+  surface is now feature-complete at the ScoreBuilder
+  level. PNG export via the `png` feature (`resvg` +
+  `tiny-skia` + `fontdb`) — still the largest deferred
+  post-v1 chunk and has no in-progress prerequisites.
+  Cross-system church rests (multi-measure rest cluster
+  breaking across systems). Line-breaking quality
+  improvements (Gourlay extension or Bellini & Nesi).
+  Golden-SVG corpus PHASH-based visual regression (per-test
+  golden coverage is broad now; consolidating into a
+  PHASH-tolerant comparator would simplify future golden
+  triage). Auto-resolved low-staff beam-group collision
+  golden (still requires ScoreBuilder opt-out for
+  force-stems, deferred). Cross-voice tie/slur consultation
+  of the collision detector (deferred). A natural follow-up
+  golden for niente + dashed at the score level (mirroring
+  the cresc-text golden pattern landed two runs ago)
+  would freeze the visual baseline of the new combo path
+  through the page renderer.
+
+- Open issues: None. The change is additive at every
+  surface — one new public enum (`NientePlacement`), one
+  new public layout helper (`layout_hairpin_styled`), one
+  new field on `NoteAnnotations`, one new field on the
+  internal `HairpinNoteInfo` and `UnresolvedHairpin`
+  structs, two new public methods on `ScoreBuilder`
+  (`hairpin_niente`, `hairpin_niente_start`). Default
+  behavior of every existing call site is byte-identical:
+  no golden baseline moved, all 2845 pre-existing lib
+  tests continue to pass, all 75 golden SVG tests
+  continue to byte-match. The `hairpin_niente` flag is
+  silently ignored when `hairpin_start` is `None` (no
+  wedge to attach the circle to); this is by design and
+  is exercised by the
+  `hairpin_niente_without_hairpin_start_renders_no_circle`
+  test. The pre-existing `multi_staff.rs:394` and other
+  clippy warnings noted on prior entries remain
+  unaddressed (out of scope).

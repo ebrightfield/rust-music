@@ -1970,6 +1970,220 @@
         );
     }
 
+    // --- hairpin_niente (open "o" at wedge tip) integration tests ---
+    //
+    // Plumbing under test: ScoreBuilder.hairpin_niente() / .hairpin_niente_start()
+    // → NoteAnnotations::hairpin_niente → HairpinNoteInfo::hairpin_niente →
+    // layout_hairpin_styled → draw_hairpin (which renders the niente as a
+    // `<circle>` element). Each test asserts on the SVG output, not on
+    // intermediate state, so the full chain is exercised.
+
+    #[test]
+    fn hairpin_niente_convenience_sets_closed_end_annotation() {
+        // The shorthand `.hairpin_niente()` is closed-end (the common
+        // "al niente" / "dal niente" convention). Verifies the builder
+        // surface: annotation field is set; hairpin_start preserved.
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc().hairpin_niente();
+        let (_, last) = builder.current_events.last().expect("note pushed");
+        match last {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.hairpin_niente, Some(NientePlacement::ClosedEnd),
+                    "hairpin_niente() must set ClosedEnd placement"
+                );
+                assert_eq!(
+                    annotations.hairpin_start, Some(HairpinType::Crescendo),
+                    "hairpin_niente must not clear hairpin_start"
+                );
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn hairpin_niente_start_open_end_sets_open_end_annotation() {
+        // The full API takes a NientePlacement; OpenEnd is preserved
+        // verbatim on the annotation.
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc()
+            .hairpin_niente_start(NientePlacement::OpenEnd);
+        let (_, last) = builder.current_events.last().expect("note pushed");
+        match last {
+            ScoreEvent::Note { annotations, .. } => {
+                assert_eq!(
+                    annotations.hairpin_niente, Some(NientePlacement::OpenEnd),
+                    "hairpin_niente_start(OpenEnd) must set OpenEnd placement"
+                );
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn hairpin_niente_renders_open_circle() {
+        // End-to-end: ScoreBuilder → SVG must emit one `<circle>` element
+        // for the niente "o", on top of the existing 2-line wedge. The
+        // baseline (no niente) has zero `<circle>` elements anywhere in
+        // the output (the renderer doesn't emit circles for any other
+        // hairpin-band glyph).
+        let svg_n = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc().hairpin_niente()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let circles_n = svg_n.matches("<circle ").count();
+        let circles_plain = svg_plain.matches("<circle ").count();
+        assert_eq!(
+            circles_n, circles_plain + 1,
+            "hairpin_niente must add exactly one <circle> over the plain hairpin; \
+             niente SVG had {circles_n} circles, plain SVG had {circles_plain}"
+        );
+        // The circle must be open (fill="none") — the engraved "o" reading.
+        assert!(
+            svg_n.contains(r#"fill="none""#),
+            "niente circle must be drawn fill=\"none\" (open ring); SVG:\n{svg_n}"
+        );
+        // Wedge line count identical between with/without — niente is
+        // purely additive on top of the wedge geometry.
+        assert_eq!(
+            svg_n.matches("<line ").count(),
+            svg_plain.matches("<line ").count(),
+            "niente must not change the total `<line>` count"
+        );
+    }
+
+    #[test]
+    fn hairpin_niente_with_dashed_keeps_circle_solid() {
+        // Combo: dashed wedge + niente "o". The wedge lines must carry
+        // stroke-dasharray; the niente circle element must NOT — engraved
+        // convention treats the niente as a definite symbol independent of
+        // the dashed wedge.
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc().hairpin_dashed().hairpin_niente()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        // Exactly one niente circle.
+        assert_eq!(
+            svg.matches("<circle ").count(),
+            1,
+            "combined dashed+niente must emit exactly one circle; SVG:\n{svg}"
+        );
+        // Locate the <circle ...> element and confirm it lacks the
+        // stroke-dasharray attribute. Asserts the engraving invariant
+        // directly on the element rather than the document-level count.
+        let circle_line = svg
+            .lines()
+            .find(|l| l.contains("<circle "))
+            .expect("circle element must exist in combined-mode SVG");
+        assert!(
+            !circle_line.contains("stroke-dasharray"),
+            "niente circle must remain solid (no stroke-dasharray) even on a \
+             dashed wedge; circle element was: {circle_line}"
+        );
+        // Both wedge lines must carry dasharray (the dashed half of the combo).
+        assert_eq!(
+            svg.matches("stroke-dasharray").count(),
+            2,
+            "dashed wedge half of the combo must emit dasharray on both wedge lines"
+        );
+    }
+
+    #[test]
+    fn hairpin_niente_without_hairpin_start_renders_no_circle() {
+        // Like the dashed flag, niente only has visible meaning paired
+        // with a hairpin start. Lone `.hairpin_niente()` after a plain
+        // note must produce SVG byte-identical to the no-niente render —
+        // no wedge means no circle.
+        let svg_lone = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).hairpin_niente()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            svg_lone, svg_plain,
+            "hairpin_niente without hairpin_start must not emit any wedge or circle"
+        );
+    }
+
+    #[test]
+    fn hairpin_niente_on_rest_is_noop() {
+        // `.hairpin_niente()` after a rest cannot set the flag (RestEvent
+        // carries no NoteAnnotations). Mirror of `hairpin_dashed_on_rest_is_noop`.
+        let svg_rest_niente = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR).cresc().hairpin_niente()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            svg_rest_niente, svg_plain,
+            "cresc().hairpin_niente() on a rest must be a no-op end-to-end"
+        );
+    }
+
+    #[test]
+    fn hairpin_niente_decrescendo_also_renders_circle() {
+        // Direction-agnostic: a decrescendo with closed-end niente also
+        // emits the open "o" — at the closing tip (right side of the
+        // wedge). Catches a regression where niente is conditional on
+        // Crescendo only.
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).decresc().hairpin_niente()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            svg.matches("<circle ").count(),
+            1,
+            "decrescendo + niente must emit one circle; SVG:\n{svg}"
+        );
+    }
+
     // --- cresc-text (dashed-text crescendo/diminuendo) integration tests ---
 
     #[test]
