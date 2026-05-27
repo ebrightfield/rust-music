@@ -668,6 +668,90 @@ fn build_bow_strokes_plain() -> String {
     b.end_barline().render_svg()
 }
 
+/// Canonical ordering of the 4 SMuFL combined-articulation variants —
+/// AccentStaccato, MarcatoStaccato, TenutoStaccato, TenutoAccent. These
+/// are SMuFL shorthand glyphs for what would otherwise be a two-glyph
+/// stack of the simpler primitives (e.g. `AccentStaccato` is the single
+/// glyph for what would normally be Accent + Staccato stacked). All four
+/// share the same wiring as `ACCENT_EXTENSION_VARIANTS`: the *normal*
+/// articulation stack bucket (not fermata, not bow-stroke) and
+/// stem-opposite default placement. They predate the golden-coverage
+/// pattern introduced by `golden_fermata_variants` /
+/// `golden_accent_extensions` / `golden_bow_strokes`, so this list locks
+/// them in too — guarding against a regression that reclassifies any
+/// of them into the fermata bucket (placing them outside any fermatas)
+/// or the bow-stroke bucket (placing them at the wrong y-offset), or a
+/// `glyph()` arm typo that collapses any two onto the same SMuFL outline.
+const COMBINED_ARTICULATION_VARIANTS: [Articulation; 4] = [
+    Articulation::AccentStaccato,
+    Articulation::MarcatoStaccato,
+    Articulation::TenutoStaccato,
+    Articulation::TenutoAccent,
+];
+
+/// Pitches for the combined-articulation score. Alternating low/high so
+/// the engraver assigns alternating stem directions across the four
+/// measures: positions below the middle line stem up (articulation
+/// placed below the notehead), positions above the middle line stem
+/// down (articulation placed above). Exercises both the `Above` and
+/// `Below` glyph arms for each of the four variants on the same canvas.
+/// Same pitch set as `ACCENT_EXTENSION_PITCHES` by design — the
+/// byte-exact baseline must still differ from the accent-extensions
+/// baseline because the glyphs themselves are distinct, so reusing the
+/// same pitches isolates glyph routing as the only source of difference.
+const COMBINED_ARTICULATION_PITCHES: [(&str, u8); 4] = [
+    ("E", 4), // line 1 → stem up → glyph below
+    ("C", 5), // 3rd space → stem down → glyph above
+    ("G", 4), // line 2 → stem up → glyph below
+    ("A", 5), // above staff → stem down → glyph above
+];
+
+/// Each of the 4 combined-articulation variants on a half note in its
+/// own measure across one 4/4 system. Half notes (not whole notes) so
+/// each note carries a real stem and the stem-opposite placement
+/// contract is exercised. Mirror of `build_accent_extensions` with the
+/// variant list and pitch list swapped out.
+fn build_combined_articulations() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4);
+    let count = COMBINED_ARTICULATION_VARIANTS.len();
+    for (i, variant) in COMBINED_ARTICULATION_VARIANTS.iter().enumerate() {
+        let (n, oct) = COMBINED_ARTICULATION_PITCHES[i];
+        b = b
+            .note(p(n, oct), Duration::HALF)
+            .articulation(*variant)
+            .rest(Duration::HALF);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
+/// Same layout as `build_combined_articulations` with no articulations.
+/// Structural baseline for the combined-articulation golden test: the
+/// variant score must add exactly one path per variant on top of this
+/// baseline.
+fn build_combined_articulations_plain() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4);
+    let count = COMBINED_ARTICULATION_VARIANTS.len();
+    for (i, _variant) in COMBINED_ARTICULATION_VARIANTS.iter().enumerate() {
+        let (n, oct) = COMBINED_ARTICULATION_PITCHES[i];
+        b = b.note(p(n, oct), Duration::HALF).rest(Duration::HALF);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
 /// Grace note before a principal note.
 fn build_grace_notes() -> String {
     ScoreBuilder::new()
@@ -1622,6 +1706,129 @@ fn golden_bow_strokes() {
     );
 
     assert_golden("bow_strokes", &svg);
+}
+
+#[test]
+fn golden_combined_articulations() {
+    let svg = build_combined_articulations();
+    let plain = build_combined_articulations_plain();
+
+    // Structural validity
+    assert!(
+        svg.starts_with("<svg"),
+        "combined_articulations should be SVG"
+    );
+    assert!(
+        svg.contains("</svg>"),
+        "combined_articulations should close SVG"
+    );
+
+    // Path-count guard: each variant must add exactly one path on top of
+    // the same score with no articulations. Catches a silent regression
+    // where any of the 4 variants maps to a missing glyph (zero paths)
+    // or to a multi-path glyph (more than 1) — e.g. if a `glyph()` arm
+    // were accidentally changed to render a combined variant as a stack
+    // of the two primitive glyphs (Accent + Staccato as two paths
+    // instead of the single ArticAccentStaccatoAbove path), the delta
+    // would climb to 2 per variant.
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths,
+        COMBINED_ARTICULATION_VARIANTS.len(),
+        "each combined-articulation variant must add exactly one path: \
+         full={full_paths}, plain={plain_paths}, delta={added_paths}, \
+         expected={}",
+        COMBINED_ARTICULATION_VARIANTS.len()
+    );
+
+    // Distinct-d guard: each variant must contribute a unique SMuFL path
+    // payload. Bravura ships distinct outlines for each of
+    // ArticAccentStaccato{Above,Below}, ArticMarcatoStaccato{Above,Below},
+    // ArticTenutoStaccato{Above,Below}, ArticTenutoAccent{Above,Below} —
+    // if any two variants collapse to the same d-string (a typo'd
+    // `glyph()` arm aliasing one onto another), this assertion fails.
+    // Note: the pitch alternation means each variant exercises *one* of
+    // its arms in this score; the 4 added paths should still be 4
+    // distinct d-strings because the 4 variants have 4 distinct glyph
+    // outlines.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        COMBINED_ARTICULATION_VARIANTS.len(),
+        "combined-articulation variants must contribute exactly {} \
+         unique path d-strings (no glyph collapses), got {}",
+        COMBINED_ARTICULATION_VARIANTS.len(),
+        added.len()
+    );
+
+    // Plain-disjoint check: every newly-added d-string must NOT appear
+    // in the plain (no-articulation) baseline. Catches the (unlikely
+    // but possible) regression where a combined-articulation glyph's
+    // path data coincidentally matches a notehead, rest, or clef path
+    // in the baseline.
+    let plain_set = distinct_d(&plain);
+    for d in &added {
+        assert!(
+            !plain_set.contains(d),
+            "combined-articulation d-string {d:?} should not appear in \
+             the plain (no-articulation) baseline"
+        );
+    }
+
+    // Cross-baseline distinctness vs `build_articulations()` — catches
+    // a glyph-routing regression that collapses a combined variant onto
+    // its primitive equivalent (e.g. AccentStaccato → Accent), or that
+    // changes the bucket assignment.
+    assert_ne!(
+        svg,
+        build_articulations(),
+        "combined_articulations must differ from the existing articulations baseline"
+    );
+    // Cross-baseline distinctness vs `build_fermata_variants()` — catches
+    // a regression that routes a combined variant into the fermata
+    // bucket (always-above placement at fermata y-offset).
+    assert_ne!(
+        svg,
+        build_fermata_variants(),
+        "combined_articulations must differ from the fermata_variants baseline"
+    );
+    // Cross-baseline distinctness vs `build_bow_strokes()` — catches a
+    // regression that routes a combined variant into the bow-stroke
+    // bucket (always-above placement at bow-stroke y-offset).
+    assert_ne!(
+        svg,
+        build_bow_strokes(),
+        "combined_articulations must differ from the bow_strokes baseline"
+    );
+    // Cross-baseline distinctness vs `build_accent_extensions()` — same
+    // score shape (4 measures of HALF + HALF-rest with
+    // measures_per_system(4) and the same pitch sequence) and same
+    // normal-bucket stem-opposite contract; the only thing that should
+    // differ is the 4 SMuFL glyph payloads themselves. A byte-equal
+    // match would mean the four combined variants collapsed onto the
+    // four accent-extension variants (a glyph-routing regression).
+    assert_ne!(
+        svg,
+        build_accent_extensions(),
+        "combined_articulations must differ from the accent_extensions baseline"
+    );
+
+    assert_golden("combined_articulations", &svg);
 }
 
 #[test]

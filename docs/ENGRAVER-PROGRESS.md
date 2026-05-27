@@ -3249,3 +3249,134 @@
   dedicated golden coverage, since they predate this golden-coverage
   pattern and share the normal-bucket contract already exercised by
   `golden_articulations` and `golden_accent_extensions`.
+
+## 2026-05-27 — Post-v1, golden_combined_articulations
+
+- Did: Added a `golden_combined_articulations` SVG-regression test
+  that locks the full SVG encoding (glyph routing + normal-bucket
+  stem-opposite placement) for the four combined-variant
+  `Articulation`s (`AccentStaccato`, `MarcatoStaccato`,
+  `TenutoStaccato`, `TenutoAccent`). The previous chunk's
+  `ENGRAVER-PROGRESS.md` "Open issues" called these out as the last
+  articulation-family without dedicated golden coverage; this chunk
+  closes that gap using the same shape as `golden_accent_extensions`
+  (which shares the normal-bucket contract and the same score
+  shape).
+
+  `music-engraver/tests/golden_svg.rs`:
+  - Added `COMBINED_ARTICULATION_VARIANTS: [Articulation; 4]` listing
+    the four variants in canonical order. Docstring describes them
+    as SMuFL shorthand glyphs for what would otherwise be a two-glyph
+    stack of the primitives (e.g. `AccentStaccato` = single glyph for
+    Accent + Staccato), and names the shared wiring contract — normal
+    stack bucket, stem-opposite default placement — distinct from the
+    fermata and bow-stroke buckets covered by the existing
+    family-specific goldens.
+  - Added `COMBINED_ARTICULATION_PITCHES: [(&str, u8); 4]` —
+    `("E", 4)`, `("C", 5)`, `("G", 4)`, `("A", 5)` (same pitches as
+    `ACCENT_EXTENSION_PITCHES`). Alternating low/high so the
+    engraver assigns alternating stem directions across the four
+    measures, exercising both the `Above` and `Below` glyph arms
+    for each of the four variants. Reusing the accent-extensions
+    pitch set is intentional: it isolates glyph routing as the only
+    source of difference between the two goldens, so the
+    cross-baseline `assert_ne!` against `build_accent_extensions()`
+    is a sharp regression net for a glyph-routing collapse onto the
+    accent-extensions family.
+  - Added `build_combined_articulations()`: 4-measure 4/4 system,
+    one HALF note + HALF rest per measure, articulation applied to
+    each note. HALF (not WHOLE) so each note carries a real stem and
+    the stem-opposite placement contract is exercised.
+  - Added `build_combined_articulations_plain()`: structural
+    baseline — same score, no articulations.
+  - Added `#[test] fn golden_combined_articulations()` with these
+    concrete-value assertions:
+      1. Structural: SVG starts with `<svg` and contains `</svg>`.
+      2. Path-count guard: `full.<path-count> − plain.<path-count>
+         == 4`. Catches a regression where any of the 4 variants
+         maps to a missing glyph (delta drops to 3 or less) or to a
+         multi-path glyph rendered as a stack of the two primitives
+         (delta climbs to 5+).
+      3. Distinct-d guard: the set difference of `d="..."` strings
+         between full and plain must contain exactly 4 entries.
+         Catches a `glyph()` arm typo that aliases any of the four
+         onto another's path data; strongest single regression net
+         for the eight ArticAccentStaccato/MarcatoStaccato/
+         TenutoStaccato/TenutoAccent {Above,Below} glyph arms.
+      4. Plain-disjoint check: every newly-added d-string must NOT
+         appear in the plain baseline. Catches the (unlikely but
+         possible) regression where a combined-articulation glyph's
+         path data coincidentally matches a notehead/rest/clef in
+         the baseline.
+      5. Cross-baseline distinctness vs `build_articulations()` —
+         catches a regression that collapses a combined variant onto
+         its primitive equivalent (e.g. AccentStaccato → Accent) or
+         changes the bucket assignment.
+      6. Cross-baseline distinctness vs `build_fermata_variants()` —
+         catches a regression that routes a combined variant into
+         the fermata bucket (always-above at fermata y-offset).
+      7. Cross-baseline distinctness vs `build_bow_strokes()` —
+         catches a regression that routes a combined variant into
+         the bow-stroke bucket (always-above at bow-stroke
+         y-offset).
+      8. Cross-baseline distinctness vs `build_accent_extensions()` —
+         the sharpest cross-baseline check: same score shape (4
+         measures of HALF + HALF-rest with `measures_per_system(4)`
+         and the same pitch sequence) and same normal-bucket
+         stem-opposite contract. The only thing that should differ
+         is the four SMuFL glyph payloads themselves. A byte-equal
+         match would mean the four combined variants collapsed onto
+         the four accent-extension variants — a glyph-routing
+         regression.
+      9. `assert_golden("combined_articulations", &svg)` — byte-
+         exact baseline lock, matching the pattern of all other
+         golden tests.
+
+- Verified: `cargo check -p music-engraver --tests` passes (0
+  errors). `cargo check --workspace` passes. `cargo clippy -p
+  music-engraver --test golden_svg` reports only 1 pre-existing
+  warning in `src/score/multi_staff.rs:394` (unrelated to this
+  chunk — my added code in `tests/golden_svg.rs` is clippy-clean).
+  `cargo test -p music-engraver --test golden_svg
+  golden_combined_articulations` — passes both at `GOLDEN_UPDATE=1`
+  baseline-generation time AND on the immediate re-run without
+  `GOLDEN_UPDATE` (byte-equal). `cargo test -p music-engraver
+  --test golden_svg` — **72 golden tests pass** (vs 71 prior; +1
+  new, exact arithmetic match — and crucially, all 71 pre-existing
+  goldens remain byte-identical, confirming the new functions did
+  not perturb any shared state). `cargo test -p music-engraver` —
+  **2543 lib + 72 golden_svg + 3 svg_glyph_render + 13 doc-test (1
+  ignored) = 2631 tests pass** (lib + svg_glyph_render + doc-tests
+  unchanged from prior; +1 in golden_svg). Generated baseline is
+  8127 bytes / 32 lines / 15 `<path>` elements (1 clef + 4 noteheads
+  + 4 stems + 4 rests + 4 combined-articulation glyphs — consistent
+  with the path-count guard's `delta == 4`).
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression**; **PNG export
+  via the `png` feature** (`resvg` + `tiny-skia` + `fontdb`);
+  **worked `examples/laissez_vibrer.rs`, `examples/accent_extensions.rs`,
+  `examples/bow_strokes.rs`, `examples/combined_articulations.rs`**
+  (small follow-ups, not required to lock variants in); trill polish
+  (per-segment `WiggleTrillFast` variant selection from a single-
+  speed annotation); auto-resolved low-staff beam-group collision
+  golden (still requires ScoreBuilder opt-out for force-stems,
+  deferred); cross-voice tie/slur consultation of the collision
+  detector (deferred).
+
+- Open issues: None. With this chunk, **all four articulation
+  families** — normal (Staccato/Accent/Tenuto/Marcato/etc. via
+  `golden_articulations`), accent-extension normal-bucket
+  post-v1 variants (SoftAccent/Stress/Unstress/LaissezVibrer via
+  `golden_accent_extensions`), bow-stroke always-above bucket
+  (UpBow/DownBow via `golden_bow_strokes`), fermata bucket
+  (Fermata/FermataLong/FermataShort/FermataVeryLong/FermataVeryShort/
+  FermataHenzeLong/FermataHenzeShort via `golden_fermata_variants`),
+  and combined-variant normal-bucket (AccentStaccato/MarcatoStaccato/
+  TenutoStaccato/TenutoAccent via `golden_combined_articulations`)
+  — have dedicated golden-SVG regression coverage that locks the
+  glyph routing, the bucket assignment, and the placement contract.
+  No articulation family remains uncovered.
