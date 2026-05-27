@@ -54,6 +54,6 @@
   <line x1="3292.0779220779223" y1="4500" x2="4795.12987012987" y2="4375" stroke="black" stroke-width="32.5"/>
   <line x1="4020.7936507936506" y1="1875" x2="10000" y2="1750" stroke="black" stroke-width="32.5"/>
   <line x1="4020.7936507936506" y1="1875" x2="10000" y2="2000" stroke="black" stroke-width="32.5"/>
-  <line x1="0" y1="4375" x2="1873.051948051948" y2="4250" stroke="black" stroke-width="32.5"/>
-  <line x1="0" y1="4375" x2="1873.051948051948" y2="4500" stroke="black" stroke-width="32.5"/>
+  <line x1="0" y1="4375" x2="1873.051948051948" y2="4250" stroke="black" stroke-width="32.5" stroke-dasharray="100,50"/>
+  <line x1="0" y1="4375" x2="1873.051948051948" y2="4500" stroke="black" stroke-width="32.5" stroke-dasharray="100,50"/>
 </svg>

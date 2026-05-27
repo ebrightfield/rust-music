@@ -1,6 +1,6 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::glissando::{layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle};
-use crate::layout::hairpin::layout_hairpin;
+use crate::layout::hairpin::{layout_hairpin, layout_hairpin_dashed};
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
@@ -658,7 +658,10 @@ pub(crate) fn draw_cross_system_hairpins(
         let targets = find_incoming_hairpin_targets(config, &systems[i + 1]);
 
         for hp_src in &unresolved {
-            // Draw trailing half-hairpin at the end of the source system
+            // Trailing half-hairpin at the end of the source system: solid.
+            // This half reads as the natural continuation of the within-system
+            // wedge — the reader sees an unbroken line continuing to the
+            // system's right edge.
             let right_layout = layout_hairpin(
                 hp_src.kind,
                 hp_src.x_right,
@@ -669,9 +672,15 @@ pub(crate) fn draw_cross_system_hairpins(
             );
             draw_hairpin(svg, &right_layout);
 
-            // Draw incoming half-hairpin at the start of the target system
+            // Incoming half-hairpin at the start of the target system: dashed.
+            // Engraved convention (Gould, *Behind Bars*) — the continuation
+            // half on the next system uses dashed lines so the reader
+            // recognizes it as a resumption rather than a new wedge starting
+            // at the system's left edge. Mirrors the dashed continuation
+            // already used for cross-system ottava brackets and trill
+            // extensions in this codebase.
             if let Some(tgt) = targets.first() {
-                let left_layout = layout_hairpin(
+                let left_layout = layout_hairpin_dashed(
                     hp_src.kind,
                     tgt.staff_left,
                     tgt.x_left,

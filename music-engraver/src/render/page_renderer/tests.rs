@@ -887,6 +887,286 @@ fn two_system_page_has_different_y_for_staff_lines() {
     );
 }
 
+// --- cross-system hairpin: dashed-continuation tests ---
+//
+// Engraved convention (Gould, *Behind Bars*; mirrored in this codebase's
+// cross-system ottava and trill-extension renderers): when a hairpin breaks
+// across systems, the **trailing** half on the source system stays solid
+// (it's seen as the natural continuation of the within-system wedge), and
+// the **incoming** half on the target system is **dashed** so the reader
+// recognizes it as a resumption rather than a brand-new wedge.
+//
+// These tests pin both halves of that convention. The earlier "four lines"
+// test only counts line elements — it would still pass if both halves
+// became dashed, both halves stayed solid, or the two halves swapped roles.
+
+/// Build a 2-system page where measure 1 carries a `Crescendo` start and
+/// measure 2 carries the matching `hairpin_end`, with `Fixed(1)` system
+/// breaking — guarantees the wedge crosses a system boundary.
+fn cross_system_hairpin_page(kind: HairpinType) -> String {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let start_note = MeasureEvent::Note(NoteEvent {
+        staff_position: 4,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations { hairpin_start: Some(kind), ..Default::default() },
+    });
+    let measures = vec![
+        MeasureContent {
+            events: vec![start_note],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+    draw_page(&font, &config, &page).unwrap().to_svg()
+}
+
+/// Return all `<line ...>` substrings (one per element) from an SVG string.
+fn line_elements(svg: &str) -> Vec<&str> {
+    svg.split("<line ").skip(1).map(|s| s.split('>').next().unwrap_or("")).collect()
+}
+
+/// Parse the `x1` attribute out of a single `<line ...>` payload. Panics if
+/// missing — every `<line>` we emit has both x1 and x2.
+fn parse_x1(line_attrs: &str) -> f64 {
+    line_attrs
+        .split("x1=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or_else(|| panic!("no x1 in line attrs: {line_attrs:?}"))
+}
+
+#[test]
+fn cross_system_hairpin_emits_dashed_on_incoming_half_only() {
+    // Total of 4 wedge lines; exactly 2 must carry stroke-dasharray
+    // (the incoming half on system 2). The other 2 (trailing half on
+    // system 1) must be solid.
+    let output = cross_system_hairpin_page(HairpinType::Crescendo);
+    let dashed_count = output.matches("stroke-dasharray").count();
+    assert_eq!(
+        dashed_count, 2,
+        "expected exactly 2 stroke-dasharray attributes (incoming half only); \
+         got {dashed_count}. SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_hairpin_total_line_count_unchanged_by_dashed_continuation() {
+    // The dashed-continuation behaviour is purely a stroke change, not a
+    // geometry change: the cross-system hairpin still emits exactly 4 wedge
+    // lines (2 trailing + 2 incoming). Catches a regression where the
+    // dashed-aware path accidentally drops or duplicates a wedge line.
+    let output = cross_system_hairpin_page(HairpinType::Crescendo);
+
+    // Baseline: same measures without any hairpin markings.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+    let baseline_measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let baseline_page = layout_page(&prefix(), &baseline_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let baseline_svg = draw_page(&font, &config, &baseline_page).unwrap().to_svg();
+
+    let hp_lines = output.matches("<line ").count();
+    let no_lines = baseline_svg.matches("<line ").count();
+    assert_eq!(
+        hp_lines,
+        no_lines + 4,
+        "dashed continuation must preserve the 4-line wedge count \
+         (2 trailing solid + 2 incoming dashed); got {hp_lines} vs baseline {no_lines}"
+    );
+}
+
+#[test]
+fn cross_system_hairpin_dashed_lines_anchor_on_target_system_left() {
+    // The dashed lines belong to the *incoming* half on the target system —
+    // they should sit at small x (near the target system's left edge) while
+    // the solid trailing half sits at large x (near the source system's
+    // right edge). This catches a swap of solid/dashed across the two halves.
+    let output = cross_system_hairpin_page(HairpinType::Crescendo);
+
+    let lines = line_elements(&output);
+    let mut dashed_x1s = Vec::new();
+    let mut solid_x1s = Vec::new();
+    for line in &lines {
+        if line.contains("stroke-dasharray") {
+            dashed_x1s.push(parse_x1(line));
+        } else {
+            // We only care about wedge lines here; staff/stem lines have x1
+            // values that span the full page too, but the dashed wedge lines
+            // are uniquely identified. The maximum dashed x1 vs the minimum
+            // solid x1 comparison below is robust because the trailing
+            // wedge's leftmost point sits well to the right of all incoming
+            // wedge geometry on a Fixed(1) two-system layout.
+            solid_x1s.push(parse_x1(line));
+        }
+    }
+    assert_eq!(dashed_x1s.len(), 2, "expected 2 dashed lines, got {dashed_x1s:?}");
+
+    let max_dashed_x1 = dashed_x1s.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let min_solid_wedge_x1 = solid_x1s
+        .iter()
+        .cloned()
+        // The trailing solid wedge lines are the only solid lines whose
+        // y matches the source system's hairpin band; filtering by absolute
+        // x avoids needing to reason about y. Empirically, on a Fixed(1)
+        // layout with 8000fu page width, the trailing wedge sits well past
+        // 4000fu, while no staff/stem line on system 2 starts past that.
+        // Pick the *minimum* solid x1 that is still to the right of every
+        // dashed x1: that's the leftmost x of the trailing wedge.
+        .filter(|x| *x > max_dashed_x1)
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        min_solid_wedge_x1.is_finite(),
+        "no solid line found to the right of the dashed continuation; \
+         SVG:\n{output}"
+    );
+    assert!(
+        max_dashed_x1 < min_solid_wedge_x1,
+        "expected dashed (incoming) lines to anchor at smaller x than \
+         solid (trailing) wedge lines; max_dashed_x1={max_dashed_x1}, \
+         min_solid_wedge_x1={min_solid_wedge_x1}"
+    );
+}
+
+#[test]
+fn cross_system_hairpin_right_half_only_when_no_end_emits_no_dasharray() {
+    // When the source system has an unresolved hairpin_start but the target
+    // system has no `hairpin_end`, only the trailing solid half is drawn —
+    // never the dashed incoming half. Catches a regression where
+    // layout_hairpin_dashed leaks into the solo-trailing path.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)], // no hairpin_end
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    assert_eq!(
+        output.matches("stroke-dasharray").count(),
+        0,
+        "trailing-only cross-system hairpin must not emit stroke-dasharray; SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_decrescendo_incoming_half_also_dashed() {
+    // The dashed-continuation convention is direction-agnostic — both
+    // crescendo and decrescendo continuations should be dashed. Catches
+    // a regression where the dashed treatment is conditional on
+    // HairpinType::Crescendo only.
+    let output = cross_system_hairpin_page(HairpinType::Decrescendo);
+    let dashed_count = output.matches("stroke-dasharray").count();
+    assert_eq!(
+        dashed_count, 2,
+        "decrescendo cross-system incoming half must also be dashed \
+         (got {dashed_count} stroke-dasharray occurrences); SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_hairpin_dashed_value_matches_layout_constants() {
+    // The dashed continuation must emit the same dash/gap values as
+    // `layout_hairpin_dashed` produces — i.e. the const-times-staff-space
+    // products, not raw staff-space constants. Catches a regression where
+    // an ad-hoc dash pattern is hard-coded into the page renderer instead
+    // of routed through the layout helper.
+    let (_font, config) = setup();
+    let ss = config.staff_space;
+
+    let expected_dash = crate::layout::hairpin::HAIRPIN_DASH_LENGTH_SS * ss;
+    let expected_gap = crate::layout::hairpin::HAIRPIN_GAP_LENGTH_SS * ss;
+    let expected_attr = format!(r#"stroke-dasharray="{expected_dash},{expected_gap}""#);
+
+    let output = cross_system_hairpin_page(HairpinType::Crescendo);
+    let occurrences = output.matches(&expected_attr).count();
+    assert_eq!(
+        occurrences, 2,
+        "expected dasharray attribute {expected_attr:?} to appear exactly \
+         twice (once per incoming wedge line); got {occurrences}. SVG:\n{output}"
+    );
+}
+
+#[test]
+fn within_system_hairpin_emits_no_dasharray() {
+    // Sanity check: the dashed-continuation behaviour is exclusive to
+    // *cross-system* hairpins. A hairpin that starts and ends within the
+    // same system must remain entirely solid.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_start_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![hairpin_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    // Both measures fit on one system (Fixed(2)) — no cross-system hairpin.
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1);
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    assert_eq!(
+        output.matches("stroke-dasharray").count(),
+        0,
+        "within-system hairpin must remain solid; SVG:\n{output}"
+    );
+}
+
 // ---- Measure number tests ----
 
 #[test]

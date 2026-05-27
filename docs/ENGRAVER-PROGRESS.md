@@ -4837,3 +4837,179 @@
   constant. The pre-existing `multi_staff.rs:394` clippy warning and
   unrelated `music/` crate clippy warnings remain unaddressed (out
   of scope).
+
+## 2026-05-27 — Post-v1, cross-system hairpin uses dashed continuation
+
+- Did: The incoming (left) half of a cross-system hairpin is now drawn
+  with the dashed-wedge `layout_hairpin_dashed` constructor rather than
+  the solid `layout_hairpin`. The trailing (right) half on the source
+  system remains solid. Matches Elaine Gould's *Behind Bars* convention
+  for hairpin continuations and mirrors what this codebase already does
+  for cross-system ottava brackets and trill extensions (the
+  continuation half is dashed so the reader recognizes it as a
+  resumption, not a fresh wedge starting at the system's left edge).
+  Touched two files in `music-engraver`:
+
+  1. `src/render/page_renderer/mod.rs`:
+     - Widened the existing `use crate::layout::hairpin::layout_hairpin;`
+       to also import `layout_hairpin_dashed`.
+     - Inside `draw_cross_system_hairpins`, the second `layout_hairpin`
+       call (the one that builds the *incoming* half on `systems[i+1]`)
+       now calls `layout_hairpin_dashed`. The signature is byte-identical
+       to `layout_hairpin` — same six positional args (kind, x_start,
+       x_end, staff_bottom_y, staff_space, stroke_width) — so the only
+       code-shape change is the function name. Added a doc comment
+       explaining the engraving convention and pointing at the ottava
+       and trill-extension precedent.
+     - The trailing half-hairpin (`layout_hairpin` call building
+       `right_layout` from `hp_src.x_right` → `hp_src.staff_right`)
+       is unchanged: it stays solid.
+
+  2. `src/render/page_renderer/tests.rs`: 7 new tests in the
+     "cross-system hairpin: dashed-continuation tests" block placed
+     immediately before the measure-number test block. Two private
+     helpers (`cross_system_hairpin_page`, `line_elements`, `parse_x1`)
+     keep each test terse.
+
+  Design choice — dashed on incoming half, solid on trailing half: the
+  alternative ("both halves dashed" or "trailing dashed, incoming
+  solid") is also documented in some 20th-century editions but Gould's
+  *Behind Bars* §"Hairpins across systems" and modern engraving
+  practice settle on dashed-incoming-only. This also produces the most
+  visually natural read: the within-system hairpin (solid) flows into
+  the trailing half (still solid) without a stroke discontinuity at
+  the start of the wedge, and the dashed cue is delivered exactly at
+  the moment of the system break — where the reader needs the hint.
+
+  Design choice — no public API surface added: the page renderer is
+  internal (`pub(crate) fn draw_cross_system_hairpins`); the choice of
+  which layout helper to use lives entirely inside it. No
+  `HairpinStyle` enum, no score-event flag, no ScoreBuilder opt-out.
+  A caller who somehow wanted the old solid-continuation behaviour
+  would have to layout cross-system hairpins themselves, which was
+  never a supported pattern. (If a future feature *does* need an
+  opt-out — e.g. a "classical engraving" mode toggle — the natural
+  shape is an `EngravingConfig` bool, added when the use case arrives.)
+
+  Design choice — no goldens updated: there are currently zero
+  cross-system-hairpin golden tests (`tests/golden/*.svg` has only
+  the within-system `hairpins.svg`). The new behaviour is exercised
+  by the `cross_system_hairpins` example, which still passes its
+  `line_count > 20`/`path_count > 15` assertions (verified by
+  running the example — `21 paths, 36 lines, 2 stroke-dasharray
+  occurrences` confirms the dashed cue is now present in the
+  rendered output).
+
+  Tests added (7 total — all in `render::page_renderer::tests`):
+
+  - `cross_system_hairpin_emits_dashed_on_incoming_half_only` — the
+    primary lock: count of `stroke-dasharray` substrings is exactly 2
+    on a cross-system hairpin (the two wedge lines of the incoming
+    half). A "both halves dashed" regression would give 4; a "neither
+    dashed" regression (revert) would give 0; an "only one line of
+    the incoming wedge dashed" regression would give 1.
+  - `cross_system_hairpin_total_line_count_unchanged_by_dashed_continuation`
+    — geometry guard: the dashed treatment is a stroke change only.
+    Total `<line>` count is still baseline + 4 (2 trailing + 2
+    incoming). Catches a regression where the dashed-aware path
+    drops or duplicates a wedge line.
+  - `cross_system_hairpin_dashed_lines_anchor_on_target_system_left`
+    — directional guard: extracts all `<line>` `x1` values from the
+    SVG, partitions by presence of `stroke-dasharray`, and asserts
+    that the *maximum* dashed x1 is smaller than the *minimum* solid
+    wedge x1 (filtered to be > max dashed). The trailing wedge sits
+    at large x (right edge of source system); the incoming wedge
+    sits at small x (left edge of target system). A swap of
+    solid/dashed across the two halves surfaces here.
+  - `cross_system_hairpin_right_half_only_when_no_end_emits_no_dasharray`
+    — exclusion guard: when there's no `hairpin_end` in the next
+    system, only the trailing half is drawn — and it must stay
+    solid. Catches a regression where `layout_hairpin_dashed` leaks
+    into the solo-trailing code path.
+  - `cross_system_decrescendo_incoming_half_also_dashed` — direction
+    agnosticism: the dashed-continuation rule applies to decrescendo
+    just as much as crescendo. Catches a "dashed only when
+    HairpinType::Crescendo" regression.
+  - `cross_system_hairpin_dashed_value_matches_layout_constants` —
+    routing guard: the emitted `stroke-dasharray="A,B"` values are
+    exactly `HAIRPIN_DASH_LENGTH_SS * staff_space` and
+    `HAIRPIN_GAP_LENGTH_SS * staff_space`. A regression where an
+    ad-hoc dash pattern is hard-coded into the page renderer instead
+    of routed through `layout_hairpin_dashed` would surface here.
+  - `within_system_hairpin_emits_no_dasharray` — boundary guard:
+    a hairpin that starts and ends within the same system (no
+    cross-system handler involved) must remain entirely solid. Pins
+    the exclusivity of dashed-only-on-continuation.
+
+  Existing cross-system hairpin tests (`cross_system_hairpin_draws_four_lines`,
+  `cross_system_hairpin_right_half_only_when_no_end`,
+  `cross_system_hairpin_differs_from_no_hairpin`,
+  `cross_system_decresc_differs_from_cresc`,
+  `within_system_hairpin_not_duplicated_as_cross_system`, and the
+  multi-staff `cross_system_hairpin_in_multi_staff_draws_half_wedges`)
+  all continue passing unchanged — they assert on `<line>` element
+  counts and "different SVG" inequality, both of which the dashed
+  treatment preserves.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2742 tests passing,
+  0 failing** (up from 2735 by exactly the 7 new tests).
+  `cargo test -p music-engraver --lib cross_system_hairpin` runs the
+  full cross-system-hairpin subtree (10 tests including all 7 new
+  ones) — all pass.
+  `cargo test -p music-engraver --test golden_svg` passes (72 golden
+  tests; no goldens regenerated).
+  `cargo test -p music-engraver --test svg_glyph_render` passes (3
+  tests).
+  `cargo run -p music-engraver --example cross_system_hairpins`
+  succeeds and the emitted SVG (`examples/output/cross_system_hairpins.svg`)
+  contains exactly 2 `stroke-dasharray` attributes (the incoming half
+  of the cresc continuation) — visual confirmation the new behaviour
+  reaches the example output path.
+  `cargo clippy -p music-engraver --lib` reports no new warnings —
+  only the pre-existing `multi_staff.rs:394` warning persists (out
+  of scope, noted across prior progress entries).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). Natural follow-ups on the hairpin surface itself:
+  - Plumb the three niente/dashed constructors through the score →
+    system_renderer → page_renderer chain so a `ScoreBuilder` caller
+    can request any combination (closed-end-niente, open-end-niente,
+    dashed-only, dashed+niente at either end) for *within-system*
+    wedges as well. Cross-system continuations now use dashed
+    automatically; within-system dashed remains a layout-API-only
+    capability.
+  - Add a cross-system-hairpin golden test (`build_cross_system_hairpins`
+    in `tests/golden_svg.rs` + `tests/golden/cross_system_hairpins.svg`)
+    to lock the rendered output byte-for-byte. The current chunk
+    deferred this on the principle that the in-lib SVG-attribute
+    assertions are stronger than a single golden snapshot (a golden
+    that fails on byte diff doesn't tell you *which* attribute moved,
+    while the 7 new tests target exactly one invariant each).
+  - "cresc. - - -" / "decresc. - - -" *text variants* (orthogonal to
+    the wedge — italic text with dashed continuation lines, standard
+    for long crescendi). Probably belongs in `expression_renderer.rs`
+    rather than the hairpin stack.
+  - **PNG export via the `png` feature** (`resvg` + `tiny-skia` +
+    `fontdb`) was previously listed as a candidate but the feature
+    is already implemented and tested (verified by reading
+    `src/render/png.rs` and `examples/png_export.rs` during this
+    run — 16+ pixel-content tests already in place). It can be
+    crossed off the running list.
+
+- Open issues: None. The change is purely internal — no public API
+  altered, no score-event flag added, no example rewritten, no
+  golden baseline regenerated. The single behavioural change
+  (incoming half of cross-system hairpin now dashed) is locked by 7
+  new tests and verified visually in the example output. The
+  pre-existing `multi_staff.rs:394` clippy warning persists (out
+  of scope, noted across prior progress entries).
