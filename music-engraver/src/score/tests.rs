@@ -1827,6 +1827,250 @@
         }
     }
 
+    // --- cresc-text (dashed-text crescendo/diminuendo) integration tests ---
+
+    #[test]
+    fn cresc_text_adds_label_and_dashed_line_to_svg() {
+        // Verifies the full ScoreBuilder → event → measure → system_renderer
+        // chain: calling .cresc_text() / .cresc_text_end() must produce a
+        // dashed-text marking in the rendered SVG.
+        let svg_with = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc_text()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).cresc_text_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // The marking adds exactly one label and exactly one dashed line.
+        assert!(svg_with.contains(">cresc.</text>"), "should contain literal 'cresc.' label");
+        assert_eq!(
+            svg_with.matches("stroke-dasharray").count(),
+            svg_without.matches("stroke-dasharray").count() + 1,
+            "cresc_text marking adds exactly one dashed line"
+        );
+        assert_eq!(
+            svg_with.matches("<text").count(),
+            svg_without.matches("<text").count() + 1,
+            "cresc_text marking adds exactly one <text> element"
+        );
+    }
+
+    #[test]
+    fn decresc_text_label_differs_from_cresc_text() {
+        let svg_c = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc_text()
+            .note(p("E", 4), Duration::QTR).cresc_text_end()
+            .end_barline()
+            .render_svg();
+
+        let svg_d = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).decresc_text()
+            .note(p("E", 4), Duration::QTR).cresc_text_end()
+            .end_barline()
+            .render_svg();
+
+        let svg_m = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).dim_text()
+            .note(p("E", 4), Duration::QTR).cresc_text_end()
+            .end_barline()
+            .render_svg();
+
+        // Each renders its own label.
+        assert!(svg_c.contains(">cresc.</text>"), "cresc_text() should emit 'cresc.'");
+        assert!(svg_d.contains(">decresc.</text>"), "decresc_text() should emit 'decresc.'");
+        assert!(svg_m.contains(">dim.</text>"), "dim_text() should emit 'dim.'");
+
+        // And distinct SVG.
+        assert_ne!(svg_c, svg_d);
+        assert_ne!(svg_d, svg_m);
+        assert_ne!(svg_c, svg_m);
+    }
+
+    #[test]
+    fn cresc_text_on_rest_is_noop() {
+        // Calling .cresc_text() right after .rest() should be a no-op
+        // (the convenience methods only apply to Notes and Chords), so
+        // the dangling cresc_text_end() has nothing to pair with and
+        // also renders nothing.
+        let svg1 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR).cresc_text()
+            .note(p("E", 4), Duration::QTR).cresc_text_end()
+            .end_barline()
+            .render_svg();
+
+        let svg2 = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(svg1, svg2, "cresc_text on rest must be a no-op");
+        assert!(!svg1.contains(">cresc.</text>"), "must not emit label");
+    }
+
+    #[test]
+    fn cresc_text_start_without_end_renders_no_marking() {
+        // Orphan start: dangling .cresc_text() with no matching
+        // .cresc_text_end() produces no marking.
+        let svg_orphan = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc_text()
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            svg_orphan, svg_baseline,
+            "orphan cresc_text_start (no matching cresc_text_end) must produce no marking"
+        );
+    }
+
+    #[test]
+    fn cresc_text_and_hairpin_coexist_independently() {
+        // Belt-and-suspenders: a phrase with BOTH a hairpin marking AND
+        // a cresc-text marking on different pairs of notes must add up
+        // to one wedge (2 lines, no dashed) + one cresc-text (1 dashed
+        // line + 1 text element). Catches a regression where the two
+        // paths interfere or share state.
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .note(p("G", 4), Duration::QTR).cresc_text()
+            .note(p("A", 4), Duration::QTR).cresc_text_end()
+            .end_barline()
+            .render_svg();
+
+        // Hairpin wedge contributes no dashed lines; cresc-text
+        // contributes one. So exactly one stroke-dasharray must appear.
+        assert_eq!(
+            svg.matches("stroke-dasharray").count(),
+            1,
+            "exactly one dashed line (cresc-text continuation); hairpin must contribute none"
+        );
+        assert!(
+            svg.contains(">cresc.</text>"),
+            "cresc-text label must still render alongside hairpin"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_cresc_text_fields() {
+        // The annotations flow through convert_event unchanged — required
+        // for the system_renderer to see the flags downstream.
+        use crate::layout::cresc_text::CrescTextKind;
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: p("C", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                cresc_text_start: Some(CrescTextKind::Diminuendo),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &builder.key_sig, None);
+        match result {
+            MeasureEvent::Note(n) => {
+                assert_eq!(n.annotations.cresc_text_start, Some(CrescTextKind::Diminuendo));
+                assert!(!n.annotations.cresc_text_end);
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn convert_event_preserves_cresc_text_end_flag() {
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Note {
+            pitch: p("C", 4),
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                cresc_text_end: true,
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let mut seen = HashMap::new();
+        let result = convert_event(&event, &clef, &builder.key_sig, Some(&mut seen));
+        match result {
+            MeasureEvent::Note(n) => {
+                assert!(n.annotations.cresc_text_start.is_none());
+                assert!(n.annotations.cresc_text_end);
+            }
+            _ => panic!("expected Note"),
+        }
+    }
+
+    #[test]
+    fn chord_cresc_text_preserved_in_convert() {
+        use crate::layout::cresc_text::CrescTextKind;
+        let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
+        let event = ScoreEvent::Chord {
+            pitches: vec![p("C", 4), p("E", 4)],
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                cresc_text_start: Some(CrescTextKind::Crescendo),
+                ..NoteAnnotations::default()
+            },
+        };
+        let clef = Clef::Treble;
+        let result = convert_event(&event, &clef, &builder.key_sig, None);
+        match result {
+            MeasureEvent::Chord(c) => {
+                assert_eq!(c.annotations.cresc_text_start, Some(CrescTextKind::Crescendo));
+                assert!(!c.annotations.cresc_text_end);
+            }
+            _ => panic!("expected Chord"),
+        }
+    }
+
+    #[test]
+    fn cresc_text_on_chord_renders_label() {
+        // The end-to-end path also works when the start lives on a Chord
+        // event (not just on a Note event).
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR).cresc_text()
+            .note(p("A", 4), Duration::QTR).cresc_text_end()
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains(">cresc.</text>"),
+            "cresc_text() on a chord must still emit the label in the rendered SVG"
+        );
+        assert_eq!(
+            svg.matches("stroke-dasharray").count(),
+            1,
+            "exactly one dashed continuation line on chord-anchored marking"
+        );
+    }
+
     // --- Rehearsal mark integration tests ---
 
     #[test]

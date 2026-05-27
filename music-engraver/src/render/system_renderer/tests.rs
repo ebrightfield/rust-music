@@ -864,6 +864,408 @@ fn hairpin_across_barline() {
     assert_eq!(hp_lines, no_lines + 2, "cross-barline hairpin adds 2 lines");
 }
 
+// --- cresc-text (dashed-text crescendo/diminuendo) rendering ---
+
+use crate::layout::cresc_text::CrescTextKind;
+
+fn cresc_text_start_note(pos: i8, kind: CrescTextKind) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            cresc_text_start: Some(kind),
+            ..Default::default()
+        },
+    })
+}
+
+fn cresc_text_end_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            cresc_text_end: true,
+            ..Default::default()
+        },
+    })
+}
+
+#[test]
+fn cresc_text_within_measure_emits_label_and_dashed_line() {
+    // The cresc_text path should contribute exactly:
+    //   - one <text> element (the "dim." label)
+    //   - one dashed <line> (the continuation line, with stroke-dasharray)
+    // above what a no-marking baseline produces.
+    //
+    // Uses the `Diminuendo` kind ("dim." — 4-char label) and a 4-note
+    // span so the label + padding + dashed line all fit within the
+    // raw measure-layout spacing the system_renderer test fixtures use.
+    // (The score-level `render_svg` path uses extra page-level stretching
+    // and has more room to play with, but this test exercises the
+    // system_renderer in isolation.)
+    let (font, config, mcfg) = setup();
+    let with_marking = vec![MeasureContent {
+        events: vec![
+            cresc_text_start_note(4, CrescTextKind::Diminuendo),
+            quarter_note(6),
+            quarter_note(8),
+            cresc_text_end_note(2),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let baseline = vec![MeasureContent {
+        events: vec![
+            quarter_note(4),
+            quarter_note(6),
+            quarter_note(8),
+            quarter_note(2),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_m = layout_system(&treble_prefix(), &with_marking, &mcfg, None);
+    let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
+
+    let mut svg_m = make_svg();
+    draw_system(&mut svg_m, &font, &config, &sys_m, 0.0, 0.0).unwrap();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_b, &font, &config, &sys_b, 0.0, 0.0).unwrap();
+    let out_m = svg_m.to_svg();
+    let out_b = svg_b.to_svg();
+
+    // Exactly one text element more than the baseline (the label).
+    assert_eq!(
+        out_m.matches("<text").count(),
+        out_b.matches("<text").count() + 1,
+        "cresc-text marking must add exactly one <text> element"
+    );
+
+    // Label content present, anchored to start, italic, non-bold.
+    assert!(out_m.contains(">dim.</text>"), "label 'dim.' must appear");
+    assert!(out_m.contains("font-style=\"italic\""), "label must be italic");
+    assert!(out_m.contains("text-anchor=\"start\""), "label must be left-anchored");
+
+    // Exactly one dashed line more than the baseline.
+    assert_eq!(
+        out_m.matches("stroke-dasharray").count(),
+        out_b.matches("stroke-dasharray").count() + 1,
+        "cresc-text marking must add exactly one dashed line"
+    );
+    assert_eq!(
+        out_m.matches("<line ").count(),
+        out_b.matches("<line ").count() + 1,
+        "cresc-text marking must add exactly one <line> (the dashed continuation)"
+    );
+}
+
+#[test]
+fn no_cresc_text_without_start_flag() {
+    // A note with only cresc_text_end and no preceding cresc_text_start
+    // must not produce any marking — same byte output as the baseline.
+    let (font, config, mcfg) = setup();
+    let end_only = vec![MeasureContent {
+        events: vec![quarter_note(4), cresc_text_end_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let baseline = vec![MeasureContent {
+        events: vec![quarter_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_e = layout_system(&treble_prefix(), &end_only, &mcfg, None);
+    let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
+
+    let mut svg_e = make_svg();
+    draw_system(&mut svg_e, &font, &config, &sys_e, 0.0, 0.0).unwrap();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_b, &font, &config, &sys_b, 0.0, 0.0).unwrap();
+
+    assert_eq!(
+        svg_e.to_svg(),
+        svg_b.to_svg(),
+        "cresc_text_end without a preceding cresc_text_start must render identically to baseline"
+    );
+}
+
+#[test]
+fn cresc_text_start_without_end_draws_nothing_extra() {
+    // Same orphan-start semantics as hairpins: an unresolved
+    // cresc_text_start produces no marking until a matching end appears.
+    let (font, config, mcfg) = setup();
+    let start_only = vec![MeasureContent {
+        events: vec![
+            cresc_text_start_note(4, CrescTextKind::Crescendo),
+            quarter_note(6),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let baseline = vec![MeasureContent {
+        events: vec![quarter_note(4), quarter_note(6)],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_s = layout_system(&treble_prefix(), &start_only, &mcfg, None);
+    let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
+
+    let mut svg_s = make_svg();
+    draw_system(&mut svg_s, &font, &config, &sys_s, 0.0, 0.0).unwrap();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_b, &font, &config, &sys_b, 0.0, 0.0).unwrap();
+
+    assert_eq!(
+        svg_s.to_svg(),
+        svg_b.to_svg(),
+        "cresc_text_start without cresc_text_end must produce no extra elements"
+    );
+}
+
+#[test]
+fn cresc_text_kinds_differ_in_label_content() {
+    // Same start/end notes, three different kinds — each label must
+    // appear in its own render, and the cresc./decresc./dim. labels
+    // must NOT cross-contaminate between renders.
+    let (font, config, mcfg) = setup();
+
+    let mut renders = Vec::new();
+    for kind in [
+        CrescTextKind::Crescendo,
+        CrescTextKind::Decrescendo,
+        CrescTextKind::Diminuendo,
+    ] {
+        let measures = vec![MeasureContent {
+            events: vec![cresc_text_start_note(4, kind), cresc_text_end_note(6)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        }];
+        let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+        let mut svg = make_svg();
+        draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+        renders.push((kind, svg.to_svg()));
+    }
+
+    let cresc = &renders[0].1;
+    let decresc = &renders[1].1;
+    let dim = &renders[2].1;
+
+    assert!(cresc.contains(">cresc.</text>"), "Crescendo render missing 'cresc.' label");
+    assert!(decresc.contains(">decresc.</text>"), "Decrescendo render missing 'decresc.' label");
+    assert!(dim.contains(">dim.</text>"), "Diminuendo render missing 'dim.' label");
+
+    // Cross-contamination guards: the cresc. render must not contain the
+    // dim. or decresc. literal strings, etc.
+    assert!(!cresc.contains("decresc."), "Crescendo render must not contain 'decresc.'");
+    assert!(!cresc.contains("dim."), "Crescendo render must not contain 'dim.'");
+    assert!(!dim.contains("cresc."), "Diminuendo render must not contain 'cresc.' (catches accidental fallthrough on label dispatch)");
+    // decresc. *contains* "cresc." as a substring, so we only guard the
+    // reverse direction here.
+    assert!(!decresc.contains(">dim.</text>"), "Decrescendo render must not contain 'dim.' label");
+
+    // Each pairing produces visually distinct SVG.
+    assert_ne!(cresc, decresc, "Crescendo and Decrescendo SVG must differ");
+    assert_ne!(decresc, dim, "Decrescendo and Diminuendo SVG must differ");
+    assert_ne!(cresc, dim, "Crescendo and Diminuendo SVG must differ");
+}
+
+#[test]
+fn cresc_text_across_barline_emits_one_label_and_one_line() {
+    // Within a single system but across a barline: the marking should
+    // still emit exactly one label + one dashed line (we are not
+    // crossing a system break). Two-measure layout gives enough span.
+    let (font, config, mcfg) = setup();
+    let measures = vec![
+        MeasureContent {
+            events: vec![
+                cresc_text_start_note(4, CrescTextKind::Diminuendo),
+                quarter_note(6),
+            ],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(7), cresc_text_end_note(2)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let baseline = vec![
+        MeasureContent {
+            events: vec![quarter_note(4), quarter_note(6)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(7), quarter_note(2)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let sys_m = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
+
+    let mut svg_m = make_svg();
+    draw_system(&mut svg_m, &font, &config, &sys_m, 0.0, 0.0).unwrap();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_b, &font, &config, &sys_b, 0.0, 0.0).unwrap();
+
+    let out_m = svg_m.to_svg();
+    let out_b = svg_b.to_svg();
+
+    assert_eq!(
+        out_m.matches(">dim.</text>").count(),
+        1,
+        "across-barline marking must emit exactly one label"
+    );
+    assert_eq!(
+        out_m.matches("stroke-dasharray").count(),
+        out_b.matches("stroke-dasharray").count() + 1,
+        "across-barline marking must add exactly one dashed line"
+    );
+}
+
+#[test]
+fn cresc_text_dashed_line_endpoints_lie_between_start_and_end_notes() {
+    // Locks the geometric routing: the dashed line's x1 must be greater
+    // than the start note's x (the label sits at the start, the line
+    // begins after the label), and x2 must lie strictly left of the
+    // end note's x (with the standard 0.3 staff-space pad).
+    //
+    // This catches a regression where the renderer accidentally swapped
+    // start/end positions or routed the line to the wrong notes.
+    let (font, config, mcfg) = setup();
+    let measures = vec![MeasureContent {
+        events: vec![
+            cresc_text_start_note(4, CrescTextKind::Diminuendo),
+            quarter_note(6),
+            quarter_note(8),
+            cresc_text_end_note(0),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
+    let mut svg = make_svg();
+    draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
+    let out = svg.to_svg();
+
+    // Sanity: the marking actually rendered a dashed line — without it,
+    // the x2 assertion below would be vacuously true on an empty match.
+    assert!(
+        out.contains("stroke-dasharray"),
+        "test precondition: scenario must be wide enough for a dashed line; got:\n{out}"
+    );
+
+    // Pull the cresc-text info back out to derive expected endpoints.
+    let info = collect_cresc_text_note_info(&system);
+    let start = info
+        .iter()
+        .find(|n| n.cresc_text_start.is_some())
+        .expect("start note present");
+    let end = info
+        .iter()
+        .find(|n| n.cresc_text_end)
+        .expect("end note present");
+    assert!(
+        end.x > start.x,
+        "test setup precondition: end note must be after start note"
+    );
+
+    // The dashed line ends at: system_x (=0) + end.x − 0.3 * staff_space.
+    let expected_x2 = end.x - 0.3 * config.staff_space;
+    let needle = format!("x2=\"{}\"", expected_x2);
+    assert!(
+        out.contains(&needle),
+        "expected dashed-line x2={} in SVG; got:\n{out}",
+        expected_x2
+    );
+}
+
+#[test]
+fn cresc_text_renders_independently_of_a_hairpin_on_other_notes() {
+    // The two paths share the same vertical band but do not interfere:
+    // a system that has BOTH a hairpin (on one pair of notes) and a
+    // cresc-text marking (on a different pair of notes) must emit
+    // exactly one hairpin contribution + one cresc-text contribution.
+    let (font, config, mcfg) = setup();
+    let mixed = vec![MeasureContent {
+        events: vec![
+            cresc_start_note(4), // hairpin start
+            hairpin_end_note(6), // hairpin end
+            cresc_text_start_note(8, CrescTextKind::Diminuendo),
+            quarter_note(7),
+            quarter_note(2),
+            cresc_text_end_note(0),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let baseline = vec![MeasureContent {
+        events: vec![
+            quarter_note(4),
+            quarter_note(6),
+            quarter_note(8),
+            quarter_note(7),
+            quarter_note(2),
+            quarter_note(0),
+        ],
+        barline: BarlineStyle::Single,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let sys_m = layout_system(&treble_prefix(), &mixed, &mcfg, None);
+    let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
+
+    let mut svg_m = make_svg();
+    draw_system(&mut svg_m, &font, &config, &sys_m, 0.0, 0.0).unwrap();
+    let mut svg_b = make_svg();
+    draw_system(&mut svg_b, &font, &config, &sys_b, 0.0, 0.0).unwrap();
+    let out_m = svg_m.to_svg();
+    let out_b = svg_b.to_svg();
+
+    // Hairpin contributes 2 solid lines, cresc-text contributes 1
+    // dashed line: total +3 line elements.
+    assert_eq!(
+        out_m.matches("<line ").count(),
+        out_b.matches("<line ").count() + 3,
+        "hairpin (2 lines) + cresc-text (1 dashed line) must add exactly 3 lines over baseline"
+    );
+    // Exactly one dashed line (the cresc-text continuation); the hairpin
+    // wedge lines are solid, not dashed.
+    assert_eq!(
+        out_m.matches("stroke-dasharray").count(),
+        out_b.matches("stroke-dasharray").count() + 1,
+        "cresc-text must add exactly one dashed line; hairpin must add none"
+    );
+    // Exactly one text element added (the cresc-text label); hairpin
+    // contributes no <text> in this scenario.
+    assert_eq!(
+        out_m.matches("<text").count(),
+        out_b.matches("<text").count() + 1,
+        "cresc-text label must add exactly one <text>; hairpin must add none"
+    );
+}
+
 // --- lyric extender rendering ---
 
 fn note_with_lyric(pos: i8, syl: LyricSyllable) -> MeasureEvent {

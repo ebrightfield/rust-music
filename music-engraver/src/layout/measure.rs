@@ -3,6 +3,7 @@ use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::clef::ClefLayout;
+use crate::layout::cresc_text::CrescTextKind;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
@@ -198,6 +199,19 @@ pub struct NoteAnnotations {
     /// draw time, and the renderer falls back to no wiggle — same
     /// fail-safe as for spans too short to tile.
     pub trill_speed_ramp: Option<TrillSpeedRampSpec>,
+    /// Whether this note/chord starts a dashed-text crescendo/diminuendo
+    /// marking ("cresc.", "decresc.", "dim." followed by a dashed
+    /// continuation line). The marking is the wedgeless alternative to a
+    /// hairpin, used for long crescendi or where a wedge would be too
+    /// crowded. The dashed line extends from this note to the note with
+    /// `cresc_text_end = true`. The label is rendered in italic below
+    /// the staff at the same vertical band as hairpins/dynamics so a
+    /// section mixing hairpins and dashed-text markings reads as one
+    /// continuous dynamic axis.
+    pub cresc_text_start: Option<CrescTextKind>,
+    /// Whether this note/chord ends a dashed-text crescendo/diminuendo
+    /// marking. Pairs with a preceding `cresc_text_start`.
+    pub cresc_text_end: bool,
 }
 
 /// A group of notes to be beamed together.

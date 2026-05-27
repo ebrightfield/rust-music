@@ -1,4 +1,5 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::cresc_text::{layout_cresc_text, CrescTextKind};
 use crate::layout::glissando::{layout_glissando, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin, HairpinType};
 use crate::layout::ornament::{layout_ornament, Ornament};
@@ -19,6 +20,7 @@ use crate::layout::trill_extension::{
     TrillWiggleSpeed,
 };
 use crate::layout::volta::layout_volta_bracket;
+use crate::render::cresc_text_renderer::draw_cresc_text;
 use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
@@ -135,6 +137,12 @@ pub fn draw_system(
 
     // Draw hairpins between notes marked with hairpin_start and hairpin_end
     draw_system_hairpins(svg, font, config, system, &staff, x)?;
+
+    // Draw dashed-text crescendo/diminuendo markings ("cresc. - - -",
+    // "decresc. - - -", "dim. - - -") between notes marked with
+    // cresc_text_start and cresc_text_end. Conceptually parallel to
+    // draw_system_hairpins — the wedgeless alternative.
+    draw_system_cresc_texts(svg, font, config, system, &staff, x)?;
 
     // Draw lyric extender lines (melisma) between syllables with Extender
     // continuation and the next note that has a lyric
@@ -420,6 +428,101 @@ fn draw_system_hairpins(
             stroke_width,
         );
         draw_hairpin(svg, &hp_layout);
+    }
+
+    Ok(())
+}
+
+/// Positional info for a note/chord relevant to dashed-text
+/// crescendo/diminuendo drawing.
+///
+/// Conceptually parallel to [`HairpinNoteInfo`] — the dashed-text
+/// marking is the wedgeless alternative to a hairpin, so the two
+/// paths share the same collection/draw structure.
+pub(crate) struct CrescTextNoteInfo {
+    pub(crate) x: f64,
+    pub(crate) duration_log2: u8,
+    pub(crate) cresc_text_start: Option<CrescTextKind>,
+    pub(crate) cresc_text_end: bool,
+}
+
+pub(crate) fn collect_cresc_text_note_info(system: &SystemLayout) -> Vec<CrescTextNoteInfo> {
+    let mut notes = Vec::new();
+    for measure in &system.measures {
+        for (elem_x, elem) in all_measure_elements(measure) {
+            match &elem.element {
+                MeasureElement::Note(n) => {
+                    notes.push(CrescTextNoteInfo {
+                        x: elem_x,
+                        duration_log2: n.duration_log2,
+                        cresc_text_start: n.annotations.cresc_text_start,
+                        cresc_text_end: n.annotations.cresc_text_end,
+                    });
+                }
+                MeasureElement::Chord(c) => {
+                    notes.push(CrescTextNoteInfo {
+                        x: elem_x,
+                        duration_log2: c.duration_log2,
+                        cresc_text_start: c.annotations.cresc_text_start,
+                        cresc_text_end: c.annotations.cresc_text_end,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    notes
+}
+
+/// Draw within-system dashed-text crescendo/diminuendo markings.
+///
+/// Cross-system markings (where `cresc_text_start` and `cresc_text_end`
+/// land on different systems) are not handled here — the system_renderer
+/// only sees one system at a time, so a span without a matching end on
+/// this system silently emits nothing. Cross-system continuation is the
+/// page_renderer's responsibility (parallel to `draw_cross_system_hairpins`)
+/// and is intentionally deferred from this chunk.
+fn draw_system_cresc_texts(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) -> Result<(), FontError> {
+    let note_info = collect_cresc_text_note_info(system);
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(kind) = info.cresc_text_start else {
+            continue;
+        };
+
+        // Find the next note flagged as cresc_text_end.
+        let target = note_info[i + 1..]
+            .iter()
+            .find(|n| n.cresc_text_end);
+
+        let Some(target) = target else {
+            continue;
+        };
+
+        // Position the label just right of the start notehead, and let
+        // the dashed line end just left of the target notehead — same
+        // padding convention as hairpins so the two markings share a
+        // visual rhythm when interleaved.
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        let ct_x_start = system_x + info.x + advance + 0.3 * config.staff_space;
+        let ct_x_end = system_x + target.x - 0.3 * config.staff_space;
+
+        let layout = layout_cresc_text(kind, ct_x_start, ct_x_end, staff, config.staff_space);
+        draw_cresc_text(svg, &layout);
     }
 
     Ok(())

@@ -5708,3 +5708,234 @@
   function (`golden_cross_system_hairpins`), one new golden file
   (`tests/golden/cross_system_hairpins.svg`), and one entry added
   to the `golden_baselines_are_valid_svgs` name registry.
+
+
+## 2026-05-27 — Post-v1, plumb cresc-text into the score-event chain
+
+- Did: Wired the dashed-text crescendo/diminuendo marking through
+  the full `ScoreBuilder` → annotations → `convert_event` → measure
+  → system_renderer chain. Before this run the layout module
+  (`layout/cresc_text.rs`) and the SVG renderer
+  (`render/cresc_text_renderer.rs`) were both complete with their
+  own unit tests (including the cross-system continuation variant),
+  but there was no way for a `ScoreBuilder` caller to actually
+  request the marking — it was an unreachable code path. This was
+  the top item on the previous run's "Next" list.
+
+  Concrete changes:
+  - `src/layout/measure.rs`: added `use crate::layout::cresc_text::CrescTextKind;`
+    and two new fields on `NoteAnnotations`:
+    `cresc_text_start: Option<CrescTextKind>` and
+    `cresc_text_end: bool`. These propagate through
+    `convert_event` (which clones the annotations onto the
+    resulting `NoteEvent` / `ChordEvent`) without any code change
+    to the converter — same pattern hairpin uses.
+  - `src/score/mod.rs`: added `use crate::layout::cresc_text::CrescTextKind;`
+    and five new `ScoreBuilder` methods, matching the
+    hairpin-style two-callsite-then-three-convenience-wrappers
+    shape:
+      - `cresc_text_start(kind: CrescTextKind) -> Self`
+      - `cresc_text_end() -> Self`
+      - `cresc_text() -> Self` (Crescendo convenience)
+      - `decresc_text() -> Self` (Decrescendo convenience)
+      - `dim_text() -> Self` (Diminuendo convenience)
+    All five are `Note | Chord`-gated via the same `if let Some((_,
+    ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord {
+    annotations, .. }))` pattern — calling them after a `.rest()` is
+    a documented no-op, parallel to `.hairpin_start()` and
+    `.dynamic()`.
+  - `src/render/system_renderer/mod.rs`:
+    - imports `layout_cresc_text`, `CrescTextKind`,
+      `draw_cresc_text`;
+    - new `CrescTextNoteInfo` struct (mirror of `HairpinNoteInfo`);
+    - new `collect_cresc_text_note_info(system)` walks
+      `all_measure_elements`, picking up the flags on both
+      `Note` and `Chord` events (same coverage as the hairpin
+      collector — both voices, all measures in the system);
+    - new `draw_system_cresc_texts(svg, font, config, system,
+      staff, system_x)` finds each `cresc_text_start`, pairs it
+      with the next `cresc_text_end`, computes the x range using
+      the same `+ advance + 0.3 * staff_space` / `- 0.3 *
+      staff_space` start/end padding the hairpin path uses, calls
+      `layout_cresc_text` and then `draw_cresc_text`;
+    - `draw_system` now invokes `draw_system_cresc_texts` right
+      after `draw_system_hairpins`. Comment notes that the two
+      paths are conceptually parallel — wedgeless alternative.
+
+  Cross-system continuation (label-suppressed dashed halves on each
+  side of a system break) is intentionally deferred from this
+  chunk — `layout_cresc_text_continuation` exists and is fully
+  unit-tested, but plumbing it through the page_renderer (parallel
+  to `draw_cross_system_hairpins`) is a separate piece of work.
+  Within a single system, an unresolved `cresc_text_start` whose
+  matching end falls on the next system silently emits nothing,
+  which is the same fail-safe the hairpin code path has before
+  cross-system support was added there.
+
+  Tests (15 new tests across two files, all asserting on specific
+  SVG structure rather than "render didn't panic"):
+
+  System-renderer level (`src/render/system_renderer/tests.rs`):
+  - `cresc_text_within_measure_emits_label_and_dashed_line` —
+    asserts the SVG gets exactly +1 `<text>`, +1
+    `stroke-dasharray`, and +1 `<line>` over a no-marking
+    baseline. Also asserts the label text (`>dim.</text>`), the
+    `font-style="italic"` attribute, and the
+    `text-anchor="start"` attribute appear. Uses the
+    `Diminuendo` kind ("dim." — 4-char label) and a 4-note
+    span so the label + padding + dashed line all fit within the
+    raw measure-layout spacing the system_renderer test fixtures
+    use; the `Crescendo` kind ("cresc." — 6 chars at 0.6 SS each
+    + padding = 962.5 unit minimum span) overflows a 4-quarter-
+    note measure at the standard `from_staff_space` config and
+    triggers the `x_line_start >= x_end` label-only fail-safe.
+  - `no_cresc_text_without_start_flag` — a lone `cresc_text_end`
+    with no preceding start renders byte-identical to the
+    baseline.
+  - `cresc_text_start_without_end_draws_nothing_extra` — orphan
+    start: renders byte-identical to baseline.
+  - `cresc_text_kinds_differ_in_label_content` — same notes, three
+    different kinds (Crescendo, Decrescendo, Diminuendo) → each
+    label appears in its own render; cross-contamination guards
+    assert that the `cresc.` render does NOT contain `decresc.`
+    or `dim.`, the `dim.` render does NOT contain `cresc.`
+    (catches accidental fall-through in label dispatch), and
+    `decresc.` does NOT contain the `>dim.</text>` literal
+    (decresc.'s label string is a superstring of cresc.'s, so
+    that one-direction guard is sufficient). The three SVGs
+    must also differ pairwise.
+  - `cresc_text_across_barline_emits_one_label_and_one_line` —
+    two-measure span: exactly one label and one dashed line over
+    the no-marking baseline.
+  - `cresc_text_dashed_line_endpoints_lie_between_start_and_end_notes`
+    — locks the geometric routing. Pulls the `CrescTextNoteInfo`
+    back out via `collect_cresc_text_note_info` and asserts the
+    SVG contains the literal `x2="<expected>"` derived from
+    `end.x - 0.3 * staff_space`. Catches a regression where the
+    renderer swapped start/end positions or used the wrong
+    padding direction. Has an explicit precondition assertion
+    that the rendered SVG actually contains a dashed line — so
+    if a future change shrinks the spacing below the
+    label+padding threshold, the test fails loudly instead of
+    vacuously matching on an empty SVG.
+  - `cresc_text_renders_independently_of_a_hairpin_on_other_notes`
+    — mixed scenario: a hairpin (2 solid lines, 0 text) on notes
+    1–2 plus a cresc-text marking (1 dashed line + 1 label) on
+    notes 3–6 must add exactly +3 lines, +1 dasharray, and +1
+    text element over the no-marking baseline. Catches any
+    shared-state interference between the two paths.
+
+  ScoreBuilder level (`src/score/tests.rs`):
+  - `cresc_text_adds_label_and_dashed_line_to_svg` — end-to-end:
+    `.cresc_text() ... .cresc_text_end()` on a `ScoreBuilder`
+    chain produces +1 dasharray and +1 text-element in the final
+    `render_svg()` output vs. the same chain with the two calls
+    removed. (The score-level `render_svg()` path uses
+    `layout_page` and the `PageLayoutConfig` system width, which
+    stretches the layout more than the bare system_renderer
+    test fixture — so the `Crescendo` kind fits here even on a
+    short 3-note span; sticking with the default kind keeps the
+    high-level test idiomatic.)
+  - `decresc_text_label_differs_from_cresc_text` — all three
+    convenience wrappers (`.cresc_text()`, `.decresc_text()`,
+    `.dim_text()`) emit their distinct labels in the final SVG;
+    the three rendered strings must be pairwise distinct.
+  - `cresc_text_on_rest_is_noop` — calling `.cresc_text()` right
+    after `.rest()` is a no-op (the `last_mut()` arm only matches
+    `Note` / `Chord`), so the dangling `.cresc_text_end()` has
+    nothing to pair with and the rendered SVG is byte-identical
+    to a no-marking version. No `cresc.` label appears.
+  - `cresc_text_start_without_end_renders_no_marking` — orphan
+    start at the high level: byte-identical to baseline.
+  - `cresc_text_and_hairpin_coexist_independently` — high-level
+    mixed scenario: chain has both a hairpin and a cresc-text
+    marking; SVG must contain exactly 1 `stroke-dasharray` (the
+    hairpin contributes none, the cresc-text contributes exactly
+    one) and the `>cresc.</text>` label.
+  - `convert_event_preserves_cresc_text_fields` and
+    `convert_event_preserves_cresc_text_end_flag` — direct
+    `convert_event` tests with and without the within-measure
+    accidental tracker, parallel to the existing
+    `convert_event_preserves_hairpin_fields` /
+    `convert_event_with_tracking_preserves_hairpin_fields` pair.
+    Asserts that the start kind and the end flag round-trip
+    through to the resulting `MeasureEvent::Note` unchanged.
+  - `chord_cresc_text_preserved_in_convert` — same but for
+    `ScoreEvent::Chord`, parallel to
+    `chord_hairpin_preserved_in_convert`.
+  - `cresc_text_on_chord_renders_label` — end-to-end via
+    `ScoreBuilder` confirming the start can land on a
+    `.chord(...)` event and still produce both the label and the
+    dashed continuation line.
+
+  Test-design choice — why `Diminuendo` for the system_renderer
+  scenarios but `Crescendo` for the score-level scenarios:
+  the bare system_renderer uses
+  `MeasureLayoutConfig::from_staff_space(staff_space)` directly,
+  which gives `min_note_spacing = 1.5 * staff_space = 375` and
+  spacing-ratio-1.6 per duration step. For 4 quarter notes at
+  that spacing, the start→end span is ~1125 fu. The "cresc."
+  label needs ~962.5 fu (6 chars × 0.6 SS × 250 + 62.5 padding +
+  the 0.3-SS start pad and the notehead advance), which leaves
+  almost no room for the dashed continuation — triggering the
+  `layout_cresc_text` `x_line_start >= x_end` label-only
+  fail-safe and emitting no `stroke-dasharray`. Using "dim." (4
+  chars) shrinks the label requirement to ~662.5 fu and leaves
+  a clear margin. The `ScoreBuilder` path uses `layout_page`
+  with `effective_system_width`, which stretches the layout to
+  fill the page-width target and yields enough span for the
+  "cresc." case to fit even on short scores. The
+  `decresc_text_label_differs_from_cresc_text` test still
+  exercises all three labels at the high level so each
+  convenience wrapper is covered.
+
+- Verified:
+  - `cargo check -p music-engraver --offline` → 0 errors.
+  - `cargo check -p music-engraver --tests --offline` → 0 errors.
+  - `cargo check --workspace --offline` → 0 errors (no
+    cross-crate regression).
+  - `cargo build -p music-engraver --offline` → succeeds.
+  - `cargo test -p music-engraver --offline --lib` → **2825
+    passed, 0 failed** (was 2809; +16 new tests across
+    `render::system_renderer::tests::cresc_text_*` (7) and
+    `score::tests::cresc_text_*` /
+    `score::tests::*_cresc_text_*` (9)).
+  - `cargo test -p music-engraver --offline --tests` → 2825 +
+    73 (`golden_svg.rs`) + 3 (`svg_glyph_render.rs`) = 2901
+    passed, 0 failed. No golden baselines moved.
+  - `cargo test -p music-engraver --offline --doc` → 13
+    passed, 1 ignored (unchanged from prior).
+  - `cargo clippy -p music-engraver --tests --offline` → no
+    new warnings from the new code; the pre-existing
+    `multi_staff.rs:394`, `cresc_text.rs:667` (in an existing
+    test using `!(a < b)`), `map(..).flatten()`, and unneeded
+    `return` warnings persist (all out of scope, noted across
+    prior progress entries).
+
+- Next: cross-system cresc.-text wiring at the page_renderer
+  level (parallel to `draw_cross_system_ottava_brackets` and
+  `draw_cross_system_hairpins`) using the already-tested
+  `layout_cresc_text_continuation` helper — this completes the
+  cresc-text feature surface; **golden-SVG corpus PHASH-based
+  visual regression**; **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi); **cross-system church
+  rests**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems,
+  deferred); cross-voice tie/slur consultation of the collision
+  detector (deferred); plumbing of niente/dashed hairpin
+  constructors through the score → system_renderer →
+  page_renderer chain; **golden test for the cresc-text marking
+  via ScoreBuilder** (this run added unit + integration tests
+  but did not freeze a visual baseline — natural follow-up).
+
+- Open issues: None. The change is purely additive at the API
+  level — two new `NoteAnnotations` fields default to
+  `None`/`false`, so existing callers see no behavior change.
+  Three new public `ScoreBuilder` entry points plus two
+  convenience wrappers (five methods total). One new module-
+  level function in `system_renderer/mod.rs`
+  (`draw_system_cresc_texts`) plus one new helper
+  (`collect_cresc_text_note_info`) and one new
+  `pub(crate)` info struct (`CrescTextNoteInfo`). Cross-system
+  continuation is documented as the next chunk in the comment
+  above `draw_system_cresc_texts` itself.

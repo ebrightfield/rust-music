@@ -45,6 +45,7 @@ use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
+use crate::layout::cresc_text::CrescTextKind;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::HairpinType;
 use crate::layout::dynamics::Dynamic;
@@ -327,6 +328,52 @@ impl ScoreBuilder {
     /// Convenience: mark the start of a decrescendo at the most recent note.
     pub fn decresc(self) -> Self {
         self.hairpin_start(HairpinType::Decrescendo)
+    }
+
+    /// Mark the start of a dashed-text crescendo / diminuendo marking
+    /// at the most recently added note or chord. The marking is the
+    /// wedgeless alternative to a hairpin: an italic label ("cresc.",
+    /// "decresc.", "dim.") followed by a dashed continuation line that
+    /// extends to the note marked with [`cresc_text_end`](Self::cresc_text_end).
+    /// Rendered below the staff at the same vertical band as hairpins,
+    /// so a phrase mixing hairpins and dashed-text markings reads as
+    /// one continuous dynamic axis.
+    ///
+    /// Must be called immediately after `.note()` or `.chord()`. Has no
+    /// effect if the last event is not a note or chord.
+    pub fn cresc_text_start(mut self, kind: CrescTextKind) -> Self {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
+            annotations.cresc_text_start = Some(kind);
+        }
+        self
+    }
+
+    /// Mark the most recently added note or chord as the end of a
+    /// dashed-text crescendo / diminuendo marking. Pairs with a
+    /// preceding `cresc_text_start()` call.
+    pub fn cresc_text_end(mut self) -> Self {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
+            annotations.cresc_text_end = true;
+        }
+        self
+    }
+
+    /// Convenience: start a dashed-text crescendo (`cresc. - - -`) at
+    /// the most recent note.
+    pub fn cresc_text(self) -> Self {
+        self.cresc_text_start(CrescTextKind::Crescendo)
+    }
+
+    /// Convenience: start a dashed-text decrescendo (`decresc. - - -`)
+    /// at the most recent note.
+    pub fn decresc_text(self) -> Self {
+        self.cresc_text_start(CrescTextKind::Decrescendo)
+    }
+
+    /// Convenience: start a dashed-text diminuendo (`dim. - - -`) at
+    /// the most recent note.
+    pub fn dim_text(self) -> Self {
+        self.cresc_text_start(CrescTextKind::Diminuendo)
     }
 
     /// Attach a rehearsal mark above the staff at the most recently added note
