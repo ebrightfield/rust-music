@@ -89,6 +89,15 @@ pub enum Articulation {
     /// The prosodic counterpart to `Stress`: marks a deliberately
     /// de-emphasized note. Standard opposite-stem placement.
     Unstress,
+    /// Laissez vibrer — SMuFL `articLaissezVibrer` ("l.v."): a short
+    /// tie-like curve attached to a notehead, instructing the player to
+    /// let the note ring (decay naturally without damping). Standard
+    /// in piano, harp, vibraphone, percussion, and arco-string scores.
+    /// Bravura ships a true above/below pair; placement follows the
+    /// standard opposite-stem rule (above-glyph for stem-down notes,
+    /// below-glyph for stem-up notes), and the variant lives in the
+    /// normal articulation stack bucket alongside Staccato/Accent/etc.
+    LaissezVibrer,
 }
 
 /// Whether an articulation appears above or below the notehead.
@@ -186,6 +195,12 @@ impl Articulation {
             (Self::Stress, ArticulationPlacement::Below) => Glyph::ArticStressBelow,
             (Self::Unstress, ArticulationPlacement::Above) => Glyph::ArticUnstressAbove,
             (Self::Unstress, ArticulationPlacement::Below) => Glyph::ArticUnstressBelow,
+            (Self::LaissezVibrer, ArticulationPlacement::Above) => {
+                Glyph::ArticLaissezVibrerAbove
+            }
+            (Self::LaissezVibrer, ArticulationPlacement::Below) => {
+                Glyph::ArticLaissezVibrerBelow
+            }
         }
     }
 
@@ -2010,6 +2025,299 @@ mod tests {
             Articulation::Unstress,
             175.0,
             3,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0].x, direct.x);
+        assert!((stack[0].y - direct.y).abs() < 1e-9);
+        assert_eq!(stack[0].glyph, direct.glyph);
+        assert_eq!(stack[0].placement, direct.placement);
+    }
+
+    // --- LaissezVibrer tests ---
+    //
+    // l.v. ("let ring") is a single articulation variant that ships a real
+    // above/below pair in SMuFL (codepoints E4BA/E4BB) and behaves
+    // identically to a standard articulation: opposite-stem placement,
+    // lives in the normal stack bucket (not always-above like fermata or
+    // bow strokes). These tests lock both the glyph mapping and the
+    // stacking-bucket classification.
+
+    #[test]
+    fn laissez_vibrer_glyph_pair() {
+        // Locks the exact (LaissezVibrer, Above/Below) → SMuFL glyph
+        // mapping. Any swap to a different glyph (e.g. ArticTenutoAbove)
+        // would silently render as the wrong symbol.
+        assert_eq!(
+            Articulation::LaissezVibrer.glyph(ArticulationPlacement::Above),
+            Glyph::ArticLaissezVibrerAbove
+        );
+        assert_eq!(
+            Articulation::LaissezVibrer.glyph(ArticulationPlacement::Below),
+            Glyph::ArticLaissezVibrerBelow
+        );
+    }
+
+    #[test]
+    fn laissez_vibrer_above_below_differ() {
+        // Bravura ships distinct above/below glyphs (not a draw-time flip
+        // of a single glyph). The pair must differ at the glyph level.
+        assert_ne!(
+            Articulation::LaissezVibrer.glyph(ArticulationPlacement::Above),
+            Articulation::LaissezVibrer.glyph(ArticulationPlacement::Below),
+            "l.v. above and below glyphs should be distinct",
+        );
+    }
+
+    #[test]
+    fn laissez_vibrer_glyph_differs_from_all_other_articulations() {
+        // Regression net against an enum-arm typo that would collapse
+        // LaissezVibrer onto any other articulation's glyph. Checks both
+        // placements against every other variant in the enum.
+        let others: &[Articulation] = &[
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+            Articulation::Fermata,
+            Articulation::FermataLong,
+            Articulation::FermataShort,
+            Articulation::FermataVeryLong,
+            Articulation::FermataVeryShort,
+            Articulation::FermataHenzeLong,
+            Articulation::FermataHenzeShort,
+            Articulation::UpBow,
+            Articulation::DownBow,
+            Articulation::AccentStaccato,
+            Articulation::MarcatoStaccato,
+            Articulation::TenutoStaccato,
+            Articulation::TenutoAccent,
+            Articulation::SoftAccent,
+            Articulation::Stress,
+            Articulation::Unstress,
+        ];
+        let lv_above = Articulation::LaissezVibrer.glyph(ArticulationPlacement::Above);
+        let lv_below = Articulation::LaissezVibrer.glyph(ArticulationPlacement::Below);
+        for &o in others {
+            assert_ne!(
+                lv_above,
+                o.glyph(ArticulationPlacement::Above),
+                "l.v.-above must not alias {o:?}-above",
+            );
+            assert_ne!(
+                lv_below,
+                o.glyph(ArticulationPlacement::Below),
+                "l.v.-below must not alias {o:?}-below",
+            );
+        }
+    }
+
+    #[test]
+    fn laissez_vibrer_not_flagged_by_is_fermata() {
+        // Defensive: l.v. is not a fermata, so the stack splitter must
+        // not route it through the fermata bucket.
+        assert!(!Articulation::LaissezVibrer.is_fermata());
+    }
+
+    #[test]
+    fn laissez_vibrer_not_flagged_by_is_bow_stroke() {
+        // Defensive: l.v. is not a bow stroke, so the stack splitter must
+        // not route it through the bow-stroke bucket.
+        assert!(!Articulation::LaissezVibrer.is_bow_stroke());
+    }
+
+    #[test]
+    fn laissez_vibrer_default_placement_follows_stem_opposite() {
+        // Standard articulation rule: opposite from stem. A copy-paste
+        // typo could put l.v. in the always-above bucket (where it would
+        // appear on the wrong side for stem-down notes).
+        assert_eq!(
+            Articulation::LaissezVibrer.default_placement(StemDirection::Up),
+            ArticulationPlacement::Below,
+            "l.v. with stem-up should default to Below",
+        );
+        assert_eq!(
+            Articulation::LaissezVibrer.default_placement(StemDirection::Down),
+            ArticulationPlacement::Above,
+            "l.v. with stem-down should default to Above",
+        );
+    }
+
+    #[test]
+    fn laissez_vibrer_alone_lays_out_below_stem_up_note() {
+        // Stem-up, middle-line note: l.v. lands below with the
+        // ArticLaissezVibrerBelow glyph and y > note_y.
+        let staff = test_staff();
+        let layout = layout_articulation(
+            Articulation::LaissezVibrer,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(layout.placement, ArticulationPlacement::Below);
+        assert_eq!(layout.glyph, Glyph::ArticLaissezVibrerBelow);
+        assert_eq!(layout.x, 100.0);
+        let note_y = staff.y_of(4);
+        assert!(
+            layout.y > note_y,
+            "below-placed l.v. should have y > note_y: {} > {}",
+            layout.y,
+            note_y,
+        );
+    }
+
+    #[test]
+    fn laissez_vibrer_alone_lays_out_above_stem_down_note() {
+        // Symmetric to the previous test: stem-down, in-space note → l.v.
+        // lands above with the ArticLaissezVibrerAbove glyph.
+        let staff = test_staff();
+        let layout = layout_articulation(
+            Articulation::LaissezVibrer,
+            150.0,
+            3,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(layout.placement, ArticulationPlacement::Above);
+        assert_eq!(layout.glyph, Glyph::ArticLaissezVibrerAbove);
+        assert_eq!(layout.x, 150.0);
+        let note_y = staff.y_of(3);
+        assert!(
+            layout.y < note_y,
+            "above-placed l.v. should have y < note_y: {} < {}",
+            layout.y,
+            note_y,
+        );
+    }
+
+    #[test]
+    fn stack_laissez_vibrer_with_fermata_separates_placement() {
+        // Stem-up: l.v. goes below (normal bucket), fermata always above.
+        // Verifies that the stack splitter routes l.v. to the normal
+        // bucket — not the always-above bucket reserved for fermatas.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::LaissezVibrer, Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticLaissezVibrerBelow);
+        assert_eq!(stack[1].glyph, Glyph::FermataAbove);
+        assert!(stack[1].y < stack[0].y);
+    }
+
+    #[test]
+    fn stack_laissez_vibrer_with_bow_stem_up_separates_buckets() {
+        // Stem-up: l.v. below (normal bucket), bow above (bow bucket).
+        // Catches a misclassification that would route l.v. through the
+        // bow-stroke bucket.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::LaissezVibrer, Articulation::UpBow],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticLaissezVibrerBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsUpBow);
+    }
+
+    #[test]
+    fn stack_laissez_vibrer_with_simple_articulation_stacks_outward_same_side() {
+        // Both Staccato and LaissezVibrer go to the normal bucket. On a
+        // stem-up note they both render below; the second is offset by
+        // exactly one ARTICULATION_STACK_SPACING_SS × staff_space.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::LaissezVibrer],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        for l in &stack {
+            assert_eq!(l.placement, ArticulationPlacement::Below);
+        }
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::ArticLaissezVibrerBelow);
+        assert!(stack[1].y > stack[0].y);
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let actual_gap = stack[1].y - stack[0].y;
+        assert!(
+            (actual_gap - expected_gap).abs() < 1e-6,
+            "stack spacing {actual_gap} should match expected {expected_gap}",
+        );
+    }
+
+    #[test]
+    fn stack_laissez_vibrer_full_triple_orders_correctly_stem_up() {
+        // Full triple: l.v. (normal bucket, below) + DownBow (bow bucket,
+        // above) + FermataLong (fermata bucket, above-outermost). Locks
+        // the normal→bow→fermata bucket-emit order for the new variant.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[
+                Articulation::LaissezVibrer,
+                Articulation::DownBow,
+                Articulation::FermataLong,
+            ],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 3);
+        assert_eq!(stack[0].glyph, Glyph::ArticLaissezVibrerBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsDownBow);
+        assert_eq!(stack[2].glyph, Glyph::FermataLongAbove);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[2].placement, ArticulationPlacement::Above);
+        let note_y = staff.y_of(4);
+        assert!(stack[0].y > note_y, "l.v. below note");
+        assert!(stack[1].y < note_y, "bow above note");
+        assert!(stack[2].y < stack[1].y, "fermata above bow");
+        // The bow→fermata gap is exactly one stack spacing (cascading-
+        // above rule shared with the other always-above buckets).
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let bow_to_fermata = stack[1].y - stack[2].y;
+        assert!(
+            (bow_to_fermata - expected_gap).abs() < 1e-6,
+            "bow→fermata gap {bow_to_fermata} should match {expected_gap}",
+        );
+    }
+
+    #[test]
+    fn stack_laissez_vibrer_only_matches_single_layout() {
+        // A single LaissezVibrer through the stacker must produce a
+        // layout identical to calling layout_articulation directly — no
+        // spurious offset. Mirrors the equivalent guard for accent
+        // extensions and bow strokes.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::LaissezVibrer],
+            220.5,
+            5,
+            StemDirection::Down,
+            &staff,
+        );
+        let direct = layout_articulation(
+            Articulation::LaissezVibrer,
+            220.5,
+            5,
             StemDirection::Down,
             &staff,
         );

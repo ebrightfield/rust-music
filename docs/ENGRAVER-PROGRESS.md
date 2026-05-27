@@ -2882,3 +2882,148 @@
   purposes; per Gould (Behind Bars, p. 116ff) this matches engraving
   convention since they are accent-family symbols, not always-above
   marks.
+
+## 2026-05-27 — Post-v1, LaissezVibrer ("l.v.") articulation
+
+- Did: Added the SMuFL `articLaissezVibrer` ("let ring") articulation as
+  `Articulation::LaissezVibrer`. A single variant — no Long/Short/Henze
+  sub-family like fermata — with a real above/below glyph pair
+  (`ArticLaissezVibrerAbove`/`Below`, codepoints E4BA/E4BB in the
+  bundled Bravura). Wires identically to the accent-extensions chunk
+  (SoftAccent/Stress/Unstress): standard opposite-stem placement and
+  lives in the *normal* articulation stack bucket alongside
+  Staccato/Accent — not the always-above buckets reserved for fermatas
+  and bow strokes.
+
+  `layout/articulation.rs`:
+  - Added `Articulation::LaissezVibrer` variant with doc comment naming
+    the SMuFL glyph, the engraving meaning ("let ring, decay naturally
+    without damping"), the typical instruments (piano, harp, vibraphone,
+    percussion, arco strings), and the placement/bucket contract.
+  - Added two `glyph()` arms: `(LaissezVibrer, Above) → ArticLaissezVibrerAbove`
+    and `(LaissezVibrer, Below) → ArticLaissezVibrerBelow`.
+  - **No changes to `is_fermata`, `is_bow_stroke`, or
+    `default_placement`** — the existing fall-through in
+    `default_placement` returns stem-opposite for any variant that
+    isn't a fermata or bow stroke, which is exactly the contract
+    LaissezVibrer needs. This is structurally identical to how the
+    three accent extensions were wired in the previous chunk.
+
+  Tests (+13 in `layout::articulation::tests`, +1 in
+  `render::articulation_renderer::tests`):
+
+  Layout-level (`layout::articulation::tests`):
+  1. `laissez_vibrer_glyph_pair` — locks the exact (LaissezVibrer,
+     Above/Below) → (`ArticLaissezVibrerAbove`/`Below`) mapping. Any
+     swap to a different glyph (e.g. accidentally returning
+     `ArticTenutoAbove`) would silently render as the wrong symbol.
+  2. `laissez_vibrer_above_below_differ` — Bravura ships a real
+     above/below pair (not a draw-time flip of a single glyph). Asserts
+     `Above != Below` at the glyph level so a regression collapsing them
+     to one glyph is caught at the layout layer (not just at render).
+  3. `laissez_vibrer_glyph_differs_from_all_other_articulations` — the
+     broadest regression net: sweeps every other Articulation variant
+     (all 21 currently in the enum), asserts `lv_above != other_above`
+     and `lv_below != other_below` for each. Catches a glyph-arm typo
+     that would alias LaissezVibrer onto, e.g., a TenutoAccent or an
+     accent.
+  4. `laissez_vibrer_not_flagged_by_is_fermata` — defensive: the stack
+     splitter must not route l.v. through the fermata bucket. (l.v.
+     placement is below for stem-up; fermata is always-above. A
+     mis-classification would render l.v. on the wrong side.)
+  5. `laissez_vibrer_not_flagged_by_is_bow_stroke` — same defensive
+     check for the bow-stroke bucket.
+  6. `laissez_vibrer_default_placement_follows_stem_opposite` — asserts
+     `default_placement(Up) == Below` and `default_placement(Down) ==
+     Above`. Locks the "standard articulation" placement contract; a
+     copy-paste mistake adding l.v. to `is_fermata` or `is_bow_stroke`
+     would trip this.
+  7. `laissez_vibrer_alone_lays_out_below_stem_up_note` — single l.v.
+     on a stem-up middle-line note (position 4): asserts placement is
+     Below, glyph is `ArticLaissezVibrerBelow`, `x == 100.0`, and
+     `y > note_y`. Concrete-value assertions, not is_ok.
+  8. `laissez_vibrer_alone_lays_out_above_stem_down_note` — symmetric:
+     stem-down in-space note (position 3), x=150.0. Asserts placement
+     Above, glyph `ArticLaissezVibrerAbove`, `y < note_y`.
+  9. `stack_laissez_vibrer_with_fermata_separates_placement` — stem-up:
+     l.v. below (normal bucket), fermata above (fermata bucket).
+     Asserts both glyphs and `stack[1].y < stack[0].y`. Locks the
+     bucket-partition rule for the new variant.
+  10. `stack_laissez_vibrer_with_bow_stem_up_separates_buckets` —
+      stem-up: l.v. below (normal bucket), UpBow above (bow bucket).
+      Catches a misclassification that would push l.v. into the bow
+      bucket.
+  11. `stack_laissez_vibrer_with_simple_articulation_stacks_outward_same_side`
+      — Staccato + LaissezVibrer on stem-up: both below, input order
+      preserved, second offset by exactly one
+      `ARTICULATION_STACK_SPACING_SS × staff_space` (1e-6 tolerance).
+  12. `stack_laissez_vibrer_full_triple_orders_correctly_stem_up` —
+      full triple: LaissezVibrer (normal, below) + DownBow (bow, above)
+      + FermataLong (fermata, above-outermost). Asserts all three
+      glyphs, placements, y-monotonicity, AND the exact bow→fermata
+      gap = one stack spacing (the cascading-above rule shared with
+      the other always-above buckets).
+  13. `stack_laissez_vibrer_only_matches_single_layout` — a single
+      LaissezVibrer through the stacker must produce a layout identical
+      (x, y to 1e-9, glyph, placement) to calling `layout_articulation`
+      directly. Guards against the stacker introducing accidental
+      offset for the singleton case. Uses stem-down for variety.
+
+  Render-level (`render::articulation_renderer::tests`):
+  14. `laissez_vibrer_renders_distinct_paths_above_below_and_from_other_articulations`
+      — strongest regression net for the wiring change. Extracts the
+      `d="..."` path data through the Bravura outline extractor for
+      both above and below l.v. layouts, then asserts:
+      (a) both are non-empty, (b) `above_d != below_d` (Bravura ships
+      distinct above/below outlines, not a draw-time flip), and
+      (c) sweeps the entire 21-variant Articulation enum and asserts
+      that neither `lv_above_d` nor `lv_below_d` aliases any other
+      variant's path data on either side. A `glyph()` arm typo would
+      produce duplicated path-data and trip one of these asserts.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors). `cargo
+  check --workspace` passes. `cargo build -p music-engraver` succeeds.
+  `cargo clippy -p music-engraver --lib` — 0 new warnings (1
+  pre-existing in `score/multi_staff.rs:394`, unchanged from prior
+  entries). `cargo test -p music-engraver --lib` — **2543 unit tests
+  pass** (vs 2529 prior; +14 new from this chunk: +13 layout, +1
+  renderer — exact arithmetic match). `cargo test -p music-engraver
+  --test golden_svg` — **69 golden tests pass, byte-identical**: no
+  existing golden uses LaissezVibrer, so adding the variant is
+  golden-neutral. Focused laissez run (`cargo test -p music-engraver
+  --lib laissez`) — all 14 new tests pass, 0 filtered out.
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression**; **a golden test
+  covering bow-stroke / accent-extension / l.v. stacks** (these last
+  three post-v1 chunks added unit + renderer coverage but no golden —
+  adding one would lock the full SVG encoding); **PNG export via the
+  `png` feature** (`resvg` + `tiny-skia` + `fontdb`); **a worked
+  `examples/laissez_vibrer.rs`** demonstrating piano l.v. on a
+  rolled chord and a percussion let-ring (small follow-up — not
+  required to lock the variant in); **`HookDirection::Up` standalone
+  builder** (judgment call); trill polish (per-segment
+  `WiggleTrillFast` variant selection from a single-speed annotation);
+  auto-resolved low-staff beam-group collision golden (still requires
+  ScoreBuilder opt-out for force-stems, deferred); cross-voice
+  tie/slur consultation of the collision detector (deferred).
+
+- Open issues: LaissezVibrer does not yet have a worked example in
+  `music-engraver/examples/`. The variant is reachable through
+  `ScoreBuilder::articulation(Articulation::LaissezVibrer)` via the
+  existing generic API — no separate builder hook needed. The
+  layout-side stacking rule treats l.v. identically to
+  Staccato/Tenuto/Accent/Marcato/Staccatissimo/SoftAccent/Stress/
+  Unstress for stack-bucket purposes; this matches the SMuFL
+  classification (l.v. lives in the "articulation" subrange E4A0–E4BF
+  alongside accents and tenuto/staccato glyphs, not in the fermata
+  or bow-stroke subranges). No engraving-tied-curve handling — that
+  is the *tie*-style l.v. (a real curve attached to the notehead like
+  a tie) and would belong in a separate tie/slur subsystem, not in
+  the articulation stack. The articulation-glyph form covered here
+  is the form Bravura ships under `articLaissezVibrer*` and is the
+  appropriate notation when a real tie cannot be drawn (e.g., the
+  note is followed by a rest).

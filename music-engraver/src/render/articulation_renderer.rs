@@ -440,6 +440,110 @@ mod tests {
     }
 
     #[test]
+    fn laissez_vibrer_renders_distinct_paths_above_below_and_from_other_articulations() {
+        // The LaissezVibrer ("l.v.") variant must render through the
+        // Bravura outline extractor as:
+        //   (a) non-empty path data for both Above and Below placements,
+        //   (b) different path d-data between Above and Below — Bravura
+        //       ships a real above/below pair, not a draw-time flip,
+        //   (c) different path d-data from every other articulation in
+        //       the enum (both placements) — a Glyph-wiring typo could
+        //       otherwise silently alias l.v. onto, e.g., a tenuto line
+        //       or an accent.
+        let font = test_font();
+        let staff = test_staff();
+
+        // Capture l.v. Below (stem-up default) and Above (stem-down) paths.
+        let below_layout = layout_articulation(
+            Articulation::LaissezVibrer,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let above_layout = layout_articulation(
+            Articulation::LaissezVibrer,
+            100.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(below_layout.placement, ArticulationPlacement::Below);
+        assert_eq!(above_layout.placement, ArticulationPlacement::Above);
+
+        let mut wb = test_writer();
+        draw_articulation(&mut wb, &font, &below_layout).unwrap();
+        let lv_below_d = path_d_data(&wb.to_svg());
+
+        let mut wa = test_writer();
+        draw_articulation(&mut wa, &font, &above_layout).unwrap();
+        let lv_above_d = path_d_data(&wa.to_svg());
+
+        // (a) Both paths are non-empty.
+        assert!(!lv_above_d.is_empty(), "l.v. above path d-data is empty");
+        assert!(!lv_below_d.is_empty(), "l.v. below path d-data is empty");
+        // (b) Above and below differ.
+        assert_ne!(
+            lv_above_d, lv_below_d,
+            "l.v. above and below path d-data should differ",
+        );
+
+        // (c) Path data differs from every other articulation, both
+        // placements. Sweeps the full enum (minus l.v. itself) and asserts
+        // no aliasing. This is the broadest possible regression net for
+        // the glyph-wiring change.
+        let others: &[Articulation] = &[
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+            Articulation::Fermata,
+            Articulation::FermataLong,
+            Articulation::FermataShort,
+            Articulation::FermataVeryLong,
+            Articulation::FermataVeryShort,
+            Articulation::FermataHenzeLong,
+            Articulation::FermataHenzeShort,
+            Articulation::UpBow,
+            Articulation::DownBow,
+            Articulation::AccentStaccato,
+            Articulation::MarcatoStaccato,
+            Articulation::TenutoStaccato,
+            Articulation::TenutoAccent,
+            Articulation::SoftAccent,
+            Articulation::Stress,
+            Articulation::Unstress,
+        ];
+        for &o in others {
+            // Below (stem-up) comparison.
+            let below_other =
+                layout_articulation(o, 100.0, 4, StemDirection::Up, &staff);
+            let mut wo_b = test_writer();
+            draw_articulation(&mut wo_b, &font, &below_other).unwrap();
+            let other_below_d = path_d_data(&wo_b.to_svg());
+            assert_ne!(
+                lv_below_d, other_below_d,
+                "l.v.-below path must differ from {o:?} (stem-up render)",
+            );
+            // Above (stem-down) comparison. Bow strokes ignore the
+            // placement arg in glyph(), but the layout still routes them
+            // through their single SMuFL glyph, so the comparison remains
+            // meaningful (and the bow-glyph d-data must still differ from
+            // l.v.-above).
+            let above_other =
+                layout_articulation(o, 100.0, 4, StemDirection::Down, &staff);
+            let mut wo_a = test_writer();
+            draw_articulation(&mut wo_a, &font, &above_other).unwrap();
+            let other_above_d = path_d_data(&wo_a.to_svg());
+            assert_ne!(
+                lv_above_d, other_above_d,
+                "l.v.-above path must differ from {o:?} (stem-down render)",
+            );
+        }
+    }
+
+    #[test]
     fn bow_stroke_path_differs_from_articulation_glyphs() {
         // Bow strokes must not silently alias to any standard articulation
         // path — a Glyph wiring regression would otherwise be invisible.
