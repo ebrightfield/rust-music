@@ -126,7 +126,7 @@ impl Ornament {
     /// wanted, use [`Self::Trill`] instead), and for every other variant.
     /// The wiggle would be visually meaningless attached to e.g. a turn or
     /// a Schleifer, both of which are single-figure ornaments.
-    pub fn supports_trill_extension(self) -> bool {
+    pub const fn supports_trill_extension(self) -> bool {
         matches!(self, Self::Trill | Self::TrillWithMordent)
     }
 }

@@ -181,9 +181,66 @@ impl TrillExtensionFullOptions {
     /// a precomposed compound trill. The ornament must satisfy
     /// [`Ornament::supports_trill_extension`]; an unsupported ornament
     /// causes the renderer to drop the entire trill extension.
+    ///
+    /// This setter is permissive — any [`Ornament`] is stored as-is so the
+    /// options bundle can travel through annotation pipelines whose validity
+    /// is only checked at the renderer's collector. Callers wanting
+    /// construction-time rejection of ornaments the renderer would silently
+    /// drop should use
+    /// [`with_ornament_validated`](Self::with_ornament_validated), which
+    /// returns `Option<Self>` and rejects the exact set
+    /// `!Ornament::supports_trill_extension()`.
     pub const fn with_ornament(mut self, ornament: Ornament) -> Self {
         self.ornament = Some(ornament);
         self
+    }
+
+    /// Stricter counterpart to [`with_ornament`](Self::with_ornament):
+    /// rejects ornaments that do not satisfy
+    /// [`Ornament::supports_trill_extension`] at the options-bundle
+    /// construction site, returning `Option<Self>`.
+    ///
+    /// Currently `Ornament::Trill` and `Ornament::TrillWithMordent` are the
+    /// only two variants that satisfy the predicate; every other variant
+    /// (mordents, turns, the historical/precomposed family, `ShortTrill`)
+    /// returns `None`. The accept set is locked to the predicate, not
+    /// hardcoded, so a future expansion of `supports_trill_extension`
+    /// automatically widens this method's accept band.
+    ///
+    /// Rejection rules (`None` returned):
+    /// - `ornament` is any variant for which
+    ///   [`Ornament::supports_trill_extension`] returns `false`.
+    ///
+    /// Acceptance (`Some(self)` returned with `ornament` populated):
+    /// - `ornament` is any variant for which
+    ///   [`Ornament::supports_trill_extension`] returns `true`.
+    /// - Every other field on `self` (bracket-related fields, speed,
+    ///   length_ss, speed_ramp) is preserved unchanged (additive contract,
+    ///   matching the permissive setter and every other validator-pairing
+    ///   on this bundle, e.g.
+    ///   [`with_speed_ramp_validated_ramp_count`](Self::with_speed_ramp_validated_ramp_count)).
+    ///
+    /// `const`-callable, matching every other setter on this bundle. On the
+    /// `None` branch the builder chain is broken at the call site and the
+    /// partially-built bundle is dropped — there is no fallback that
+    /// silently leaves `ornament` unset, because that would demote a
+    /// rejection into a no-op.
+    ///
+    /// Mirrors the validator-pairing pattern at
+    /// [`crate::layout::trill_bracket::TrillBracketOptions::with_ornament_validated`]
+    /// and [`crate::layout::trill_extension::TrillExtensionSpeedOptions::with_ornament_validated`]
+    /// — all three options bundles expose the same `with_ornament` /
+    /// `with_ornament_validated` pair.
+    pub const fn with_ornament_validated(mut self, ornament: Ornament) -> Option<Self> {
+        // The predicate is the single source of truth for the accept band —
+        // any future broadening of `supports_trill_extension` automatically
+        // widens this method's accept band without code changes here.
+        if ornament.supports_trill_extension() {
+            self.ornament = Some(ornament);
+            Some(self)
+        } else {
+            None
+        }
     }
 
     /// Set an explicit termination length for the wavy line, in staff spaces,
@@ -694,6 +751,189 @@ mod tests {
             .with_ornament(Ornament::ShortTrill);
         assert_eq!(opts.ornament, Some(Ornament::ShortTrill));
         assert!(!Ornament::ShortTrill.supports_trill_extension());
+    }
+
+    // --- TrillExtensionFullOptions ornament validator ---
+
+    #[test]
+    fn with_ornament_validated_accepts_trill() {
+        // Canonical accept case: plain Trill on a fresh bundle. Every
+        // unset field stays unset on accept.
+        let opts =
+            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::Trill);
+        let opts = opts.expect("Trill must be accepted");
+        assert_eq!(opts.ornament, Some(Ornament::Trill));
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.length_ss, None);
+        assert_eq!(opts.speed_ramp, None);
+    }
+
+    #[test]
+    fn with_ornament_validated_accepts_trill_with_mordent() {
+        // The other accept variant.
+        let opts = TrillExtensionFullOptions::new()
+            .with_ornament_validated(Ornament::TrillWithMordent);
+        let opts = opts.expect("TrillWithMordent must be accepted");
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn with_ornament_validated_rejects_short_trill() {
+        // Headline rejection case for the full-options surface.
+        let opts =
+            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::ShortTrill);
+        assert!(opts.is_none(), "ShortTrill must be rejected");
+    }
+
+    #[test]
+    fn with_ornament_validated_rejects_every_non_supporting_variant() {
+        // Walk all 15 ornaments and cross-validate `is_none()` iff
+        // `!supports_trill_extension()`. Locks the validator's accept band
+        // to the predicate's accept band.
+        for &ornament in Ornament::ALL.iter() {
+            let result =
+                TrillExtensionFullOptions::new().with_ornament_validated(ornament);
+            assert_eq!(
+                result.is_some(),
+                ornament.supports_trill_extension(),
+                "{ornament:?}: validator accept must match supports_trill_extension"
+            );
+        }
+    }
+
+    #[test]
+    fn with_ornament_validated_some_branch_byte_equals_unvalidated() {
+        // For every accepted ornament, layered on top of a fully-populated
+        // bundle, the validated and permissive setters must produce
+        // field-by-field equal bundles. Catches a future refactor that
+        // started normalizing accepted inputs.
+        for &ornament in Ornament::ALL.iter().filter(|o| o.supports_trill_extension()) {
+            let permissive = TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_bracket_direction(HookDirection::Up)
+                .with_bracket_length_ss(0.85)
+                .with_speed(TrillWiggleSpeed::Slow)
+                .with_length_ss(4.0)
+                .with_ornament(ornament);
+            let validated = TrillExtensionFullOptions::new()
+                .with_bracket(TrillBracketSide::Both)
+                .with_bracket_direction(HookDirection::Up)
+                .with_bracket_length_ss(0.85)
+                .with_speed(TrillWiggleSpeed::Slow)
+                .with_length_ss(4.0)
+                .with_ornament_validated(ornament)
+                .expect("supported ornament must accept");
+            assert_eq!(
+                permissive, validated,
+                "{ornament:?}: validated vs permissive byte-equal"
+            );
+        }
+    }
+
+    #[test]
+    fn with_ornament_validated_preserves_other_setters_on_some() {
+        // Layered on top of a fully-populated bundle (including speed_ramp,
+        // which exercises the bundle's largest field), every prior field
+        // survives unchanged on accept. Locks the additive contract across
+        // every knob on the bundle.
+        let opts = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::End)
+            .with_bracket_direction(HookDirection::Down)
+            .with_bracket_length_ss(0.75)
+            .with_speed(TrillWiggleSpeed::Fast)
+            .with_length_ss(3.0)
+            .with_speed_ramp_ramp_count(
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                4,
+            )
+            .with_ornament_validated(Ornament::TrillWithMordent)
+            .expect("supported ornament must accept");
+        assert_eq!(opts.bracket, Some(TrillBracketSide::End));
+        assert_eq!(opts.bracket_direction, Some(HookDirection::Down));
+        assert_eq!(opts.bracket_length_ss, Some(0.75));
+        assert_eq!(opts.speed, Some(TrillWiggleSpeed::Fast));
+        assert_eq!(opts.length_ss, Some(3.0));
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(
+                TrillSpeedRamp::Linear {
+                    start: TrillWiggleSpeed::Slow,
+                    end: TrillWiggleSpeed::Fast,
+                },
+                4,
+            ))
+        );
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn with_ornament_validated_is_const_callable() {
+        // `const` items hold one Some and two Nones across distinct
+        // rejected ornaments. Drops `const fn` would break this.
+        const ACCEPTED: Option<TrillExtensionFullOptions> = TrillExtensionFullOptions::new()
+            .with_ornament_validated(Ornament::TrillWithMordent);
+        const REJECTED_SHORT_TRILL: Option<TrillExtensionFullOptions> =
+            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::ShortTrill);
+        const REJECTED_MORDENT: Option<TrillExtensionFullOptions> =
+            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::Mordent);
+        assert!(ACCEPTED.is_some());
+        assert!(REJECTED_SHORT_TRILL.is_none());
+        assert!(REJECTED_MORDENT.is_none());
+    }
+
+    #[test]
+    fn with_ornament_validated_overwrites_prior_value_on_some() {
+        // Two consecutive validated calls on the accept band: last write
+        // wins (matches the permissive setter's last-write-wins).
+        let opts = TrillExtensionFullOptions::new()
+            .with_ornament_validated(Ornament::Trill)
+            .expect("Trill accepts")
+            .with_ornament_validated(Ornament::TrillWithMordent)
+            .expect("TrillWithMordent accepts");
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn with_ornament_validated_none_branch_does_not_partially_populate() {
+        // On a rejected ornament, the entire bundle is dropped via the
+        // `Option<Self>` shape — there is no fallback that silently leaves
+        // `ornament` unset and returns Some(self). Pins down the
+        // documented "rejection breaks the chain" contract.
+        //
+        // We verify by composition: rejecting an ornament must not produce
+        // a `Some` bundle whose ornament is None on the bracket-populated
+        // input. The shape `Option<Self>` makes the contract structural,
+        // but this test also rules out a hypothetical future refactor that
+        // tried to return `Some(self)` with `ornament` unset on rejection.
+        let result = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Start)
+            .with_ornament_validated(Ornament::Turn);
+        assert!(
+            result.is_none(),
+            "Turn must be rejected; bundle must not be partially populated"
+        );
+    }
+
+    #[test]
+    fn with_ornament_validated_some_branch_isolation() {
+        // From a fresh `new()`, only `ornament` is populated on accept.
+        // Locks the validator's "single-field write" contract.
+        let opts = TrillExtensionFullOptions::new()
+            .with_ornament_validated(Ornament::Trill)
+            .expect("Trill accepts");
+        assert_eq!(opts.ornament, Some(Ornament::Trill));
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.length_ss, None);
+        assert_eq!(opts.speed_ramp, None);
     }
 
     // --- PartialEq sensitivity ---

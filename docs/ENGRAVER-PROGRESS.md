@@ -3918,3 +3918,128 @@
   `music/src/notation/rhythm/meter.rs` and
   `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, with_ornament_validated across three trill options bundles
+
+- Did: Extended the validator-pairing pattern to the
+  *ornament-acceptance* surface across all three trill options bundles.
+  Added `with_ornament_validated(ornament) -> Option<Self>` on:
+  - `TrillBracketOptions` in
+    `music-engraver/src/layout/trill_bracket.rs`
+  - `TrillExtensionSpeedOptions` in
+    `music-engraver/src/layout/trill_extension.rs`
+  - `TrillExtensionFullOptions` in
+    `music-engraver/src/layout/trill_options.rs`
+
+  All three permissive `with_ornament` setters store any `Ornament` as
+  written so options bundles can travel through annotation pipelines
+  whose validity is only checked at the renderer's collector (which
+  filters by `Ornament::supports_trill_extension()` and silently drops
+  the entire trill extension — no wiggle, no bracket — for unsupported
+  ornaments). The new validated counterparts return `None` for exactly
+  the set `!Ornament::supports_trill_extension()` (currently 13 of 15
+  variants: every variant except `Trill` and `TrillWithMordent`), so
+  callers wanting construction-time rejection get a Result-shaped
+  failure at the call site rather than discovering an empty SVG at
+  draw time.
+
+  The accept band is locked to the predicate, not hardcoded — a
+  future expansion of `supports_trill_extension` (e.g. accepting
+  `Tremblement` for a wavy-line tail) automatically widens all three
+  validators without code changes. The `rejects_every_non_supporting_variant`
+  tests on each bundle walk every ornament in `Ornament::ALL` and
+  cross-validate `is_none()` iff `!supports_trill_extension()`, so the
+  pairing tightness is asserted, not asserted-once-then-forgotten.
+
+  All three validated methods are `const fn`, matching every other
+  setter on these bundles and `TrillSpeedRampSpec::new_validated` /
+  `with_speed_ramp_validated_ramp_count` from the prior two chunks
+  — the validator-pairing pattern is now uniformly applied at
+  every options-bundle layer that has an ornament knob.
+
+  On the accept branch all other fields on `self` are preserved
+  byte-for-byte (additive contract). On the reject branch the
+  partially-built bundle is dropped via the `Option<Self>` shape;
+  there is no silent-fallback that returns `Some(self)` with
+  `ornament` unset, because that would demote a rejection into a
+  no-op.
+
+  One-line dependent change: promoted
+  `Ornament::supports_trill_extension` from `fn` to `const fn` in
+  `music-engraver/src/layout/ornament.rs`. The body is just
+  `matches!(self, Self::Trill | Self::TrillWithMordent)`, so the
+  promotion is mechanical and additive — callers needing the runtime
+  shape are unaffected; the three new validators need the const
+  shape to themselves be `const`. Existing tests on the predicate
+  continue to pass unchanged.
+
+  Acceptance rules (`Some(self)` returned) — identical across all three
+  bundles:
+  - `ornament.supports_trill_extension()` is `true` (i.e. ornament is
+    `Trill` or `TrillWithMordent`).
+  - `self.ornament = Some(ornament)`; every other field on `self`
+    survives byte-for-byte.
+
+  Rejection rules (`None` returned) — identical across all three
+  bundles:
+  - `ornament.supports_trill_extension()` is `false` (any of the 13
+    other variants: `ShortTrill`, `Mordent`, `InvertedMordent`, `Turn`,
+    `InvertedTurn`, `TurnSlash`, `TurnUp`, `TurnUpSlash`, `Tremblement`,
+    `TremblementCouperin`, `Haydn`, `Shake`, `Schleifer`).
+
+  Tests added (28 total): per bundle, 8–10 tests covering accept-Trill,
+  accept-TrillWithMordent, reject-ShortTrill (headline rejection),
+  reject-every-non-supporting-variant (walks `Ornament::ALL`),
+  byte-equality with permissive setter on accept (catches future
+  normalization), preserve-other-setters-on-some (full chained bundle),
+  is-const-callable (const items hold one Some and two distinct Nones),
+  overwrites-prior-value-on-some (last-write-wins matching permissive),
+  some-branch-isolation (only `ornament` populated from `new()`). The
+  `TrillExtensionFullOptions` set adds a `none_branch_does_not_partially_populate`
+  test for the strongest field-preservation case (combined with `Turn`
+  rejection on a bracket-populated bundle), and the `preserves_other_setters_on_some`
+  test there layers in a `TrillSpeedRampSpec::new(Linear, 4)` to
+  exercise the bundle's largest field. The `TrillBracketOptions` set
+  walks all 3 × 15 = 45 (side × ornament) pairs in the
+  cross-validation and byte-equality tests, catching any per-side
+  asymmetry in the validator's behaviour.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2597 tests passing,
+  0 failing** (up from 2569 by exactly the 28 new tests).
+  `cargo test -p music-engraver --lib with_ornament_validated` runs
+  the 28 new tests in isolation: all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings on
+  any of the four modified files (pre-existing warnings on
+  `multi_staff.rs:394` and unrelated `music/` crate files persist —
+  out of scope).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). The validator-pairing pattern is now consistently
+  applied across (a) the entire trill speed-ramp stack and (b) the
+  entire trill ornament-acceptance surface — every options-bundle
+  setter whose acceptance criterion is testable at construction time
+  has both a permissive and a strict variant. Natural follow-ups
+  outside the trill surface: similar validator pairings on other
+  options bundles that silently drop their work at draw time — e.g.
+  bracket extension length (`with_extension_length_ss` accepts
+  non-positive values that the renderer's fail-safe suppresses;
+  rejection at construction time would surface the misuse earlier).
+
+- Open issues: None. The change is additive — no existing public API
+  altered, no golden baseline regenerated, no example or test
+  modified. `Ornament::supports_trill_extension` gained `const fn`
+  but its body is unchanged, so call sites and pre-existing tests on
+  the predicate continue to pass. Pre-existing clippy warnings in
+  `music/src/notation/rhythm/meter.rs` and
+  `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
+  (out of scope for this chunk).

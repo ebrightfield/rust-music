@@ -223,9 +223,63 @@ impl TrillExtensionSpeedOptions {
     /// satisfies [`Ornament::supports_trill_extension`] is valid. Passing an
     /// unsupported ornament makes the renderer drop the entire trill
     /// extension (no wiggle — only the ornament glyph).
+    ///
+    /// This setter is permissive — any [`Ornament`] is stored as-is so the
+    /// options bundle can travel through annotation pipelines whose validity
+    /// is only checked at the renderer's collector. Callers wanting
+    /// construction-time rejection of ornaments the renderer would silently
+    /// drop should use
+    /// [`with_ornament_validated`](Self::with_ornament_validated), which
+    /// returns `Option<Self>` and rejects the exact set
+    /// `!Ornament::supports_trill_extension()`.
     pub const fn with_ornament(mut self, ornament: Ornament) -> Self {
         self.ornament = Some(ornament);
         self
+    }
+
+    /// Stricter counterpart to [`with_ornament`](Self::with_ornament):
+    /// rejects ornaments that do not satisfy
+    /// [`Ornament::supports_trill_extension`] at the options-bundle
+    /// construction site, returning `Option<Self>`.
+    ///
+    /// Currently `Ornament::Trill` and `Ornament::TrillWithMordent` are the
+    /// only two variants that satisfy the predicate; every other variant
+    /// (mordents, turns, the historical/precomposed family, `ShortTrill`)
+    /// returns `None`. The accept set is locked to the predicate, not
+    /// hardcoded, so a future expansion of `supports_trill_extension`
+    /// automatically widens this method's accept band.
+    ///
+    /// Rejection rules (`None` returned):
+    /// - `ornament` is any variant for which
+    ///   [`Ornament::supports_trill_extension`] returns `false`.
+    ///
+    /// Acceptance (`Some(self)` returned with `ornament` populated):
+    /// - `ornament` is any variant for which
+    ///   [`Ornament::supports_trill_extension`] returns `true`.
+    /// - All other fields on `self` are preserved unchanged (additive
+    ///   contract, matching the permissive setter).
+    ///
+    /// `const`-callable, matching every other setter on this bundle. On the
+    /// `None` branch the builder chain is broken at the call site and the
+    /// partially-built bundle is dropped — there is no fallback that
+    /// silently leaves `ornament` unset, because that would demote a
+    /// rejection into a no-op.
+    ///
+    /// Mirrors the validator-pairing pattern at
+    /// [`crate::layout::trill_bracket::TrillBracketOptions::with_ornament_validated`]
+    /// and [`crate::layout::trill_options::TrillExtensionFullOptions::with_ornament_validated`]
+    /// — all three options bundles expose the same `with_ornament` /
+    /// `with_ornament_validated` pair.
+    pub const fn with_ornament_validated(mut self, ornament: Ornament) -> Option<Self> {
+        // The predicate is the single source of truth for the accept band —
+        // any future broadening of `supports_trill_extension` automatically
+        // widens this method's accept band without code changes here.
+        if ornament.supports_trill_extension() {
+            self.ornament = Some(ornament);
+            Some(self)
+        } else {
+            None
+        }
     }
 
     /// Set an explicit termination length for the wavy line, in staff
@@ -1191,6 +1245,136 @@ mod tests {
         let zero = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
             .with_extension_length_ss(0.0);
         assert_ne!(none, zero);
+    }
+
+    // --- TrillExtensionSpeedOptions ornament validator ---
+
+    #[test]
+    fn speed_options_with_ornament_validated_accepts_trill() {
+        // The canonical accept case: plain Trill is the default-mapped
+        // ornament and the most-used variant on this surface.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Fast)
+            .with_ornament_validated(Ornament::Trill);
+        let opts = opts.expect("Trill must be accepted by the validator");
+        assert_eq!(opts.ornament, Some(Ornament::Trill));
+        assert_eq!(opts.speed, TrillWiggleSpeed::Fast, "speed must survive");
+        assert_eq!(opts.extension_length_ss, None, "extension length unset");
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_accepts_trill_with_mordent() {
+        // The other accept variant: the precomposed compound. Pins down the
+        // accept band to the full predicate-defined set, not just `Trill`.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_ornament_validated(Ornament::TrillWithMordent);
+        let opts = opts.expect("TrillWithMordent must be accepted");
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.speed, TrillWiggleSpeed::Slow);
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_rejects_short_trill() {
+        // ShortTrill is the headline rejection case: the wave-less form of
+        // the trill mark, and the documented "do not use" for an extension.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_ornament_validated(Ornament::ShortTrill);
+        assert!(opts.is_none(), "ShortTrill must be rejected");
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_rejects_every_non_supporting_variant() {
+        // Walk all 15 variants and cross-validate `is_none()` iff
+        // `!supports_trill_extension()`. Locks the validator's accept band
+        // to the predicate's accept band — any future drift trips this.
+        for &ornament in Ornament::ALL.iter() {
+            let result = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_ornament_validated(ornament);
+            assert_eq!(
+                result.is_some(),
+                ornament.supports_trill_extension(),
+                "{ornament:?}: validator accept must match supports_trill_extension"
+            );
+        }
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_some_branch_byte_equals_unvalidated() {
+        // For every accepted ornament, the validated and permissive setters
+        // must produce field-by-field equal bundles. Catches a future
+        // refactor that started normalizing accepted inputs (e.g. clearing
+        // extension_length_ss when adopting a supported ornament).
+        for &ornament in Ornament::ALL.iter().filter(|o| o.supports_trill_extension()) {
+            let permissive = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+                .with_extension_length_ss(2.5)
+                .with_ornament(ornament);
+            let validated = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+                .with_extension_length_ss(2.5)
+                .with_ornament_validated(ornament)
+                .expect("supported ornament must accept");
+            assert_eq!(permissive, validated, "{ornament:?}: validated vs permissive byte-equal");
+        }
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_preserves_other_setters_on_some() {
+        // Chain on top of a populated bundle: every prior field must
+        // survive. Locks the additive contract — a future refactor that
+        // touched any other field on the accept path would fail here.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slowest)
+            .with_extension_length_ss(4.25)
+            .with_ornament_validated(Ornament::TrillWithMordent)
+            .expect("supported ornament must accept");
+        assert_eq!(opts.speed, TrillWiggleSpeed::Slowest, "speed survives");
+        assert_eq!(
+            opts.extension_length_ss,
+            Some(4.25),
+            "extension length survives"
+        );
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_is_const_callable() {
+        // The setter must be `const`-callable so accepted bundles can live
+        // in `const` items and rejection branches can be evaluated at
+        // compile time. `const` items hold one Some and two Nones across
+        // distinct rejected ornaments to walk both control-flow branches.
+        const ACCEPTED: Option<TrillExtensionSpeedOptions> =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_ornament_validated(Ornament::Trill);
+        const REJECTED_SHORT_TRILL: Option<TrillExtensionSpeedOptions> =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_ornament_validated(Ornament::ShortTrill);
+        const REJECTED_TURN: Option<TrillExtensionSpeedOptions> =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_ornament_validated(Ornament::Turn);
+        assert!(ACCEPTED.is_some());
+        assert!(REJECTED_SHORT_TRILL.is_none());
+        assert!(REJECTED_TURN.is_none());
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_overwrites_prior_value_on_some() {
+        // Two consecutive validated calls on the accept band: the last
+        // value wins (matches the permissive setter's last-write-wins).
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_ornament_validated(Ornament::Trill)
+            .expect("Trill accepts")
+            .with_ornament_validated(Ornament::TrillWithMordent)
+            .expect("TrillWithMordent accepts");
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+    }
+
+    #[test]
+    fn speed_options_with_ornament_validated_some_branch_isolation() {
+        // From a fresh `new()`, only `ornament` is populated on the accept
+        // branch — extension_length_ss stays None. Locks the validator's
+        // "single-field write" contract.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_ornament_validated(Ornament::Trill)
+            .expect("Trill accepts");
+        assert_eq!(opts.ornament, Some(Ornament::Trill));
+        assert_eq!(opts.extension_length_ss, None);
     }
 
     // --- layout_trill_extension_multi_speed ---
