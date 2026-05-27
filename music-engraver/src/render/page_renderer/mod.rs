@@ -1,4 +1,5 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::cresc_text::{layout_cresc_text, layout_cresc_text_continuation, CrescTextKind};
 use crate::layout::glissando::{layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin, layout_hairpin_dashed};
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
@@ -19,6 +20,7 @@ use crate::layout::trill_extension::{
     trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
 };
 use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_bracket_hooks};
+use crate::render::cresc_text_renderer::draw_cresc_text;
 use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
@@ -26,10 +28,10 @@ use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::system_renderer::{
-    collect_glissando_note_info, collect_hairpin_note_info, collect_lyric_note_info,
-    collect_note_positions, collect_ottava_note_info, collect_slur_note_info,
-    collect_trill_extension_note_info, draw_system, layout_trill_end_hook,
-    TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
+    collect_cresc_text_note_info, collect_glissando_note_info, collect_hairpin_note_info,
+    collect_lyric_note_info, collect_note_positions, collect_ottava_note_info,
+    collect_slur_note_info, collect_trill_extension_note_info, draw_system,
+    layout_trill_end_hook, TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
 };
 use crate::render::tie_renderer::draw_tie;
 use crate::render::trill_extension_renderer::{
@@ -117,6 +119,13 @@ pub fn draw_page(
 
     // Draw cross-system hairpins between adjacent systems
     draw_cross_system_hairpins(&mut svg, font, config, &page.systems)?;
+
+    // Draw cross-system dashed-text crescendo/diminuendo markings between
+    // adjacent systems. Conceptually parallel to draw_cross_system_hairpins —
+    // the wedgeless alternative — but with the label always landing on the
+    // source system (where the start flag lives) and the incoming half on
+    // the target system being label-suppressed (dashed line only).
+    draw_cross_system_cresc_texts(&mut svg, font, config, &page.systems)?;
 
     // Draw cross-system lyric extender lines between adjacent systems
     draw_cross_system_lyric_extenders(&mut svg, config, &page.systems);
@@ -689,6 +698,204 @@ pub(crate) fn draw_cross_system_hairpins(
                     stroke_width,
                 );
                 draw_hairpin(svg, &left_layout);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// A note at the end of a system with an unresolved `cresc_text_start`.
+///
+/// Conceptually parallel to [`UnresolvedHairpin`] — the dashed-text dynamic
+/// is the wedgeless alternative to a hairpin. Both share the same shape of
+/// "start flag here, end flag missing on this system" splitter logic, so the
+/// page-renderer carries both unresolved markings through symmetric paths.
+struct UnresolvedCrescText {
+    /// Absolute x where the cresc-text marking's label should sit on the
+    /// source system (i.e. just right of the start notehead, with the same
+    /// 0.3ss padding `draw_system_cresc_texts` uses for the within-system
+    /// path).
+    x_start: f64,
+    /// Which marking (Crescendo / Decrescendo / Diminuendo). Drives the
+    /// label string.
+    kind: CrescTextKind,
+    /// Right edge of the system's staff lines (absolute x). The dashed
+    /// continuation on the source side runs from `x_start + label_width`
+    /// to this value.
+    staff_right: f64,
+}
+
+/// A note at the start of the next system that has `cresc_text_end = true`.
+struct IncomingCrescTextTarget {
+    /// Absolute x where the incoming dashed continuation should end
+    /// (the note's left edge minus the same 0.3ss padding the
+    /// within-system path uses for the end side).
+    x_end: f64,
+    /// Left edge of the system's note area (after prefix). The dashed
+    /// continuation on the target side starts here.
+    staff_left: f64,
+}
+
+/// Find notes with `cresc_text_start` at the end of a system that have no
+/// matching `cresc_text_end` within the same system.
+fn find_unresolved_cresc_texts(
+    font: &MusicFont,
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Result<Vec<UnresolvedCrescText>, FontError> {
+    let system = &page_system.system;
+    let note_info = collect_cresc_text_note_info(system);
+
+    let mut unresolved = Vec::new();
+
+    for (i, info) in note_info.iter().enumerate() {
+        let Some(kind) = info.cresc_text_start else {
+            continue;
+        };
+
+        // Check if there's a matching cresc_text_end within this system
+        let has_end = note_info[i + 1..].iter().any(|n| n.cresc_text_end);
+
+        if has_end {
+            continue; // Resolved within the system
+        }
+
+        let notehead_kind = match info.duration_log2 {
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let outline = font.glyph_outline(notehead_kind.glyph())?;
+        let advance = outline.advance_width as f64;
+
+        // Match the same start-side padding draw_system_cresc_texts uses
+        // (notehead_right + 0.3ss). Keeps a within-system cresc-text and a
+        // cross-system cresc-text starting on the same note pixel-aligned.
+        let x_start = page_system.x + info.x + advance + 0.3 * config.staff_space;
+
+        unresolved.push(UnresolvedCrescText {
+            x_start,
+            kind,
+            staff_right: page_system.x + system.staff_width,
+        });
+    }
+
+    Ok(unresolved)
+}
+
+/// Find the first note with `cresc_text_end = true` in a system (candidate
+/// for incoming cross-system cresc-text continuation).
+fn find_incoming_cresc_text_targets(
+    config: &EngravingConfig,
+    page_system: &PageSystem,
+) -> Vec<IncomingCrescTextTarget> {
+    let system = &page_system.system;
+    let note_info = collect_cresc_text_note_info(system);
+
+    let first_measure_x = system
+        .measures
+        .first()
+        .map(|m| page_system.x + m.x_offset)
+        .unwrap_or(page_system.x);
+
+    let mut targets = Vec::new();
+
+    for info in &note_info {
+        if !info.cresc_text_end {
+            continue;
+        }
+
+        // Match the 0.3ss padding draw_system_cresc_texts uses for the
+        // end side.
+        let x_end = page_system.x + info.x - 0.3 * config.staff_space;
+
+        targets.push(IncomingCrescTextTarget {
+            x_end,
+            staff_left: first_measure_x,
+        });
+
+        // Only the first cresc_text_end on the target system is the
+        // continuation target.
+        break;
+    }
+
+    targets
+}
+
+/// Draw cross-system dashed-text crescendo/diminuendo markings between
+/// adjacent systems.
+///
+/// For each unresolved `cresc_text_start` at the end of system N, finds the
+/// first `cresc_text_end` note at the start of system N+1 and draws:
+///   1. a trailing half on system N: the italic label ("cresc.", "decresc.",
+///      "dim.") at the start position followed by a dashed line running to
+///      the system's right edge (via [`layout_cresc_text`]), and
+///   2. an incoming half on system N+1: a dashed-only continuation
+///      (label suppressed) from the system's left edge to just before the
+///      `cresc_text_end` note (via [`layout_cresc_text_continuation`]).
+///
+/// The label always lives on the source system because that's where the
+/// `cresc_text_start` annotation logically lands — the continuation half
+/// on the next system reads as "this is the same marking continuing", so
+/// repeating the label would be redundant. Mirrors the dashed-incoming-half
+/// convention used by [`draw_cross_system_hairpins`] and the
+/// cross-system ottava-bracket / trill-extension paths.
+pub(crate) fn draw_cross_system_cresc_texts(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    systems: &[PageSystem],
+) -> Result<(), FontError> {
+    for i in 0..systems.len().saturating_sub(1) {
+        let src_system = &systems[i];
+        let unresolved = find_unresolved_cresc_texts(font, config, src_system)?;
+        if unresolved.is_empty() {
+            continue;
+        }
+
+        let tgt_system = &systems[i + 1];
+        let targets = find_incoming_cresc_text_targets(config, tgt_system);
+
+        let src_staff = StaffLayout::new(
+            src_system.x,
+            src_system.y,
+            src_system.system.staff_width,
+            config.staff_space,
+        );
+        let tgt_staff = StaffLayout::new(
+            tgt_system.x,
+            tgt_system.y,
+            tgt_system.system.staff_width,
+            config.staff_space,
+        );
+
+        for src in &unresolved {
+            // Trailing half on the source system: label + dashed line to
+            // system right edge. Uses layout_cresc_text (not the continuation
+            // variant) because the start flag lives on this system, so the
+            // label appears here.
+            let right_layout = layout_cresc_text(
+                src.kind,
+                src.x_start,
+                src.staff_right,
+                &src_staff,
+                config.staff_space,
+            );
+            draw_cresc_text(svg, &right_layout);
+
+            // Incoming half on the target system: dashed-only continuation.
+            // layout_cresc_text_continuation sets has_label = false so the
+            // renderer emits only the dashed line.
+            if let Some(tgt) = targets.first() {
+                let left_layout = layout_cresc_text_continuation(
+                    src.kind,
+                    tgt.staff_left,
+                    tgt.x_end,
+                    &tgt_staff,
+                    config.staff_space,
+                );
+                draw_cresc_text(svg, &left_layout);
             }
         }
     }

@@ -5939,3 +5939,169 @@
   `pub(crate)` info struct (`CrescTextNoteInfo`). Cross-system
   continuation is documented as the next chunk in the comment
   above `draw_system_cresc_texts` itself.
+
+
+## 2026-05-27 — Post-v1, cross-system cresc-text continuation
+
+- Did: Plumbed cross-system dashed-text crescendo/diminuendo
+  ("cresc. - - -", "decresc. - - -", "dim. - - -") through the
+  page renderer, completing the cresc-text feature surface that the
+  previous run flagged as the natural follow-up. Before this chunk
+  the within-system marking worked end-to-end via the ScoreBuilder
+  but a `cresc_text_start` whose matching end fell on the next
+  system silently emitted nothing — the `layout_cresc_text_continuation`
+  helper was fully unit-tested but had no caller.
+
+  Concrete changes (all in `music-engraver/src/render/page_renderer/mod.rs`):
+  - New imports: `layout_cresc_text`, `layout_cresc_text_continuation`,
+    `CrescTextKind` from `crate::layout::cresc_text`; `draw_cresc_text`
+    from `crate::render::cresc_text_renderer`;
+    `collect_cresc_text_note_info` from `crate::render::system_renderer`.
+  - Two new private structs (`UnresolvedCrescText`,
+    `IncomingCrescTextTarget`) — mirror of `UnresolvedHairpin` /
+    `IncomingHairpinTarget` in shape, but the cresc-text variants
+    omit the `staff_bottom_y` cache since the StaffLayout is
+    rebuilt at the draw site.
+  - Two new helpers (`find_unresolved_cresc_texts`,
+    `find_incoming_cresc_text_targets`) — collect cresc-text note
+    info, walk it for start-no-end (source) and the first end
+    (target). Same notehead-advance + 0.3ss padding the within-
+    system path uses, so a within-system cresc-text and a
+    cross-system cresc-text starting on the same note pixel-align.
+  - One new `pub(crate)` function
+    (`draw_cross_system_cresc_texts`) plus one call site in
+    `draw_page` right after `draw_cross_system_hairpins`.
+
+  Key asymmetry vs. the cross-system hairpin path:
+  - Hairpin: source half = solid wedge (`layout_hairpin`),
+    target half = dashed wedge (`layout_hairpin_dashed`). Both halves
+    have wedge geometry; only the stroke style differs.
+  - Cresc-text: source half = label + dashed line
+    (`layout_cresc_text`, which keeps `has_label = true`), target
+    half = dashed line only (`layout_cresc_text_continuation`,
+    which sets `has_label = false`). The label always lives on
+    the source system because that's where the `cresc_text_start`
+    annotation logically lands; repeating it on the target side
+    would defeat the continuation convention. Mirrors the
+    "label-suppressed continuation" pattern already used by
+    cross-system ottava and trill extensions.
+
+  Tests (11 new, all in `src/render/page_renderer/tests.rs`,
+  asserting on specific SVG counts/contents rather than "render
+  didn't panic"):
+  - `cross_system_cresc_text_adds_one_label_and_two_dashed_lines`
+    — primary count assertion: cross-system marking adds exactly
+    +1 `>cresc.</text>` and +2 `stroke-dasharray` over a same-
+    structure baseline. Catches under- and over-emission in one
+    test.
+  - `cross_system_cresc_text_incoming_half_has_no_label` — direct
+    label count equals 1, not 2. Catches a regression where the
+    incoming half accidentally calls `layout_cresc_text` (which
+    sets `has_label = true`) instead of the continuation variant.
+  - `no_cross_system_cresc_text_without_flags` — baseline emits
+    zero `cresc.` / `decresc.` / `dim.` labels (all three guarded
+    independently).
+  - `cross_system_cresc_text_orphan_start_emits_trailing_half_only`
+    — start with no matching end on the next system → +1 label
+    and +1 dashed line over baseline, never +2.
+  - `cross_system_cresc_text_orphan_end_emits_nothing` — end with
+    no matching start → zero labels and dasharray-count unchanged
+    from baseline.
+  - `within_system_cresc_text_not_duplicated_as_cross_system` —
+    both flags fit on one system via `Fixed(2)`: exactly 1 label
+    and 1 dashed line in the SVG (the within-system path's
+    output, with no cross-system duplication).
+  - `cross_system_cresc_text_differs_from_baseline` — byte-
+    difference smoke test catching any silent no-op regression.
+  - `cross_system_cresc_text_dim_kind_uses_dim_label` — kind
+    routing: Diminuendo emits exactly 1 `>dim.</text>`, zero
+    `>cresc.</text>`, zero `>decresc.</text>`, and the +2
+    dasharray count is preserved. Catches any
+    hard-wiring-to-Crescendo regression.
+  - `cross_system_cresc_text_decresc_kind_uses_decresc_label`
+    — same for Decrescendo. Guards on `>cresc.</text>` (the
+    `>decresc.</text>` tag does NOT contain the `>cresc.<` prefix
+    by literal-string match, so the contains-check is safe).
+  - `cross_system_cresc_text_dashed_value_matches_layout_constants`
+    — the rendered `stroke-dasharray="…,…"` attribute uses the
+    `CRESC_TEXT_DASH_LENGTH_SS` × ss / `CRESC_TEXT_DASH_GAP_SS` × ss
+    products (not staff-space constants directly), appearing
+    exactly twice (once per half). Catches a regression where the
+    cross-system path uses hard-coded dash geometry instead of
+    routing through the layout helpers.
+  - `cross_system_cresc_text_label_lives_on_source_system_left_of_incoming_dashed`
+    — geometric routing sanity: extract both dashed-line `x1`
+    values from the SVG and assert they're distinct. Catches a
+    regression where the trailing and incoming halves collapse to
+    the same x (i.e. no real cross-system split happened).
+
+  Test helpers (`cresc_text_start_note`, `cresc_text_end_note`,
+  `cross_system_cresc_text_page`, `cross_system_cresc_text_baseline`)
+  parallel the existing hairpin helpers (`cresc_start_note`,
+  `hairpin_end_note`, `cross_system_hairpin_page`).
+
+  Width budget — a `cresc.` label needs ~962fu (6 chars × 0.6 SS
+  × 250fu + padding) plus the notehead-advance + 0.3ss offset.
+  At `system_width = 8000fu` the justified system staff_width
+  is essentially 8000fu, so the source half has plenty of room
+  for the label *and* the dashed continuation. (The previous-
+  chunk system_renderer scenarios had to drop to "dim." for the
+  short 4-quarter-note span because they used the raw measure-
+  layout config; the page-renderer scenarios use the full
+  page-width justification and don't hit that constraint.)
+
+- Verified:
+  - `cargo check -p music-engraver` → 0 errors.
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors (no cross-crate
+    regression).
+  - `cargo test -p music-engraver --offline --lib` →
+    **2836 passed, 0 failed** (was 2825 last run; +11 new tests
+    all under `render::page_renderer::tests::*_cross_system_cresc_text_*`
+    / `within_system_cresc_text_not_duplicated_as_cross_system` /
+    `no_cross_system_cresc_text_without_flags`).
+  - `cargo test -p music-engraver --offline --tests` →
+    73 (`golden_svg.rs`) + 3 (`svg_glyph_render.rs`) = **76
+    passed, 0 failed** (unchanged from the previous run). No
+    golden baselines moved.
+  - All 11 new tests pass; the existing `cross_system_hairpin_*`
+    suite continues to pass byte-identically (the new path runs
+    after `draw_cross_system_hairpins` and only emits labels/lines
+    in response to cresc-text annotations, which the hairpin
+    tests don't set).
+
+- Next: cross-system church rests; **golden-SVG corpus PHASH-
+  based visual regression** (covers the cresc-text feature surface
+  among others); **line breaking quality improvements** (Gourlay
+  extension or Bellini & Nesi); auto-resolved low-staff
+  beam-group collision golden (still requires ScoreBuilder opt-out
+  for force-stems, deferred); cross-voice tie/slur consultation of
+  the collision detector (deferred); plumbing of niente/dashed
+  hairpin constructors through the score → system_renderer →
+  page_renderer chain; **golden test for the cresc-text marking
+  via ScoreBuilder** (cross-system case is now exercised by the
+  page-renderer unit tests but no visual baseline is frozen yet);
+  PNG export via the `png` feature (`resvg` + `tiny-skia` +
+  `fontdb`).
+
+- Open issues: None. The change is purely additive at the
+  page-renderer surface — one new public-in-crate function
+  (`draw_cross_system_cresc_texts`), two new private structs,
+  two new private helpers. No public API of the crate changed.
+  No existing golden baselines moved (the cross-system cresc-text
+  path only runs when `cresc_text_start` / `cresc_text_end`
+  annotations are present, which none of the current golden
+  fixtures set). The within-system fail-safe in
+  `draw_system_cresc_texts` (silently emit nothing for an
+  unresolved span) remains in place — the page-renderer path
+  picks up exactly those previously-silent cases. The
+  `layout_cresc_text_continuation` doc comment mentions a more
+  sophisticated "trailing half drops the label when label
+  appeared earlier on the source system" scenario; this chunk
+  implements the simpler parallel-with-hairpin path where the
+  label always lives on the source system because the
+  `cresc_text_start` annotation lands there. Refining for the
+  case where a within-system cresc-text label has already been
+  drawn earlier on the source system (multi-end-flag pattern)
+  is a separate concern and not currently triggerable from the
+  ScoreBuilder API.

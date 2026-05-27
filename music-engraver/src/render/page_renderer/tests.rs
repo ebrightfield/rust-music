@@ -1167,6 +1167,440 @@ fn within_system_hairpin_emits_no_dasharray() {
     );
 }
 
+// --- cross-system dashed-text crescendo (cresc-text) tests ---
+
+use crate::layout::cresc_text::{
+    CrescTextKind, CRESC_TEXT_DASH_GAP_SS, CRESC_TEXT_DASH_LENGTH_SS,
+};
+
+fn cresc_text_start_note(pos: i8, kind: CrescTextKind) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            cresc_text_start: Some(kind),
+            ..Default::default()
+        },
+    })
+}
+
+fn cresc_text_end_note(pos: i8) -> MeasureEvent {
+    MeasureEvent::Note(NoteEvent {
+        staff_position: pos,
+        duration_log2: 2,
+        dots: 0,
+        accidental: None,
+        stem_direction: None,
+        annotations: NoteAnnotations {
+            cresc_text_end: true,
+            ..Default::default()
+        },
+    })
+}
+
+/// Build a 2-system page where measure 1 carries a `cresc_text_start` of
+/// the given kind and measure 2 carries the matching `cresc_text_end`,
+/// with `Fixed(1)` system breaking — guarantees the marking crosses a
+/// system boundary.
+fn cross_system_cresc_text_page(kind: CrescTextKind) -> String {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_text_start_note(4, kind)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![cresc_text_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+    draw_page(&font, &config, &page).unwrap().to_svg()
+}
+
+/// Build a 2-system baseline (same measures, no cresc-text flags) for diff
+/// counts. Identical structure to `cross_system_cresc_text_page` but with
+/// plain quarter notes.
+fn cross_system_cresc_text_baseline() -> String {
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    assert_eq!(page.systems.len(), 2);
+    draw_page(&font, &config, &page).unwrap().to_svg()
+}
+
+#[test]
+fn cross_system_cresc_text_adds_one_label_and_two_dashed_lines() {
+    // Cresc-text crossing a system boundary should add:
+    //   - exactly 1 italic "cresc." label (on the source system only)
+    //   - exactly 2 dashed lines (one trailing on source, one incoming on target)
+    // over the no-marking baseline.
+    let output = cross_system_cresc_text_page(CrescTextKind::Crescendo);
+    let baseline = cross_system_cresc_text_baseline();
+
+    let dashed_with = output.matches("stroke-dasharray").count();
+    let dashed_without = baseline.matches("stroke-dasharray").count();
+    assert_eq!(
+        dashed_with,
+        dashed_without + 2,
+        "cross-system cresc-text should add 2 stroke-dasharray lines \
+         (1 trailing on source + 1 incoming on target); got {dashed_with} \
+         vs baseline {dashed_without}. SVG:\n{output}"
+    );
+
+    let label_with = output.matches(">cresc.</text>").count();
+    let label_without = baseline.matches(">cresc.</text>").count();
+    assert_eq!(
+        label_with,
+        label_without + 1,
+        "cross-system cresc-text should add exactly 1 'cresc.' label \
+         (only on the source system — the incoming half on the target \
+         system suppresses the label); got {label_with} vs baseline \
+         {label_without}. SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_incoming_half_has_no_label() {
+    // The cross-system cresc-text emits exactly 1 'cresc.' label. If we
+    // saw 2, that would mean the incoming half on the target system
+    // accidentally drew the label too — defeating the continuation
+    // convention.
+    let output = cross_system_cresc_text_page(CrescTextKind::Crescendo);
+    let label_count = output.matches(">cresc.</text>").count();
+    assert_eq!(
+        label_count, 1,
+        "cross-system cresc-text must emit exactly 1 label \
+         (incoming half is label-suppressed); got {label_count}. SVG:\n{output}"
+    );
+}
+
+#[test]
+fn no_cross_system_cresc_text_without_flags() {
+    // Baseline sanity: a 2-system page with plain notes emits zero
+    // 'cresc.' labels and zero dashed lines coming from the cresc-text
+    // path.
+    let baseline = cross_system_cresc_text_baseline();
+    assert_eq!(
+        baseline.matches(">cresc.</text>").count(),
+        0,
+        "baseline must not contain any 'cresc.' label; SVG:\n{baseline}"
+    );
+    assert_eq!(
+        baseline.matches(">dim.</text>").count(),
+        0,
+        "baseline must not contain any 'dim.' label; SVG:\n{baseline}"
+    );
+    assert_eq!(
+        baseline.matches(">decresc.</text>").count(),
+        0,
+        "baseline must not contain any 'decresc.' label; SVG:\n{baseline}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_orphan_start_emits_trailing_half_only() {
+    // cresc_text_start on system 1, no cresc_text_end on system 2.
+    // Source-half should still emit (label + 1 dashed line); incoming
+    // half is suppressed because there is no target. So we expect
+    // +1 label and +1 dashed line over baseline, never +2.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_text_start_note(4, CrescTextKind::Crescendo)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            // No cresc_text_end — orphan start.
+            events: vec![quarter_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+    let baseline = cross_system_cresc_text_baseline();
+
+    let dashed_with = output.matches("stroke-dasharray").count();
+    let dashed_without = baseline.matches("stroke-dasharray").count();
+    assert_eq!(
+        dashed_with,
+        dashed_without + 1,
+        "orphan cresc_text_start should add exactly 1 dashed line \
+         (trailing on source only — no incoming half); got {dashed_with} \
+         vs baseline {dashed_without}. SVG:\n{output}"
+    );
+
+    let label_count = output.matches(">cresc.</text>").count();
+    assert_eq!(
+        label_count, 1,
+        "orphan cresc_text_start still emits its label on the source \
+         system; got {label_count}. SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_orphan_end_emits_nothing() {
+    // cresc_text_end on system 2 without a matching cresc_text_start
+    // anywhere — the page renderer should emit no cresc-text artifacts.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![cresc_text_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+    let baseline = cross_system_cresc_text_baseline();
+
+    assert_eq!(
+        output.matches(">cresc.</text>").count(),
+        0,
+        "orphan cresc_text_end must not produce a label; SVG:\n{output}"
+    );
+    assert_eq!(
+        output.matches("stroke-dasharray").count(),
+        baseline.matches("stroke-dasharray").count(),
+        "orphan cresc_text_end must not produce a dashed line; SVG:\n{output}"
+    );
+}
+
+#[test]
+fn within_system_cresc_text_not_duplicated_as_cross_system() {
+    // When both cresc_text_start and cresc_text_end fit on the same system
+    // (Fixed(2)), the within-system path draws label + 1 dashed line.
+    // The cross-system path must NOT add a second label or extra dashed
+    // segments.
+    let (font, config) = setup();
+    let ss = config.staff_space;
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0);
+    let mcfg = MeasureLayoutConfig::from_staff_space(ss);
+
+    let measures = vec![
+        MeasureContent {
+            events: vec![cresc_text_start_note(4, CrescTextKind::Crescendo)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![],
+        },
+        MeasureContent {
+            events: vec![cresc_text_end_note(6)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        },
+    ];
+    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    assert_eq!(page.systems.len(), 1);
+
+    let output = draw_page(&font, &config, &page).unwrap().to_svg();
+
+    assert_eq!(
+        output.matches(">cresc.</text>").count(),
+        1,
+        "within-system cresc-text must emit exactly 1 label, not get \
+         duplicated by the cross-system path; SVG:\n{output}"
+    );
+    assert_eq!(
+        output.matches("stroke-dasharray").count(),
+        1,
+        "within-system cresc-text must emit exactly 1 dashed line; \
+         SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_differs_from_baseline() {
+    // End-to-end byte-difference smoke test: the SVG with cross-system
+    // cresc-text must differ from the no-marking baseline. Catches a
+    // regression where the cross-system path silently no-ops.
+    let with_marking = cross_system_cresc_text_page(CrescTextKind::Crescendo);
+    let without = cross_system_cresc_text_baseline();
+    assert_ne!(
+        with_marking, without,
+        "cross-system cresc-text SVG must differ from the no-marking baseline"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_dim_kind_uses_dim_label() {
+    // Per kind: a Diminuendo cross-system marking emits 'dim.' on the
+    // source half and no label on the incoming half. The 'cresc.' /
+    // 'decresc.' labels must NOT appear (a regression where the kind
+    // was hard-wired to Crescendo would surface here).
+    let output = cross_system_cresc_text_page(CrescTextKind::Diminuendo);
+
+    assert_eq!(
+        output.matches(">dim.</text>").count(),
+        1,
+        "diminuendo cross-system must emit exactly 1 'dim.' label on \
+         the source half; got {}. SVG:\n{output}",
+        output.matches(">dim.</text>").count()
+    );
+    assert_eq!(
+        output.matches(">cresc.</text>").count(),
+        0,
+        "diminuendo cross-system must NOT emit a 'cresc.' label; SVG:\n{output}"
+    );
+    // 'decresc.' literally starts with 'd' so guard against substring
+    // accidents by checking for the full closing-tag form.
+    assert_eq!(
+        output.matches(">decresc.</text>").count(),
+        0,
+        "diminuendo cross-system must NOT emit a 'decresc.' label; SVG:\n{output}"
+    );
+    // Still produces exactly 2 dashed lines.
+    let baseline = cross_system_cresc_text_baseline();
+    assert_eq!(
+        output.matches("stroke-dasharray").count(),
+        baseline.matches("stroke-dasharray").count() + 2,
+        "diminuendo cross-system must add 2 dashed lines; SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_decresc_kind_uses_decresc_label() {
+    // Mirror of the Diminuendo test for the Decrescendo kind. 'decresc.'
+    // is the only label that should appear.
+    let output = cross_system_cresc_text_page(CrescTextKind::Decrescendo);
+
+    assert_eq!(
+        output.matches(">decresc.</text>").count(),
+        1,
+        "decrescendo cross-system must emit exactly 1 'decresc.' label; \
+         SVG:\n{output}"
+    );
+    assert_eq!(
+        output.matches(">cresc.</text>").count(),
+        0,
+        "decrescendo cross-system must NOT emit a bare 'cresc.' label \
+         — the 'decresc.' tag must not be matched by a >cresc.< search \
+         (its leading 'de' protects the contains-check); SVG:\n{output}"
+    );
+    assert_eq!(
+        output.matches(">dim.</text>").count(),
+        0,
+        "decrescendo cross-system must NOT emit a 'dim.' label; SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_dashed_value_matches_layout_constants() {
+    // The dashed continuation lines must use the same dash/gap geometry
+    // as `layout_cresc_text` / `layout_cresc_text_continuation` produce.
+    // Catches a regression where a wrong dash pattern was used in either
+    // half (which would surface as a visual seam at the system break).
+    let (font, config) = setup();
+    let ss = config.staff_space;
+
+    let expected_dash = CRESC_TEXT_DASH_LENGTH_SS * ss;
+    let expected_gap = CRESC_TEXT_DASH_GAP_SS * ss;
+    let expected_attr = format!("stroke-dasharray=\"{expected_dash},{expected_gap}\"");
+
+    let _ = (font, config);
+    let output = cross_system_cresc_text_page(CrescTextKind::Crescendo);
+    let occurrences = output.matches(&expected_attr).count();
+    assert_eq!(
+        occurrences, 2,
+        "expected dasharray attribute {expected_attr:?} to appear \
+         exactly twice (once per half); got {occurrences}. SVG:\n{output}"
+    );
+}
+
+#[test]
+fn cross_system_cresc_text_label_lives_on_source_system_left_of_incoming_dashed() {
+    // The 'cresc.' label sits on the source system (system 1) and the
+    // incoming dashed line sits on the target system (system 2). On a
+    // Fixed(1) two-system layout, the incoming dashed line's x1 must be
+    // smaller than the source system's right edge — because system 2's
+    // left starts back at the left page margin, identical to system 1's
+    // left margin (both systems align horizontally on the page).
+    //
+    // More importantly: we should be able to distinguish the trailing
+    // dashed line (large x) from the incoming dashed line (small x). The
+    // two dashed lines must have different x1 values. Catches a regression
+    // where both halves collapse to the same position.
+    let output = cross_system_cresc_text_page(CrescTextKind::Crescendo);
+
+    let dashed_x1s: Vec<f64> = output
+        .split("<line ")
+        .skip(1)
+        .filter_map(|chunk| {
+            let head = chunk.split('>').next()?;
+            if !head.contains("stroke-dasharray") {
+                return None;
+            }
+            head.split("x1=\"")
+                .nth(1)
+                .and_then(|s| s.split('"').next())
+                .and_then(|s| s.parse::<f64>().ok())
+        })
+        .collect();
+
+    assert_eq!(
+        dashed_x1s.len(),
+        2,
+        "expected exactly 2 dashed cresc-text lines; got x1s = {dashed_x1s:?}. \
+         SVG:\n{output}"
+    );
+    assert_ne!(
+        dashed_x1s[0], dashed_x1s[1],
+        "the trailing dashed line (source system, large x) must have a \
+         different x1 from the incoming dashed line (target system, \
+         small x); both collapsed to the same x = no real cross-system \
+         split. x1s = {dashed_x1s:?}"
+    );
+}
+
 // ---- Measure number tests ----
 
 #[test]
