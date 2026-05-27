@@ -3675,3 +3675,119 @@
   Pre-existing clippy warnings in `music/src/notation/rhythm/meter.rs`
   and `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, TrillSpeedRampSpec::new_validated
+
+- Did: Added a strict counterpart to `TrillSpeedRampSpec::new` in
+  `music-engraver/src/layout/trill_extension.rs`. The bare `new` stores
+  any `(ramp, region_count)` pair unchanged so the spec can travel
+  through annotation pipelines whose validity is only checked at draw
+  time (mirroring `TrillSpeedRamp::linear`'s permissive contract). The
+  new `new_validated` returns `Option<TrillSpeedRampSpec>` and rejects
+  exactly the same degenerate inputs that
+  `TrillSpeedRamp::synthesize_regions` would reject at draw time, so
+  callers wanting construction-time rejection get it at the call site
+  rather than discovering `None` later. Closes the explicit follow-up
+  that was inline in the module's prior doc comment ("Adding
+  `new_validated` later would be additive"), matching the existing
+  `TrillSpeedRamp::linear` / `TrillSpeedRamp::linear_validated`
+  pairing on the ramp itself.
+
+  Rejection rules (`None` returned):
+  - `region_count == 0` for any ramp variant (no regions to emit).
+  - `ramp` is `TrillSpeedRamp::Linear { .. }` AND `region_count < 2`
+    (a single-region linear progression is ill-defined — only one
+    endpoint can land on the region's speed, both endpoints can't).
+
+  Carve-outs (`Some(...)` returned — pinned down explicitly so they
+  can't drift):
+  - `TrillSpeedRamp::Constant(_)` accepts any `region_count >= 1` —
+    a single-region constant trivially renders the chosen speed
+    across the span. Walked all 9 `TrillWiggleSpeed` × 5 region
+    counts in the test grid to lock the asymmetry in.
+  - `TrillSpeedRamp::Linear { start, end }` with `start == end` is
+    permitted (rejection of equal endpoints is `linear_validated`'s
+    job, not the spec validator's). A composition test chains
+    `linear_validated` + `new_validated` to demonstrate the
+    orthogonal-layering use case for callers wanting both.
+  - Span- and font-related degeneracies (`end_x <= start_x`,
+    `region_count` exceeding what physically fits) are *draw-time*
+    properties — they depend on the trill's anchoring note positions
+    and are not knowable at spec-construction time — so they
+    remain the synthesizer's responsibility and `new_validated` does
+    not double-validate them.
+
+  `const fn` for symmetry with `TrillSpeedRamp::linear_validated`,
+  using `matches!(ramp, TrillSpeedRamp::Linear { .. })` for the
+  variant check (`matches!` is const-callable on stable). Pinned
+  down by a `const`-context compile-time test that exercises one
+  `Some` and two distinct `None` branches.
+
+  Also updated the surrounding `TrillSpeedRampSpec` doc comment to
+  point at the new method instead of merely promising it.
+
+  Tests added (12) in `layout::trill_extension::tests`:
+  - `spec_new_validated_rejects_zero_region_count_for_constant`
+  - `spec_new_validated_rejects_zero_region_count_for_linear`
+  - `spec_new_validated_rejects_one_region_for_linear`
+  - `spec_new_validated_accepts_one_region_for_constant` — the
+    documented Constant carve-out at the minimum region count.
+  - `spec_new_validated_accepts_two_regions_for_linear` — the
+    minimum-valid `Linear` case (both endpoints land on the
+    region's speed at `t = 0` and `t = 1`).
+  - `spec_new_validated_accepts_typical_inputs_for_both_variants` —
+    9 speeds × 5 region counts for `Constant`, 9 × 9 speed pairs ×
+    5 region counts (≥ 2) for `Linear`. Catches any future narrowing
+    that accidentally rejects the documented accept band.
+  - `spec_new_validated_some_branch_byte_equals_new` — the validator
+    is rejection-only, no normalization. Verified across both
+    variants at minimum-valid `region_count`.
+  - `spec_new_validated_is_const_callable` — `const` items hold one
+    `Some` spec and two distinct `None` cases (zero-count + Linear
+    with `region_count == 1`).
+  - `spec_new_validated_some_branch_feeds_synthesize_regions` — end-
+    to-end: an accepted spec must produce `Some` from the
+    synthesizer on a non-degenerate span. Spot-checks `start_x`
+    values to verify `region_count` is used verbatim.
+  - `spec_new_validated_accepts_linear_with_equal_endpoint_speeds` —
+    pins down the orthogonal-layering carve-out + chains
+    `linear_validated` + `new_validated` to show the composition.
+  - `spec_new_validated_rejection_table_matches_synthesize_regions_zero_region`
+    — cross-validates: every rejection mode the spec validator owns
+    is *also* a rejection in the synthesizer (validator is a strict
+    subset of the synthesizer's rejection set on the inputs it owns).
+  - `spec_new_validated_does_not_mutate_inputs_on_accept` — guards
+    against a hypothetical "helpful" normalization that promoted
+    `Linear { s, s }` into `Constant(s)` on accept; the ramp
+    variant must survive byte-for-byte.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — 2555 tests passing,
+  0 failing (the 12 new tests are part of that total).
+  `cargo test -p music-engraver --lib spec_new_validated` runs the
+  12 new tests in isolation: all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings on
+  `trill_extension.rs` (the pre-existing warnings on
+  `multi_staff.rs:394` and unrelated `music/` crate files persist).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). On the trill side, a natural follow-up is mirroring
+  this validator on `TrillExtensionFullOptions::with_speed_ramp_ramp_count`
+  via a `with_speed_ramp_validated_ramp_count` that returns
+  `Option<Self>` — a one-line extension of the same pattern.
+
+- Open issues: None. The change is additive — no existing public API
+  altered, no golden baseline regenerated, no example or test
+  modified. Pre-existing clippy warnings in
+  `music/src/notation/rhythm/meter.rs` and
+  `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
+  (out of scope for this chunk).

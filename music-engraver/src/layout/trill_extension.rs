@@ -687,12 +687,16 @@ impl TrillSpeedRamp {
 /// site; the [`new`](Self::new) constructor is provided for
 /// `const`-callable bundle construction.
 ///
-/// Currently no validation at construction — `region_count == 0` and
-/// `region_count == 1` for a `Linear` ramp are both *defined* failures in
-/// [`TrillSpeedRamp::synthesize_regions`] (returning `None`). The spec
-/// stores the raw values; the consumer that calls `synthesize_regions`
-/// observes the same `None` it would have for a hand-built call. Adding
-/// `new_validated` later would be additive.
+/// The bare [`new`](Self::new) constructor performs no validation —
+/// `region_count == 0` and `region_count == 1` for a `Linear` ramp are
+/// both *defined* failures in [`TrillSpeedRamp::synthesize_regions`]
+/// (returning `None`). `new` stores the raw values; the consumer that
+/// calls `synthesize_regions` observes the same `None` it would have for
+/// a hand-built call. Callers that want construction-time rejection of
+/// those degenerate inputs should use [`new_validated`](Self::new_validated),
+/// which returns `None` for the same inputs the synthesizer would reject,
+/// mirroring the [`TrillSpeedRamp::linear`] / [`TrillSpeedRamp::linear_validated`]
+/// pairing on the ramp itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TrillSpeedRampSpec {
     /// The ramp pattern (constant or linear-progression) to synthesize.
@@ -713,6 +717,65 @@ impl TrillSpeedRampSpec {
             ramp,
             region_count,
         }
+    }
+
+    /// Stricter counterpart to [`Self::new`]: rejects the degenerate
+    /// `(ramp, region_count)` pairs at construction time, returning `None`.
+    ///
+    /// The bare [`Self::new`] constructor stores any pair unchanged so the
+    /// spec can travel through annotation pipelines whose validity is only
+    /// checked at draw time — mirroring the permissive policy of
+    /// [`TrillSpeedRamp::linear`]. That contract makes a degenerate spec
+    /// like `TrillSpeedRampSpec::new(Linear { … }, 1)` syntactically valid
+    /// even though its [`TrillSpeedRamp::synthesize_regions`] call will
+    /// return `None`. Callers wanting compile-time or run-time confidence
+    /// that the spec will actually produce regions should construct via
+    /// this method and propagate the `None` upward — the call site sees
+    /// "degenerate input" at construction rather than discovering it via
+    /// `synthesize_regions` returning `None` later.
+    ///
+    /// Returns:
+    /// - `None` when `region_count == 0` (no regions to emit for *any*
+    ///   ramp).
+    /// - `None` when `ramp` is [`TrillSpeedRamp::Linear`] and
+    ///   `region_count < 2` (a single-region linear progression is
+    ///   ill-defined — only one endpoint can be the region's speed, both
+    ///   endpoints can't be — and `TrillSpeedRamp::synthesize_regions`
+    ///   would itself return `None`).
+    /// - `Some(Self { ramp, region_count })` otherwise.
+    ///
+    /// [`TrillSpeedRamp::Constant`] explicitly accepts any
+    /// `region_count >= 1`; a single-region `Constant` spec trivially
+    /// renders the chosen speed across the entire span (the synthesizer
+    /// behaves identically). Span-related degeneracies
+    /// (`end_x <= start_x`, `region_count` exceeding what fits) are
+    /// *draw-time* properties — they depend on the trill's anchoring note
+    /// positions and are not knowable at spec construction — so they
+    /// remain the synthesizer's responsibility.
+    ///
+    /// This method does NOT additionally reject a `Linear { start, end }`
+    /// with `start == end`: that degenerate input is documented as
+    /// permitted at [`TrillSpeedRamp::Linear`] (`linear` accepts it; only
+    /// [`TrillSpeedRamp::linear_validated`] rejects it). Callers that want
+    /// both layers of rejection should chain:
+    /// `TrillSpeedRamp::linear_validated(s, e).and_then(|r| TrillSpeedRampSpec::new_validated(r, n))`.
+    ///
+    /// `const`-callable so canonical validated specs can live in
+    /// module-level `const` items via `match`-on-`Option` patterns,
+    /// mirroring [`TrillSpeedRamp::linear_validated`].
+    pub const fn new_validated(ramp: TrillSpeedRamp, region_count: usize) -> Option<Self> {
+        if region_count == 0 {
+            return None;
+        }
+        // `matches!` is const-callable on stable; explicit Linear check
+        // mirrors the gate in `TrillSpeedRamp::synthesize_regions`.
+        if matches!(ramp, TrillSpeedRamp::Linear { .. }) && region_count < 2 {
+            return None;
+        }
+        Some(Self {
+            ramp,
+            region_count,
+        })
     }
 }
 
@@ -2168,6 +2231,243 @@ mod tests {
                     "regions must be sorted strictly increasing in start_x"
                 );
             }
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // TrillSpeedRampSpec::new_validated — strict constructor
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn spec_new_validated_rejects_zero_region_count_for_constant() {
+        // region_count == 0 is the *defined* failure case in
+        // `synthesize_regions` for any ramp; the validated constructor
+        // surfaces that rejection at spec construction.
+        let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
+        assert_eq!(TrillSpeedRampSpec::new_validated(ramp, 0), None);
+    }
+
+    #[test]
+    fn spec_new_validated_rejects_zero_region_count_for_linear() {
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        assert_eq!(TrillSpeedRampSpec::new_validated(ramp, 0), None);
+    }
+
+    #[test]
+    fn spec_new_validated_rejects_one_region_for_linear() {
+        // A single-region linear progression is ill-defined: only one
+        // endpoint can land on the region's speed, both endpoints
+        // can't. The synthesizer rejects this at draw time; the
+        // validated constructor rejects it at spec construction.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        assert_eq!(TrillSpeedRampSpec::new_validated(ramp, 1), None);
+    }
+
+    #[test]
+    fn spec_new_validated_accepts_one_region_for_constant() {
+        // The asymmetry that's the whole point of the method: `Constant`
+        // explicitly permits region_count == 1 (a single tile-row run of
+        // that speed across the span). This must be accepted.
+        let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
+        let spec = TrillSpeedRampSpec::new_validated(ramp, 1).expect("Constant + 1 region is valid");
+        assert_eq!(spec.ramp, ramp);
+        assert_eq!(spec.region_count, 1);
+    }
+
+    #[test]
+    fn spec_new_validated_accepts_two_regions_for_linear() {
+        // The minimum-valid `region_count` for `Linear`.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest);
+        let spec = TrillSpeedRampSpec::new_validated(ramp, 2).expect("Linear + 2 regions is valid");
+        assert_eq!(spec.ramp, ramp);
+        assert_eq!(spec.region_count, 2);
+    }
+
+    #[test]
+    fn spec_new_validated_accepts_typical_inputs_for_both_variants() {
+        // Walks all 9 canonical speeds + a representative region_count.
+        // Every speed × region_count >= 1 must succeed for `Constant`;
+        // every distinct speed pair × region_count >= 2 must succeed for
+        // `Linear`. Catches a regression that accidentally introduced a
+        // narrower acceptance band (e.g. rejecting region_count == 1 for
+        // any ramp, which would break the documented Constant carve-out).
+        for &speed in &TrillWiggleSpeed::ALL {
+            for &n in &[1usize, 2, 3, 7, 32] {
+                let spec = TrillSpeedRampSpec::new_validated(
+                    TrillSpeedRamp::constant(speed),
+                    n,
+                );
+                assert!(
+                    spec.is_some(),
+                    "Constant({speed:?}) + region_count={n} must be accepted"
+                );
+            }
+        }
+        for &start in &TrillWiggleSpeed::ALL {
+            for &end in &TrillWiggleSpeed::ALL {
+                if start.index() == end.index() {
+                    // Linear { s, s } is documented as permitted at
+                    // construction by both `linear` and the spec's
+                    // `new_validated` (rejection of degenerate equal
+                    // endpoints belongs to `linear_validated`).
+                }
+                let ramp = TrillSpeedRamp::linear(start, end);
+                for &n in &[2usize, 3, 5, 9, 32] {
+                    let spec = TrillSpeedRampSpec::new_validated(ramp, n);
+                    assert!(
+                        spec.is_some(),
+                        "Linear {{ start: {start:?}, end: {end:?} }} + region_count={n} must be accepted"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spec_new_validated_some_branch_byte_equals_new() {
+        // On the accept branch the validated constructor must produce a
+        // spec field-by-field equal to the bare `new` constructor — the
+        // validation is rejection-only, not normalization. PartialEq
+        // covers both fields; this assertion catches a regression that
+        // sneaks a normalization step into the validated path (e.g.,
+        // clamping region_count or rewriting the ramp).
+        let ramps = [
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Fastest, TrillWiggleSpeed::Slowest),
+        ];
+        // Use minimum-valid region_count per ramp so every pair is
+        // accepted by both constructors.
+        for &ramp in &ramps {
+            let min_n = if matches!(ramp, TrillSpeedRamp::Linear { .. }) {
+                2
+            } else {
+                1
+            };
+            let bare = TrillSpeedRampSpec::new(ramp, min_n);
+            let validated = TrillSpeedRampSpec::new_validated(ramp, min_n)
+                .expect("validated must accept minimum-valid pair");
+            assert_eq!(bare, validated, "bare and validated must agree on accept");
+        }
+    }
+
+    #[test]
+    fn spec_new_validated_is_const_callable() {
+        // Locks in `const fn` on the new constructor. A future change
+        // that dropped `const` would break this compile-time canary —
+        // matching the contract of `TrillSpeedRamp::linear_validated`.
+        const SOME_SPEC: Option<TrillSpeedRampSpec> = TrillSpeedRampSpec::new_validated(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            3,
+        );
+        const NONE_SPEC_ZERO: Option<TrillSpeedRampSpec> = TrillSpeedRampSpec::new_validated(
+            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+            0,
+        );
+        const NONE_SPEC_LINEAR_ONE: Option<TrillSpeedRampSpec> = TrillSpeedRampSpec::new_validated(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            1,
+        );
+        assert!(SOME_SPEC.is_some());
+        assert_eq!(NONE_SPEC_ZERO, None);
+        assert_eq!(NONE_SPEC_LINEAR_ONE, None);
+    }
+
+    #[test]
+    fn spec_new_validated_some_branch_feeds_synthesize_regions() {
+        // End-to-end contract: a spec accepted by `new_validated` must
+        // unconditionally produce `Some` from `synthesize_regions` for
+        // a non-degenerate span. Locks in the source-of-truth chain:
+        //   new_validated rejects iff synthesize_regions would reject
+        //   (modulo span/font-related inputs, which the spec does not
+        //   own at construction time).
+        let spec = TrillSpeedRampSpec::new_validated(
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+            3,
+        )
+        .unwrap();
+        let regions = spec
+            .ramp
+            .synthesize_regions(0.0, 300.0, spec.region_count, |_| 50.0)
+            .expect("validated spec must produce Some at draw time");
+        assert_eq!(regions.len(), 3);
+        // Spot-check that the synthesizer used the spec's region_count
+        // verbatim (no off-by-one).
+        assert_eq!(regions[0].start_x, 0.0);
+        assert_eq!(regions[1].start_x, 100.0);
+        assert_eq!(regions[2].start_x, 200.0);
+    }
+
+    #[test]
+    fn spec_new_validated_accepts_linear_with_equal_endpoint_speeds() {
+        // Documented carve-out: this method does NOT reject
+        // `Linear { start, end }` where `start == end` — that rejection
+        // belongs to `TrillSpeedRamp::linear_validated`. The two
+        // validators compose orthogonally so callers wanting both layers
+        // chain them.
+        let degenerate_linear = TrillSpeedRamp::linear(
+            TrillWiggleSpeed::Standard,
+            TrillWiggleSpeed::Standard,
+        );
+        // region_count >= 2 satisfies the spec's own rule for Linear, so
+        // it MUST be accepted here — surfacing the equal-endpoint
+        // degeneracy is `linear_validated`'s job.
+        let spec = TrillSpeedRampSpec::new_validated(degenerate_linear, 3)
+            .expect("Linear { Std, Std } + 3 regions must pass spec validation");
+        assert_eq!(spec.ramp, degenerate_linear);
+        assert_eq!(spec.region_count, 3);
+        // Composition with `linear_validated`: now this should reject.
+        assert_eq!(
+            TrillSpeedRamp::linear_validated(
+                TrillWiggleSpeed::Standard,
+                TrillWiggleSpeed::Standard,
+            )
+            .and_then(|r| TrillSpeedRampSpec::new_validated(r, 3)),
+            None,
+            "chaining linear_validated + new_validated must reject equal endpoints"
+        );
+    }
+
+    #[test]
+    fn spec_new_validated_rejection_table_matches_synthesize_regions_zero_region() {
+        // Cross-check: for every rejection mode the spec validator owns
+        // (`region_count == 0`, Linear with `region_count == 1`), the
+        // synthesizer would have returned `None` too on a well-formed
+        // span. Locks in the "validator is a strict subset of the
+        // synthesizer's rejection set" invariant.
+        let constant = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
+        let linear = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+
+        // region_count == 0 rejected by both for any ramp.
+        assert_eq!(TrillSpeedRampSpec::new_validated(constant, 0), None);
+        assert!(constant.synthesize_regions(0.0, 100.0, 0, |_| 50.0).is_none());
+        assert_eq!(TrillSpeedRampSpec::new_validated(linear, 0), None);
+        assert!(linear.synthesize_regions(0.0, 100.0, 0, |_| 50.0).is_none());
+
+        // region_count == 1 rejected only for Linear by both layers.
+        assert!(TrillSpeedRampSpec::new_validated(constant, 1).is_some());
+        assert!(constant.synthesize_regions(0.0, 100.0, 1, |_| 50.0).is_some());
+        assert_eq!(TrillSpeedRampSpec::new_validated(linear, 1), None);
+        assert!(linear.synthesize_regions(0.0, 100.0, 1, |_| 50.0).is_none());
+    }
+
+    #[test]
+    fn spec_new_validated_does_not_mutate_inputs_on_accept() {
+        // A trivial canary against a refactor that promoted `Linear`
+        // with `region_count == 1` into `Constant` (a "helpful"
+        // normalization). The accept branch must preserve the ramp
+        // variant byte-for-byte.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Fast, TrillWiggleSpeed::Slow);
+        let spec = TrillSpeedRampSpec::new_validated(ramp, 4).unwrap();
+        assert!(matches!(spec.ramp, TrillSpeedRamp::Linear { .. }));
+        // Same Linear endpoints survive.
+        match spec.ramp {
+            TrillSpeedRamp::Linear { start, end } => {
+                assert_eq!(start, TrillWiggleSpeed::Fast);
+                assert_eq!(end, TrillWiggleSpeed::Slow);
+            }
+            _ => panic!("ramp variant must survive validation unchanged"),
         }
     }
 }
