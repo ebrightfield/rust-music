@@ -5243,3 +5243,202 @@
   clippy warning persists (out of scope, noted across prior
   progress entries). No score-event wiring; no example added; no
   golden baseline regenerated.
+
+## 2026-05-27 — Post-v1, cross-system continuation for cresc.-text
+
+- Did: Added the layout-only piece needed for cross-system splitting
+  of dashed-text crescendo / decrescendo / diminuendo markings. When
+  a `cresc. - - -`, `decresc. - - -`, or `dim. - - -` marking
+  straddles a system break, both halves must drop the label and
+  render as a bare dashed line so the marking reads continuously
+  across the system boundary. This is the same convention used by
+  cross-system trill extensions (the wiggle continues with no `tr`
+  re-labelling) and cross-system hairpins (the wedge halves do not
+  re-grow from zero on the trailing side). Ottava brackets *do*
+  re-label per segment ("8va" on each system) — that's the
+  established 19th-century convention; cresc.-text follows the
+  trill/hairpin pattern instead because the textual marking is a
+  one-shot directive, not a positional indicator.
+
+  Layout changes (`music-engraver/src/layout/cresc_text.rs`):
+  1. Added `pub has_label: bool` field on `CrescTextLayout`. Doc
+     comment cross-references the cross-system hairpin / trill
+     conventions so a future maintainer sees the rationale without
+     having to dig.
+  2. `layout_cresc_text` now sets `has_label: true` (the only
+     behavioural change to the existing public API — preserves all
+     existing semantics; the renderer's existing tests still pass
+     byte-identical SVG).
+  3. New `pub fn layout_cresc_text_continuation(kind, x_start,
+     x_end, staff, staff_space) -> CrescTextLayout` that produces a
+     label-suppressed layout: `has_label = false`, `x_line_start =
+     x_start` (no label-width offset — the dashed line begins
+     immediately at the segment's left edge). Vertical placement,
+     dash geometry, and line thickness are byte-identical to
+     `layout_cresc_text` for the same staff. The `kind` and `label`
+     fields are preserved on the returned struct so golden tests
+     and debug-print can still inspect which marking this
+     continuation belongs to; they're just not rendered.
+
+  Renderer changes (`music-engraver/src/render/cresc_text_renderer.rs`):
+  - `draw_cresc_text` now gates the `<text>` emission on
+    `layout.has_label`. The dashed-line emission is unchanged
+    (still gated on `x_line_start < x_end`). One file, two-line
+    diff plus a doc-comment update.
+
+  Design choice — `kind` preserved on continuation layouts (rather
+  than e.g. an `Option<CrescTextKind>` or a `None` kind sentinel):
+  the cross-system splitter needs to know which marking it's
+  continuing so it can match the trailing half against the
+  upcoming incoming half. Carrying the same `kind` enum value on
+  both halves means the splitter can compare for equality without
+  needing a separate identifier. The `label` string is kept too —
+  it's also useful for inspection (e.g. `dbg!(&layout)` shows
+  "dim." even on a continuation segment, which beats showing "").
+
+  Design choice — `x_line_start = x_start` (no label region) rather
+  than `x_line_start = x_start + small_margin`: a continuation
+  segment's dashed line should read as if it began on the previous
+  system, so there should be no visual "step" or extra gap at the
+  left edge of the incoming system. The test
+  `continuation_x_line_start_equals_x_start` locks this exactly.
+
+  Design choice — kept the existing single-function renderer
+  rather than splitting into `draw_cresc_text` + `draw_cresc_text_
+  continuation`: the only difference between the two paths is one
+  `if`-guarded `<text>` emission. Splitting would duplicate the
+  dashed-line emission and the `x_line_start < x_end` check. The
+  `has_label` field is a clean enough signal that a single
+  function stays readable.
+
+  Tests added (29 total — 15 layout + 14 renderer):
+
+  - `cresc_text.rs` layout (15):
+    - `plain_layout_has_label_is_true`,
+      `plain_layout_has_label_is_true_for_all_kinds` — locks that
+      the existing constructor still produces a label-bearing
+      layout (regression guard against the new field defaulting to
+      false).
+    - `continuation_has_label_is_false`,
+      `continuation_has_label_is_false_for_all_kinds` — three-way
+      pin on the new constructor.
+    - `continuation_x_line_start_equals_x_start` — exact equality
+      (≤ f64::EPSILON) for the continuation: the dashed line
+      begins right where the segment begins.
+    - `continuation_x_line_start_strictly_left_of_plain` —
+      *quantitative* delta: the difference between
+      `plain.x_line_start` and `cont.x_line_start` equals exactly
+      `label_chars * per_char + padding` (six characters for
+      "cresc." times 0.6 SS plus 0.25 SS padding, scaled by SS).
+      A regression that left a residual label offset on the
+      continuation would surface as a non-zero delta against the
+      formula.
+    - `continuation_x_coordinates_preserved` — `x_start`, `x_end`,
+      `label_x` all pass through unchanged.
+    - `continuation_baseline_matches_plain_baseline` — `y_baseline`
+      and `label_y` byte-equal between continuation and plain. The
+      cross-system axis-continuity invariant.
+    - `continuation_baseline_is_below_bottom_staff_line` —
+      `y_baseline == bottom + CRESC_TEXT_BELOW_STAFF_SS * SS` to
+      1e-9 (locks the exact offset constant on the continuation
+      path too).
+    - `continuation_dash_constants_match_plain` —
+      `dash_length`, `dash_gap`, `line_thickness` byte-equal between
+      continuation and plain.
+    - `continuation_dash_constants_scale_with_staff_space` — 2×
+      scaling for all three.
+    - `continuation_preserves_kind_field` — three-way pin that
+      `CrescTextKind` round-trips through the continuation
+      constructor.
+    - `continuation_preserves_label_string_for_debugging` — the
+      `label` String still holds the canonical label text
+      ("dim.") even though `has_label` is false.
+    - `continuation_empty_range_yields_no_dashed_line_region` —
+      degenerate `x_end == x_start`: `x_line_start < x_end` is
+      false (so the renderer's existing line-suppression check
+      fires).
+    - `continuation_x_end_independent_of_kind` — three-way pin on
+      `x_end`.
+    - `continuation_x_line_start_does_not_depend_on_kind` — three-
+      way pin on `x_line_start == x_start` (catches a regression
+      that re-introduced a kind-dependent label-width offset).
+
+  - `cresc_text_renderer.rs` (14):
+    - `continuation_emits_zero_text_elements` — exactly 0 `<text`
+      substrings in the rendered SVG.
+    - `continuation_emits_zero_text_for_all_kinds` — three-way pin
+      (Crescendo / Decrescendo / Diminuendo all suppress the
+      `<text>` element).
+    - `continuation_emits_no_label_string_anywhere` — defensive:
+      not just "no `<text>`," but also no literal "cresc.",
+      "decresc.", "dim." substring anywhere in the SVG. Catches a
+      regression that hand-rolled the label using a different
+      element (e.g. `<tspan>` or `<g>`).
+    - `continuation_emits_exactly_one_line_when_room` — exactly
+      one `<line ` element when `x_end > x_start`.
+    - `continuation_emits_dashed_stroke` — `stroke-dasharray`
+      substring present.
+    - `continuation_dasharray_matches_layout_constants` — exact
+      `stroke-dasharray="<dash_length>,<dash_gap>"` match against
+      the formatted constants — locks visual continuity across
+      the system break (same dash spec as the in-system half).
+    - `continuation_dashed_line_starts_at_x_start` — `x1="<x_start>"`
+      present in the rendered SVG (the dashed line begins at the
+      segment's left edge with no label offset).
+    - `continuation_dashed_line_ends_at_x_end` — `x2="<x_end>"`
+      present.
+    - `continuation_no_line_when_x_end_equals_x_start` — degenerate
+      range: both `<line` count and `<text` count are zero (no
+      output at all — clean degenerate handling).
+    - `continuation_differs_visually_from_plain` — same kind, same
+      coordinates, different SVG: the renderer's two paths *do*
+      produce observably different output.
+    - `continuation_emits_no_path_elements` — count of `<path` is
+      exactly 0 (no glyph paths on the continuation either).
+    - `continuation_emits_no_italic_style` — defensive: no
+      `font-style="italic"` substring on the continuation output
+      (catches a regression that emitted styling without text).
+    - `continuation_kinds_render_identically_when_no_label` —
+      crescendo, decrescendo, and diminuendo continuations
+      produce *byte-identical* SVG for the same `x_start`/`x_end`.
+      Locks the "label is the only thing that varies between
+      kinds" invariant — a regression that special-cased one
+      kind's continuation would break this.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors, no new
+  warnings).
+  `cargo build -p music-engraver` succeeds.
+  `cargo check --workspace` passes (0 errors).
+  `cargo test -p music-engraver --lib` passes — **2809 tests
+  passing, 0 failing** (up from 2780 by exactly the 29 new tests).
+  `cargo test -p music-engraver --lib cresc_text` runs the 67
+  cresc_text tests in isolation — all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings —
+  only the pre-existing `multi_staff.rs:394` warning persists.
+
+- Next: Cross-system cresc.-text wiring at the page_renderer level
+  (parallel to `draw_cross_system_ottava_brackets` and
+  `draw_cross_system_hairpins`). That requires the marking to first
+  be plumbed through the score-event chain (still deferred); the
+  layout primitive added in this run is the prerequisite. Other
+  remaining post-v1 candidates: **golden-SVG corpus PHASH-based
+  visual regression**; **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi); **cross-system church
+  rests**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred); plumbing of `draw_cresc_text` into score-event /
+  system_renderer / page_renderer chain; plumbing of niente/dashed
+  hairpin constructors through the same chain; cross-system
+  hairpin golden test (carried over); small `examples/cresc_text.rs`
+  visual exerciser.
+
+- Open issues: None. The change is additive on the layout side
+  (`has_label` is a new field, default-set to `true` by the
+  existing constructor so existing callers see no behavioural
+  change) and a one-`if`-statement gate on the renderer side. No
+  public API removed or renamed. No score-event wiring; no
+  page_renderer wiring; no example added; no golden baseline
+  regenerated. The pre-existing `multi_staff.rs:394` clippy
+  warning persists (out of scope, noted across prior progress
+  entries).

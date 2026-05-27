@@ -16,25 +16,31 @@ use crate::layout::cresc_text::CrescTextLayout;
 use crate::render::{SvgWriter, TextStyle};
 
 /// Draw a dashed-text crescendo marking onto the SVG.
+///
+/// Emits the italic text label *only* when `layout.has_label == true`
+/// — cross-system continuation segments suppress the label so the
+/// dashed line reads continuously across the system boundary.
 pub fn draw_cresc_text(svg: &mut SvgWriter, layout: &CrescTextLayout) {
-    // Italic, non-bold label, left-anchored — Gould convention. The
-    // ottava renderer uses bold-italic ("8va") but cresc./dim. is
-    // traditionally italic-only, matching dynamics and expression
-    // markings in the same band.
-    svg.add_text(
-        layout.label_x,
-        layout.label_y,
-        &layout.label,
-        &TextStyle {
-            font_family: "serif",
-            font_size: layout.font_size,
-            fill: "black",
-            anchor: "start",
-            font_weight: "normal",
-            font_style: "italic",
-            dominant_baseline: "auto",
-        },
-    );
+    if layout.has_label {
+        // Italic, non-bold label, left-anchored — Gould convention. The
+        // ottava renderer uses bold-italic ("8va") but cresc./dim. is
+        // traditionally italic-only, matching dynamics and expression
+        // markings in the same band.
+        svg.add_text(
+            layout.label_x,
+            layout.label_y,
+            &layout.label,
+            &TextStyle {
+                font_family: "serif",
+                font_size: layout.font_size,
+                fill: "black",
+                anchor: "start",
+                font_weight: "normal",
+                font_style: "italic",
+                dominant_baseline: "auto",
+            },
+        );
+    }
 
     // Dashed continuation line. Omit if there's no room.
     if layout.x_line_start < layout.x_end {
@@ -55,7 +61,8 @@ pub fn draw_cresc_text(svg: &mut SvgWriter, layout: &CrescTextLayout) {
 mod tests {
     use super::*;
     use crate::layout::cresc_text::{
-        layout_cresc_text, CrescTextKind, CRESC_TEXT_DASH_GAP_SS, CRESC_TEXT_DASH_LENGTH_SS,
+        layout_cresc_text, layout_cresc_text_continuation, CrescTextKind, CRESC_TEXT_DASH_GAP_SS,
+        CRESC_TEXT_DASH_LENGTH_SS,
     };
     use crate::layout::staff::StaffLayout;
 
@@ -312,6 +319,217 @@ mod tests {
             out.matches("<line ").count(),
             0,
             "no continuation, no line"
+        );
+    }
+
+    // ---- cross-system continuation segments -----------------------------
+
+    fn render_continuation(kind: CrescTextKind, x_start: f64, x_end: f64) -> String {
+        let layout =
+            layout_cresc_text_continuation(kind, x_start, x_end, &test_staff(), SS);
+        let mut svg = test_svg();
+        draw_cresc_text(&mut svg, &layout);
+        svg.to_svg()
+    }
+
+    #[test]
+    fn continuation_emits_zero_text_elements() {
+        // The whole point of the continuation variant: no label.
+        let out = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        assert_eq!(
+            out.matches("<text").count(),
+            0,
+            "continuation must NOT emit a <text> element; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn continuation_emits_zero_text_for_all_kinds() {
+        // Regression guard: a regression that special-cased one kind
+        // would surface here.
+        for kind in [
+            CrescTextKind::Crescendo,
+            CrescTextKind::Decrescendo,
+            CrescTextKind::Diminuendo,
+        ] {
+            let out = render_continuation(kind, 100.0, 1500.0);
+            assert_eq!(
+                out.matches("<text").count(),
+                0,
+                "continuation must emit zero <text> elements for kind {:?}; got:\n{out}",
+                kind
+            );
+        }
+    }
+
+    #[test]
+    fn continuation_emits_no_label_string_anywhere() {
+        // Even more defensive: the label content ("cresc.", "decresc.",
+        // "dim.") must not appear anywhere in the output — not just
+        // inside <text>...</text>. A regression that hand-rolled the
+        // text using a different element would still be caught.
+        let out_c = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        let out_d = render_continuation(CrescTextKind::Decrescendo, 100.0, 1500.0);
+        let out_m = render_continuation(CrescTextKind::Diminuendo, 100.0, 1500.0);
+        assert!(
+            !out_c.contains("cresc."),
+            "continuation SVG must not contain literal 'cresc.'; got:\n{out_c}"
+        );
+        assert!(
+            !out_d.contains("decresc."),
+            "continuation SVG must not contain literal 'decresc.'; got:\n{out_d}"
+        );
+        assert!(
+            !out_m.contains("dim."),
+            "continuation SVG must not contain literal 'dim.'; got:\n{out_m}"
+        );
+    }
+
+    #[test]
+    fn continuation_emits_exactly_one_line_when_room() {
+        let out = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        assert_eq!(
+            out.matches("<line ").count(),
+            1,
+            "continuation should emit exactly one dashed line; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn continuation_emits_dashed_stroke() {
+        let out = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        assert!(
+            out.contains("stroke-dasharray"),
+            "continuation line must be dashed; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn continuation_dasharray_matches_layout_constants() {
+        // Same dash-spec as the in-system marking — so the visual
+        // register is continuous across the system boundary.
+        let out = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        let expected = format!(
+            "stroke-dasharray=\"{},{}\"",
+            CRESC_TEXT_DASH_LENGTH_SS * SS,
+            CRESC_TEXT_DASH_GAP_SS * SS
+        );
+        assert!(
+            out.contains(&expected),
+            "expected {expected:?} in continuation SVG; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn continuation_dashed_line_starts_at_x_start() {
+        // No label region — line begins at x_start.
+        let x_start = 175.5;
+        let layout = layout_cresc_text_continuation(
+            CrescTextKind::Crescendo,
+            x_start,
+            2000.0,
+            &test_staff(),
+            SS,
+        );
+        let mut svg = test_svg();
+        draw_cresc_text(&mut svg, &layout);
+        let out = svg.to_svg();
+        let needle = format!("x1=\"{}\"", x_start);
+        assert!(
+            out.contains(&needle),
+            "continuation dashed line must start at x_start ({}); got:\n{out}",
+            x_start
+        );
+    }
+
+    #[test]
+    fn continuation_dashed_line_ends_at_x_end() {
+        let x_end = 1875.25;
+        let layout = layout_cresc_text_continuation(
+            CrescTextKind::Crescendo,
+            100.0,
+            x_end,
+            &test_staff(),
+            SS,
+        );
+        let mut svg = test_svg();
+        draw_cresc_text(&mut svg, &layout);
+        let out = svg.to_svg();
+        let needle = format!("x2=\"{}\"", x_end);
+        assert!(
+            out.contains(&needle),
+            "continuation dashed line must end at x_end ({}); got:\n{out}",
+            x_end
+        );
+    }
+
+    #[test]
+    fn continuation_no_line_when_x_end_equals_x_start() {
+        // Degenerate range: zero-length continuation. Should emit
+        // nothing — no text and no line.
+        let out = render_continuation(CrescTextKind::Crescendo, 500.0, 500.0);
+        assert_eq!(
+            out.matches("<line ").count(),
+            0,
+            "zero-length continuation should emit no <line>"
+        );
+        assert_eq!(
+            out.matches("<text").count(),
+            0,
+            "zero-length continuation should still emit no <text>"
+        );
+    }
+
+    #[test]
+    fn continuation_differs_visually_from_plain() {
+        // Same coords, same kind — different SVG (continuation has
+        // no label, line starts further left).
+        let plain = render(CrescTextKind::Crescendo, 100.0, 1500.0);
+        let cont = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        assert_ne!(
+            plain, cont,
+            "plain and continuation must render to visually distinct SVG"
+        );
+    }
+
+    #[test]
+    fn continuation_emits_no_path_elements() {
+        let out = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        assert_eq!(
+            out.matches("<path").count(),
+            0,
+            "continuation should emit no <path> elements"
+        );
+    }
+
+    #[test]
+    fn continuation_emits_no_italic_style() {
+        // No <text> => no font-style attribute either. Belt-and-
+        // suspenders alongside continuation_emits_zero_text_elements.
+        let out = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        assert!(
+            !out.contains("font-style=\"italic\""),
+            "continuation must not emit italic styling (no label rendered); got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn continuation_kinds_render_identically_when_no_label() {
+        // Since the label is suppressed and the dashed-line geometry
+        // is identical across kinds (same dash_length/gap/thickness,
+        // same baseline), all three kinds must produce *identical*
+        // SVG for the same x_start/x_end. This locks the "label is
+        // the only thing that varies between kinds" invariant.
+        let c = render_continuation(CrescTextKind::Crescendo, 100.0, 1500.0);
+        let d = render_continuation(CrescTextKind::Decrescendo, 100.0, 1500.0);
+        let m = render_continuation(CrescTextKind::Diminuendo, 100.0, 1500.0);
+        assert_eq!(
+            c, d,
+            "Crescendo/Decrescendo continuation SVG must be identical (no label, identical line geometry)"
+        );
+        assert_eq!(
+            d, m,
+            "Decrescendo/Diminuendo continuation SVG must be identical"
         );
     }
 }
