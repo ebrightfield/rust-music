@@ -74,6 +74,21 @@ pub enum Articulation {
     /// Frequent in 19th–20th-century scores for "leaning into" a sustained
     /// note. Opposite-side-of-stem placement.
     TenutoAccent,
+    /// Soft accent — SMuFL `articSoftAccent` (a parenthesized accent).
+    /// Indicates a gentle emphasis, less prominent than a plain accent;
+    /// used in 20th-century and contemporary scores. Follows the standard
+    /// "opposite from stem" placement rule and lives in the normal
+    /// articulation stack bucket.
+    SoftAccent,
+    /// Stress — SMuFL `articStress` (sometimes written as a small "u").
+    /// Used in prosodic and contemporary notation to indicate a stressed
+    /// note, between an unmarked attack and a full accent. Standard
+    /// opposite-stem placement.
+    Stress,
+    /// Unstress — SMuFL `articUnstress` (a small inverted "u").
+    /// The prosodic counterpart to `Stress`: marks a deliberately
+    /// de-emphasized note. Standard opposite-stem placement.
+    Unstress,
 }
 
 /// Whether an articulation appears above or below the notehead.
@@ -161,6 +176,16 @@ impl Articulation {
             (Self::TenutoAccent, ArticulationPlacement::Below) => {
                 Glyph::ArticTenutoAccentBelow
             }
+            (Self::SoftAccent, ArticulationPlacement::Above) => {
+                Glyph::ArticSoftAccentAbove
+            }
+            (Self::SoftAccent, ArticulationPlacement::Below) => {
+                Glyph::ArticSoftAccentBelow
+            }
+            (Self::Stress, ArticulationPlacement::Above) => Glyph::ArticStressAbove,
+            (Self::Stress, ArticulationPlacement::Below) => Glyph::ArticStressBelow,
+            (Self::Unstress, ArticulationPlacement::Above) => Glyph::ArticUnstressAbove,
+            (Self::Unstress, ArticulationPlacement::Below) => Glyph::ArticUnstressBelow,
         }
     }
 
@@ -1653,6 +1678,338 @@ mod tests {
             Articulation::UpBow,
             150.0,
             4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0].x, direct.x);
+        assert!((stack[0].y - direct.y).abs() < 1e-9);
+        assert_eq!(stack[0].glyph, direct.glyph);
+        assert_eq!(stack[0].placement, direct.placement);
+    }
+
+    // --- Soft accent / stress / unstress (SMuFL accent extensions) ---
+    //
+    // These three articulations are extensions of the basic Accent for
+    // prosodic / contemporary notation: SoftAccent is a parenthesized
+    // accent (gentle emphasis), Stress marks a slightly emphasized note,
+    // Unstress marks a deliberately de-emphasized one. They behave like
+    // standard articulations: stem-opposite placement, distinct above/below
+    // glyph pair per variant, and they live in the `normal` bucket of the
+    // stacker (not the always-above bucket reserved for bow strokes and
+    // fermatas).
+
+    /// Convenience: the 3 SMuFL accent-extension variants in canonical order.
+    const ACCENT_EXTENSION_VARIANTS: [Articulation; 3] = [
+        Articulation::SoftAccent,
+        Articulation::Stress,
+        Articulation::Unstress,
+    ];
+
+    #[test]
+    fn soft_accent_glyph_pair() {
+        assert_eq!(
+            Articulation::SoftAccent.glyph(ArticulationPlacement::Above),
+            Glyph::ArticSoftAccentAbove
+        );
+        assert_eq!(
+            Articulation::SoftAccent.glyph(ArticulationPlacement::Below),
+            Glyph::ArticSoftAccentBelow
+        );
+    }
+
+    #[test]
+    fn stress_glyph_pair() {
+        assert_eq!(
+            Articulation::Stress.glyph(ArticulationPlacement::Above),
+            Glyph::ArticStressAbove
+        );
+        assert_eq!(
+            Articulation::Stress.glyph(ArticulationPlacement::Below),
+            Glyph::ArticStressBelow
+        );
+    }
+
+    #[test]
+    fn unstress_glyph_pair() {
+        assert_eq!(
+            Articulation::Unstress.glyph(ArticulationPlacement::Above),
+            Glyph::ArticUnstressAbove
+        );
+        assert_eq!(
+            Articulation::Unstress.glyph(ArticulationPlacement::Below),
+            Glyph::ArticUnstressBelow
+        );
+    }
+
+    #[test]
+    fn accent_extensions_produce_distinct_above_glyphs() {
+        let glyphs: Vec<Glyph> = ACCENT_EXTENSION_VARIANTS
+            .iter()
+            .map(|a| a.glyph(ArticulationPlacement::Above))
+            .collect();
+        for (i, g1) in glyphs.iter().enumerate() {
+            for (j, g2) in glyphs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        g1, g2,
+                        "accent-extension variants {i} and {j} share above-glyph: {g1:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn accent_extensions_produce_distinct_below_glyphs() {
+        let glyphs: Vec<Glyph> = ACCENT_EXTENSION_VARIANTS
+            .iter()
+            .map(|a| a.glyph(ArticulationPlacement::Below))
+            .collect();
+        for (i, g1) in glyphs.iter().enumerate() {
+            for (j, g2) in glyphs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        g1, g2,
+                        "accent-extension variants {i} and {j} share below-glyph",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn accent_extensions_above_below_differ_within_each() {
+        for &a in &ACCENT_EXTENSION_VARIANTS {
+            assert_ne!(
+                a.glyph(ArticulationPlacement::Above),
+                a.glyph(ArticulationPlacement::Below),
+                "{a:?} above and below glyphs should differ",
+            );
+        }
+    }
+
+    #[test]
+    fn accent_extensions_differ_from_plain_accent() {
+        // Critical regression net: an enum-arm typo could collapse
+        // SoftAccent/Stress/Unstress back onto the plain Accent. Each
+        // must have a glyph distinct from `Articulation::Accent` for both
+        // placements.
+        let plain_above = Articulation::Accent.glyph(ArticulationPlacement::Above);
+        let plain_below = Articulation::Accent.glyph(ArticulationPlacement::Below);
+        for &a in &ACCENT_EXTENSION_VARIANTS {
+            assert_ne!(
+                a.glyph(ArticulationPlacement::Above),
+                plain_above,
+                "{a:?} above glyph must not alias plain Accent",
+            );
+            assert_ne!(
+                a.glyph(ArticulationPlacement::Below),
+                plain_below,
+                "{a:?} below glyph must not alias plain Accent",
+            );
+        }
+    }
+
+    #[test]
+    fn accent_extensions_not_flagged_by_is_fermata() {
+        for &a in &ACCENT_EXTENSION_VARIANTS {
+            assert!(
+                !a.is_fermata(),
+                "{a:?} must not be flagged as a fermata variant",
+            );
+        }
+    }
+
+    #[test]
+    fn accent_extensions_not_flagged_by_is_bow_stroke() {
+        for &a in &ACCENT_EXTENSION_VARIANTS {
+            assert!(
+                !a.is_bow_stroke(),
+                "{a:?} must not be flagged as a bow stroke",
+            );
+        }
+    }
+
+    #[test]
+    fn accent_extensions_default_placement_follows_stem_opposite() {
+        // Standard articulation rule: opposite from stem. Crucial because
+        // the previous post-v1 chunk (bow strokes) introduced "always above"
+        // placement for a different family — a copy-paste mistake could put
+        // these in the wrong bucket.
+        for &a in &ACCENT_EXTENSION_VARIANTS {
+            assert_eq!(
+                a.default_placement(StemDirection::Up),
+                ArticulationPlacement::Below,
+                "{a:?} with stem-up should default to Below",
+            );
+            assert_eq!(
+                a.default_placement(StemDirection::Down),
+                ArticulationPlacement::Above,
+                "{a:?} with stem-down should default to Above",
+            );
+        }
+    }
+
+    #[test]
+    fn soft_accent_alone_lays_out_opposite_stem() {
+        let staff = test_staff();
+        // Stem-up, middle-line note: SoftAccent should land below.
+        let layout = layout_articulation(
+            Articulation::SoftAccent,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(layout.placement, ArticulationPlacement::Below);
+        assert_eq!(layout.glyph, Glyph::ArticSoftAccentBelow);
+        let note_y = staff.y_of(4);
+        assert!(
+            layout.y > note_y,
+            "below-placed soft accent should have y > note_y: {} > {}",
+            layout.y,
+            note_y,
+        );
+    }
+
+    #[test]
+    fn stress_alone_lays_out_opposite_stem_down() {
+        let staff = test_staff();
+        // Stem-down, middle-line note: Stress should land above.
+        let layout = layout_articulation(
+            Articulation::Stress,
+            150.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(layout.placement, ArticulationPlacement::Above);
+        assert_eq!(layout.glyph, Glyph::ArticStressAbove);
+        let note_y = staff.y_of(4);
+        assert!(
+            layout.y < note_y,
+            "above-placed stress should have y < note_y: {} < {}",
+            layout.y,
+            note_y,
+        );
+    }
+
+    #[test]
+    fn stack_accent_extension_with_fermata_separates_placement() {
+        // Stem-up: accent extension goes below, fermata always above.
+        // Locks the bucket-partition rule for the new variants.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::SoftAccent, Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticSoftAccentBelow);
+        assert_eq!(stack[1].glyph, Glyph::FermataAbove);
+        assert!(stack[1].y < stack[0].y);
+    }
+
+    #[test]
+    fn stack_accent_extension_with_bow_stem_up_separates_buckets() {
+        // Stem-up: accent extension goes below (normal bucket), bow stroke
+        // above. Catches a regression where Stress or Unstress would be
+        // incorrectly classified as bow-stroke-equivalent.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Stress, Articulation::DownBow],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticStressBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsDownBow);
+    }
+
+    #[test]
+    fn stack_accent_extension_with_simple_articulation_stacks_outward_same_side() {
+        // Stem-up: a Staccato and an Unstress both go below, input order
+        // preserved, stacked outward by one stack-step.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::Unstress],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        for l in &stack {
+            assert_eq!(l.placement, ArticulationPlacement::Below);
+        }
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::ArticUnstressBelow);
+        assert!(stack[1].y > stack[0].y);
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let actual_gap = stack[1].y - stack[0].y;
+        assert!(
+            (actual_gap - expected_gap).abs() < 1e-6,
+            "stack spacing {actual_gap} should match expected {expected_gap}",
+        );
+    }
+
+    #[test]
+    fn stack_accent_extension_full_triple_orders_correctly_stem_up() {
+        // Full triple stack: accent extension (below) + bow (above) +
+        // fermata (above, outermost). Same ordering rule as plain
+        // normal+bow+fermata stack, since accent extensions sit in the
+        // normal bucket.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[
+                Articulation::SoftAccent,
+                Articulation::UpBow,
+                Articulation::Fermata,
+            ],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 3);
+        assert_eq!(stack[0].glyph, Glyph::ArticSoftAccentBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsUpBow);
+        assert_eq!(stack[2].glyph, Glyph::FermataAbove);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[2].placement, ArticulationPlacement::Above);
+        let note_y = staff.y_of(4);
+        assert!(stack[0].y > note_y, "soft accent below note");
+        assert!(stack[1].y < note_y, "bow above note");
+        assert!(stack[2].y < stack[1].y, "fermata above bow");
+    }
+
+    #[test]
+    fn stack_accent_extension_only_matches_single_layout() {
+        // A single accent-extension through the stacker must produce a
+        // layout identical to calling layout_articulation directly — no
+        // spurious offset.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Unstress],
+            175.0,
+            3,
+            StemDirection::Down,
+            &staff,
+        );
+        let direct = layout_articulation(
+            Articulation::Unstress,
+            175.0,
+            3,
             StemDirection::Down,
             &staff,
         );

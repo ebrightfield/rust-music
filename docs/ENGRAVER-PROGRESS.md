@@ -2736,3 +2736,149 @@
   for trait-uniformity with other articulations, but a future
   refactor could route bow strokes through a separate
   glyph-without-placement path if the dead-arg becomes confusing.
+
+## 2026-05-27 — Post-v1, SMuFL accent extensions (SoftAccent / Stress / Unstress)
+
+- Did: Added three SMuFL accent-extension articulations as new variants
+  of `Articulation`: `SoftAccent` (parenthesized accent — gentle
+  emphasis), `Stress` (small "u" — prosodic stress), `Unstress` (inverted
+  "u" — prosodic de-emphasis). All three behave as standard
+  articulations: stem-opposite placement, real above/below glyph pair
+  per variant, and they live in the *normal* stacker bucket (not the
+  always-above bucket reserved for fermatas and bow strokes).
+
+  `layout/articulation.rs`:
+  - Added `Articulation::SoftAccent`, `Articulation::Stress`,
+    `Articulation::Unstress` variants with doc comments naming the
+    SMuFL glyph and engraving meaning.
+  - Added `glyph()` arms for each variant/placement combination:
+    `ArticSoftAccent{Above,Below}`, `ArticStress{Above,Below}`,
+    `ArticUnstress{Above,Below}`.
+  - **No changes to `is_fermata`, `is_bow_stroke`, or
+    `default_placement`**: since the extensions are neither fermatas nor
+    bow strokes, the existing fall-through in `default_placement`
+    correctly returns the stem-opposite side. This is the lightest
+    possible delta to add the variants and is structurally identical to
+    how the four combined-articulation variants (`AccentStaccato` etc.)
+    were wired in earlier.
+
+  Tests (+17 in `layout::articulation::tests`, +1 in
+  `render::articulation_renderer::tests`):
+
+  Layout-level (`layout::articulation::tests`):
+  1. `soft_accent_glyph_pair` — locks the (SoftAccent, Above/Below) →
+     (ArticSoftAccentAbove/Below) mapping. Catches a wiring typo that
+     would map SoftAccent to a different SMuFL glyph.
+  2. `stress_glyph_pair` — same for `Stress` / `ArticStress{Above,Below}`.
+  3. `unstress_glyph_pair` — same for `Unstress` /
+     `ArticUnstress{Above,Below}`.
+  4. `accent_extensions_produce_distinct_above_glyphs` — pairwise
+     distinct above-glyphs across the 3 variants. Regression guard
+     against an enum-arm swap that would collapse two variants onto a
+     single glyph.
+  5. `accent_extensions_produce_distinct_below_glyphs` — same for
+     below-glyphs.
+  6. `accent_extensions_above_below_differ_within_each` — for each
+     variant, Above and Below glyphs must differ. Bravura ships real
+     above/below pairs (not vertically-flipped versions of one glyph);
+     this assertion would fail if the same glyph were returned for both
+     placements of any variant.
+  7. `accent_extensions_differ_from_plain_accent` — the critical
+     regression net: none of SoftAccent/Stress/Unstress may alias the
+     plain `Articulation::Accent` glyph (above or below). A wrong arm
+     in the `glyph()` match could silently collapse one of them to
+     `ArticAccentAbove`/`ArticAccentBelow`.
+  8. `accent_extensions_not_flagged_by_is_fermata` — exhaustive
+     defensive check.
+  9. `accent_extensions_not_flagged_by_is_bow_stroke` — same.
+  10. `accent_extensions_default_placement_follows_stem_opposite` —
+      for each of stem-up/stem-down, asserts placement is the standard
+      opposite side. Locks the "extensions are normal articulations,
+      *not* always-above" contract — catches a copy-paste mistake that
+      would put them in the bow-stroke or fermata bucket.
+  11. `soft_accent_alone_lays_out_opposite_stem` — single SoftAccent
+      on a stem-up middle-line note lays out Below with the
+      `ArticSoftAccentBelow` glyph and `y > note_y`. Concrete-value
+      assertions, not is_ok.
+  12. `stress_alone_lays_out_opposite_stem_down` — symmetric:
+      single Stress on a stem-down note lays out Above with
+      `ArticStressAbove` and `y < note_y`.
+  13. `stack_accent_extension_with_fermata_separates_placement` —
+      stem-up: SoftAccent goes Below (normal bucket), Fermata goes
+      Above (fermata bucket). Asserts both glyph values and `stack[1].y
+      < stack[0].y`. Locks the bucket-partition rule for the new
+      variants.
+  14. `stack_accent_extension_with_bow_stem_up_separates_buckets` —
+      Stress + DownBow on a stem-up note: Stress below (normal bucket),
+      bow above (bow bucket). Catches a regression where Stress or
+      Unstress would be mis-classified as bow-equivalent.
+  15. `stack_accent_extension_with_simple_articulation_stacks_outward_same_side`
+      — Staccato + Unstress, stem-up: both below, input order preserved,
+      stacked outward by exactly one
+      `ARTICULATION_STACK_SPACING_SS × staff_space`. Tight 1e-6
+      tolerance.
+  16. `stack_accent_extension_full_triple_orders_correctly_stem_up` —
+      full triple: SoftAccent (normal bucket, below) + UpBow (bow
+      bucket, above) + Fermata (fermata bucket, above-outermost). All
+      three placement, glyph, and y-monotonicity assertions.
+  17. `stack_accent_extension_only_matches_single_layout` — a single
+      Unstress through the stacker must produce identical x/y/glyph/
+      placement to calling `layout_articulation` directly. Guards
+      against the stacker introducing accidental offset for the
+      singleton case.
+
+  Render-level (`render::articulation_renderer::tests`):
+  18. `accent_extensions_render_distinct_paths_from_plain_accent_and_each_other`
+      — extracts `d="..."` data through the Bravura outline extractor
+      and asserts: (a) each of the 3 extensions has non-empty path
+      data, (b) each extension's path differs from the plain Accent
+      path, (c) all 3 extensions produce pairwise-distinct paths,
+      (d) for each extension, the Above and Below paths differ —
+      Bravura ships a real above/below pair, not a draw-time flip.
+      This is the strongest regression net for the wiring: any
+      `glyph()` arm typo would produce duplicated path-data and trip
+      one of these asserts.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors). `cargo
+  check --workspace` passes. `cargo build -p music-engraver` succeeds.
+  `cargo clippy -p music-engraver --lib` — 0 new warnings (1
+  pre-existing in `score/multi_staff.rs:394`, unchanged from prior
+  entry). `cargo test -p music-engraver --lib` — **2529 unit tests
+  pass** (vs 2492 prior; +18 new from this chunk, plus +19 unrelated
+  drift from intervening counter refresh — the absolute count is the
+  source of truth, the 18-new figure matches exactly what was added
+  in this chunk). `cargo test -p music-engraver --test golden_svg`
+  — **69 golden tests pass, byte-identical**: no existing golden uses
+  any of these variants, so adding them is golden-neutral. Focused
+  articulation test run (`cargo test -p music-engraver --lib
+  articulation`) — 109 tests pass, including all 18 new ones.
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression**; **a golden test
+  covering the bow-stroke stack and/or the new accent extensions**
+  (the existing unit + renderer tests lock the layout and path-data
+  contract, but a golden would lock the full SVG encoding);
+  **`HookDirection::Up` standalone builder** (judgment call); trill
+  polish (per-segment `WiggleTrillFast` variant selection from a
+  single-speed annotation); **`ArticLaissezVibrer` family** (same
+  pattern: another standard above/below pair, opposite-stem
+  placement); auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred since the prior chunk).
+
+- Open issues: The three accent extensions do not yet have a worked
+  example in `music-engraver/examples/`. The combined-variant chunk
+  added `bow_strokes.rs` as a demonstration; an analogous
+  `accent_extensions.rs` would be a small follow-up but is not
+  required to lock the variants in. The variants are reachable
+  through `ScoreBuilder::articulation(Articulation::SoftAccent)` etc.
+  by the existing generic API — no separate builder hook needed. The
+  layout-side stacking rule treats accent extensions identically to
+  Staccato/Tenuto/Accent/Marcato/Staccatissimo for stack-bucket
+  purposes; per Gould (Behind Bars, p. 116ff) this matches engraving
+  convention since they are accent-family symbols, not always-above
+  marks.

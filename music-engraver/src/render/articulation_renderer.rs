@@ -356,6 +356,90 @@ mod tests {
     }
 
     #[test]
+    fn accent_extensions_render_distinct_paths_from_plain_accent_and_each_other() {
+        // The three SMuFL accent extensions (SoftAccent, Stress, Unstress)
+        // must each render as a unique shape, distinct from one another and
+        // from the plain Accent — otherwise a Glyph wiring regression would
+        // collapse multiple variants to the same visual.
+        let font = test_font();
+        let staff = test_staff();
+        let extensions = [
+            Articulation::SoftAccent,
+            Articulation::Stress,
+            Articulation::Unstress,
+        ];
+
+        // Capture plain-Accent path for cross-comparison.
+        let plain_layout = layout_articulation(
+            Articulation::Accent,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        let mut plain_writer = test_writer();
+        draw_articulation(&mut plain_writer, &font, &plain_layout).unwrap();
+        let plain_d = path_d_data(&plain_writer.to_svg());
+        assert!(!plain_d.is_empty(), "plain Accent path d-data empty");
+
+        // Capture each extension's path on the Below side (stem-up default).
+        let mut ext_paths: Vec<(Articulation, String)> = Vec::new();
+        for &a in &extensions {
+            let layout =
+                layout_articulation(a, 100.0, 4, StemDirection::Up, &staff);
+            assert_eq!(
+                layout.placement,
+                ArticulationPlacement::Below,
+                "{a:?} stem-up default must be Below",
+            );
+            let mut writer = test_writer();
+            draw_articulation(&mut writer, &font, &layout).unwrap();
+            let d = path_d_data(&writer.to_svg());
+            assert!(!d.is_empty(), "{a:?} below path d-data should be non-empty");
+            assert_ne!(
+                d, plain_d,
+                "{a:?} below path must differ from plain Accent below path",
+            );
+            ext_paths.push((a, d));
+        }
+
+        // Pairwise distinct among the 3 extensions.
+        for (i, (ai, di)) in ext_paths.iter().enumerate() {
+            for (j, (aj, dj)) in ext_paths.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        di, dj,
+                        "{ai:?} and {aj:?} share path data — extensions must be visually distinct",
+                    );
+                }
+            }
+        }
+
+        // Each extension must also produce a distinct Above-glyph (the
+        // stem-down case) — and that Above path must differ from its own
+        // Below path, since Bravura ships a real above/below pair (not a
+        // flip applied at draw time).
+        for &a in &extensions {
+            let above = layout_articulation(a, 100.0, 4, StemDirection::Down, &staff);
+            let below = layout_articulation(a, 100.0, 4, StemDirection::Up, &staff);
+            assert_eq!(above.placement, ArticulationPlacement::Above);
+            assert_eq!(below.placement, ArticulationPlacement::Below);
+
+            let mut wa = test_writer();
+            draw_articulation(&mut wa, &font, &above).unwrap();
+            let da = path_d_data(&wa.to_svg());
+
+            let mut wb = test_writer();
+            draw_articulation(&mut wb, &font, &below).unwrap();
+            let db = path_d_data(&wb.to_svg());
+
+            assert!(!da.is_empty(), "{a:?} above path empty");
+            assert!(!db.is_empty(), "{a:?} below path empty");
+            assert_ne!(da, db, "{a:?} above/below path data should differ");
+        }
+    }
+
+    #[test]
     fn bow_stroke_path_differs_from_articulation_glyphs() {
         // Bow strokes must not silently alias to any standard articulation
         // path — a Glyph wiring regression would otherwise be invisible.
