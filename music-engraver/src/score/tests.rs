@@ -1827,6 +1827,149 @@
         }
     }
 
+    // --- hairpin_dashed (within-system dashed wedge) integration tests ---
+
+    #[test]
+    fn hairpin_dashed_flag_sets_annotation_on_start_note() {
+        // The ScoreBuilder method must set NoteAnnotations::hairpin_dashed
+        // on the most recent note. Verifies the builder surface — the
+        // rendering side is exercised in the next two tests.
+        let builder = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).cresc().hairpin_dashed();
+        // Inspect the last current_events entry.
+        let (_, last) = builder.current_events.last().expect("note pushed");
+        match last {
+            ScoreEvent::Note { annotations, .. } => {
+                assert!(annotations.hairpin_dashed, "hairpin_dashed flag must be set");
+                assert_eq!(
+                    annotations.hairpin_start, Some(HairpinType::Crescendo),
+                    "hairpin_dashed must not clear the hairpin_start"
+                );
+            }
+            _ => panic!("expected Note event"),
+        }
+    }
+
+    #[test]
+    fn hairpin_dashed_renders_stroke_dasharray() {
+        // Full integration: ScoreBuilder → events → measure → system_renderer
+        // → SVG must produce a hairpin with stroke-dasharray on both wedge
+        // lines. Catches a regression at any layer of the plumbing.
+        let svg_dashed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc().hairpin_dashed()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_solid = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).cresc()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        // Exactly 2 stroke-dasharray attributes on the dashed wedge,
+        // exactly 0 on the solid one. Both produce the same number of
+        // total <line> elements (dashed only changes the attribute set).
+        assert_eq!(
+            svg_dashed.matches("stroke-dasharray").count(),
+            2,
+            "dashed hairpin must emit stroke-dasharray on both wedge lines; SVG:\n{svg_dashed}"
+        );
+        assert_eq!(
+            svg_solid.matches("stroke-dasharray").count(),
+            0,
+            "solid hairpin must emit zero stroke-dasharray; SVG:\n{svg_solid}"
+        );
+        assert_eq!(
+            svg_dashed.matches("<line ").count(),
+            svg_solid.matches("<line ").count(),
+            "dashed and solid hairpins must produce the same total <line> count"
+        );
+    }
+
+    #[test]
+    fn hairpin_dashed_without_hairpin_start_renders_no_wedge() {
+        // hairpin_dashed() without a preceding cresc() / decresc() /
+        // hairpin_start() must be a no-op visually — there is no wedge to
+        // dash. Catches a regression where setting hairpin_dashed on its
+        // own accidentally synthesizes a wedge.
+        let svg_lone = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR).hairpin_dashed()
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR).hairpin_end()
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .note(p("G", 4), Duration::QTR)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            svg_lone, svg_plain,
+            "hairpin_dashed without hairpin_start must not emit any wedge"
+        );
+    }
+
+    #[test]
+    fn hairpin_dashed_on_rest_is_noop() {
+        // hairpin_dashed after a rest cannot set the flag (the rest event
+        // carries no NoteAnnotations). Mirror of `hairpin_on_rest_is_noop`.
+        let svg_rest_dashed = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR).cresc().hairpin_dashed()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+
+        let svg_plain = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .rest(Duration::QTR)
+            .note(p("E", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+
+        assert_eq!(
+            svg_rest_dashed, svg_plain,
+            "cresc().hairpin_dashed() on a rest must be a no-op end-to-end"
+        );
+    }
+
+    #[test]
+    fn hairpin_dashed_decrescendo_also_dashes() {
+        // The dashed style must apply regardless of HairpinType — both
+        // crescendo and decrescendo wedges respect the flag. Catches a
+        // regression where the flag is conditional on Crescendo only.
+        let svg_c = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(p("C", 4), Duration::QTR).decresc().hairpin_dashed()
+            .note(p("E", 4), Duration::QTR).hairpin_end()
+            .end_barline()
+            .render_svg();
+        assert_eq!(
+            svg_c.matches("stroke-dasharray").count(),
+            2,
+            "dashed decrescendo must emit stroke-dasharray on both wedge lines; SVG:\n{svg_c}"
+        );
+    }
+
     // --- cresc-text (dashed-text crescendo/diminuendo) integration tests ---
 
     #[test]

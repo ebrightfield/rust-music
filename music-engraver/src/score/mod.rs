@@ -330,6 +330,30 @@ impl ScoreBuilder {
         self.hairpin_start(HairpinType::Decrescendo)
     }
 
+    /// Flag the most recently added note or chord as the start of a
+    /// **dashed** hairpin wedge. Use after a `hairpin_start` / `cresc()` /
+    /// `decresc()` call on the same note to switch the rendered wedge from
+    /// solid to dashed lines.
+    ///
+    /// Engraved convention uses dashed wedges for "soft" or implied crescendi
+    /// and for modern-notation continuation markings (independent of the
+    /// `cresc. - - -` dashed-text variant, which uses dashed text rather than
+    /// a wedge). The flag attaches to the start note; the wedge style spans
+    /// the whole hairpin including the trailing half on the source system of
+    /// a cross-system wedge. The incoming half on the next system is always
+    /// dashed regardless of this flag.
+    ///
+    /// Must be called immediately after `.note()` or `.chord()` — i.e.
+    /// alongside the `hairpin_start` call. Has no effect if the last event
+    /// is not a note or chord, and (silently) no visible effect if the
+    /// last event has no `hairpin_start` set.
+    pub fn hairpin_dashed(mut self) -> Self {
+        if let Some((_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. })) = self.current_events.last_mut() {
+            annotations.hairpin_dashed = true;
+        }
+        self
+    }
+
     /// Mark the start of a dashed-text crescendo / diminuendo marking
     /// at the most recently added note or chord. The marking is the
     /// wedgeless alternative to a hairpin: an italic label ("cresc.",

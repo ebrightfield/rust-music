@@ -536,6 +536,12 @@ struct UnresolvedHairpin {
     staff_right: f64,
     /// Y of the bottom staff line (absolute).
     staff_bottom_y: f64,
+    /// Mirror of `HairpinNoteInfo::hairpin_dashed`. When `true`, the trailing
+    /// half of the wedge on the source system is drawn dashed so the
+    /// continuation reads consistently with the within-system dashed style.
+    /// The incoming half on the next system is always dashed regardless of
+    /// this flag — engraved convention for cross-system continuations.
+    dashed: bool,
 }
 
 /// A note at the start of the next system that has `hairpin_end = true`.
@@ -594,6 +600,7 @@ fn find_unresolved_hairpins(
             kind: hairpin_type,
             staff_right: page_system.x + system.staff_width,
             staff_bottom_y: staff.bottom_y(),
+            dashed: info.hairpin_dashed,
         });
     }
 
@@ -667,18 +674,35 @@ pub(crate) fn draw_cross_system_hairpins(
         let targets = find_incoming_hairpin_targets(config, &systems[i + 1]);
 
         for hp_src in &unresolved {
-            // Trailing half-hairpin at the end of the source system: solid.
-            // This half reads as the natural continuation of the within-system
-            // wedge — the reader sees an unbroken line continuing to the
-            // system's right edge.
-            let right_layout = layout_hairpin(
-                hp_src.kind,
-                hp_src.x_right,
-                hp_src.staff_right,
-                hp_src.staff_bottom_y,
-                config.staff_space,
-                stroke_width,
-            );
+            // Trailing half-hairpin at the end of the source system: solid by
+            // default. This half reads as the natural continuation of the
+            // within-system wedge — the reader sees an unbroken line
+            // continuing to the system's right edge.
+            //
+            // If the within-system wedge is dashed (carried on
+            // `UnresolvedHairpin::dashed`), the trailing half is dashed too
+            // so the source system's marking stays internally consistent.
+            // The incoming half on the next system is unconditionally dashed
+            // either way (engraved convention for cross-system resumptions).
+            let right_layout = if hp_src.dashed {
+                layout_hairpin_dashed(
+                    hp_src.kind,
+                    hp_src.x_right,
+                    hp_src.staff_right,
+                    hp_src.staff_bottom_y,
+                    config.staff_space,
+                    stroke_width,
+                )
+            } else {
+                layout_hairpin(
+                    hp_src.kind,
+                    hp_src.x_right,
+                    hp_src.staff_right,
+                    hp_src.staff_bottom_y,
+                    config.staff_space,
+                    stroke_width,
+                )
+            };
             draw_hairpin(svg, &right_layout);
 
             // Incoming half-hairpin at the start of the target system: dashed.

@@ -1,7 +1,7 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::cresc_text::{layout_cresc_text, CrescTextKind};
 use crate::layout::glissando::{layout_glissando, GlissandoStyle};
-use crate::layout::hairpin::{layout_hairpin, HairpinType};
+use crate::layout::hairpin::{layout_hairpin, layout_hairpin_dashed, HairpinType};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
@@ -349,6 +349,12 @@ pub(crate) struct HairpinNoteInfo {
     pub(crate) duration_log2: u8,
     pub(crate) hairpin_start: Option<HairpinType>,
     pub(crate) hairpin_end: bool,
+    /// Mirror of `NoteAnnotations::hairpin_dashed`. Set on the start side of
+    /// a hairpin to request a dashed wedge; ignored on notes that aren't a
+    /// hairpin start. `collect_hairpin_note_info` propagates this from both
+    /// `MeasureElement::Note` and `MeasureElement::Chord` annotations so that
+    /// `draw_system_hairpins` and the cross-system splitter both see it.
+    pub(crate) hairpin_dashed: bool,
 }
 
 pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
@@ -362,6 +368,7 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         duration_log2: n.duration_log2,
                         hairpin_start: n.annotations.hairpin_start,
                         hairpin_end: n.annotations.hairpin_end,
+                        hairpin_dashed: n.annotations.hairpin_dashed,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -370,6 +377,7 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         duration_log2: c.duration_log2,
                         hairpin_start: c.annotations.hairpin_start,
                         hairpin_end: c.annotations.hairpin_end,
+                        hairpin_dashed: c.annotations.hairpin_dashed,
                     });
                 }
                 _ => {}
@@ -419,14 +427,25 @@ fn draw_system_hairpins(
         // Use staff line thickness as hairpin stroke width
         let stroke_width = config.staff_line_thickness_fu();
 
-        let hp_layout = layout_hairpin(
-            hairpin_type,
-            hp_x_start,
-            hp_x_end,
-            staff.bottom_y(),
-            config.staff_space,
-            stroke_width,
-        );
+        let hp_layout = if info.hairpin_dashed {
+            layout_hairpin_dashed(
+                hairpin_type,
+                hp_x_start,
+                hp_x_end,
+                staff.bottom_y(),
+                config.staff_space,
+                stroke_width,
+            )
+        } else {
+            layout_hairpin(
+                hairpin_type,
+                hp_x_start,
+                hp_x_end,
+                staff.bottom_y(),
+                config.staff_space,
+                stroke_width,
+            )
+        };
         draw_hairpin(svg, &hp_layout);
     }
 

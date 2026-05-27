@@ -46,6 +46,19 @@ pub struct NoteAnnotations {
     pub hairpin_start: Option<HairpinType>,
     /// Whether this note/chord is the end of a hairpin wedge.
     pub hairpin_end: bool,
+    /// Whether the hairpin starting at this note/chord should be drawn with
+    /// dashed wedge lines instead of solid. Has no effect unless
+    /// `hairpin_start` is `Some`. Engraved convention uses dashed wedges for
+    /// "soft" or implied crescendi and for modern-notation continuation
+    /// markings independent of the `cresc. - - -` text variant.
+    ///
+    /// The flag lives on the start side because the wedge is a single visual
+    /// object owned by the start note; the end note carries no styling.
+    /// Cross-system hairpins propagate the dashed style to the trailing
+    /// half on the source system; the incoming half on the next system is
+    /// always dashed regardless of this flag (engraved convention for
+    /// cross-system continuations).
+    pub hairpin_dashed: bool,
     /// Optional rehearsal mark displayed above the staff at this note/chord's position.
     /// Tuple of (text content, enclosure style).
     pub rehearsal_mark: Option<(String, RehearsalStyle)>,

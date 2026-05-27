@@ -6250,3 +6250,164 @@
   touched. The pre-existing
   `multi_staff.rs:394` and other clippy warnings noted on
   prior entries remain unaddressed (out of scope).
+
+## 2026-05-27 — Post-v1, plumb hairpin_dashed through the score-event chain
+
+- Did: Plumbed the dashed-wedge hairpin style from the
+  `ScoreBuilder` API down through `NoteAnnotations`, the
+  within-system renderer, and the cross-system trailing-half
+  path on the page renderer. This is the natural follow-on to
+  the cresc-text plumbing run — same shape (annotation field +
+  builder modifier + per-renderer dispatch), different style
+  (dashed wedge instead of dashed text label). The dashed-text
+  variant uses `layout_cresc_text`; this run wires the parallel
+  `layout_hairpin_dashed` into the score path.
+
+  Before this run, `layout_hairpin_dashed`,
+  `layout_hairpin_with_niente`, and
+  `layout_hairpin_with_niente_at_open_end` existed at the
+  layout/renderer layer and were exercised by extensive
+  hairpin-renderer unit tests, but the ScoreBuilder only ever
+  invoked the plain `layout_hairpin`. Cross-system hairpins
+  used `layout_hairpin_dashed` for the incoming half on the
+  next system (engraved-convention default), but no user-facing
+  API could request a fully-dashed wedge for a within-system
+  or cross-system trailing half.
+
+  Concrete changes:
+  - `layout/measure.rs` — `NoteAnnotations` gains
+    `hairpin_dashed: bool`. Defaults to `false` via
+    `#[derive(Default)]`; no existing fixture or test breaks
+    because all existing construction sites either use
+    `NoteAnnotations::default()` directly or
+    `..NoteAnnotations::default()` struct-update syntax.
+    Doc comment explains the semantics: flag lives on the
+    start side, cross-system propagates to the trailing half
+    on the source system, incoming half stays dashed
+    unconditionally per engraving convention.
+  - `render/system_renderer/mod.rs` —
+    `HairpinNoteInfo` gains `hairpin_dashed: bool`;
+    `collect_hairpin_note_info` propagates it from both
+    `MeasureElement::Note` and `MeasureElement::Chord`.
+    `draw_system_hairpins` dispatches between
+    `layout_hairpin` and `layout_hairpin_dashed` based on
+    the flag. Added `layout_hairpin_dashed` to the existing
+    `use crate::layout::hairpin::{...}` import.
+  - `render/page_renderer/mod.rs` —
+    `UnresolvedHairpin` gains `dashed: bool`;
+    `find_unresolved_hairpins` carries it through from
+    `HairpinNoteInfo`. `draw_cross_system_hairpins`
+    dispatches the trailing-half layout based on the flag.
+    The incoming-half code path is unchanged (still
+    `layout_hairpin_dashed` unconditionally).
+  - `score/mod.rs` — new
+    `ScoreBuilder::hairpin_dashed()` modifier. Sets
+    `annotations.hairpin_dashed = true` on the most recent
+    `ScoreEvent::Note` or `ScoreEvent::Chord`. No-op on
+    rests / barlines / multi-measure rests (mirrors the
+    no-op semantics of `cresc()`, `cresc_text()`, and the
+    rest of the per-note modifiers). Doc explains:
+    must be called alongside `hairpin_start` / `cresc()` /
+    `decresc()`; silently no visible effect if hairpin_start
+    is unset, because there is no wedge to dash.
+
+- Verified:
+  - `cargo check -p music-engraver` → 0 errors.
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors (no cross-crate
+    regression).
+  - `cargo build -p music-engraver` → succeeds.
+  - `cargo test -p music-engraver --offline --lib` →
+    **2845 passed, 0 failed** (was 2836 last run; +9 new
+    tests).
+  - `cargo test -p music-engraver --offline --tests` →
+    75 (`golden_svg.rs`) + 3 (`svg_glyph_render.rs`)
+    = **78 passed, 0 failed** (unchanged from prior run —
+    no golden baseline moved because no fixture sets
+    `hairpin_dashed`, so existing SVGs are byte-identical).
+
+  New tests (9 total):
+  - `score::tests`:
+    - `hairpin_dashed_flag_sets_annotation_on_start_note` —
+      verifies the builder modifier sets the annotation
+      field and preserves `hairpin_start`.
+    - `hairpin_dashed_renders_stroke_dasharray` —
+      end-to-end ScoreBuilder → SVG: dashed wedge emits 2
+      `stroke-dasharray` attrs; solid wedge emits 0; line
+      count identical between the two.
+    - `hairpin_dashed_without_hairpin_start_renders_no_wedge` —
+      flag on a note without a preceding `cresc()` /
+      `decresc()` is silently a no-op (no wedge synthesized).
+    - `hairpin_dashed_on_rest_is_noop` — mirror of the
+      existing `hairpin_on_rest_is_noop` test for the
+      dashed-style flag.
+    - `hairpin_dashed_decrescendo_also_dashes` —
+      direction-agnostic: `decresc().hairpin_dashed()`
+      emits dasharray on both wedge lines.
+  - `render::page_renderer::tests`:
+    - `within_system_dashed_hairpin_emits_two_dasharrays` —
+      forces a both-measures-on-one-system layout (`Fixed(2)`)
+      so the wedge stays in `draw_system_hairpins`, then
+      asserts 2 dasharrays exactly and identical
+      `<line>` count vs solid.
+    - `within_system_dashed_hairpin_dasharray_value_matches_layout_constants` —
+      asserts the emitted dasharray attribute equals
+      `HAIRPIN_DASH_LENGTH_SS * ss, HAIRPIN_GAP_LENGTH_SS * ss`
+      (the same constants `layout_hairpin_dashed`
+      produces). Catches a regression where an ad-hoc dash
+      pattern leaks into the system renderer.
+    - `cross_system_dashed_hairpin_emits_dasharray_on_all_four_lines` —
+      forces a `Fixed(1)` split so the wedge crosses
+      systems; with the dashed flag set, all 4 wedge lines
+      (2 trailing + 2 incoming) carry dasharray. Negative
+      control inline: same layout without the flag → only
+      2 dasharrays (existing cross-system convention).
+    - `cross_system_dashed_hairpin_trailing_half_uses_dasharray_layout_constants` —
+      asserts all 4 wedge lines in a cross-system dashed
+      hairpin use the exact same dasharray attribute
+      derived from the layout constants.
+
+- Next: Plumb niente (closed-end and open-end) hairpin
+  variants through the score-event chain — mirror of this
+  chunk for the niente "o" circle. Will need
+  `hairpin_niente: Option<NientePlacement>` or two
+  separate booleans on `NoteAnnotations` plus dispatch in
+  `draw_system_hairpins` and the cross-system splitter
+  (cross-system niente is rare but should at least preserve
+  the closed-end "from silence" mark on the source system if
+  the start note carries niente_start). The combination
+  `hairpin_dashed + niente` is already supported at the
+  layout layer (via field mutation per
+  `dashed_hairpin_with_niente_keeps_circle_solid`); the
+  score-event surface should expose that combo.
+  Then: cross-system church rests (multi-measure rest cluster
+  breaking across systems); line-breaking quality improvements
+  (Gourlay extension or Bellini & Nesi); golden-SVG corpus
+  PHASH-based visual regression; PNG export polish
+  (already exists, would benefit from a golden-PHASH-style
+  baseline corpus); auto-resolved low-staff beam-group
+  collision golden (still requires ScoreBuilder opt-out for
+  force-stems, deferred); cross-voice tie/slur consultation
+  of the collision detector (deferred).
+
+- Open issues: None. The change is additive at every
+  surface — one new public-in-crate field on
+  `NoteAnnotations`, one new public method on `ScoreBuilder`
+  (`hairpin_dashed`), one new field on the internal
+  `HairpinNoteInfo` and `UnresolvedHairpin` structs.
+  Default behaviour of every existing call site is
+  byte-identical: no golden baseline moved, all 2836
+  pre-existing lib tests continue to pass, all 75 golden
+  SVG tests continue to byte-match. The `hairpin_dashed`
+  flag is silently ignored when `hairpin_start` is `None`
+  (no wedge to dash); this is by design and is exercised
+  by the
+  `hairpin_dashed_without_hairpin_start_renders_no_wedge`
+  test. The niente "o" circle surface remains unplumbed
+  to the ScoreBuilder (deferred to the next chunk —
+  same shape but with the additional cross-system
+  decision about whether the source system should still
+  carry the closed-end circle when the wedge crosses).
+  Combined dashed + niente at the ScoreBuilder surface
+  will be enabled by that next chunk; the layout layer
+  already supports the combination.
