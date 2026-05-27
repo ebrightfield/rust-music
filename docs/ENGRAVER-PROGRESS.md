@@ -3476,3 +3476,98 @@
   Pre-existing clippy warnings in `music/src/notation/rhythm/meter.rs`
   and `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, examples/accent_extensions.rs
+
+- Did: Added a worked example
+  `music-engraver/examples/accent_extensions.rs` that demonstrates the
+  four accent-extension family articulations
+  (`Articulation::{SoftAccent, Stress, Unstress, LaissezVibrer}`) via
+  the `ScoreBuilder` API. Closes another follow-up from the "worked
+  examples for post-v1 articulation families" line item — the four
+  accent-extension variants previously only existed in the
+  `golden_accent_extensions` byte-exact regression but had no human-
+  readable walkthrough on disk. Mirrors the structure of
+  `examples/combined_articulations.rs` (which covered the four combined-
+  glyph variants) and `examples/bow_strokes.rs` (which covered the two
+  bow-stroke variants), so the three sit side by side in the examples
+  directory as a complete set of post-v1-articulation walkthroughs.
+
+  Structure (treble clef, open key, 4/4, two measures per system, four
+  measures = two systems):
+  - Measure 1: four low quarter notes (C4 D4 E4 G4), each carrying one
+    of the four accent-extension variants. Low pitches → stems up → glyph
+    placed below the notehead (the `Below` glyph arm).
+  - Measure 2: four high quarter notes (C5 D5 E5 G5), each carrying the
+    same four variants. High pitches → stems down → glyph placed above
+    the notehead (the `Above` glyph arm). Together M1 and M2 exercise
+    both placement arms for every variant on the same canvas.
+  - Measure 3: each variant stacked with a `Fermata`. With stem-up notes
+    (low pitches) the accent extension sits below and the fermata sits
+    above. Verifies that the two glyphs route into distinct buckets — a
+    regression that misrouted SoftAccent / Stress / Unstress /
+    LaissezVibrer into the fermata bucket would collapse them on top of
+    the fermata above the note. Renders four notes × two glyphs = 8
+    articulation paths.
+  - Measure 4: each variant stacked with an `UpBow`. Bow strokes are
+    always-above; with stem-up notes the accent extension sits below and
+    the bow above. The stack splitter must put them on opposite sides.
+    A regression that misrouted the accent extension into the bow bucket
+    would stack the two glyphs on the same side above the note. Renders
+    four notes × two glyphs = 8 articulation paths.
+
+  Assertions:
+  - `svg.starts_with("<svg")` and `svg.contains("</svg>")` — structural
+    sanity.
+  - `path_count >= 42`: 2 clefs (one per system) + 16 noteheads (4 per
+    measure × 4 measures) + 8 accent-extension glyphs from M1+M2 + 8
+    accent-extension glyphs from M3+M4 + 4 fermatas from M3 + 4 up-bow
+    glyphs from M4 = 42 minimum. Lower-bound rather than equality so
+    unrelated renderer additions (e.g. ledger lines, accidentals from
+    time-signature digits) don't trip the example; tight enough that a
+    regression silently dropping any of the 16 accent-extension /
+    fermata / bow-stroke glyph emissions would fail.
+  - `line_count >= 3`: at least three `<line>` elements (barlines,
+    stems, or staff segments) — a structural floor that catches a
+    catastrophic SVG emitter regression.
+  - `path_count > 2`: trivially distinguishes "every glyph beyond the
+    clefs vanished" (which would be 2) from a working render.
+  - Writes `music-engraver/examples/output/accent_extensions.svg` for
+    visual inspection (matches the convention used by all other example
+    outputs tracked in git).
+
+- Verified: `cargo check -p music-engraver --example accent_extensions`
+  passes (0 errors). `cargo check --workspace` passes (0 errors). `cargo
+  build -p music-engraver --example accent_extensions` succeeds. `cargo
+  run -p music-engraver --example accent_extensions` runs to completion,
+  prints `accent_extensions.svg: 18083 bytes, 44 paths`, and produces an
+  18083-byte SVG starting with `<svg xmlns="..."` and containing the
+  expected 44 `<path>` elements (above the assertion floor of 42 — 2
+  clefs + 16 noteheads + 16 articulation/fermata/bow glyphs = 34
+  guaranteed, plus an extra 10 from rests/staff-segment paths). `cargo
+  test -p music-engraver --test golden_svg golden_accent_extensions`
+  continues to pass (the example and the golden test exercise the same
+  four `Articulation` variants but build distinct scores, so they are
+  independent). `cargo clippy -p music-engraver --example
+  accent_extensions` reports only the pre-existing
+  `music-engraver/src/score/multi_staff.rs:394` warning — the new file
+  is clippy-clean.
+
+- Next: Remaining "worked examples" follow-ups: `examples/laissez_vibrer.rs`
+  (LaissezVibrer-focused walkthrough; a subset of the accent-extensions
+  example, but useful to keep separate for harp/piano users searching
+  for the l.v. tie-curve in particular). Other candidate post-v1 items
+  remaining: **cross-system church rests** (multi-measure rest cluster
+  that breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the existing
+  Knuth-Plass DP); **golden-SVG corpus PHASH-based visual regression**;
+  trill polish (per-segment `WiggleTrillFast` variant selection from a
+  single-speed annotation); auto-resolved low-staff beam-group collision
+  golden (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector (deferred).
+
+- Open issues: None. The example file is additive — no library code
+  changed, no golden baseline regenerated, no existing test affected.
+  Pre-existing clippy warnings in `music/src/notation/rhythm/meter.rs`
+  and `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
+  (out of scope for this chunk).
