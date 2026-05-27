@@ -1036,6 +1036,76 @@ fn build_hairpins() -> String {
         .render_svg()
 }
 
+/// Cross-system hairpins: a crescendo that spans a system break (rendered as
+/// a solid trailing half-wedge in system 1 plus a *dashed* incoming half-wedge
+/// in system 2), plus a within-system decrescendo on system 2 for contrast.
+fn build_cross_system_hairpins() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        // System 1, measure 1: cresc starts here
+        .note(p("C", 4), Duration::QTR)
+        .dynamic(Dynamic::Pp)
+        .hairpin_start(HairpinType::Crescendo)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        // System 1, measure 2: cresc continues — no end before the system break
+        .note(p("G", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        // System 2, measure 3: cresc ends; then a within-system decresc
+        .note(p("B", 4), Duration::QTR)
+        .hairpin_end()
+        .dynamic(Dynamic::Ff)
+        .note(p("A", 4), Duration::QTR)
+        .hairpin_start(HairpinType::Decrescendo)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .hairpin_end()
+        .dynamic(Dynamic::Piano)
+        .barline()
+        // System 2, measure 4: final plain phrase
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("C", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
+/// Same notes/structure as `build_cross_system_hairpins`, but with every
+/// hairpin and dynamic removed. Used as a delta baseline so the cross-system
+/// hairpin golden can assert *exactly* how many extra `<line>` elements the
+/// hairpins contribute.
+fn build_cross_system_hairpins_baseline() -> String {
+    ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(2)
+        .note(p("C", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("G", 4), Duration::HALF)
+        .note(p("A", 4), Duration::HALF)
+        .barline()
+        .note(p("B", 4), Duration::QTR)
+        .note(p("A", 4), Duration::QTR)
+        .note(p("G", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .barline()
+        .note(p("E", 4), Duration::QTR)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("C", 4), Duration::HALF)
+        .end_barline()
+        .render_svg()
+}
+
 /// Cross-system ties: tie from end of system 1 to start of system 2.
 fn build_cross_system_ties() -> String {
     ScoreBuilder::new()
@@ -2119,6 +2189,86 @@ fn golden_hairpins() {
 #[test]
 fn golden_cross_system_ties() {
     assert_golden("cross_system_ties", &build_cross_system_ties());
+}
+
+#[test]
+fn golden_cross_system_hairpins() {
+    let svg = build_cross_system_hairpins();
+
+    // Engraved convention (Gould, *Behind Bars*): the trailing half-wedge on
+    // the source system is solid, the incoming half-wedge on the target
+    // system is dashed. Each half-wedge is rendered as 2 `<line>` elements
+    // (upper + lower arm of the wedge), so the dashed incoming half should
+    // contribute *exactly* 2 `stroke-dasharray` occurrences. The within-
+    // system decrescendo is fully solid and must not add any dasharray.
+    let dasharray_count = svg.matches("stroke-dasharray").count();
+    assert_eq!(
+        dasharray_count, 2,
+        "exactly 2 dasharray attributes expected (the 2 lines of the dashed \
+         incoming half-wedge); got {dasharray_count} — \
+         a regression would either drop the dashed half (count=0) or dash \
+         the wrong half (count=4)"
+    );
+
+    // Delta-baseline: rendering the same notes with no hairpins gives the
+    // staff/stem/barline line count. Subtracting it isolates the hairpin
+    // contribution.
+    //
+    //   cross-system crescendo: trailing half (2 lines, solid)
+    //                         + incoming half (2 lines, dashed)
+    //                         = 4 lines
+    //   within-system decrescendo: 1 wedge (2 lines, solid)
+    //                         = 2 lines
+    //   total hairpin lines  = 6
+    //
+    // Pinning the exact delta catches regressions that would, e.g., drop
+    // the incoming-half emission, double-emit the trailing half, or fall
+    // back to a single-wedge same-system layout that ignores the system
+    // break.
+    let baseline = build_cross_system_hairpins_baseline();
+    let with_lines = svg.matches("<line ").count();
+    let no_lines = baseline.matches("<line ").count();
+    assert_eq!(
+        with_lines,
+        no_lines + 6,
+        "cross-system cresc (4 lines: solid trailing + dashed incoming) \
+         plus within-system decresc (2 lines) should add exactly 6 lines; \
+         got {with_lines} vs baseline {no_lines}"
+    );
+
+    // The baseline must itself contain no hairpin artifacts — protects the
+    // delta assertion above against a baseline-side leak.
+    assert!(
+        !baseline.contains("stroke-dasharray"),
+        "the no-hairpin baseline must not contain stroke-dasharray; \
+         a leak here would invalidate the delta assertion"
+    );
+
+    // Counter-example: the same crescendo, but laid out so it fits within a
+    // single system (no system break under the wedge). The within-system code
+    // path uses solid lines exclusively — dashed continuation is a
+    // cross-system artifact only. This pins the implication direction:
+    // "dasharray appears" ⇒ "the wedge crossed a system break".
+    let within_system_only = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .note(p("C", 4), Duration::QTR)
+        .hairpin_start(HairpinType::Crescendo)
+        .note(p("D", 4), Duration::QTR)
+        .note(p("E", 4), Duration::QTR)
+        .note(p("F", 4), Duration::QTR)
+        .hairpin_end()
+        .end_barline()
+        .render_svg();
+    assert!(
+        !within_system_only.contains("stroke-dasharray"),
+        "a within-system hairpin must render entirely solid; dasharray here \
+         would mean the dashed-continuation code path leaked outside the \
+         cross-system case"
+    );
+
+    assert_golden("cross_system_hairpins", &svg);
 }
 
 #[test]
@@ -5475,6 +5625,7 @@ fn golden_baselines_are_valid_svgs() {
         "ornaments",
         "ornaments_full",
         "hairpins",
+        "cross_system_hairpins",
         "cross_system_ties",
         "expression_text",
         "multi_staff_cross_system",

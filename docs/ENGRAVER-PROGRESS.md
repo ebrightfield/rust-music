@@ -5567,3 +5567,144 @@
   API rather than `ScoreBuilder` because the cresc.-text
   marking is not yet plumbed through the score-event chain
   (carried over as the next-most-natural follow-up).
+
+
+## 2026-05-27 — Post-v1, cross-system hairpins golden test
+
+- Did: Added `golden_cross_system_hairpins` to
+  `music-engraver/tests/golden_svg.rs`, picking up the "cross-system
+  hairpin golden test (carried over)" item from the previous run's
+  "Next" list. The carried-over status reflects that the
+  cross-system hairpin code path
+  (`draw_cross_system_hairpins` in `page_renderer/mod.rs`) is fully
+  covered by *unit* tests under `src/render/page_renderer/tests.rs`
+  (`cross_system_hairpin_draws_four_lines`,
+  `cross_system_hairpin_emits_dashed_on_incoming_half_only`,
+  `cross_system_hairpin_total_line_count_unchanged_by_dashed_continuation`,
+  …) but had no *visual-regression* golden — every other
+  cross-system span construct (ties, ottava, volta, glissandos,
+  multi-staff cross-system) does. The new golden closes that gap.
+
+  Scenario (`build_cross_system_hairpins`):
+  - Treble clef, C major, 4/4, `.measures_per_system(2)`.
+  - System 1 m. 1: `pp` + `hairpin_start(Crescendo)` on note 1, then
+    3 more quarters.
+  - System 1 m. 2: cresc continues — two half notes, no
+    `hairpin_end` yet, so the wedge is unresolved at the system break.
+  - System 2 m. 3: `hairpin_end` on note 1, dynamic `ff`, then a
+    fully within-system `hairpin_start(Decrescendo)` resolving on
+    note 4 + dynamic `p`.
+  - System 2 m. 4: plain closing phrase.
+
+  This is the smallest scenario that exercises both code paths
+  simultaneously — the cross-system cresc proves the split (solid
+  trailing + dashed incoming half-wedges) and the within-system
+  decresc on the same page proves the dashed-continuation logic
+  does not leak into ordinary single-system wedges.
+
+  Companion `build_cross_system_hairpins_baseline` is byte-for-byte
+  identical in note sequence but strips every dynamic and hairpin
+  call — it exists *only* as a delta reference so the test can
+  assert "the hairpins add exactly six `<line>` elements" rather
+  than the much weaker "the hairpins add some lines."
+
+  Assertions (each pins a distinct invariant — none would pass if
+  the cross-system code path silently degraded to "render trailing
+  half only", "render both halves solid", or "render no halves"):
+
+  - `dasharray_count == 2`: the incoming (target-system) half-wedge
+    is dashed; each half-wedge is 2 `<line>` elements (upper +
+    lower arm), so exactly 2 `stroke-dasharray` attributes must
+    appear. A regression that dropped the dashed half would
+    collapse this to 0; one that dashed both halves would lift it
+    to 4.
+  - Delta-line invariant `with_lines == no_lines + 6`: the
+    cross-system cresc contributes 4 lines (2 solid trailing + 2
+    dashed incoming) and the within-system decresc contributes 2
+    solid lines. Hardcoding the delta exposes any change to how
+    the wedge halves are emitted — a single-line wedge, a
+    triple-line accent, or a missed half — without relying on the
+    fragile absolute line count (which also includes staff lines,
+    stems, and barlines).
+  - Baseline-side guard `!baseline.contains("stroke-dasharray")`:
+    if the no-hairpin baseline ever leaks dashed lines (e.g., a
+    future feature adds dashed barlines on volta endings), the
+    delta arithmetic above becomes silently wrong. This guard
+    fails loudly instead.
+  - Counter-example guard `!within_system_only.contains("stroke-dasharray")`:
+    builds a separate single-measure scenario where the cresc
+    fully fits inside one system, then asserts the rendered SVG
+    has zero dasharray. Locks the implication "dashed wedge
+    half ⇒ wedge crossed a system break" — the dashed code path
+    is gated on the cross-system condition, never invoked for
+    same-system wedges.
+  - `assert_golden("cross_system_hairpins", &svg)`: byte-level
+    comparison against the frozen baseline at
+    `tests/golden/cross_system_hairpins.svg` (14290 bytes, 36
+    `<line>` elements, 2 dasharrays). Catches any change to the
+    cross-system hairpin's exact pixel layout — wedge slope, end
+    points, dash pattern, half-wedge anchor x — that the
+    structural assertions above might miss.
+
+  Also added `"cross_system_hairpins"` to the
+  `golden_baselines_are_valid_svgs` registry list so the new file
+  is included in the SVG-well-formedness sweep alongside every
+  other baseline.
+
+  Design choice — separate `_baseline` builder vs. inline string
+  manipulation: a builder mirrors the convention already used by
+  `build_cross_voice_spans` / `build_cross_voice_spans_baseline`
+  (line 3711 in this file). Same shape, same notes; only the
+  hairpin/dynamic calls differ. Easier to read than asking the
+  reader to mentally subtract "6 lines" from a string with no
+  comparator.
+
+  Design choice — counter-example uses a smaller single-measure
+  scenario rather than reusing the main one with `.measures_per_system(99)`:
+  a single-measure score is unambiguously within-system regardless
+  of system-breaking heuristics, so the assertion's premise is
+  robust against future changes to the auto-break algorithm.
+
+- Verified: `cargo check -p music-engraver --tests --offline` passes
+  (0 errors).
+  `cargo check --workspace --offline` passes (0 errors).
+  `cargo build -p music-engraver --offline` succeeds.
+  `cargo test -p music-engraver --offline` passes — **2809 lib
+  tests + 73 `tests/golden_svg.rs` (was 72; +1 for the new
+  `golden_cross_system_hairpins`) + 3 `tests/svg_glyph_render.rs`
+  + 13 doctests = 2898 passed, 0 failed**.
+  `cargo clippy -p music-engraver --tests --offline` reports no
+  new warnings from the new code (the pre-existing
+  `map(..).flatten()` and `unneeded return` warnings, plus the
+  long-standing `multi_staff.rs:394` one, persist — all out of
+  scope).
+  Baseline file
+  `music-engraver/tests/golden/cross_system_hairpins.svg`
+  generated via `GOLDEN_UPDATE=1` and confirmed to match on a
+  second run without that flag. Spot-checked: 36 `<line>`
+  elements, exactly 2 `stroke-dasharray="100,50"` occurrences,
+  starts `<svg xmlns=...`, contains `</svg>`.
+
+- Next: Remaining post-v1 candidates: **plumb `draw_cresc_text`
+  into score-event / system_renderer / page_renderer chain** so
+  `ScoreBuilder` callers can request a dashed-text marking;
+  cross-system cresc.-text wiring at the page_renderer level
+  (parallel to `draw_cross_system_ottava_brackets` and
+  `draw_cross_system_hairpins`); **golden-SVG corpus PHASH-based
+  visual regression**; **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi); **cross-system church
+  rests**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems,
+  deferred); cross-voice tie/slur consultation of the collision
+  detector (deferred); plumbing of niente/dashed hairpin
+  constructors through the score → system_renderer →
+  page_renderer chain.
+
+- Open issues: None. The change is purely additive — no engraver
+  source code modified, no public API touched, no existing golden
+  baselines regenerated. Two new builder functions
+  (`build_cross_system_hairpins`,
+  `build_cross_system_hairpins_baseline`), one new `#[test]`
+  function (`golden_cross_system_hairpins`), one new golden file
+  (`tests/golden/cross_system_hairpins.svg`), and one entry added
+  to the `golden_baselines_are_valid_svgs` name registry.
