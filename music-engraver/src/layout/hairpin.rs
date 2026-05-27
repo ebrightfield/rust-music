@@ -167,6 +167,53 @@ pub fn layout_hairpin_with_niente(
     layout
 }
 
+/// Compute the layout for a hairpin with a niente "o" circle at its open
+/// (wide) end — the rarer mirror of [`layout_hairpin_with_niente`].
+///
+/// Most niente hairpins place the circle at the closed (pointy) end. The
+/// open-end variant is used for special-effect markings where the silence
+/// is at the wide side of the wedge — e.g. a crescendo that starts at full
+/// dynamic and *opens out* into silence (an open-end "to silence" reading),
+/// or a decrescendo that begins from silence at its widest. Standard in
+/// contemporary scores by composers like Lachenmann and Sciarrino.
+///
+/// Anchor placement is the mirror of [`layout_hairpin_with_niente`]:
+/// - `(x_end,   y_center)` for [`HairpinType::Crescendo`] — circle at the
+///   wide right end (open end of a crescendo).
+/// - `(x_start, y_center)` for [`HairpinType::Decrescendo`] — circle at the
+///   wide left end (open end of a decrescendo).
+///
+/// Radius, `cy`, and `stroke_width` are computed identically to the
+/// closed-end constructor; only `cx` differs. Wedge geometry is
+/// byte-identical to [`layout_hairpin`] for the same arguments — the
+/// niente is purely additive.
+///
+/// The circle remains a small open "o" at the wedge midline. A reader sees
+/// it at the wedge's mouth rather than at its tip; the visual conflict
+/// with the diverging wedge lines at small radii is the same trade-off
+/// engravers accept in the closed-end case at the tip.
+pub fn layout_hairpin_with_niente_at_open_end(
+    kind: HairpinType,
+    x_start: f64,
+    x_end: f64,
+    staff_bottom_y: f64,
+    staff_space: f64,
+    stroke_width: f64,
+) -> HairpinLayout {
+    let mut layout = layout_hairpin(kind, x_start, x_end, staff_bottom_y, staff_space, stroke_width);
+    let cx = match kind {
+        HairpinType::Crescendo => x_end,
+        HairpinType::Decrescendo => x_start,
+    };
+    layout.niente = Some(NienteCircleLayout {
+        cx,
+        cy: layout.y_center,
+        radius: HAIRPIN_NIENTE_RADIUS_SS * staff_space,
+        stroke_width,
+    });
+    layout
+}
+
 /// Compute the layout for a dashed hairpin wedge.
 ///
 /// Identical to [`layout_hairpin`] except that the returned layout carries
@@ -406,6 +453,207 @@ mod tests {
         assert!((n.cx - copy.cx).abs() < 1e-12);
         assert!((n.cy - copy.cy).abs() < 1e-12);
         assert!((n.radius - copy.radius).abs() < 1e-12);
+    }
+
+    // ---- open-end niente (rare mirror of closed-end niente) ----
+
+    fn cresc_n_open() -> HairpinLayout {
+        layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        )
+    }
+
+    fn decresc_n_open() -> HairpinLayout {
+        layout_hairpin_with_niente_at_open_end(
+            HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        )
+    }
+
+    #[test]
+    fn open_end_niente_crescendo_places_circle_at_x_end() {
+        // For a crescendo, the open end is the wide right side → x_end.
+        let h = cresc_n_open();
+        let n = h.niente.expect("open-end crescendo must carry niente");
+        assert!(
+            (n.cx - 600.0).abs() < 1e-9,
+            "open-end crescendo niente.cx should equal x_end (600.0); got {}",
+            n.cx
+        );
+        assert!((n.cy - h.y_center).abs() < 1e-9, "cy should equal y_center");
+    }
+
+    #[test]
+    fn open_end_niente_decrescendo_places_circle_at_x_start() {
+        // For a decrescendo, the open end is the wide left side → x_start.
+        let h = decresc_n_open();
+        let n = h.niente.expect("open-end decrescendo must carry niente");
+        assert!(
+            (n.cx - 100.0).abs() < 1e-9,
+            "open-end decrescendo niente.cx should equal x_start (100.0); got {}",
+            n.cx
+        );
+        assert!((n.cy - h.y_center).abs() < 1e-9, "cy should equal y_center");
+    }
+
+    #[test]
+    fn open_end_niente_mirrors_closed_end_niente_anchor() {
+        // Open-end and closed-end niente target opposite tips for the same kind.
+        // For Crescendo: closed-end is x_start, open-end is x_end.
+        let closed = cresc_n();
+        let open = cresc_n_open();
+        let cn = closed.niente.unwrap();
+        let on = open.niente.unwrap();
+        assert!(
+            (cn.cx - 100.0).abs() < 1e-9,
+            "closed-end crescendo anchored at x_start"
+        );
+        assert!(
+            (on.cx - 600.0).abs() < 1e-9,
+            "open-end crescendo anchored at x_end"
+        );
+        // Anchor diff equals the full wedge span (500.0).
+        assert!(
+            ((on.cx - cn.cx) - 500.0).abs() < 1e-9,
+            "anchor diff should equal full x span; got {}",
+            on.cx - cn.cx
+        );
+        // Geometry (cy, radius, stroke_width) is identical — only cx differs.
+        assert!((cn.cy - on.cy).abs() < 1e-12);
+        assert!((cn.radius - on.radius).abs() < 1e-12);
+        assert!((cn.stroke_width - on.stroke_width).abs() < 1e-12);
+    }
+
+    #[test]
+    fn open_end_niente_decrescendo_mirrors_crescendo_closed_anchor_choice() {
+        // For Decrescendo: closed-end is x_end, open-end is x_start.
+        // Cross-check the symmetric flip relative to crescendo.
+        let closed = decresc_n();
+        let open = decresc_n_open();
+        let cn = closed.niente.unwrap();
+        let on = open.niente.unwrap();
+        assert!((cn.cx - 600.0).abs() < 1e-9, "closed-end decresc at x_end");
+        assert!((on.cx - 100.0).abs() < 1e-9, "open-end decresc at x_start");
+        // Anchor differs by the full span (in the opposite direction from cresc).
+        assert!(
+            ((cn.cx - on.cx) - 500.0).abs() < 1e-9,
+            "closed - open = full span for decrescendo"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_radius_matches_const_times_staff_space() {
+        let h = cresc_n_open();
+        let n = h.niente.unwrap();
+        let expected = HAIRPIN_NIENTE_RADIUS_SS * SS;
+        assert!(
+            (n.radius - expected).abs() < 1e-9,
+            "open-end niente radius should be HAIRPIN_NIENTE_RADIUS_SS * staff_space ({expected}), got {}",
+            n.radius
+        );
+    }
+
+    #[test]
+    fn open_end_niente_radius_scales_with_staff_space() {
+        let small = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 0.0, 100.0, 0.0, 200.0, SW,
+        );
+        let large = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 0.0, 100.0, 0.0, 400.0, SW,
+        );
+        let rs = small.niente.unwrap().radius;
+        let rl = large.niente.unwrap().radius;
+        assert!(rl > rs, "larger staff space → larger niente");
+        assert!((rs - HAIRPIN_NIENTE_RADIUS_SS * 200.0).abs() < 1e-9);
+        assert!((rl - HAIRPIN_NIENTE_RADIUS_SS * 400.0).abs() < 1e-9);
+        assert!(((rl / rs) - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn open_end_niente_stroke_width_matches_hairpin() {
+        let custom_sw = 17.5;
+        let h = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 0.0, 500.0, BOTTOM_Y, SS, custom_sw,
+        );
+        let n = h.niente.unwrap();
+        assert!((n.stroke_width - custom_sw).abs() < 1e-9);
+        assert!((h.stroke_width - n.stroke_width).abs() < 1e-9);
+    }
+
+    #[test]
+    fn open_end_niente_does_not_alter_wedge_geometry() {
+        // Open-end niente is purely additive — wedge geometry must be byte-identical
+        // to the plain layout_hairpin output.
+        let plain = layout_hairpin(HairpinType::Crescendo, 123.0, 789.0, BOTTOM_Y, SS, SW);
+        let with_open = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 123.0, 789.0, BOTTOM_Y, SS, SW,
+        );
+        assert_eq!(plain.kind, with_open.kind);
+        assert!((plain.x_start - with_open.x_start).abs() < 1e-12);
+        assert!((plain.x_end - with_open.x_end).abs() < 1e-12);
+        assert!((plain.y_center - with_open.y_center).abs() < 1e-12);
+        assert!((plain.half_opening - with_open.half_opening).abs() < 1e-12);
+        assert!((plain.stroke_width - with_open.stroke_width).abs() < 1e-12);
+        assert!(plain.niente.is_none());
+        assert!(with_open.niente.is_some());
+    }
+
+    #[test]
+    fn open_end_niente_y_lives_on_hairpin_midline() {
+        // Open-end niente sits at the wide end of the wedge but still on the
+        // midline (not on the top/bottom wedge line) — same convention as
+        // the closed-end variant.
+        let h = cresc_n_open();
+        let n = h.niente.unwrap();
+        assert!((n.cy - h.y_center).abs() < 1e-12);
+    }
+
+    #[test]
+    fn open_end_niente_does_not_set_dashed() {
+        // Independence from the dashed flag — the open-end niente constructor
+        // must NOT silently populate `dashed`.
+        assert!(cresc_n_open().dashed.is_none());
+        assert!(decresc_n_open().dashed.is_none());
+    }
+
+    #[test]
+    fn open_end_niente_constructor_distinct_from_closed_end_constructor() {
+        // Locks the API contract: the two constructors place the circle at
+        // different anchors for the same arguments. A regression that aliased
+        // one to the other would surface immediately.
+        let closed = layout_hairpin_with_niente(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        );
+        let open = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        );
+        let cn = closed.niente.unwrap();
+        let on = open.niente.unwrap();
+        assert!(
+            (cn.cx - on.cx).abs() > 1.0,
+            "closed-end and open-end constructors must place the circle at different x; \
+             got cn.cx={} on.cx={}",
+            cn.cx, on.cx
+        );
+    }
+
+    #[test]
+    fn open_end_niente_combo_with_dashed_supported_via_field_mutation() {
+        // The dashed+niente combinator path also works for the open-end
+        // variant — the additive fields are independent. Pins the contract
+        // so a future refactor doesn't silently break composition.
+        let mut h = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        );
+        assert!(h.niente.is_some());
+        assert!(h.dashed.is_none());
+        h.dashed = Some(HairpinDashStyle {
+            dash_length: 80.0,
+            gap_length: 40.0,
+        });
+        assert!(h.niente.is_some(), "field mutation must not clear niente");
+        assert!(h.dashed.is_some(), "field mutation must set dashed");
+        // Open-end decrescendo anchor still pinned at x_start after mutation.
+        assert!((h.niente.unwrap().cx - 100.0).abs() < 1e-9);
     }
 
     // ---- dashed hairpin ----

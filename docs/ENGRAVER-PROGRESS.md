@@ -4665,3 +4665,175 @@
   case. The pre-existing `multi_staff.rs:394` clippy warning and
   unrelated `music/` crate clippy warnings remain unaddressed (out
   of scope).
+
+## 2026-05-27 — Post-v1, open-end niente hairpin (rare mirror of closed-end)
+
+- Did: Added a third niente constructor —
+  `layout_hairpin_with_niente_at_open_end` — placing the open "o" at
+  the wide (open) end of the wedge rather than the closed (pointy) end.
+  Standard contemporary-score notation (Lachenmann, Sciarrino) for the
+  rare "open-end to/from silence" reading. Touched two files (no
+  renderer changes needed — the renderer dispatches purely on
+  `Option<NienteCircleLayout>` and is agnostic to which end the circle
+  was anchored at).
+
+  1. `music-engraver/src/layout/hairpin.rs`:
+     - New `pub fn layout_hairpin_with_niente_at_open_end(kind,
+       x_start, x_end, staff_bottom_y, staff_space, stroke_width) ->
+       HairpinLayout`. Same signature as
+       `layout_hairpin_with_niente`. Anchor is mirrored:
+       - `Crescendo` → niente at `(x_end, y_center)` (wide right end).
+       - `Decrescendo` → niente at `(x_start, y_center)` (wide left end).
+     - Internally: delegates to `layout_hairpin(...)` for wedge geometry
+       (byte-identical), then populates `niente` with the flipped `cx`.
+       Radius (`HAIRPIN_NIENTE_RADIUS_SS * staff_space`), `cy`
+       (`y_center`), and `stroke_width` (parent) match the closed-end
+       constructor exactly — only `cx` differs.
+
+  2. `music-engraver/src/layout/mod.rs`:
+     - Added `layout_hairpin_with_niente_at_open_end` to the
+       `pub use hairpin::{...}` block.
+
+  Design choice — separate constructor rather than enum parameter:
+  the existing closed-end `layout_hairpin_with_niente` has no enum
+  selector. Adding a `NientePosition::{Closed, Open}` parameter to
+  the existing constructor would be a breaking change at every call
+  site (system_renderer, page_renderer, etc.) just to express the
+  rarer case. The two-constructor pattern matches what the codebase
+  already does (`layout_hairpin` vs `layout_hairpin_dashed` vs
+  `layout_hairpin_with_niente`) and keeps the closed-end-is-default
+  convention readable at call sites.
+
+  Design choice — `cy` stays on `y_center` even at the wide end:
+  engraved convention places the open-end niente on the wedge
+  midline (not on the upper or lower wedge line) so the circle reads
+  as belonging to the dynamic axis. The
+  `open_end_niente_y_lives_on_hairpin_midline` test pins this; a
+  future change that anchored the circle to the top or bottom line
+  (e.g. `y_center ± half_opening`) would surface immediately.
+
+  Tests added (23 total — 12 layout + 11 renderer):
+
+  - `hairpin.rs` layout (12):
+    - `open_end_niente_crescendo_places_circle_at_x_end` — for cresc,
+      `cx == x_end` (mirror of closed-end-at-`x_start`).
+    - `open_end_niente_decrescendo_places_circle_at_x_start` — for
+      decresc, `cx == x_start` (mirror of closed-end-at-`x_end`).
+    - `open_end_niente_mirrors_closed_end_niente_anchor` — for cresc,
+      `closed.cx == 100`, `open.cx == 600`, diff == full wedge span
+      (500). Also asserts `cy`, `radius`, `stroke_width` are
+      byte-equal between the two constructors — only `cx` differs.
+    - `open_end_niente_decrescendo_mirrors_crescendo_closed_anchor_choice` —
+      for decresc, mirror direction (`closed - open == full span` instead
+      of `open - closed`). Symmetric cross-check.
+    - `open_end_niente_radius_matches_const_times_staff_space` —
+      radius locked to `HAIRPIN_NIENTE_RADIUS_SS * SS` (250) = 50.0.
+    - `open_end_niente_radius_scales_with_staff_space` — walks two
+      staff sizes (200, 400), asserts both absolute values and 2× ratio.
+    - `open_end_niente_stroke_width_matches_hairpin` — custom stroke
+      flows from parent to niente field.
+    - `open_end_niente_does_not_alter_wedge_geometry` — byte-equal
+      wedge fields (kind, x_start, x_end, y_center, half_opening,
+      stroke_width) between `layout_hairpin` and the open-end niente
+      variant — purely additive (matches the closed-end
+      `niente_does_not_alter_wedge_geometry` contract).
+    - `open_end_niente_y_lives_on_hairpin_midline` — `cy == y_center`
+      to 1e-12 (locks the wedge-midline convention).
+    - `open_end_niente_does_not_set_dashed` — independence: the open-end
+      constructor must NOT silently populate `dashed`.
+    - `open_end_niente_constructor_distinct_from_closed_end_constructor` —
+      API contract: same args to both constructors → different `cx`
+      (by > 1.0). A regression that aliased one to the other surfaces
+      here.
+    - `open_end_niente_combo_with_dashed_supported_via_field_mutation` —
+      pins the combinator-via-mutation contract for open-end + dashed
+      (mirrors the closed-end+dashed combo test). Includes a check
+      that the anchor (`x_start` for decresc-open-end) survives the
+      `dashed = Some(...)` mutation.
+
+  - `hairpin_renderer.rs` (11):
+    - `open_end_niente_hairpin_emits_exactly_one_circle` — count of
+      `<circle ` substrings is exactly 1.
+    - `open_end_niente_hairpin_still_emits_two_wedge_lines` —
+      decoration must not displace the wedge — exactly 2 `<line `
+      elements.
+    - `open_end_niente_crescendo_circle_anchored_at_x_end` — emitted
+      SVG contains `cx="600"` AND does NOT contain `cx="100"` for an
+      open-end crescendo. Two-sided assertion catches both an alias
+      to closed-end and a coincidental match.
+    - `open_end_niente_decrescendo_circle_anchored_at_x_start` — emitted
+      SVG contains `cx="100"` AND does NOT contain `cx="600"` for an
+      open-end decrescendo.
+    - `open_end_niente_cy_matches_hairpin_y_center` — `cy="<y_center>"`
+      appears in the SVG.
+    - `open_end_niente_circle_is_open_o_not_filled_dot` — the
+      `<circle>` line carries `fill="none"` AND `stroke="black"`
+      (same convention as closed-end).
+    - `open_end_niente_circle_radius_in_svg_matches_layout` —
+      `r="<radius>"` flows through.
+    - `open_end_niente_circle_stroke_width_matches_hairpin_stroke` —
+      custom stroke (13.0) appears on exactly 3 elements (2 wedge
+      lines + 1 circle).
+    - `open_end_and_closed_end_niente_produce_different_svg` — sanity:
+      visually distinguishable end-to-end. Catches a regression that
+      collapsed the two constructors to the same anchor.
+    - `open_end_niente_emits_no_dasharray_by_default` — independence:
+      open-end-niente-only hairpin has 0 occurrences of
+      `stroke-dasharray`.
+    - `open_end_dashed_combo_keeps_circle_solid` — combo via field
+      mutation: 2 dashed wedge lines, 1 solid circle (no
+      `stroke-dasharray` on the circle line), `fill="none"`, AND
+      `cx="600"` (open-end crescendo anchor). Five simultaneous
+      invariants.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2735 tests passing,
+  0 failing** (up from 2712 by exactly the 23 new tests; matches the
+  count expectation: 12 layout + 11 renderer = 23).
+  `cargo test -p music-engraver --lib hairpin` runs the full hairpin
+  subtree (103 tests including all 23 new ones) — all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings —
+  only the pre-existing `multi_staff.rs:394` warning persists (out
+  of scope, noted across prior progress entries).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). Natural follow-ups on the hairpin surface itself:
+  - **PNG export via the `png` feature** (`resvg` + `tiny-skia` +
+    `fontdb`) — listed at the top of the post-v1 backlog; nothing
+    currently exercises a non-SVG output path.
+  - Plumb the three niente/dashed constructors through the score →
+    system_renderer → page_renderer chain so a `ScoreBuilder` caller
+    can request any combination (closed-end-niente, open-end-niente,
+    dashed, dashed+niente at either end) end-to-end. Requires a
+    score-event flag — natural shape: a `HairpinStyle { dashed: bool,
+    niente: Option<NienteEnd> }` bundle on the score-event side.
+  - Use `layout_hairpin_dashed` for the *second segment* of a
+    cross-system hairpin automatically (engraved convention says the
+    continuation half should be dashed). Would touch the existing
+    `page_renderer::cross_system_hairpin_*` tests.
+  - "cresc. - - -" / "decresc. - - -" *text variants* (orthogonal to
+    the wedge — italic text with dashed continuation lines, standard
+    for long crescendi). Probably belongs in `expression_renderer.rs`
+    rather than the hairpin stack.
+  - A small example (`examples/hairpin_niente_open_end.rs` or merged
+    into an existing niente example) exercising the open-end variant
+    visually so a reviewer can eyeball the placement.
+
+- Open issues: None. The change is purely additive — no existing
+  public API altered, no existing call site changed, no golden
+  baseline regenerated, no example or example test modified. The new
+  public surface (`layout_hairpin_with_niente_at_open_end`) is a
+  drop-in mirror of `layout_hairpin_with_niente` and reuses the
+  existing `NienteCircleLayout` type and `HAIRPIN_NIENTE_RADIUS_SS`
+  constant. The pre-existing `multi_staff.rs:394` clippy warning and
+  unrelated `music/` crate clippy warnings remain unaddressed (out
+  of scope).

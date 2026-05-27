@@ -531,4 +531,225 @@ mod tests {
             "dashed-only hairpin must emit zero <circle> elements"
         );
     }
+
+    // ---- open-end niente (rare mirror of closed-end niente) ----
+
+    use crate::layout::hairpin::layout_hairpin_with_niente_at_open_end;
+
+    #[test]
+    fn open_end_niente_hairpin_emits_exactly_one_circle() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("<circle ").count(),
+            1,
+            "open-end niente hairpin must produce exactly one <circle> element"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_hairpin_still_emits_two_wedge_lines() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("<line ").count(),
+            2,
+            "open-end niente decoration must not displace the wedge — still 2 lines"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_crescendo_circle_anchored_at_x_end() {
+        // For crescendo, the open end is the wide right side → cx == x_end.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert!(
+            out.contains(r#"cx="600""#),
+            "open-end crescendo niente cx should be x_end (600.0); SVG:\n{out}"
+        );
+        assert!(
+            !out.contains(r#"cx="100""#),
+            "open-end crescendo niente must NOT be at x_start (100.0); SVG:\n{out}"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_decrescendo_circle_anchored_at_x_start() {
+        // For decrescendo, the open end is the wide left side → cx == x_start.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert!(
+            out.contains(r#"cx="100""#),
+            "open-end decrescendo niente cx should be x_start (100.0); SVG:\n{out}"
+        );
+        assert!(
+            !out.contains(r#"cx="600""#),
+            "open-end decrescendo niente must NOT be at x_end (600.0); SVG:\n{out}"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_cy_matches_hairpin_y_center() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        let cy = layout.y_center;
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert!(
+            out.contains(&format!(r#"cy="{cy}""#)),
+            "open-end niente cy should equal y_center ({cy}); SVG:\n{out}"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_circle_is_open_o_not_filled_dot() {
+        // Same convention as closed-end: open "o", fill="none", stroked black.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        let circle_line = out
+            .lines()
+            .find(|l| l.contains("<circle "))
+            .expect("circle element must be present");
+        assert!(
+            circle_line.contains(r#"fill="none""#),
+            "open-end niente must be an open circle (fill=\"none\"); got: {circle_line}"
+        );
+        assert!(
+            circle_line.contains(r#"stroke="black""#),
+            "open-end niente must be stroked black; got: {circle_line}"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_circle_radius_in_svg_matches_layout() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        let r = layout.niente.unwrap().radius;
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert!(
+            out.contains(&format!(r#"r="{r}""#)),
+            "open-end niente r should be {r}; SVG:\n{out}"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_circle_stroke_width_matches_hairpin_stroke() {
+        let custom_sw = 13.0;
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, custom_sw,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        let circle_line = out
+            .lines()
+            .find(|l| l.contains("<circle "))
+            .expect("circle present");
+        assert!(
+            circle_line.contains(&format!(r#"stroke-width="{custom_sw}""#)),
+            "open-end niente circle stroke-width should equal {custom_sw}; got: {circle_line}"
+        );
+        // Wedge lines + circle = 3 elements with the custom stroke width.
+        let line_count_with_sw = out
+            .matches(&format!(r#"stroke-width="{custom_sw}""#))
+            .count();
+        assert_eq!(
+            line_count_with_sw, 3,
+            "stroke-width {custom_sw} should appear on 2 wedge lines + 1 circle = 3; got {line_count_with_sw}"
+        );
+    }
+
+    #[test]
+    fn open_end_and_closed_end_niente_produce_different_svg() {
+        // The two constructors must produce visually distinct SVG for the same
+        // hairpin kind and args — different anchor → different cx in output.
+        let c = layout_hairpin_with_niente(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        let o = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        let mut svg_c = make_svg();
+        let mut svg_o = make_svg();
+        draw_hairpin(&mut svg_c, &c);
+        draw_hairpin(&mut svg_o, &o);
+        assert_ne!(
+            svg_c.to_svg(),
+            svg_o.to_svg(),
+            "closed-end and open-end niente hairpins must produce visually distinct SVG"
+        );
+    }
+
+    #[test]
+    fn open_end_niente_emits_no_dasharray_by_default() {
+        // open-end niente constructor must not silently dashes the wedge —
+        // mirror of niente/dashed independence on the closed-end variant.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("stroke-dasharray").count(),
+            0,
+            "open-end-niente-only hairpin must not emit stroke-dasharray on any element"
+        );
+    }
+
+    #[test]
+    fn open_end_dashed_combo_keeps_circle_solid() {
+        // Combo via field mutation: dashed wedge + open-end niente. The wedge
+        // lines must be dashed; the niente circle must remain solid. Mirrors
+        // the closed-end combo invariant.
+        let mut layout = layout_hairpin_with_niente_at_open_end(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        layout.dashed = Some(crate::layout::hairpin::HairpinDashStyle {
+            dash_length: 100.0,
+            gap_length: 50.0,
+        });
+        let mut svg = make_svg();
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(out.matches("<line ").count(), 2);
+        assert_eq!(out.matches("stroke-dasharray").count(), 2);
+        assert_eq!(out.matches("<circle ").count(), 1);
+        let circle_line = out
+            .lines()
+            .find(|l| l.contains("<circle "))
+            .expect("circle element must be present in combined output");
+        assert!(
+            !circle_line.contains("stroke-dasharray"),
+            "open-end niente circle must remain solid even on a dashed hairpin; got: {circle_line}"
+        );
+        assert!(circle_line.contains(r#"fill="none""#));
+        // Open-end crescendo niente is at x_end (600.0).
+        assert!(circle_line.contains(r#"cx="600""#));
+    }
 }
