@@ -11,6 +11,13 @@ use crate::render::svg_writer::SvgWriter;
 /// (i.e. it was produced by [`crate::layout::hairpin::layout_hairpin_with_niente`]),
 /// an additional open "o" circle is drawn at the closed end of the wedge to
 /// mark to/from silence.
+///
+/// When the layout carries a [`crate::layout::hairpin::HairpinDashStyle`]
+/// (i.e. it was produced by [`crate::layout::hairpin::layout_hairpin_dashed`]),
+/// the wedge lines are emitted with a `stroke-dasharray` attribute. The
+/// niente "o" circle, if present, remains solid — engraved convention
+/// treats the niente as a definite symbol independent of the wedge's
+/// dashed/solid style.
 pub fn draw_hairpin(svg: &mut SvgWriter, layout: &HairpinLayout) {
     let HairpinLayout {
         kind,
@@ -20,6 +27,7 @@ pub fn draw_hairpin(svg: &mut SvgWriter, layout: &HairpinLayout) {
         half_opening,
         stroke_width,
         niente,
+        dashed,
     } = *layout;
 
     let (top_left_y, bot_left_y, top_right_y, bot_right_y) = match kind {
@@ -33,12 +41,21 @@ pub fn draw_hairpin(svg: &mut SvgWriter, layout: &HairpinLayout) {
         }
     };
 
-    // Top line of wedge
-    svg.add_line(x_start, top_left_y, x_end, top_right_y, "black", stroke_width);
-    // Bottom line of wedge
-    svg.add_line(x_start, bot_left_y, x_end, bot_right_y, "black", stroke_width);
+    if let Some(d) = dashed {
+        let dash_array = format!("{},{}", d.dash_length, d.gap_length);
+        // Top line of wedge (dashed)
+        svg.add_dashed_line(x_start, top_left_y, x_end, top_right_y, "black", stroke_width, &dash_array);
+        // Bottom line of wedge (dashed)
+        svg.add_dashed_line(x_start, bot_left_y, x_end, bot_right_y, "black", stroke_width, &dash_array);
+    } else {
+        // Top line of wedge
+        svg.add_line(x_start, top_left_y, x_end, top_right_y, "black", stroke_width);
+        // Bottom line of wedge
+        svg.add_line(x_start, bot_left_y, x_end, bot_right_y, "black", stroke_width);
+    }
 
     // Niente "o" circle — open (fill="none") so it reads as a small ring.
+    // Always solid (no dashing) even on a dashed-wedge hairpin.
     if let Some(n) = niente {
         svg.add_circle(n.cx, n.cy, n.radius, "black", n.stroke_width, "none");
     }
@@ -322,5 +339,196 @@ mod tests {
         draw_hairpin(&mut svg_d, &d);
         // Different circle anchor (x_start vs x_end) → different SVG payload.
         assert_ne!(svg_c.to_svg(), svg_d.to_svg());
+    }
+
+    // ---- dashed hairpin ----
+
+    use crate::layout::hairpin::layout_hairpin_dashed;
+
+    #[test]
+    fn plain_hairpin_emits_no_dasharray() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("stroke-dasharray").count(),
+            0,
+            "plain hairpin must not emit a stroke-dasharray attribute on any line"
+        );
+    }
+
+    #[test]
+    fn dashed_hairpin_emits_dasharray_on_both_lines() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("stroke-dasharray").count(),
+            2,
+            "dashed hairpin must emit stroke-dasharray on both wedge lines (got {} occurrences); SVG:\n{out}",
+            out.matches("stroke-dasharray").count()
+        );
+    }
+
+    #[test]
+    fn dashed_hairpin_still_emits_two_lines() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("<line ").count(),
+            2,
+            "dashed hairpin must still produce exactly 2 wedge lines"
+        );
+    }
+
+    #[test]
+    fn dashed_hairpin_dasharray_value_matches_layout() {
+        // dash_length = 0.4 * 250 = 100, gap_length = 0.2 * 250 = 50.
+        // The dasharray string emitted by the renderer must contain those numbers.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let d = layout.dashed.unwrap();
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        let expected = format!(r#"stroke-dasharray="{},{}""#, d.dash_length, d.gap_length);
+        assert!(
+            out.contains(&expected),
+            "expected dasharray {expected:?} in SVG; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn dashed_hairpin_dasharray_uses_design_units_not_staff_spaces() {
+        // Regression guard: dasharray must be in font design units (matches
+        // x/y coordinates) not in staff-space units. A future refactor that
+        // forgets to multiply by staff_space would emit "0.4,0.2" — much
+        // too fine — and this test catches it.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        // For SS=250 the correct emitted values are 100,50. The wrong values
+        // (raw staff-space constants) would be 0.4,0.2.
+        assert!(out.contains(r#"stroke-dasharray="100,50""#), "SVG:\n{out}");
+        assert!(
+            !out.contains(r#"stroke-dasharray="0.4,0.2""#),
+            "must NOT emit raw staff-space constants; SVG:\n{out}"
+        );
+    }
+
+    #[test]
+    fn dashed_hairpin_stroke_width_preserved() {
+        let custom_sw = 14.0;
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, custom_sw);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        // Both wedge lines must carry the custom stroke width.
+        let count = out.matches(&format!(r#"stroke-width="{custom_sw}""#)).count();
+        assert_eq!(
+            count, 2,
+            "stroke-width {custom_sw} should appear on both dashed wedge lines; got {count}; SVG:\n{out}"
+        );
+    }
+
+    #[test]
+    fn dashed_and_plain_hairpin_produce_different_svg() {
+        let mut svg_p = make_svg();
+        let mut svg_d = make_svg();
+        let p = layout_hairpin(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let d = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg_p, &p);
+        draw_hairpin(&mut svg_d, &d);
+        assert_ne!(
+            svg_p.to_svg(),
+            svg_d.to_svg(),
+            "dashed and plain hairpins must produce visually distinct SVG"
+        );
+    }
+
+    #[test]
+    fn dashed_lines_share_same_dasharray_value() {
+        // Both wedge lines must carry the SAME dasharray (a single dash
+        // pattern across the whole wedge — not a per-line override).
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        // Extract all stroke-dasharray="..." values and assert they're all equal.
+        let mut values = vec![];
+        for line in out.lines() {
+            if let Some(start) = line.find(r#"stroke-dasharray=""#) {
+                let after = &line[start + r#"stroke-dasharray=""#.len()..];
+                if let Some(end) = after.find('"') {
+                    values.push(after[..end].to_string());
+                }
+            }
+        }
+        assert_eq!(values.len(), 2, "expected 2 dasharray values; got {values:?}");
+        assert_eq!(values[0], values[1], "both wedge lines must share the same dasharray");
+    }
+
+    #[test]
+    fn dashed_decrescendo_x_coordinates_in_svg() {
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Decrescendo, 200.0, 800.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert!(out.contains(r#"x1="200""#), "x_start should appear as x1");
+        assert!(out.contains(r#"x2="800""#), "x_end should appear as x2");
+    }
+
+    #[test]
+    fn dashed_hairpin_with_niente_keeps_circle_solid() {
+        // Combo via field mutation: dashed wedge + niente circle. The wedge
+        // lines must be dashed; the niente circle must remain solid (no
+        // stroke-dasharray attribute on the <circle> element). Engraved
+        // convention: the niente "o" is a definite symbol, never dashed.
+        let mut layout = layout_hairpin_with_niente(
+            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+        );
+        layout.dashed = Some(crate::layout::hairpin::HairpinDashStyle {
+            dash_length: 100.0,
+            gap_length: 50.0,
+        });
+        let mut svg = make_svg();
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        // Wedge lines: 2 dashed.
+        assert_eq!(out.matches("<line ").count(), 2);
+        // The two wedge lines carry dasharray.
+        assert_eq!(out.matches("stroke-dasharray").count(), 2);
+        // Niente circle is present.
+        assert_eq!(out.matches("<circle ").count(), 1);
+        // The circle element must NOT carry stroke-dasharray.
+        let circle_line = out
+            .lines()
+            .find(|l| l.contains("<circle "))
+            .expect("circle element must be present in combined output");
+        assert!(
+            !circle_line.contains("stroke-dasharray"),
+            "niente circle must remain solid even on a dashed hairpin; got: {circle_line}"
+        );
+        // And the circle is still an open "o".
+        assert!(circle_line.contains(r#"fill="none""#));
+    }
+
+    #[test]
+    fn dashed_hairpin_alone_emits_no_circle() {
+        // The dashed constructor must NOT also set niente — symmetry with
+        // the layout-level "dashed_does_not_set_niente" test.
+        let mut svg = make_svg();
+        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        draw_hairpin(&mut svg, &layout);
+        let out = svg.to_svg();
+        assert_eq!(
+            out.matches("<circle ").count(),
+            0,
+            "dashed-only hairpin must emit zero <circle> elements"
+        );
     }
 }

@@ -27,6 +27,21 @@ pub struct NienteCircleLayout {
     pub stroke_width: f64,
 }
 
+/// Dash/gap pattern for a dashed hairpin wedge.
+///
+/// Both lengths are in font design units. The renderer emits these as an
+/// SVG `stroke-dasharray` attribute (`"<dash_length>,<gap_length>"`) on
+/// both wedge lines. A niente "o" circle, when present, remains solid —
+/// engraved convention treats the niente as a definite symbol independent
+/// of the wedge's dashed/solid styling.
+#[derive(Clone, Copy, Debug)]
+pub struct HairpinDashStyle {
+    /// Length of each dash, in font design units.
+    pub dash_length: f64,
+    /// Length of each gap between dashes, in font design units.
+    pub gap_length: f64,
+}
+
 /// Layout result for a hairpin (crescendo/decrescendo wedge).
 ///
 /// All coordinates in font design units. The hairpin is drawn as two
@@ -50,6 +65,10 @@ pub struct HairpinLayout {
     /// plain hairpin; `Some` only when constructed via
     /// [`layout_hairpin_with_niente`].
     pub niente: Option<NienteCircleLayout>,
+    /// Optional dashed-wedge style. `None` for a plain solid hairpin;
+    /// `Some` only when constructed via [`layout_hairpin_dashed`]. The
+    /// renderer applies the dash pattern to both wedge lines.
+    pub dashed: Option<HairpinDashStyle>,
 }
 
 /// Default vertical distance from bottom staff line to hairpin center, in staff spaces.
@@ -66,6 +85,20 @@ pub const HAIRPIN_HALF_OPENING_SS: f64 = 0.5;
 /// diameter at the closed end of a hairpin to indicate to/from silence.
 /// Radius 0.2ss → diameter 0.4ss.
 pub const HAIRPIN_NIENTE_RADIUS_SS: f64 = 0.2;
+
+/// Default dash length for a dashed hairpin, in staff spaces.
+///
+/// 0.4ss matches typical engraved practice for hairpin continuation marks
+/// and modern dashed-wedge notation. Combined with [`HAIRPIN_GAP_LENGTH_SS`]
+/// this gives a roughly 2:1 dash-to-gap ratio.
+pub const HAIRPIN_DASH_LENGTH_SS: f64 = 0.4;
+
+/// Default gap length between dashes for a dashed hairpin, in staff spaces.
+///
+/// 0.2ss matches typical engraved practice. The 2:1 dash:gap ratio reads
+/// clearly without being so fine that downstream rasterizers fuse the
+/// dashes into a solid line at small zoom levels.
+pub const HAIRPIN_GAP_LENGTH_SS: f64 = 0.2;
 
 /// Compute the layout for a hairpin (crescendo/decrescendo wedge).
 ///
@@ -93,6 +126,7 @@ pub fn layout_hairpin(
         half_opening,
         stroke_width,
         niente: None,
+        dashed: None,
     }
 }
 
@@ -129,6 +163,42 @@ pub fn layout_hairpin_with_niente(
         cy: layout.y_center,
         radius: HAIRPIN_NIENTE_RADIUS_SS * staff_space,
         stroke_width,
+    });
+    layout
+}
+
+/// Compute the layout for a dashed hairpin wedge.
+///
+/// Identical to [`layout_hairpin`] except that the returned layout carries
+/// a [`HairpinDashStyle`] in its [`HairpinLayout::dashed`] field. Dash and
+/// gap lengths are derived from [`HAIRPIN_DASH_LENGTH_SS`] and
+/// [`HAIRPIN_GAP_LENGTH_SS`] scaled by `staff_space`, so the dash pattern
+/// scales proportionally with staff size.
+///
+/// Dashed hairpins are used for:
+/// - continuation of a hairpin across a system break (the second segment
+///   is conventionally dashed),
+/// - "soft" or implied crescendi in modern notation,
+/// - text-equivalent dashed continuations (independent of the "cresc. - - -"
+///   text variant, which uses dashed text rather than a wedge).
+///
+/// Wedge geometry (x_start, x_end, y_center, half_opening, stroke_width)
+/// is byte-identical to the plain [`layout_hairpin`] for the same
+/// arguments — dashed is purely additive. The [`HairpinLayout::niente`]
+/// field remains `None`; callers wanting both a dashed wedge and a niente
+/// circle can mutate the returned layout's `niente` field after the call.
+pub fn layout_hairpin_dashed(
+    kind: HairpinType,
+    x_start: f64,
+    x_end: f64,
+    staff_bottom_y: f64,
+    staff_space: f64,
+    stroke_width: f64,
+) -> HairpinLayout {
+    let mut layout = layout_hairpin(kind, x_start, x_end, staff_bottom_y, staff_space, stroke_width);
+    layout.dashed = Some(HairpinDashStyle {
+        dash_length: HAIRPIN_DASH_LENGTH_SS * staff_space,
+        gap_length: HAIRPIN_GAP_LENGTH_SS * staff_space,
     });
     layout
 }
@@ -336,5 +406,171 @@ mod tests {
         assert!((n.cx - copy.cx).abs() < 1e-12);
         assert!((n.cy - copy.cy).abs() < 1e-12);
         assert!((n.radius - copy.radius).abs() < 1e-12);
+    }
+
+    // ---- dashed hairpin ----
+
+    fn cresc_d() -> HairpinLayout {
+        layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW)
+    }
+
+    fn decresc_d() -> HairpinLayout {
+        layout_hairpin_dashed(HairpinType::Decrescendo, 100.0, 600.0, BOTTOM_Y, SS, SW)
+    }
+
+    #[test]
+    fn plain_hairpin_has_no_dashed() {
+        // Both constructors that lack a "_dashed" suffix must yield a solid wedge.
+        assert!(cresc().dashed.is_none());
+        assert!(decresc().dashed.is_none());
+        assert!(cresc_n().dashed.is_none());
+        assert!(decresc_n().dashed.is_none());
+    }
+
+    #[test]
+    fn dashed_hairpin_crescendo_carries_style() {
+        let h = cresc_d();
+        let d = h.dashed.expect("dashed crescendo must carry a dash style");
+        assert!(d.dash_length > 0.0, "dash_length must be strictly positive");
+        assert!(d.gap_length > 0.0, "gap_length must be strictly positive");
+    }
+
+    #[test]
+    fn dashed_hairpin_decrescendo_carries_style() {
+        let h = decresc_d();
+        let d = h.dashed.expect("dashed decrescendo must carry a dash style");
+        assert!(d.dash_length > 0.0);
+        assert!(d.gap_length > 0.0);
+    }
+
+    #[test]
+    fn dashed_lengths_match_const_times_staff_space() {
+        let h = cresc_d();
+        let d = h.dashed.unwrap();
+        let expected_dash = HAIRPIN_DASH_LENGTH_SS * SS;
+        let expected_gap = HAIRPIN_GAP_LENGTH_SS * SS;
+        assert!(
+            (d.dash_length - expected_dash).abs() < 1e-9,
+            "dash_length should be HAIRPIN_DASH_LENGTH_SS * staff_space ({expected_dash}), got {}",
+            d.dash_length
+        );
+        assert!(
+            (d.gap_length - expected_gap).abs() < 1e-9,
+            "gap_length should be HAIRPIN_GAP_LENGTH_SS * staff_space ({expected_gap}), got {}",
+            d.gap_length
+        );
+    }
+
+    #[test]
+    fn dashed_lengths_scale_linearly_with_staff_space() {
+        let small = layout_hairpin_dashed(HairpinType::Crescendo, 0.0, 100.0, 0.0, 200.0, SW);
+        let large = layout_hairpin_dashed(HairpinType::Crescendo, 0.0, 100.0, 0.0, 400.0, SW);
+        let ds = small.dashed.unwrap();
+        let dl = large.dashed.unwrap();
+        assert!(dl.dash_length > ds.dash_length, "larger staff space → longer dash");
+        assert!(dl.gap_length > ds.gap_length, "larger staff space → longer gap");
+        // Linear scaling: 200 → 400 doubles both.
+        assert!(((dl.dash_length / ds.dash_length) - 2.0).abs() < 1e-9);
+        assert!(((dl.gap_length / ds.gap_length) - 2.0).abs() < 1e-9);
+        // Absolute values lock to the constants.
+        assert!((ds.dash_length - HAIRPIN_DASH_LENGTH_SS * 200.0).abs() < 1e-9);
+        assert!((ds.gap_length - HAIRPIN_GAP_LENGTH_SS * 200.0).abs() < 1e-9);
+        assert!((dl.dash_length - HAIRPIN_DASH_LENGTH_SS * 400.0).abs() < 1e-9);
+        assert!((dl.gap_length - HAIRPIN_GAP_LENGTH_SS * 400.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn dashed_default_dash_exceeds_gap() {
+        // The default 2:1 dash:gap ratio reads clearly without fusing at small zoom.
+        // Lock the relationship so a future const tweak that flips it surfaces here.
+        let h = cresc_d();
+        let d = h.dashed.unwrap();
+        assert!(
+            d.dash_length > d.gap_length,
+            "default dash ({}) should exceed default gap ({}) for a 2:1 read",
+            d.dash_length, d.gap_length
+        );
+        // Ratio is roughly 2:1 by const choice.
+        let ratio = d.dash_length / d.gap_length;
+        assert!((ratio - 2.0).abs() < 1e-9, "default ratio should be 2:1, got {ratio}");
+    }
+
+    #[test]
+    fn dashed_does_not_alter_wedge_geometry() {
+        let plain = layout_hairpin(HairpinType::Crescendo, 123.0, 789.0, BOTTOM_Y, SS, SW);
+        let dashed = layout_hairpin_dashed(HairpinType::Crescendo, 123.0, 789.0, BOTTOM_Y, SS, SW);
+        assert_eq!(plain.kind, dashed.kind);
+        assert!((plain.x_start - dashed.x_start).abs() < 1e-12);
+        assert!((plain.x_end - dashed.x_end).abs() < 1e-12);
+        assert!((plain.y_center - dashed.y_center).abs() < 1e-12);
+        assert!((plain.half_opening - dashed.half_opening).abs() < 1e-12);
+        assert!((plain.stroke_width - dashed.stroke_width).abs() < 1e-12);
+        assert!(plain.dashed.is_none());
+        assert!(dashed.dashed.is_some());
+    }
+
+    #[test]
+    fn dashed_does_not_set_niente() {
+        // dashed and niente are independent additive fields. Constructing
+        // a dashed hairpin must NOT silently populate niente.
+        assert!(cresc_d().niente.is_none());
+        assert!(decresc_d().niente.is_none());
+    }
+
+    #[test]
+    fn dashed_style_is_copy() {
+        let h = cresc_d();
+        let d = h.dashed.unwrap();
+        let copy = d; // Copy semantics — would not compile if Copy were removed.
+        assert!((d.dash_length - copy.dash_length).abs() < 1e-12);
+        assert!((d.gap_length - copy.gap_length).abs() < 1e-12);
+    }
+
+    #[test]
+    fn dashed_zero_width_hairpin_still_carries_style() {
+        // Edge case: collapsed wedge (x_start == x_end). The dashed flag
+        // should still be set — the renderer's degenerate-line behavior
+        // (zero-length dashes) is its own concern, not the layout's.
+        let h = layout_hairpin_dashed(HairpinType::Crescendo, 300.0, 300.0, BOTTOM_Y, SS, SW);
+        assert!((h.x_start - h.x_end).abs() < 1e-12);
+        assert!(h.dashed.is_some(), "zero-width hairpin should still carry dashed style");
+    }
+
+    #[test]
+    fn dashed_crescendo_and_decrescendo_same_geometry() {
+        // Same arguments → same dashed wedge geometry. Only `kind` differs.
+        let c = cresc_d();
+        let d = decresc_d();
+        assert!((c.y_center - d.y_center).abs() < 1e-12);
+        assert!((c.half_opening - d.half_opening).abs() < 1e-12);
+        assert!((c.x_start - d.x_start).abs() < 1e-12);
+        assert!((c.x_end - d.x_end).abs() < 1e-12);
+        // Dashed style is also identical between cresc and decresc on the same args.
+        let cd = c.dashed.unwrap();
+        let dd = d.dashed.unwrap();
+        assert!((cd.dash_length - dd.dash_length).abs() < 1e-12);
+        assert!((cd.gap_length - dd.gap_length).abs() < 1e-12);
+    }
+
+    #[test]
+    fn dashed_combo_with_niente_supported_via_field_mutation() {
+        // Although there is no single constructor for dashed+niente, the
+        // additive fields are public — callers can compose them. This test
+        // pins that contract so a future move of the fields behind getters
+        // doesn't silently break the combinator path.
+        let mut h = layout_hairpin_with_niente(
+            HairpinType::Crescendo, 100.0, 600.0, BOTTOM_Y, SS, SW,
+        );
+        assert!(h.niente.is_some());
+        assert!(h.dashed.is_none());
+        h.dashed = Some(HairpinDashStyle {
+            dash_length: 80.0,
+            gap_length: 40.0,
+        });
+        assert!(h.niente.is_some(), "field mutation must not clear niente");
+        assert!(h.dashed.is_some(), "field mutation must set dashed");
+        let d = h.dashed.unwrap();
+        assert!((d.dash_length - 80.0).abs() < 1e-12);
+        assert!((d.gap_length - 40.0).abs() < 1e-12);
     }
 }

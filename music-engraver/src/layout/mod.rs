@@ -115,8 +115,9 @@ pub use grace::{
     GRACE_NOTE_SCALE, GRACE_NOTE_SPACING_SS,
 };
 pub use hairpin::{
-    layout_hairpin, layout_hairpin_with_niente, HairpinLayout, HairpinType, NienteCircleLayout,
-    HAIRPIN_BELOW_STAFF_SS, HAIRPIN_NIENTE_RADIUS_SS,
+    layout_hairpin, layout_hairpin_dashed, layout_hairpin_with_niente, HairpinDashStyle,
+    HairpinLayout, HairpinType, NienteCircleLayout, HAIRPIN_BELOW_STAFF_SS,
+    HAIRPIN_DASH_LENGTH_SS, HAIRPIN_GAP_LENGTH_SS, HAIRPIN_NIENTE_RADIUS_SS,
 };
 pub use lyric::{layout_lyric, LyricContinuation, LyricLayout, LyricSyllable, LYRIC_BELOW_STAFF_SS};
 pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};

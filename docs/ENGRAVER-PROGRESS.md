@@ -4467,3 +4467,201 @@
   above for the plumbing-through chunk). The pre-existing
   `multi_staff.rs:394` clippy warning and unrelated `music/` crate
   clippy warnings remain unaddressed (out of scope).
+
+## 2026-05-27 — Post-v1, dashed hairpin variant
+
+- Did: Added engraver support for dashed-wedge hairpins — the standard
+  notation for hairpin continuation across system breaks and for
+  "soft"/implied crescendi in modern scores. Mirrors the niente
+  additive-`Option<...>` pattern from the previous chunk. Touched
+  three files:
+
+  1. `music-engraver/src/layout/hairpin.rs`:
+     - New `HairpinDashStyle { dash_length, gap_length }` —
+       `#[derive(Clone, Copy, Debug)]` so `Option<HairpinDashStyle>`
+       is `Copy` and the renderer's destructure-by-value pattern still
+       type-checks.
+     - New `pub const HAIRPIN_DASH_LENGTH_SS: f64 = 0.4;` and
+       `pub const HAIRPIN_GAP_LENGTH_SS: f64 = 0.2;` (2:1 dash:gap by
+       design — the docstrings on the constants explain why).
+     - New `dashed: Option<HairpinDashStyle>` field on `HairpinLayout`,
+       always `None` from `layout_hairpin` and
+       `layout_hairpin_with_niente` (backward-compatible — no existing
+       call site sees behavior change).
+     - New `layout_hairpin_dashed(kind, x_start, x_end, staff_bottom_y,
+       staff_space, stroke_width) -> HairpinLayout` — same signature as
+       `layout_hairpin`, returns wedge with `dashed: Some(...)` populated
+       (dash/gap derived from the constants times `staff_space` so
+       the dash pattern scales linearly with staff size).
+
+  2. `music-engraver/src/render/hairpin_renderer.rs`:
+     - Added `dashed` to the destructure pattern.
+     - When `dashed.is_some()`, switches from `add_line` to
+       `add_dashed_line` (already present in `SvgWriter` from prior
+       work) for both wedge lines. Dasharray string is formatted as
+       `"{dash_length},{gap_length}"` in font design units.
+     - When `dashed.is_none()`, the existing solid-line path runs
+       unchanged.
+     - Niente "o" circle stays solid (no stroke-dasharray) regardless
+       of the wedge style — engraved convention treats the niente as
+       a definite symbol independent of dashed/solid wedge styling.
+     - Updated the `draw_hairpin` doc comment to mention both
+       additive flags.
+
+  3. `music-engraver/src/layout/mod.rs`: re-exported the new public
+     items (`layout_hairpin_dashed`, `HairpinDashStyle`,
+     `HAIRPIN_DASH_LENGTH_SS`, `HAIRPIN_GAP_LENGTH_SS`).
+
+  Design choice — dash/gap in design units, not staff-spaces, on the
+  `HairpinDashStyle` struct: the renderer needs the values in the
+  same coordinate system as the wedge x/y (font design units, matches
+  the viewBox). Storing the pre-scaled values on the struct keeps the
+  renderer arithmetic-free and matches the existing `NienteCircleLayout`
+  convention (radius is in design units). The
+  `dashed_hairpin_dasharray_uses_design_units_not_staff_spaces`
+  regression test pins this — a future refactor that forgets the
+  `* staff_space` multiplication would emit `"0.4,0.2"` (much too
+  fine) instead of `"100,50"` and that test catches it immediately.
+
+  Design choice — dashed wedge keeps niente solid: a dashed-niente
+  combination would look like a tiny dashed circle, which engraved
+  convention does not use (the niente "o" is always a definite,
+  solid ring even on a continuation hairpin). The renderer always
+  uses `add_circle` for niente; the
+  `dashed_hairpin_with_niente_keeps_circle_solid` test pins this
+  three ways: it asserts the wedge has 2 `stroke-dasharray`
+  occurrences, the circle line does NOT contain `stroke-dasharray`,
+  and the circle line still carries `fill="none"`.
+
+  Design choice — no `layout_hairpin_dashed_with_niente` constructor.
+  Combining dashed + niente is the rare case. Adding a third
+  constructor would balloon the API surface (you'd then want
+  `_dashed_with_niente_at_open_end` etc. for every cross-product). The
+  fields are public; the
+  `dashed_combo_with_niente_supported_via_field_mutation` layout test
+  pins the field-mutation path as a stable API contract — a future
+  refactor that hides these fields behind getters must preserve the
+  combinator-via-mutation route or add explicit combinator constructors.
+
+  Tests added (23 total — 11 layout + 12 renderer):
+
+  - `hairpin.rs` (11):
+    - `plain_hairpin_has_no_dashed` — checks all four
+      non-dashed constructors (`cresc`, `decresc`, `cresc_n`,
+      `decresc_n`) return `dashed.is_none()`.
+    - `dashed_hairpin_crescendo_carries_style`,
+      `dashed_hairpin_decrescendo_carries_style` — both directions
+      populate the `dashed` field with strictly-positive lengths.
+    - `dashed_lengths_match_const_times_staff_space` — locks both
+      `dash_length` and `gap_length` to the constant-times-staff-space
+      product. Catches a refactor that swaps the constants or drops the
+      staff_space multiplication.
+    - `dashed_lengths_scale_linearly_with_staff_space` — walks two
+      staff sizes (200, 400), asserts both absolute values and the
+      2× ratio on both dash and gap.
+    - `dashed_default_dash_exceeds_gap` — locks the 2:1 default
+      ratio (`dash > gap`, ratio == 2.0). A future const tweak
+      that flips the relationship surfaces here.
+    - `dashed_does_not_alter_wedge_geometry` — byte-equal wedge
+      fields between `layout_hairpin` and `layout_hairpin_dashed`
+      (dashed is purely additive — niente did the same).
+    - `dashed_does_not_set_niente` — independence: the dashed
+      constructor must NOT silently populate the niente field.
+    - `dashed_style_is_copy` — proves `HairpinDashStyle: Copy` (the
+      renderer's destructure-by-value pattern needs it).
+    - `dashed_zero_width_hairpin_still_carries_style` — edge case:
+      collapsed wedge still has `dashed.is_some()`. The
+      degenerate-line behavior is the renderer's problem, not the
+      layout's.
+    - `dashed_crescendo_and_decrescendo_same_geometry` — sanity:
+      same args → same wedge geometry AND same dash style. Only
+      `kind` differs.
+    - `dashed_combo_with_niente_supported_via_field_mutation` —
+      pins the combinator-via-mutation API contract: construct via
+      `layout_hairpin_with_niente`, then `layout.dashed = Some(...)`,
+      assert both fields populated and `niente` survived. Locks the
+      independence of the two `Option<...>` fields.
+
+  - `hairpin_renderer.rs` (12):
+    - `plain_hairpin_emits_no_dasharray` — count of
+      `stroke-dasharray` substrings is exactly 0 on a plain hairpin.
+    - `dashed_hairpin_emits_dasharray_on_both_lines` — count is
+      exactly 2 on a dashed hairpin (both wedge lines carry it).
+    - `dashed_hairpin_still_emits_two_lines` — count of `<line `
+      is still exactly 2 (dashing does not displace the wedge).
+    - `dashed_hairpin_dasharray_value_matches_layout` — the emitted
+      `stroke-dasharray="A,B"` string contains the exact numeric
+      values from `layout.dashed.unwrap().dash_length` and
+      `gap_length`.
+    - `dashed_hairpin_dasharray_uses_design_units_not_staff_spaces`
+      — regression guard: asserts the emitted dasharray is
+      `"100,50"` (design units) and NOT `"0.4,0.2"` (raw
+      staff-space constants). Catches a future refactor that
+      forgets the `* staff_space` multiplication.
+    - `dashed_hairpin_stroke_width_preserved` — custom stroke
+      width appears on exactly 2 dashed wedge lines.
+    - `dashed_and_plain_hairpin_produce_different_svg` — sanity:
+      visually distinguishable.
+    - `dashed_lines_share_same_dasharray_value` — extracts both
+      dasharray values via string parsing and asserts equality —
+      a single dash pattern applies to the whole wedge, not
+      per-line overrides.
+    - `dashed_decrescendo_x_coordinates_in_svg` — `x1="200"`,
+      `x2="800"` flow through to the SVG for a non-default
+      x-range.
+    - `dashed_hairpin_with_niente_keeps_circle_solid` — the
+      combinator path: 2 dashed wedge lines + 1 solid niente
+      circle. Asserts: 2 lines, 2 `stroke-dasharray`
+      occurrences, 1 circle, circle line lacks
+      `stroke-dasharray`, circle still has `fill="none"`. Four
+      simultaneous invariants.
+    - `dashed_hairpin_alone_emits_no_circle` — independence:
+      dashed alone produces zero circles.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2712 tests passing,
+  0 failing** (up from 2689 by exactly the 23 new tests).
+  `cargo test -p music-engraver --lib hairpin` runs the full hairpin
+  subtree (80 tests including all 23 new ones) — all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings on
+  either modified file (pre-existing `multi_staff.rs:394` warning and
+  unrelated `music/` crate clippy warnings persist — out of scope).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). Natural follow-ups on the hairpin surface itself:
+  - Plumb both `layout_hairpin_dashed` and `layout_hairpin_with_niente`
+    through the score → system_renderer → page_renderer chain so a
+    `ScoreBuilder` caller can request a dashed or niente hairpin
+    end-to-end. Requires score-event flags for both — out of scope for
+    this chunk. The natural place: a `HairpinStyle` enum or bit-flag
+    bundle on the score-event side (Plain, Dashed, Niente, DashedNiente).
+  - Use `layout_hairpin_dashed` for the *second segment* of a
+    cross-system hairpin automatically — engraved convention says the
+    continuation half should be dashed. The
+    `page_renderer::cross_system_hairpin_*` tests would need an
+    update.
+  - "cresc. - - -" / "decresc. - - -" *text variants* (orthogonal to
+    the wedge — uses italic text with dashed continuation lines,
+    standard for long crescendi).
+  - Open-end niente (rare — fades to/from silence at the open end
+    rather than the closed end).
+
+- Open issues: None. The change is additive — no existing public API
+  altered, no existing call site changed, no golden baseline
+  regenerated, no example or example test modified. The two new
+  public surfaces (`HairpinDashStyle`, `layout_hairpin_dashed`) are
+  independent of the existing niente surface; the
+  `dashed_combo_with_niente_supported_via_field_mutation` test pins
+  the combinator-via-mutation contract for the rare dashed+niente
+  case. The pre-existing `multi_staff.rs:394` clippy warning and
+  unrelated `music/` crate clippy warnings remain unaddressed (out
+  of scope).
