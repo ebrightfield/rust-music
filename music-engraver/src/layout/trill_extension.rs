@@ -293,9 +293,73 @@ impl TrillExtensionSpeedOptions {
     /// independent of the speed knob — combining
     /// `.with_extension_length_ss(L)` with a non-standard speed clamps a
     /// fast/slow wiggle to the requested length.
+    ///
+    /// This setter is permissive — any `f64` is stored as-is so the options
+    /// bundle can travel through annotation pipelines whose validity is only
+    /// checked at draw time (the renderer's fail-safe collapses end_x to
+    /// start_x for non-positive lengths, silently producing no wiggle).
+    /// Callers wanting construction-time rejection of values the renderer
+    /// would silently suppress should use
+    /// [`with_extension_length_ss_validated`](Self::with_extension_length_ss_validated),
+    /// which returns `Option<Self>` and rejects exactly the band
+    /// `!(length_ss > 0.0)`.
     pub const fn with_extension_length_ss(mut self, length_ss: f64) -> Self {
         self.extension_length_ss = Some(length_ss);
         self
+    }
+
+    /// Stricter counterpart to
+    /// [`with_extension_length_ss`](Self::with_extension_length_ss): rejects
+    /// at the options-bundle construction site exactly the lengths that the
+    /// renderer's fail-safe would silently suppress (no wiggle drawn),
+    /// returning `Option<Self>`.
+    ///
+    /// The accept band mirrors the renderer's "would draw a wiggle" check
+    /// in
+    /// [`crate::render::system_renderer`](crate::render::system_renderer)
+    /// — `length_ss > 0.0`. The reject band is therefore precisely
+    /// `length_ss <= 0.0 || length_ss.is_nan()`. `+∞` lands on the accept
+    /// band because the renderer accepts it (and clamps it to the natural
+    /// span); this preserves byte-equivalence with the permissive setter on
+    /// the boundary case and matches the renderer literally.
+    ///
+    /// Rejection rules (`None` returned):
+    /// - `length_ss == 0.0` (positive or negative zero — both fail
+    ///   `length_ss > 0.0`).
+    /// - `length_ss < 0.0` (any negative finite, including `-∞`).
+    /// - `length_ss.is_nan()` (any NaN payload — NaN comparisons return
+    ///   false).
+    ///
+    /// Acceptance (`Some(self)` returned with `extension_length_ss`
+    /// populated):
+    /// - `length_ss > 0.0` (any finite positive value, plus `+∞`).
+    /// - All other fields on `self` (`speed`, `ornament`) are preserved
+    ///   unchanged (additive contract, matching the permissive setter
+    ///   byte-for-byte).
+    ///
+    /// `const`-callable, matching every other setter on this bundle. On the
+    /// `None` branch the builder chain is broken at the call site and the
+    /// partially-built bundle is dropped — there is no fallback that
+    /// silently leaves `extension_length_ss` unset, because that would
+    /// demote a rejection into a no-op.
+    ///
+    /// Mirrors the validator-pairing pattern at
+    /// [`crate::layout::trill_bracket::TrillBracketOptions::with_extension_length_ss_validated`]
+    /// and
+    /// [`crate::layout::trill_options::TrillExtensionFullOptions::with_extension_length_ss_validated`]
+    /// — all three options bundles expose the same
+    /// `with_extension_length_ss` / `with_extension_length_ss_validated`
+    /// pair.
+    pub const fn with_extension_length_ss_validated(mut self, length_ss: f64) -> Option<Self> {
+        // Mirror the renderer's accept band literally — any future change to
+        // the renderer's "would draw" check (e.g. tightening to a minimum
+        // tile-width) needs to update this clause in lockstep.
+        if length_ss > 0.0 {
+            self.extension_length_ss = Some(length_ss);
+            Some(self)
+        } else {
+            None
+        }
     }
 }
 
@@ -2652,6 +2716,172 @@ mod tests {
                 assert_eq!(end, TrillWiggleSpeed::Slow);
             }
             _ => panic!("ramp variant must survive validation unchanged"),
+        }
+    }
+
+    // --- TrillExtensionSpeedOptions: with_extension_length_ss_validated ---
+    //
+    // The validator's accept band mirrors the renderer's "would draw a
+    // wiggle" check (`length_ss > 0.0`) in
+    // `system_renderer::draw_trill_extensions_for_system`. The reject band
+    // is therefore precisely the `Some(_)` non-positive arm that collapses
+    // `end_x` to `start_x` (no wiggle). These tests pin the rejection rules
+    // and the Some-branch byte-equivalence with the permissive setter.
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_rejects_zero() {
+        // `0.0` is the headline rejection — the renderer's non-positive arm
+        // suppresses the wiggle entirely. Construction-time rejection
+        // surfaces the misuse rather than silently producing an empty SVG.
+        let result = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss_validated(0.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_rejects_negative_zero() {
+        // `-0.0 > 0.0` is false. Catches a refactor that used
+        // `length_ss.is_sign_negative()` or `length_ss != 0.0` instead.
+        let result = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss_validated(-0.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_rejects_negative_finite() {
+        // Walks a representative set of negative magnitudes to lock in
+        // that the predicate is `> 0.0` rather than a per-magnitude band.
+        for len in [-0.001, -0.5, -1.0, -10.0, -1.0e6] {
+            let result = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss_validated(len);
+            assert_eq!(result, None, "expected rejection for len={len}");
+        }
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_rejects_negative_infinity() {
+        // `-∞ > 0.0` is false, so `-∞` rejects like any other negative.
+        let result = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss_validated(f64::NEG_INFINITY);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_rejects_nan() {
+        // NaN > 0.0 is false (NaN comparisons always return false). The
+        // renderer suppresses NaN — the validator must match.
+        let result = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss_validated(f64::NAN);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_accepts_positive_finite() {
+        // The headline accept band: typical positive lengths. Walks small,
+        // unit, and large magnitudes.
+        for len in [0.001, 0.5, 1.0, 2.75, 1.0e6] {
+            let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(opts.extension_length_ss, Some(len), "len={len}");
+        }
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_accepts_positive_infinity() {
+        // `+∞ > 0.0` is true — the renderer accepts `+∞` and clamps the
+        // requested end_x to the natural span. The validator mirrors this
+        // exactly to preserve byte-equivalence with the permissive setter
+        // on the boundary case.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+            .with_extension_length_ss_validated(f64::INFINITY)
+            .expect("+infinity must be accepted to mirror the renderer");
+        assert_eq!(opts.extension_length_ss, Some(f64::INFINITY));
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_some_byte_equals_permissive() {
+        // On any accepted length, the validator must produce a bundle
+        // field-by-field equal to the permissive setter. PartialEq covers
+        // every field.
+        for len in [0.001, 0.5, 1.0, 2.75, 1.0e6, f64::INFINITY] {
+            let permissive = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss(len);
+            let validated = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(permissive, validated, "len={len}");
+        }
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_preserves_other_setters_on_some() {
+        // The validator must be additive: chaining it on top of a bundle
+        // with other fields already set leaves those fields intact on the
+        // `Some` branch.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss_validated(3.25)
+            .expect("3.25 is a valid extension length");
+        assert_eq!(opts.speed, TrillWiggleSpeed::Faster);
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.extension_length_ss, Some(3.25));
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_overwrites_prior_value_on_some() {
+        // Same last-write-wins semantic as the permissive setter when both
+        // values are on the accept band.
+        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
+            .with_extension_length_ss_validated(1.0)
+            .expect("1.0 is valid")
+            .with_extension_length_ss_validated(2.5)
+            .expect("2.5 is valid");
+        assert_eq!(opts.extension_length_ss, Some(2.5));
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_is_const_callable() {
+        // `const fn` symmetry: matches every other setter on this bundle.
+        const SOME_OPTS: Option<TrillExtensionSpeedOptions> =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss_validated(1.5);
+        const NONE_OPTS: Option<TrillExtensionSpeedOptions> =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss_validated(0.0);
+        assert!(SOME_OPTS.is_some());
+        assert!(NONE_OPTS.is_none());
+    }
+
+    #[test]
+    fn speed_options_with_extension_length_ss_validated_rejection_matches_renderer_accept_band() {
+        // Cross-validation: for every probe value, the validator's
+        // `is_none()` must equal the renderer's "would suppress" predicate
+        // (`!(length_ss > 0.0)`). Locks the validator and renderer
+        // together — any future drift trips this canary.
+        for len in [
+            -1.0e6,
+            -2.0,
+            -0.001,
+            -0.0,
+            0.0,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            0.001,
+            0.5,
+            1.0,
+            1.0e6,
+            f64::INFINITY,
+        ] {
+            let validator_is_none = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Standard)
+                .with_extension_length_ss_validated(len)
+                .is_none();
+            let renderer_would_suppress = !(len > 0.0);
+            assert_eq!(
+                validator_is_none, renderer_would_suppress,
+                "drift at len={len}: validator_is_none={validator_is_none} \
+                 renderer_would_suppress={renderer_would_suppress}"
+            );
         }
     }
 }

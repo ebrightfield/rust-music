@@ -271,9 +271,73 @@ impl TrillBracketOptions {
     /// independent of every other knob on this bundle — combining
     /// `.with_extension_length_ss(L)` with a bracket anchors the end hook
     /// at the shortened terminus.
+    ///
+    /// This setter is permissive — any `f64` is stored as-is so the options
+    /// bundle can travel through annotation pipelines whose validity is only
+    /// checked at draw time (the renderer's fail-safe collapses end_x to
+    /// start_x for non-positive lengths, silently producing no wiggle).
+    /// Callers wanting construction-time rejection of values the renderer
+    /// would silently suppress should use
+    /// [`with_extension_length_ss_validated`](Self::with_extension_length_ss_validated),
+    /// which returns `Option<Self>` and rejects exactly the band
+    /// `!(length_ss > 0.0)`.
     pub const fn with_extension_length_ss(mut self, length_ss: f64) -> Self {
         self.extension_length_ss = Some(length_ss);
         self
+    }
+
+    /// Stricter counterpart to
+    /// [`with_extension_length_ss`](Self::with_extension_length_ss): rejects
+    /// at the options-bundle construction site exactly the lengths that the
+    /// renderer's fail-safe would silently suppress (no wiggle drawn),
+    /// returning `Option<Self>`.
+    ///
+    /// The accept band mirrors the renderer's "would draw a wiggle" check
+    /// in
+    /// [`crate::render::system_renderer`](crate::render::system_renderer)
+    /// — `length_ss > 0.0`. The reject band is therefore precisely
+    /// `length_ss <= 0.0 || length_ss.is_nan()`. `+∞` lands on the accept
+    /// band because the renderer accepts it (and clamps it to the natural
+    /// span); this preserves byte-equivalence with the permissive setter on
+    /// the boundary case and matches the renderer literally.
+    ///
+    /// Rejection rules (`None` returned):
+    /// - `length_ss == 0.0` (positive or negative zero — both fail
+    ///   `length_ss > 0.0`).
+    /// - `length_ss < 0.0` (any negative finite, including `-∞`).
+    /// - `length_ss.is_nan()` (any NaN payload — NaN comparisons return
+    ///   false).
+    ///
+    /// Acceptance (`Some(self)` returned with `extension_length_ss`
+    /// populated):
+    /// - `length_ss > 0.0` (any finite positive value, plus `+∞`).
+    /// - All other fields on `self` (including `side`, `direction`,
+    ///   `length_ss`, `ornament`) are preserved unchanged (additive
+    ///   contract, matching the permissive setter byte-for-byte).
+    ///
+    /// `const`-callable, matching every other setter on this bundle. On the
+    /// `None` branch the builder chain is broken at the call site and the
+    /// partially-built bundle is dropped — there is no fallback that
+    /// silently leaves `extension_length_ss` unset, because that would
+    /// demote a rejection into a no-op.
+    ///
+    /// Mirrors the validator-pairing pattern at
+    /// [`crate::layout::trill_extension::TrillExtensionSpeedOptions::with_extension_length_ss_validated`]
+    /// and
+    /// [`crate::layout::trill_options::TrillExtensionFullOptions::with_extension_length_ss_validated`]
+    /// — all three options bundles expose the same
+    /// `with_extension_length_ss` / `with_extension_length_ss_validated`
+    /// pair.
+    pub const fn with_extension_length_ss_validated(mut self, length_ss: f64) -> Option<Self> {
+        // Mirror the renderer's accept band literally — any future change to
+        // the renderer's "would draw" check (e.g. tightening to a minimum
+        // tile-width) needs to update this clause in lockstep.
+        if length_ss > 0.0 {
+            self.extension_length_ss = Some(length_ss);
+            Some(self)
+        } else {
+            None
+        }
     }
 }
 
@@ -1346,5 +1410,185 @@ mod tests {
         let zero =
             TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
         assert_ne!(none, zero);
+    }
+
+    // --- with_extension_length_ss_validated — strict counterpart to
+    // with_extension_length_ss. The accept band mirrors the renderer's
+    // "would draw a wiggle" check (`length_ss > 0.0`). The reject band is
+    // therefore precisely the `Some(_)` non-positive arm in
+    // `system_renderer::mod::draw_trill_extensions_for_system` that collapses
+    // `end_x` to `start_x` (no wiggle). These tests pin the rejection rules
+    // and the Some-branch byte-equivalence with the permissive setter.
+
+    #[test]
+    fn options_with_extension_length_ss_validated_rejects_zero() {
+        // `0.0` is the headline rejection — the renderer's non-positive arm
+        // suppresses the wiggle entirely. Construction-time rejection
+        // surfaces the misuse rather than silently producing an empty SVG.
+        let result =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss_validated(0.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_rejects_negative_zero() {
+        // `-0.0` is a separate IEEE-754 representation but `-0.0 > 0.0` is
+        // false, so it must reject just like `0.0`. Catches a hypothetical
+        // refactor that started using `length_ss.is_sign_negative()`
+        // (which differs on `-0.0` vs `0.0`) or `length_ss != 0.0`.
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss_validated(-0.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_rejects_negative_finite() {
+        // Negative finite lengths collapse end_x to start_x at the renderer.
+        // Walks a representative set of negative magnitudes — small, large,
+        // sub-unit — to lock in that the predicate is `> 0.0` rather than
+        // a per-magnitude band.
+        for len in [-0.001, -0.5, -1.0, -10.0, -1.0e6] {
+            let result = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_extension_length_ss_validated(len);
+            assert_eq!(result, None, "expected rejection for len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_rejects_negative_infinity() {
+        // `-∞ > 0.0` is false, so `-∞` rejects like any other negative.
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss_validated(f64::NEG_INFINITY);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_rejects_nan() {
+        // NaN > 0.0 is false (NaN comparisons always return false). The
+        // renderer's `> 0.0` clause therefore suppresses NaN — the validator
+        // must match. Catches a refactor that swapped the comparison for
+        // `length_ss >= some_eps` without thinking about NaN.
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss_validated(f64::NAN);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_accepts_positive_finite() {
+        // The headline accept band: typical positive lengths. Walks small
+        // (< 1), unit, and large magnitudes to pin down that the predicate
+        // is `> 0.0` and not band-restricted.
+        for len in [0.001, 0.5, 1.0, 2.75, 1.0e6] {
+            let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_extension_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(opts.extension_length_ss, Some(len), "len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_accepts_positive_infinity() {
+        // `+∞ > 0.0` is true — the renderer accepts `+∞` and clamps the
+        // requested end_x to the natural span. The validator must mirror
+        // this exactly; rejecting `+∞` here would narrow the accept band
+        // relative to the renderer.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss_validated(f64::INFINITY)
+            .expect("+infinity must be accepted to mirror the renderer");
+        assert_eq!(opts.extension_length_ss, Some(f64::INFINITY));
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_some_byte_equals_permissive() {
+        // On any accepted length, the validator must produce a bundle
+        // field-by-field equal to the permissive setter. PartialEq covers
+        // every field. Catches a hypothetical normalization on accept (e.g.
+        // clamping `+∞` to a sentinel, or rounding to two decimals).
+        for len in [0.001, 0.5, 1.0, 2.75, 1.0e6, f64::INFINITY] {
+            let permissive =
+                TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(len);
+            let validated = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_extension_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(permissive, validated, "len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_preserves_other_setters_on_some() {
+        // The validator must be additive: chaining it on top of a bundle
+        // with other fields already set leaves those fields intact on the
+        // `Some` branch. Catches a regression where the validator
+        // accidentally cleared a sibling field on accept.
+        let opts = TrillBracketOptions::new(TrillBracketSide::End)
+            .with_direction(HookDirection::Up)
+            .with_length_ss(0.85)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss_validated(3.25)
+            .expect("3.25 is a valid extension length");
+        assert_eq!(opts.side, TrillBracketSide::End);
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+        assert_eq!(opts.length_ss, Some(0.85));
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.extension_length_ss, Some(3.25));
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_overwrites_prior_value_on_some() {
+        // Same last-write-wins semantic as the permissive setter when both
+        // values are on the accept band. Catches a regression where the
+        // validator switched to "first write wins".
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss_validated(1.0)
+            .expect("1.0 is valid")
+            .with_extension_length_ss_validated(2.5)
+            .expect("2.5 is valid");
+        assert_eq!(opts.extension_length_ss, Some(2.5));
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_is_const_callable() {
+        // `const fn` symmetry: matches every other setter on this bundle.
+        // Hold one `Some` and one `None` const-binding so a future change
+        // that drops `const` from either branch trips this canary at
+        // compile time.
+        const SOME_OPTS: Option<TrillBracketOptions> =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss_validated(1.5);
+        const NONE_OPTS: Option<TrillBracketOptions> =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss_validated(0.0);
+        assert!(SOME_OPTS.is_some());
+        assert!(NONE_OPTS.is_none());
+    }
+
+    #[test]
+    fn options_with_extension_length_ss_validated_rejection_matches_renderer_accept_band() {
+        // Cross-validation: for every probe value, the validator's
+        // `is_none()` must equal the renderer's "would suppress" predicate
+        // (`!(length_ss > 0.0)`). Locks the validator and renderer
+        // together — any future drift trips this canary.
+        for len in [
+            -1.0e6,
+            -2.0,
+            -0.001,
+            -0.0,
+            0.0,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            0.001,
+            0.5,
+            1.0,
+            1.0e6,
+            f64::INFINITY,
+        ] {
+            let validator_is_none = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_extension_length_ss_validated(len)
+                .is_none();
+            let renderer_would_suppress = !(len > 0.0);
+            assert_eq!(
+                validator_is_none, renderer_would_suppress,
+                "drift at len={len}: validator_is_none={validator_is_none} \
+                 renderer_would_suppress={renderer_would_suppress}"
+            );
+        }
     }
 }

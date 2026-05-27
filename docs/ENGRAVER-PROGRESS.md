@@ -4043,3 +4043,133 @@
   `music/src/notation/rhythm/meter.rs` and
   `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, with_extension_length_ss_validated across three trill options bundles
+
+- Did: Extended the validator-pairing pattern to the
+  *extension-length-acceptance* surface across all three trill options
+  bundles. Added `with_extension_length_ss_validated(length_ss: f64) -> Option<Self>`
+  on:
+  - `TrillBracketOptions` in
+    `music-engraver/src/layout/trill_bracket.rs`
+  - `TrillExtensionSpeedOptions` in
+    `music-engraver/src/layout/trill_extension.rs`
+  - `TrillExtensionFullOptions` in
+    `music-engraver/src/layout/trill_options.rs`
+
+  All three permissive `with_extension_length_ss` setters store any `f64`
+  unchanged so options bundles can travel through annotation pipelines
+  whose validity is only checked at draw time. The renderer's "would draw
+  a wiggle" check in
+  `render/system_renderer/mod.rs:1064-1075`
+  (`Some(len_ss) if len_ss > 0.0` → emit wiggle; non-positive `Some(_)`
+  → collapse `end_x` to `start_x` → no wiggle) is the documented
+  fail-safe. The new validated counterparts mirror that predicate
+  literally: accept iff `length_ss > 0.0`. The reject band is therefore
+  precisely `length_ss <= 0.0 || length_ss.is_nan()` — `0.0`, `-0.0`,
+  every finite negative, `-∞`, and every NaN payload return `None`;
+  every finite positive *and* `+∞` (which the renderer accepts via
+  clamping to the natural span) return `Some(self)`.
+
+  The accept band is locked to the renderer's predicate, not hardcoded
+  — a future tightening of the renderer (e.g. requiring a minimum
+  tile-width) would need to update both clauses in lockstep, and the
+  `rejection_matches_renderer_accept_band` test on each bundle walks 12
+  probe values cross-validating `is_none() iff !(len > 0.0)`. A
+  fourth-layer cross-validation test on `TrillExtensionFullOptions`
+  (`three_bundles_agree_on_accept_band`) walks the same probe set
+  across all three bundles and asserts that no two implementations
+  disagree on any value — catches drift in the riskiest part of the
+  pattern (permissive/validated split applied independently three
+  times).
+
+  All three validated methods are `const fn`, matching every other
+  setter on these bundles and `TrillSpeedRampSpec::new_validated` /
+  `with_speed_ramp_validated_ramp_count` / the trio of
+  `with_ornament_validated` setters from the prior three chunks. On
+  the accept branch all other fields on `self` are preserved
+  byte-for-byte (additive contract, verified by
+  `some_byte_equals_permissive` against the permissive setter). On the
+  reject branch the partially-built bundle is dropped via the
+  `Option<Self>` shape; there is no silent-fallback that returns
+  `Some(self)` with `extension_length_ss` unset, because that would
+  demote a rejection into a no-op.
+
+  Acceptance rules (`Some(self)` returned) — identical across all three
+  bundles:
+  - `length_ss > 0.0` (any finite positive, plus `+∞`).
+  - `self.{extension_length_ss | length_ss} = Some(length_ss)`; every
+    other field on `self` survives byte-for-byte.
+  - For `TrillExtensionFullOptions`: writes to the `length_ss` field
+    (the wiggle's termination length), *not* to `bracket_length_ss`
+    (the bracket hook length) — preserves the naming-disambiguation
+    invariant from the permissive setter.
+
+  Rejection rules (`None` returned) — identical across all three
+  bundles:
+  - `length_ss == 0.0` (positive *and* negative zero — both fail
+    `length_ss > 0.0`).
+  - `length_ss < 0.0` (any finite negative, including `-∞`).
+  - `length_ss.is_nan()` (any NaN payload — NaN comparisons return
+    false, so `NaN > 0.0` is false).
+
+  Tests added (39 total): per bundle, 12–15 tests covering rejects-zero,
+  rejects-negative-zero (catches an `is_sign_negative()` or
+  `!= 0.0` refactor), rejects-negative-finite (walks 5 magnitudes),
+  rejects-negative-infinity, rejects-nan, accepts-positive-finite
+  (walks 5 magnitudes), accepts-positive-infinity (mirrors renderer
+  accept), some-branch byte-equality with permissive setter (walks 6
+  accepted values including `+∞`), preserve-other-setters-on-some,
+  overwrites-prior-value-on-some (last-write-wins), is-const-callable
+  (one `Some` and one `None` const binding), and
+  `rejection_matches_renderer_accept_band` (cross-validation walking
+  12 probe values). The `TrillExtensionFullOptions` set adds three
+  bundle-specific tests:
+  - `writes_length_ss_not_bracket_length_ss` — locks the
+    field-targeting invariant down at the validated layer (mirrors
+    the permissive setter's
+    `with_extension_length_ss_is_distinct_from_with_bracket_length_ss`).
+  - `none_branch_does_not_partially_populate` — combines a non-trivial
+    chain with a rejecting validator call.
+  - `three_bundles_agree_on_accept_band` — fourth-layer
+    cross-validation walking 12 probe values across all three bundles
+    and asserting pairwise agreement.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2636 tests passing,
+  0 failing** (up from 2597 by exactly the 39 new tests).
+  `cargo test -p music-engraver --lib with_extension_length_ss_validated`
+  runs the 39 new tests in isolation: all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings on
+  any of the three modified files (pre-existing warning on
+  `multi_staff.rs:394` and unrelated `music/` crate clippy warnings
+  persist — out of scope).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). The validator-pairing pattern is now consistently
+  applied across (a) the entire trill speed-ramp stack, (b) the entire
+  trill ornament-acceptance surface, and (c) the entire trill
+  extension-length surface — every options-bundle setter whose
+  acceptance criterion is testable at construction time has both a
+  permissive and a strict variant. Natural follow-ups outside the
+  trill surface: similar validator pairings on other options bundles
+  whose values get silently dropped by the renderer — e.g. bracket
+  hook length (`with_hook_length_ss` accepts negative values that the
+  bracket renderer folds via `abs()`; strict rejection at construction
+  time would surface explicit-flip intent earlier); bracket length
+  (`with_length_ss` accepts non-positive values whose semantics at the
+  renderer are murky and worth pinning down).
+
+- Open issues: None. The change is additive — no existing public API
+  altered, no golden baseline regenerated, no example or test
+  modified.
+  (out of scope for this chunk).
