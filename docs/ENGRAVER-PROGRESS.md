@@ -6782,3 +6782,157 @@
   in `assert_golden`'s panic output. The pre-existing
   `multi_staff.rs:394` and other clippy warnings noted on
   prior entries remain unaddressed (out of scope).
+
+## 2026-05-27 — Phase 8, pedal markings: add Half and Sost variants
+- Did: Extended `PedalMark` (in `music-engraver/src/layout/pedal.rs`)
+  with two new variants and added matching `ScoreBuilder` methods:
+    - `PedalMark::Half` → `Glyph::KeyboardPedalHalf` —
+      partial pedal depression (late-Romantic / modern
+      idiom: retain partial resonance while clearing blur).
+    - `PedalMark::Sost` → `Glyph::KeyboardPedalSost` —
+      sostenuto (middle pedal) "Sost." marking.
+    - New `ScoreBuilder::pedal_half()` and
+      `ScoreBuilder::pedal_sost()` builder methods, mirroring
+      the existing `pedal_down()` / `pedal_up()` shape (no-op
+      on rest, attaches to the most recently added note or
+      chord).
+  Bravura's metadata lists both glyphs (verified in
+  `bravura_metadata.json`: `keyboardPedalHalf` and
+  `keyboardPedalSost`), and the `smufl` crate exposes both
+  enum variants — so this is a pure surface extension with
+  no new font work and no new dependencies. The
+  `PedalMark::glyph()` exhaustive match is the only enum
+  consumer in the codebase; the renderer (`draw_pedal`) and
+  layout (`layout_pedal`) call sites both route through
+  `mark.glyph()` and an opaque `advance_width`, so adding
+  variants required no other touches in the render / layout
+  pipeline.
+
+  Test-design choices:
+    - **All-pairs distinctness on glyphs** — added
+      `all_four_variants_have_distinct_glyphs` (layout-level)
+      and `all_four_pedal_variants_produce_distinct_svg`
+      (renderer-level) and
+      `all_four_pedal_score_builders_produce_distinct_svg`
+      (score-builder-level). A regression that copy-pasted
+      one variant's body into another's would collapse two of
+      the four onto the same output and fail at every layer.
+    - **Self-advance centering tests** —
+      `pedal_half_centered_on_note` and
+      `pedal_sost_centered_on_note` query the font for the
+      *Half*/*Sost* glyph's own `advance_width` and assert
+      `layout.x == note_x - advance/2`. This catches a
+      regression class where the layout reused a hardcoded
+      width or the Down-glyph's width regardless of variant
+      (the four pedal glyphs have noticeably different
+      advance widths in Bravura — `keyboardPedalHalf` is
+      ≈3.0 staff-spaces wide, `keyboardPedalSost` ≈4.4,
+      `keyboardPedalPed` ≈4.9).
+    - **Shared-y-band invariant** —
+      `half_layout_below_staff_matches_other_variants` and
+      `sost_layout_below_staff_matches_other_variants`
+      assert the new variants sit on the same y as Down
+      (i.e., still on the pedal axis, not on dynamics or
+      lyrics axes). Locks in the design intent that the
+      pedal-band is a per-axis concern, not per-glyph.
+    - **Rest no-op parity** — `pedal_half_on_rest_is_noop`
+      and `pedal_sost_on_rest_is_noop` mirror the existing
+      `pedal_on_rest_is_noop` shape so the builder's
+      pattern-match on the last event (Note | Chord only)
+      stays consistent.
+    - **Chord routing** — `pedal_half_on_chord_adds_path`
+      covers the second arm of the `Note | Chord`
+      pattern-match (Down already has chord coverage; Up
+      doesn't; Half explicitly fills that gap).
+    - **convert_event round-trip** —
+      `convert_event_preserves_pedal_half` and
+      `convert_event_preserves_pedal_sost` exercise the
+      ScoreEvent → MeasureEvent conversion for the new
+      variants, mirroring the existing Down test. This is
+      the boundary where a missing match arm in
+      `convert_event` would silently drop the annotation;
+      since the actual code stores `pedal:
+      Option<PedalMark>` without enum-matching, the test
+      can't fail unless that ever changes — but the test
+      pins the contract so a future refactor that switched
+      to enum-matching would have to add the new arms.
+
+- Verified:
+  - `cargo check -p music-engraver --tests` → 0 errors.
+  - `cargo check --workspace` → 0 errors (no cross-crate
+    regression).
+  - `cargo build -p music-engraver` → succeeds.
+  - `cargo test -p music-engraver --offline --lib` →
+    **2892 passed, 0 failed** (was 2870; +22 new tests: 7
+    in `layout::pedal::tests` for the new variants and
+    all-pairs glyph distinctness, 7 in
+    `render::pedal_renderer::tests` for renderer-level
+    path-count and centering, 8 in `score::tests` for
+    score-builder surface coverage and convert_event
+    round-trip).
+  - `cargo test -p music-engraver --offline --tests` →
+    76 + 3 = **79 passed, 0 failed** (unchanged — no
+    golden baseline moved; existing fixtures don't use
+    `pedal_half` / `pedal_sost`).
+  - `cargo clippy -p music-engraver --lib --tests` —
+    no new warnings; the 7 pre-existing warnings in
+    `trill_options.rs`, `measure_renderer/tests.rs`, etc.
+    are unchanged and remain out of scope.
+
+  New tests (22 total):
+  - `layout::pedal::tests` (7 new):
+    - `half_maps_to_keyboard_pedal_half`
+    - `sost_maps_to_keyboard_pedal_sost`
+    - `all_four_variants_have_distinct_glyphs`
+    - `layout_preserves_glyph_for_half`
+    - `layout_preserves_glyph_for_sost`
+    - `half_layout_below_staff_matches_other_variants`
+    - `sost_layout_below_staff_matches_other_variants`
+  - `render::pedal_renderer::tests` (7 new):
+    - `pedal_half_produces_single_path`
+    - `pedal_sost_produces_single_path`
+    - `pedal_half_returned_glyph_matches_mark`
+    - `pedal_sost_returned_glyph_matches_mark`
+    - `all_four_pedal_variants_produce_distinct_svg`
+    - `pedal_half_centered_on_note`
+    - `pedal_sost_centered_on_note`
+  - `score::tests` (8 new):
+    - `pedal_half_adds_path_to_svg`
+    - `pedal_sost_adds_path_to_svg`
+    - `all_four_pedal_score_builders_produce_distinct_svg`
+    - `pedal_half_on_rest_is_noop`
+    - `pedal_sost_on_rest_is_noop`
+    - `pedal_half_on_chord_adds_path`
+    - `convert_event_preserves_pedal_half`
+    - `convert_event_preserves_pedal_sost`
+
+- Next: A natural follow-up golden for `pedal_half` /
+  `pedal_sost` at the score level (mirroring the existing
+  `golden_pedal_marks` pattern) would freeze the visual
+  baseline of the new variants through the page renderer.
+  Multi-staff systems / grand-staff brackets
+  (`StaveConnector` equivalent) — the largest remaining
+  Phase-8/post-v1 chunk that requires structural layout
+  work. Cross-system church rests (multi-measure rest
+  cluster breaking across systems). Line-breaking quality
+  improvements (Gourlay extension or Bellini & Nesi).
+  Golden-SVG corpus PHASH-based visual regression (a
+  PHASH-tolerant comparator would simplify future golden
+  triage but needs a new image-hash crate — defer until
+  motivated). Tablature polish beyond Phase 7 — the tab_*
+  goldens are broad now; further surface-level features
+  (per-string bend presets, tab-stem styling) remain
+  post-v1.
+
+- Open issues: None. The change is purely additive at
+  every surface — two new variants on an existing public
+  enum, two new public methods on `ScoreBuilder`. Every
+  existing call site of `PedalMark::glyph()` is exhaustive
+  and now compiles against the wider enum without any
+  fallthrough. Default behavior of every existing
+  `ScoreBuilder` call is byte-identical: no golden baseline
+  moved, all 2870 pre-existing lib tests continue to pass,
+  all 76 golden SVG tests continue to byte-match. The
+  pre-existing `multi_staff.rs:394` and other clippy
+  warnings noted on prior entries remain unaddressed (out
+  of scope).

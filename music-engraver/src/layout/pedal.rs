@@ -15,6 +15,15 @@ pub enum PedalMark {
     Down,
     /// Sustain pedal up — renders the asterisk/star glyph (SMuFL keyboardPedalUp).
     Up,
+    /// Half pedal — partial sustain pedal depression, used by late-romantic and
+    /// modern composers to retain partial resonance while reducing blur.
+    /// Renders the SMuFL keyboardPedalHalf glyph (a horizontal stroke through
+    /// a vertical hash).
+    Half,
+    /// Sostenuto pedal down — the middle pedal on a grand piano, which
+    /// sustains only the notes already held when it is depressed.
+    /// Renders the SMuFL keyboardPedalSost glyph ("Sost.").
+    Sost,
 }
 
 impl PedalMark {
@@ -23,6 +32,8 @@ impl PedalMark {
         match self {
             PedalMark::Down => Glyph::KeyboardPedalPed,
             PedalMark::Up => Glyph::KeyboardPedalUp,
+            PedalMark::Half => Glyph::KeyboardPedalHalf,
+            PedalMark::Sost => Glyph::KeyboardPedalSost,
         }
     }
 }
@@ -85,6 +96,79 @@ mod tests {
     #[test]
     fn down_and_up_are_distinct_glyphs() {
         assert_ne!(PedalMark::Down.glyph(), PedalMark::Up.glyph());
+    }
+
+    #[test]
+    fn half_maps_to_keyboard_pedal_half() {
+        assert_eq!(PedalMark::Half.glyph(), Glyph::KeyboardPedalHalf);
+    }
+
+    #[test]
+    fn sost_maps_to_keyboard_pedal_sost() {
+        assert_eq!(PedalMark::Sost.glyph(), Glyph::KeyboardPedalSost);
+    }
+
+    #[test]
+    fn all_four_variants_have_distinct_glyphs() {
+        // Each variant must produce a unique glyph so callers can rely on
+        // visual disambiguation between Down/Up/Half/Sost in published output.
+        let glyphs = [
+            PedalMark::Down.glyph(),
+            PedalMark::Up.glyph(),
+            PedalMark::Half.glyph(),
+            PedalMark::Sost.glyph(),
+        ];
+        for i in 0..glyphs.len() {
+            for j in (i + 1)..glyphs.len() {
+                assert_ne!(
+                    glyphs[i], glyphs[j],
+                    "PedalMark variants at index {i} and {j} share a glyph"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn layout_preserves_glyph_for_half() {
+        let staff = test_staff();
+        let layout = layout_pedal(PedalMark::Half, 0.0, 100.0, &staff);
+        assert_eq!(layout.glyph, Glyph::KeyboardPedalHalf);
+    }
+
+    #[test]
+    fn layout_preserves_glyph_for_sost() {
+        let staff = test_staff();
+        let layout = layout_pedal(PedalMark::Sost, 0.0, 100.0, &staff);
+        assert_eq!(layout.glyph, Glyph::KeyboardPedalSost);
+    }
+
+    #[test]
+    fn half_layout_below_staff_matches_other_variants() {
+        // All pedal variants share the same vertical band — the y coordinate
+        // is the staff's bottom + PEDAL_BELOW_STAFF_SS regardless of glyph.
+        // A Half marking is still a pedal, so it belongs on the pedal axis.
+        let staff = test_staff();
+        let half = layout_pedal(PedalMark::Half, 500.0, 100.0, &staff);
+        let down = layout_pedal(PedalMark::Down, 500.0, 100.0, &staff);
+        assert!(
+            (half.y - down.y).abs() < 1e-6,
+            "Half pedal y ({}) must match Down pedal y ({})",
+            half.y,
+            down.y
+        );
+    }
+
+    #[test]
+    fn sost_layout_below_staff_matches_other_variants() {
+        let staff = test_staff();
+        let sost = layout_pedal(PedalMark::Sost, 500.0, 100.0, &staff);
+        let down = layout_pedal(PedalMark::Down, 500.0, 100.0, &staff);
+        assert!(
+            (sost.y - down.y).abs() < 1e-6,
+            "Sost pedal y ({}) must match Down pedal y ({})",
+            sost.y,
+            down.y
+        );
     }
 
     #[test]

@@ -4917,6 +4917,186 @@
         }
     }
 
+    #[test]
+    fn pedal_half_adds_path_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .pedal_half()
+            .end_barline()
+            .render_svg();
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.matches("<path ").count() > baseline.matches("<path ").count(),
+            "pedal_half should add at least one path"
+        );
+    }
+
+    #[test]
+    fn pedal_sost_adds_path_to_svg() {
+        let svg = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .pedal_sost()
+            .end_barline()
+            .render_svg();
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.matches("<path ").count() > baseline.matches("<path ").count(),
+            "pedal_sost should add at least one path"
+        );
+    }
+
+    #[test]
+    fn all_four_pedal_score_builders_produce_distinct_svg() {
+        // ScoreBuilder surface: each pedal builder method must reach the
+        // renderer with the correct PedalMark variant, yielding a different
+        // SVG byte string. A regression that hard-coded one variant in the
+        // builder (e.g., copy-pasting pedal_down's body into pedal_half) would
+        // collapse two of these onto the same output.
+        let make = |attach: fn(ScoreBuilder) -> ScoreBuilder| -> String {
+            attach(
+                ScoreBuilder::new()
+                    .clef(Clef::Treble)
+                    .time_signature(4, 4)
+                    .note(p("C", 4), Duration::QTR),
+            )
+            .end_barline()
+            .render_svg()
+        };
+
+        let down = make(|b| b.pedal_down());
+        let up = make(|b| b.pedal_up());
+        let half = make(|b| b.pedal_half());
+        let sost = make(|b| b.pedal_sost());
+
+        let outputs = [("down", &down), ("up", &up), ("half", &half), ("sost", &sost)];
+        for i in 0..outputs.len() {
+            for j in (i + 1)..outputs.len() {
+                assert_ne!(
+                    outputs[i].1, outputs[j].1,
+                    "pedal_{} and pedal_{} produced identical SVG",
+                    outputs[i].0, outputs[j].0,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pedal_half_on_rest_is_noop() {
+        // Mirrors pedal_on_rest_is_noop for the Half variant — the builder
+        // silently drops the annotation when the last event is a rest.
+        let with_pedal = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .pedal_half()
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(with_pedal, without, "pedal_half on rest should be no-op");
+    }
+
+    #[test]
+    fn pedal_sost_on_rest_is_noop() {
+        let with_pedal = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .pedal_sost()
+            .end_barline()
+            .render_svg();
+        let without = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .rest(Duration::QTR)
+            .end_barline()
+            .render_svg();
+        assert_eq!(with_pedal, without, "pedal_sost on rest should be no-op");
+    }
+
+    #[test]
+    fn pedal_half_on_chord_adds_path() {
+        // Pedal annotations attach to chords as well as notes — verify the
+        // Half variant follows the same routing as Down on a chord.
+        let baseline = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .end_barline()
+            .render_svg();
+        let with_pedal = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
+            .pedal_half()
+            .end_barline()
+            .render_svg();
+        assert!(
+            with_pedal.matches("<path ").count() > baseline.matches("<path ").count(),
+            "pedal_half on chord should add a path"
+        );
+    }
+
+    #[test]
+    fn convert_event_preserves_pedal_half() {
+        // Round-trip the new variants through convert_event to confirm the
+        // builder-side annotation reaches the layout-side MeasureEvent intact.
+        use crate::layout::pedal::PedalMark;
+        let pitch = p("C", 4);
+        let event = ScoreEvent::Note {
+            pitch,
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                pedal: Some(PedalMark::Half),
+                ..Default::default()
+            },
+        };
+        let result = convert_event(&event, &Clef::Treble, &KeySignature::Open, None);
+        if let MeasureEvent::Note(note) = result {
+            assert_eq!(note.annotations.pedal, Some(PedalMark::Half));
+        } else {
+            panic!("expected Note event");
+        }
+    }
+
+    #[test]
+    fn convert_event_preserves_pedal_sost() {
+        use crate::layout::pedal::PedalMark;
+        let pitch = p("C", 4);
+        let event = ScoreEvent::Note {
+            pitch,
+            duration: Duration::QTR,
+            annotations: NoteAnnotations {
+                pedal: Some(PedalMark::Sost),
+                ..Default::default()
+            },
+        };
+        let result = convert_event(&event, &Clef::Treble, &KeySignature::Open, None);
+        if let MeasureEvent::Note(note) = result {
+            assert_eq!(note.annotations.pedal, Some(PedalMark::Sost));
+        } else {
+            panic!("expected Note event");
+        }
+    }
+
     // ── Tremolo tests ──────────────────────────────────────────────
 
     #[test]

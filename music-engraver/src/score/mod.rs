@@ -1099,6 +1099,40 @@ impl ScoreBuilder {
         self
     }
 
+    /// Attach a half-pedal marking to the most recently added note or chord.
+    ///
+    /// Half-pedaling is a partial sustain pedal depression that retains some
+    /// resonance while clearing accumulated overtones. The SMuFL
+    /// "keyboardPedalHalf" glyph is placed below the staff at the same
+    /// vertical position as the standard pedal markings. No-op if the last
+    /// event was a rest.
+    pub fn pedal_half(mut self) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.pedal = Some(PedalMark::Half);
+        }
+        self
+    }
+
+    /// Attach a sostenuto-pedal ("Sost.") marking to the most recently added
+    /// note or chord.
+    ///
+    /// Sostenuto is the middle pedal on a grand piano: it sustains only the
+    /// notes already held when depressed. The SMuFL "keyboardPedalSost" glyph
+    /// is placed below the staff at the same vertical position as the
+    /// sustain pedal markings. No-op if the last event was a rest.
+    pub fn pedal_sost(mut self) -> Self {
+        if let Some(
+            (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
+        ) = self.current_events.last_mut()
+        {
+            annotations.pedal = Some(PedalMark::Sost);
+        }
+        self
+    }
+
     /// Attach tremolo slashes (1–3) to the most recently added note or chord.
     ///
     /// The slashes are drawn across the stem of the note/chord. Single slash =
