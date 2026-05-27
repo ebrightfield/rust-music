@@ -256,6 +256,16 @@ impl TrillExtensionFullOptions {
     ///
     /// Most call sites prefer this form because it elides the explicit
     /// `TrillSpeedRampSpec::new(...)` wrapping.
+    ///
+    /// This setter stores any `(ramp, region_count)` pair unchanged so the
+    /// bundle can travel through annotation pipelines whose validity is only
+    /// checked at draw time (mirroring [`TrillSpeedRampSpec::new`] and
+    /// [`TrillSpeedRamp::linear`]). Callers wanting construction-time
+    /// rejection of the degenerate inputs documented at
+    /// [`TrillSpeedRampSpec::new_validated`] should use
+    /// [`with_speed_ramp_validated_ramp_count`](Self::with_speed_ramp_validated_ramp_count),
+    /// which returns `Option<Self>` and rejects the same inputs that
+    /// [`TrillSpeedRamp::synthesize_regions`] would reject at draw time.
     pub const fn with_speed_ramp_ramp_count(
         mut self,
         ramp: TrillSpeedRamp,
@@ -263,6 +273,63 @@ impl TrillExtensionFullOptions {
     ) -> Self {
         self.speed_ramp = Some(TrillSpeedRampSpec::new(ramp, region_count));
         self
+    }
+
+    /// Stricter counterpart to
+    /// [`with_speed_ramp_ramp_count`](Self::with_speed_ramp_ramp_count):
+    /// rejects the degenerate `(ramp, region_count)` pairs at the
+    /// options-bundle construction site, returning `Option<Self>`.
+    ///
+    /// Byte-equivalent on the `Some` branch to
+    /// `with_speed_ramp(TrillSpeedRampSpec::new_validated(ramp, region_count)?)` —
+    /// the validator is a thin pass-through to
+    /// [`TrillSpeedRampSpec::new_validated`], not an independent check, so
+    /// the rejection rules are exactly that method's:
+    ///
+    /// - `None` when `region_count == 0` (no regions to emit for *any* ramp).
+    /// - `None` when `ramp` is [`TrillSpeedRamp::Linear`] and
+    ///   `region_count < 2` (a single-region linear progression is
+    ///   ill-defined; [`TrillSpeedRamp::synthesize_regions`] would itself
+    ///   return `None`).
+    /// - `Some(self)` (with `speed_ramp` populated) otherwise.
+    ///
+    /// All other fields on `self` are preserved unchanged on the `Some`
+    /// branch — the validator is additive, mirroring the existing
+    /// `with_speed_ramp_ramp_count` contract. On the `None` branch the
+    /// builder chain is broken at the call site; the partially-populated
+    /// bundle is dropped (consistent with the `Option<Self>` shape — there
+    /// is no "leave `speed_ramp` unset and return `Some(self)`" fallback,
+    /// because that would silently demote the multi-speed setter into a
+    /// no-op).
+    ///
+    /// As with the permissive setter, the single-speed [`speed`](Self::speed)
+    /// field is *not* cleared on accept — the dispatch contract permits
+    /// `speed` and `speed_ramp` to coexist (the renderer dispatches on
+    /// `speed_ramp.is_some()`).
+    ///
+    /// `const`-callable, matching the `const` shape of every other setter
+    /// on this bundle and of [`TrillSpeedRampSpec::new_validated`] itself.
+    /// Mirrors the
+    /// [`TrillSpeedRamp::linear`] / [`TrillSpeedRamp::linear_validated`] and
+    /// [`TrillSpeedRampSpec::new`] / [`TrillSpeedRampSpec::new_validated`]
+    /// pairing one layer higher up the stack.
+    pub const fn with_speed_ramp_validated_ramp_count(
+        mut self,
+        ramp: TrillSpeedRamp,
+        region_count: usize,
+    ) -> Option<Self> {
+        // Delegate to the underlying spec validator: any rejection it
+        // performs is mirrored here, and any acceptance produces a fully-
+        // formed spec that we drop into `speed_ramp` without further
+        // massaging. Locked together by this single call site — narrowing
+        // either validator narrows both.
+        match TrillSpeedRampSpec::new_validated(ramp, region_count) {
+            Some(spec) => {
+                self.speed_ramp = Some(spec);
+                Some(self)
+            }
+            None => None,
+        }
     }
 }
 
@@ -1313,5 +1380,362 @@ mod tests {
         assert_eq!(regions[0].glyph, TrillWiggleSpeed::Slow.to_glyph());
         assert_eq!(regions[1].glyph, TrillWiggleSpeed::Standard.to_glyph());
         assert_eq!(regions[2].glyph, TrillWiggleSpeed::Fast.to_glyph());
+    }
+
+    // --- with_speed_ramp_validated_ramp_count — strict counterpart to
+    // with_speed_ramp_ramp_count. Pins down the rejection rules and the
+    // Some-branch byte-equivalence with the permissive setter. The
+    // rejection rules are inherited verbatim from
+    // `TrillSpeedRampSpec::new_validated`, so these tests also serve as
+    // cross-validation that the delegation hasn't drifted.
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_rejects_zero_region_count_for_constant() {
+        // Per the underlying spec validator: zero region count is a
+        // rejection for any ramp variant, including `Constant`.
+        let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
+        let result = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_rejects_zero_region_count_for_linear() {
+        // Symmetric to the constant case — zero is rejected for `Linear`
+        // as well. Walks the boundary where the two rejection rules
+        // overlap.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let result = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_rejects_one_region_for_linear() {
+        // The Linear-specific rejection: a single-region linear progression
+        // is ill-defined (only one endpoint can land on the region's
+        // speed). The permissive setter would have accepted this and
+        // produced a spec that fails at `synthesize_regions` time; the
+        // validated setter rejects it up front.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let result = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 1);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_accepts_one_region_for_constant() {
+        // The Constant carve-out: `region_count == 1` is the documented
+        // minimum for a constant ramp (a single region trivially renders
+        // the chosen speed across the entire span). Pin down that the
+        // validator does *not* accidentally reject this — that would
+        // narrow the accept band relative to `new_validated`.
+        let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Faster);
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 1)
+            .expect("Constant + 1 region is valid");
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(ramp, 1))
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_accepts_two_regions_for_linear() {
+        // The minimum-valid `Linear` case: `region_count == 2` lets both
+        // endpoints land on their respective region's speed. The first
+        // `Some` branch into the Linear arm of the validator.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest);
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 2)
+            .expect("Linear + 2 regions is valid");
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(ramp, 2))
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_some_branch_byte_equals_unvalidated() {
+        // On any accepted `(ramp, region_count)` pair, the validated
+        // setter must produce a bundle field-by-field equal to the
+        // permissive setter. The PartialEq derive covers every field,
+        // including the `speed_ramp` we just populated. Catches a
+        // hypothetical drift where the validator started normalizing
+        // accepted inputs (e.g. collapsing `Linear { s, s }` into
+        // `Constant(s)`), which would silently change the stored spec.
+        //
+        // Walks accepted pairs only — the rejected pairs are covered by
+        // the per-rule tests above and by
+        // `with_speed_ramp_validated_ramp_count_rejection_matches_spec_new_validated`.
+        for region_count in [1usize, 2, 3, 7, 15] {
+            for ramp in [
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Slowest),
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
+            ] {
+                let permissive = TrillExtensionFullOptions::new()
+                    .with_speed_ramp_ramp_count(ramp, region_count);
+                let validated = TrillExtensionFullOptions::new()
+                    .with_speed_ramp_validated_ramp_count(ramp, region_count)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "validator rejected Constant ramp + region_count={region_count} \
+                             that permissive setter accepted"
+                        )
+                    });
+                assert_eq!(
+                    permissive, validated,
+                    "ramp={ramp:?} region_count={region_count}"
+                );
+            }
+            // Linear ramps need region_count >= 2 to land on the accept
+            // band; skip the (Linear, 1) case here — it's the dedicated
+            // rejection test above.
+            if region_count < 2 {
+                continue;
+            }
+            for ramp in [
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest),
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Fast, TrillWiggleSpeed::Slow),
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Standard, TrillWiggleSpeed::Standard),
+            ] {
+                let permissive = TrillExtensionFullOptions::new()
+                    .with_speed_ramp_ramp_count(ramp, region_count);
+                let validated = TrillExtensionFullOptions::new()
+                    .with_speed_ramp_validated_ramp_count(ramp, region_count)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "validator rejected Linear ramp + region_count={region_count} \
+                             that permissive setter accepted (ramp={ramp:?})"
+                        )
+                    });
+                assert_eq!(
+                    permissive, validated,
+                    "ramp={ramp:?} region_count={region_count}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_some_branch_isolation() {
+        // On the `Some` branch from a fresh `new()`, only `speed_ramp` is
+        // populated — every other field remains `None`. Mirrors
+        // `with_speed_ramp_ramp_count_sets_only_speed_ramp` for the
+        // validated counterpart.
+        let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Fast);
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 3)
+            .expect("Constant + 3 regions is valid");
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(ramp, 3))
+        );
+        assert_eq!(opts.bracket, None);
+        assert_eq!(opts.bracket_direction, None);
+        assert_eq!(opts.bracket_length_ss, None);
+        assert_eq!(opts.speed, None);
+        assert_eq!(opts.ornament, None);
+        assert_eq!(opts.length_ss, None);
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_preserves_other_setters_on_some() {
+        // The validator must be additive: chaining it on top of a bundle
+        // with other fields already set leaves those fields intact on the
+        // `Some` branch. Catches a regression where the validator
+        // accidentally cleared a sibling field (e.g. zeroed `speed` on
+        // accept, breaking the documented "speed + speed_ramp may
+        // coexist" contract).
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let opts = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Both)
+            .with_bracket_direction(HookDirection::Down)
+            .with_bracket_length_ss(0.85)
+            .with_speed(TrillWiggleSpeed::Standard)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_length_ss(3.25)
+            .with_speed_ramp_validated_ramp_count(ramp, 4)
+            .expect("Linear + 4 regions is valid");
+        assert_eq!(opts.bracket, Some(TrillBracketSide::Both));
+        assert_eq!(opts.bracket_direction, Some(HookDirection::Down));
+        assert_eq!(opts.bracket_length_ss, Some(0.85));
+        // The `speed` field must survive — the dispatch contract permits
+        // speed + speed_ramp to coexist (speed_ramp.is_some() wins).
+        assert_eq!(opts.speed, Some(TrillWiggleSpeed::Standard));
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.length_ss, Some(3.25));
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(ramp, 4))
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_is_const_callable() {
+        // `const fn` symmetry: the validator must be callable in a `const`
+        // context, matching every other setter on this bundle and
+        // `TrillSpeedRampSpec::new_validated` itself. The compile-time
+        // assertion form mirrors `linear_validated_is_const_callable` and
+        // `spec_new_validated_is_const_callable` in `trill_extension.rs`.
+        //
+        // Hold one `Some` and two distinct `None` cases so a future
+        // change that removes `const` from any branch trips this canary.
+        const SOME_OPTS: Option<TrillExtensionFullOptions> = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+                2,
+            );
+        const NONE_ZERO: Option<TrillExtensionFullOptions> = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(
+                TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
+                0,
+            );
+        const NONE_LINEAR_ONE: Option<TrillExtensionFullOptions> =
+            TrillExtensionFullOptions::new().with_speed_ramp_validated_ramp_count(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                1,
+            );
+        assert!(SOME_OPTS.is_some());
+        assert!(NONE_ZERO.is_none());
+        assert!(NONE_LINEAR_ONE.is_none());
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_rejection_matches_spec_new_validated() {
+        // Cross-validation: for every `(ramp, region_count)` pair in the
+        // walk, the setter rejects iff `TrillSpeedRampSpec::new_validated`
+        // rejects. Locks the delegation: any future divergence (e.g. the
+        // setter starts validating an extra rule the spec doesn't) trips
+        // this canary.
+        //
+        // Walks the boundary band — region_counts 0..=3 against Constant
+        // and Linear variants. That covers all four documented rejection
+        // / accept-edge cases.
+        let constant = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
+        let linear = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        for region_count in 0..=3 {
+            for ramp in [constant, linear] {
+                let setter_result = TrillExtensionFullOptions::new()
+                    .with_speed_ramp_validated_ramp_count(ramp, region_count);
+                let spec_result = TrillSpeedRampSpec::new_validated(ramp, region_count);
+                // Same rejection iff: setter is None iff spec is None.
+                assert_eq!(
+                    setter_result.is_none(),
+                    spec_result.is_none(),
+                    "rejection drift at ramp={ramp:?} region_count={region_count}: \
+                     setter={setter_result:?} spec={spec_result:?}"
+                );
+                // And on the `Some` branch, the setter's stored
+                // `speed_ramp` must equal the spec the validator
+                // produced — no normalization on accept.
+                if let (Some(opts), Some(spec)) = (setter_result, spec_result) {
+                    assert_eq!(
+                        opts.speed_ramp,
+                        Some(spec),
+                        "Some-branch spec mismatch at ramp={ramp:?} region_count={region_count}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_none_branch_does_not_partially_populate() {
+        // On `None`, the partially-built bundle is dropped — the caller
+        // doesn't observe a bundle with `speed_ramp` mysteriously set to
+        // some "fallback" value. The `Option<Self>` shape guarantees this
+        // by construction (no `self` is returned on the `None` branch),
+        // but this test pins the contract down at the call-site level so
+        // a future refactor that swapped the return type for `Self` (with
+        // silent fallback) would fail an existing test rather than
+        // silently changing behavior. The follow-on observation is that
+        // there's no `is_none()`-with-mutation escape hatch: the only way
+        // to populate `speed_ramp` via this setter is to pass an accepted
+        // pair, period.
+        let result = TrillExtensionFullOptions::new()
+            .with_bracket(TrillBracketSide::Start)
+            .with_speed_ramp_validated_ramp_count(
+                TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
+                1,
+            );
+        assert_eq!(result, None);
+        // A fresh bundle with only the prior setters applied should
+        // *not* be smuggled out — confirming that, on the `None` path,
+        // the only observable outcome at the call site is `None`. (No
+        // direct field assertion is possible here because the bundle is
+        // dropped; this test documents the contract via its mere
+        // existence and the `None` assertion above.)
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_accepts_linear_equal_endpoint_speeds() {
+        // Mirrors `spec_new_validated_accepts_linear_with_equal_endpoint_speeds`
+        // up one layer: the validator does *not* additionally reject a
+        // `Linear { s, s }` (rejecting equal endpoints is
+        // `linear_validated`'s job). Locks in the orthogonal-layering
+        // carve-out at the options-bundle layer.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Standard, TrillWiggleSpeed::Standard);
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 3)
+            .expect("Linear { s, s } + region_count >= 2 is accepted (rejection of \
+                     equal endpoints lives on `TrillSpeedRamp::linear_validated`)");
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(ramp, 3))
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_overwrites_prior_value_on_some() {
+        // Same last-write-wins semantic as the permissive setter when both
+        // pairs are on the accept band. Catches a regression where the
+        // validator switched to "first write wins" or accumulated into a
+        // Vec.
+        let first = TrillSpeedRamp::constant(TrillWiggleSpeed::Slow);
+        let second = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(first, 3)
+            .expect("first pair valid")
+            .with_speed_ramp_validated_ramp_count(second, 4)
+            .expect("second pair valid");
+        assert_eq!(
+            opts.speed_ramp,
+            Some(TrillSpeedRampSpec::new(second, 4))
+        );
+        // Sanity: confirm the two pairs would have produced distinct
+        // specs — otherwise the overwrite assertion above is vacuous.
+        assert_ne!(
+            TrillSpeedRampSpec::new(first, 3),
+            TrillSpeedRampSpec::new(second, 4)
+        );
+    }
+
+    #[test]
+    fn with_speed_ramp_validated_ramp_count_some_branch_feeds_synthesize_regions() {
+        // End-to-end smoke: an accepted bundle's `speed_ramp` must feed
+        // cleanly into `synthesize_regions` and produce `Some(regions)`
+        // with `region_count` entries at the spec's region count.
+        // Mirrors `spec_new_validated_some_branch_feeds_synthesize_regions`
+        // one layer up. If the bundle layer ever introduced its own
+        // post-construction massaging of the stored spec (e.g. clamping
+        // region_count downward), this assertion would catch it.
+        let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(ramp, 4)
+            .expect("Linear + 4 regions is valid");
+        let unpacked = opts.speed_ramp.expect("speed_ramp populated on accept");
+        assert_eq!(unpacked.region_count, 4);
+        let regions = unpacked
+            .ramp
+            .synthesize_regions(0.0, 400.0, unpacked.region_count, |_speed| 50.0)
+            .expect("validated spec must feed synthesize_regions cleanly");
+        assert_eq!(regions.len(), 4);
+        // Region starts at evenly-spaced 0, 100, 200, 300 across [0, 400].
+        assert_eq!(regions[0].start_x, 0.0);
+        assert_eq!(regions[1].start_x, 100.0);
+        assert_eq!(regions[2].start_x, 200.0);
+        assert_eq!(regions[3].start_x, 300.0);
     }
 }

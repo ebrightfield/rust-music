@@ -3791,3 +3791,130 @@
   `music/src/notation/rhythm/meter.rs` and
   `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, TrillExtensionFullOptions::with_speed_ramp_validated_ramp_count
+
+- Did: Closed the explicit follow-up flagged in the previous
+  `TrillSpeedRampSpec::new_validated` entry: added the strict counterpart
+  to `with_speed_ramp_ramp_count` on `TrillExtensionFullOptions` in
+  `music-engraver/src/layout/trill_options.rs`. The bare
+  `with_speed_ramp_ramp_count` stores any `(ramp, region_count)` pair
+  unchanged so options bundles can travel through annotation pipelines
+  whose validity is only checked at draw time (mirroring the
+  permissive contract of `TrillSpeedRampSpec::new` /
+  `TrillSpeedRamp::linear` one layer below). The new
+  `with_speed_ramp_validated_ramp_count` returns `Option<Self>` and
+  rejects exactly the same degenerate inputs that
+  `TrillSpeedRampSpec::new_validated` (and therefore
+  `TrillSpeedRamp::synthesize_regions`) would reject — so callers
+  wanting construction-time rejection get it at the call site rather
+  than discovering `None` later. Lifts the same validator-pairing pattern
+  used at the `TrillSpeedRamp` (`linear` / `linear_validated`) and
+  `TrillSpeedRampSpec` (`new` / `new_validated`) layers up one more level
+  into the bundle builder. Updated the permissive setter's doc comment
+  to point at the new method instead of being silent about the strict
+  counterpart's existence.
+
+  Rejection rules (`None` returned) — inherited verbatim from the
+  underlying `TrillSpeedRampSpec::new_validated`:
+  - `region_count == 0` for any ramp variant (no regions to emit).
+  - `ramp` is `TrillSpeedRamp::Linear { .. }` AND `region_count < 2`.
+
+  Carve-outs (`Some(Self { .. })` returned with `speed_ramp` populated
+  — pinned down explicitly):
+  - `TrillSpeedRamp::Constant(_)` accepts any `region_count >= 1`.
+  - `TrillSpeedRamp::Linear { start, end }` with `start == end` is
+    accepted (rejection of equal endpoints lives on
+    `linear_validated`, not the spec validator nor the bundle-builder
+    validator — the layering is orthogonal).
+  - All other fields on `self` survive byte-for-byte on accept
+    (mirrors the additive contract of every other setter on this
+    bundle — particularly that `speed` is NOT cleared when
+    `speed_ramp` is set, since the documented dispatch permits both
+    fields to coexist).
+
+  Implementation: a one-call delegation to
+  `TrillSpeedRampSpec::new_validated` followed by a `match` —
+  acceptance produces the populated bundle, rejection returns `None`
+  with the partially-built bundle dropped. `const fn` for symmetry
+  with every other setter on this bundle and with
+  `TrillSpeedRampSpec::new_validated` itself.
+
+  Tests added (14) in `layout::trill_options::tests`:
+  - `with_speed_ramp_validated_ramp_count_rejects_zero_region_count_for_constant`
+  - `with_speed_ramp_validated_ramp_count_rejects_zero_region_count_for_linear`
+  - `with_speed_ramp_validated_ramp_count_rejects_one_region_for_linear`
+  - `with_speed_ramp_validated_ramp_count_accepts_one_region_for_constant` —
+    the Constant carve-out at the minimum region count.
+  - `with_speed_ramp_validated_ramp_count_accepts_two_regions_for_linear` —
+    the minimum-valid `Linear` case.
+  - `with_speed_ramp_validated_ramp_count_some_branch_byte_equals_unvalidated` —
+    on accepted pairs, the validated and permissive setters produce
+    field-by-field equal bundles. Walks 5 region counts × 3 Constant
+    ramps + 4 region counts × 3 Linear ramps = 27 accepted pairs.
+    Catches a future drift where the validator started normalizing
+    accepted inputs (e.g. collapsing `Linear { s, s }` into
+    `Constant(s)`).
+  - `with_speed_ramp_validated_ramp_count_some_branch_isolation` —
+    on accept from `new()`, only `speed_ramp` is populated; every
+    other field stays `None`.
+  - `with_speed_ramp_validated_ramp_count_preserves_other_setters_on_some` —
+    chained on top of a fully-populated bundle, every prior field
+    survives unchanged on accept. Locks the additive contract; pins
+    down the documented "speed + speed_ramp may coexist" carve-out.
+  - `with_speed_ramp_validated_ramp_count_is_const_callable` — `const`
+    items hold one `Some` and two distinct `None` cases (zero-count
+    Constant + Linear with `region_count == 1`).
+  - `with_speed_ramp_validated_ramp_count_rejection_matches_spec_new_validated` —
+    cross-validation: for every pair in 0..=3 × {Constant, Linear},
+    `setter.is_none()` iff `spec.is_none()`, and on accept the
+    stored `speed_ramp` byte-equals the spec the validator produced.
+    Locks the delegation; any future divergence (e.g. setter adds an
+    extra rule the spec doesn't) trips this canary.
+  - `with_speed_ramp_validated_ramp_count_none_branch_does_not_partially_populate` —
+    on `None`, the partially-built bundle is dropped at the
+    `Option<Self>` shape, so a future refactor that swapped the
+    return type for `Self` with a silent fallback would fail this
+    test.
+  - `with_speed_ramp_validated_ramp_count_accepts_linear_equal_endpoint_speeds` —
+    the orthogonal-layering carve-out pinned at the bundle layer.
+  - `with_speed_ramp_validated_ramp_count_overwrites_prior_value_on_some` —
+    last-write-wins on the accept-band, matching the permissive
+    setter.
+  - `with_speed_ramp_validated_ramp_count_some_branch_feeds_synthesize_regions` —
+    end-to-end smoke: an accepted bundle's `speed_ramp` feeds cleanly
+    into `synthesize_regions` and produces the expected number of
+    regions with the expected start positions.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2569 tests passing,
+  0 failing** (up from 2555 by exactly the 14 new tests).
+  `cargo test -p music-engraver --lib with_speed_ramp_validated` runs
+  the 14 new tests in isolation: all pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings on
+  `trill_options.rs` (pre-existing warnings on `multi_staff.rs:394`
+  and unrelated `music/` crate files persist — out of scope).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). The validator pairing pattern
+  (`{constructor}` / `{constructor}_validated`) is now consistently
+  applied across all three layers of the trill speed-ramp stack
+  (`TrillSpeedRamp::linear`, `TrillSpeedRampSpec::new`,
+  `TrillExtensionFullOptions::with_speed_ramp_ramp_count`); no
+  further extension points remain on that surface.
+
+- Open issues: None. The change is additive — no existing public API
+  altered, no golden baseline regenerated, no example or test
+  modified. Pre-existing clippy warnings in
+  `music/src/notation/rhythm/meter.rs` and
+  `music-engraver/src/score/multi_staff.rs:394` remain unaddressed
+  (out of scope for this chunk).
