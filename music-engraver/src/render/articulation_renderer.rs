@@ -21,7 +21,7 @@ pub fn draw_articulation(
 mod tests {
     use super::*;
     use crate::font::bravura_font;
-    use crate::layout::articulation::{layout_articulation, Articulation};
+    use crate::layout::articulation::{layout_articulation, Articulation, ArticulationPlacement};
     use crate::layout::staff::StaffLayout;
     use crate::layout::stem::StemDirection;
 
@@ -257,6 +257,102 @@ mod tests {
         assert!(!up_d.is_empty(), "up-bow d-data should be non-empty");
         assert!(!down_d.is_empty(), "down-bow d-data should be non-empty");
         assert_ne!(up_d, down_d, "up-bow and down-bow paths must differ");
+    }
+
+    #[test]
+    fn all_four_combined_variants_render_distinct_paths() {
+        // Each combined-articulation (AccentStaccato, MarcatoStaccato,
+        // TenutoStaccato, TenutoAccent) must render as a distinct shape.
+        // Also: each must differ from its visual "constituents" (e.g.
+        // AccentStaccato differs from both Accent and Staccato), otherwise
+        // a wiring typo could collapse the combined glyph onto a simple one.
+        let font = test_font();
+        let staff = test_staff();
+        let combined = [
+            Articulation::AccentStaccato,
+            Articulation::MarcatoStaccato,
+            Articulation::TenutoStaccato,
+            Articulation::TenutoAccent,
+        ];
+        let mut combined_paths: Vec<(Articulation, String)> = Vec::new();
+        for c in combined {
+            let layout =
+                layout_articulation(c, 100.0, 4, StemDirection::Up, &staff);
+            let mut writer = test_writer();
+            draw_articulation(&mut writer, &font, &layout).unwrap();
+            let d = path_d_data(&writer.to_svg());
+            assert!(!d.is_empty(), "{c:?} should produce non-empty path data");
+            combined_paths.push((c, d));
+        }
+
+        // Pairwise distinct among the 4 combined variants.
+        for (i, (ai, di)) in combined_paths.iter().enumerate() {
+            for (j, (aj, dj)) in combined_paths.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        di, dj,
+                        "{ai:?} and {aj:?} share path data — combined glyphs must be visually distinct",
+                    );
+                }
+            }
+        }
+
+        // Each combined must differ from every simple constituent glyph.
+        // This catches a typo that would map e.g. TenutoAccent → ArticAccentBelow.
+        for simple in [
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+        ] {
+            let layout =
+                layout_articulation(simple, 100.0, 4, StemDirection::Up, &staff);
+            let mut writer = test_writer();
+            draw_articulation(&mut writer, &font, &layout).unwrap();
+            let simple_d = path_d_data(&writer.to_svg());
+            for (c, cd) in &combined_paths {
+                assert_ne!(
+                    cd, &simple_d,
+                    "{c:?} path must differ from simple {simple:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn combined_variants_render_above_and_below_distinctly() {
+        // Above-variant and Below-variant of each combined articulation must
+        // render as different path data — Bravura supplies a real
+        // above-below pair, not a vertical flip applied at draw time.
+        let font = test_font();
+        let staff = test_staff();
+        for c in [
+            Articulation::AccentStaccato,
+            Articulation::MarcatoStaccato,
+            Articulation::TenutoStaccato,
+            Articulation::TenutoAccent,
+        ] {
+            // Stem-up → Below glyph; stem-down → Above glyph.
+            let below =
+                layout_articulation(c, 100.0, 4, StemDirection::Up, &staff);
+            let above =
+                layout_articulation(c, 100.0, 4, StemDirection::Down, &staff);
+            assert_eq!(below.placement, ArticulationPlacement::Below);
+            assert_eq!(above.placement, ArticulationPlacement::Above);
+
+            let mut wb = test_writer();
+            draw_articulation(&mut wb, &font, &below).unwrap();
+            let db = path_d_data(&wb.to_svg());
+
+            let mut wa = test_writer();
+            draw_articulation(&mut wa, &font, &above).unwrap();
+            let da = path_d_data(&wa.to_svg());
+
+            assert!(!da.is_empty(), "{c:?} above path empty");
+            assert!(!db.is_empty(), "{c:?} below path empty");
+            assert_ne!(da, db, "{c:?} above/below path data should differ");
+        }
     }
 
     #[test]

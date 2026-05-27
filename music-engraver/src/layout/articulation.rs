@@ -57,6 +57,23 @@ pub enum Articulation {
     /// (from tip toward frog). SMuFL provides a single glyph; conventionally
     /// placed above the staff regardless of stem direction.
     DownBow,
+    /// Accent + staccato — a single SMuFL glyph combining an accent mark
+    /// and a staccato dot. Commonly used to mark a short, emphasized
+    /// attack without taking up two stack slots. Behaves like a standard
+    /// articulation: placed opposite the stem.
+    AccentStaccato,
+    /// Marcato + staccato — combined sharp accent and staccato dot. Rarer
+    /// than `AccentStaccato` but used for the sharpest possible short
+    /// attack. Opposite-side-of-stem placement.
+    MarcatoStaccato,
+    /// Tenuto + staccato — also called *portato* or *mezzo-staccato*:
+    /// a tenuto line over a staccato dot. Indicates a slightly detached
+    /// but sustained articulation. Opposite-side-of-stem placement.
+    TenutoStaccato,
+    /// Tenuto + accent — combined sustaining line and emphatic attack.
+    /// Frequent in 19th–20th-century scores for "leaning into" a sustained
+    /// note. Opposite-side-of-stem placement.
+    TenutoAccent,
 }
 
 /// Whether an articulation appears above or below the notehead.
@@ -120,6 +137,30 @@ impl Articulation {
             // change the glyph.
             (Self::UpBow, _) => Glyph::StringsUpBow,
             (Self::DownBow, _) => Glyph::StringsDownBow,
+            (Self::AccentStaccato, ArticulationPlacement::Above) => {
+                Glyph::ArticAccentStaccatoAbove
+            }
+            (Self::AccentStaccato, ArticulationPlacement::Below) => {
+                Glyph::ArticAccentStaccatoBelow
+            }
+            (Self::MarcatoStaccato, ArticulationPlacement::Above) => {
+                Glyph::ArticMarcatoStaccatoAbove
+            }
+            (Self::MarcatoStaccato, ArticulationPlacement::Below) => {
+                Glyph::ArticMarcatoStaccatoBelow
+            }
+            (Self::TenutoStaccato, ArticulationPlacement::Above) => {
+                Glyph::ArticTenutoStaccatoAbove
+            }
+            (Self::TenutoStaccato, ArticulationPlacement::Below) => {
+                Glyph::ArticTenutoStaccatoBelow
+            }
+            (Self::TenutoAccent, ArticulationPlacement::Above) => {
+                Glyph::ArticTenutoAccentAbove
+            }
+            (Self::TenutoAccent, ArticulationPlacement::Below) => {
+                Glyph::ArticTenutoAccentBelow
+            }
         }
     }
 
@@ -1265,6 +1306,334 @@ mod tests {
             assert_eq!(l.placement, ArticulationPlacement::Above);
         }
         assert!(stack[1].y < stack[0].y);
+    }
+
+    // --- Combined-articulation tests ---
+    //
+    // The four combined-articulation glyphs (AccentStaccato, MarcatoStaccato,
+    // TenutoStaccato, TenutoAccent) are SMuFL shorthand for what would
+    // otherwise be two stacked normal articulations. They behave exactly like
+    // normal articulations: stem-opposite placement, single above/below glyph
+    // pair, and they live in the "normal" stack bucket — not the always-above
+    // bucket reserved for bow strokes and fermatas.
+
+    /// Convenience: the 4 combined-articulation variants in canonical order.
+    const COMBINED_VARIANTS: [Articulation; 4] = [
+        Articulation::AccentStaccato,
+        Articulation::MarcatoStaccato,
+        Articulation::TenutoStaccato,
+        Articulation::TenutoAccent,
+    ];
+
+    #[test]
+    fn accent_staccato_glyph_pair() {
+        assert_eq!(
+            Articulation::AccentStaccato.glyph(ArticulationPlacement::Above),
+            Glyph::ArticAccentStaccatoAbove
+        );
+        assert_eq!(
+            Articulation::AccentStaccato.glyph(ArticulationPlacement::Below),
+            Glyph::ArticAccentStaccatoBelow
+        );
+    }
+
+    #[test]
+    fn marcato_staccato_glyph_pair() {
+        assert_eq!(
+            Articulation::MarcatoStaccato.glyph(ArticulationPlacement::Above),
+            Glyph::ArticMarcatoStaccatoAbove
+        );
+        assert_eq!(
+            Articulation::MarcatoStaccato.glyph(ArticulationPlacement::Below),
+            Glyph::ArticMarcatoStaccatoBelow
+        );
+    }
+
+    #[test]
+    fn tenuto_staccato_glyph_pair() {
+        assert_eq!(
+            Articulation::TenutoStaccato.glyph(ArticulationPlacement::Above),
+            Glyph::ArticTenutoStaccatoAbove
+        );
+        assert_eq!(
+            Articulation::TenutoStaccato.glyph(ArticulationPlacement::Below),
+            Glyph::ArticTenutoStaccatoBelow
+        );
+    }
+
+    #[test]
+    fn tenuto_accent_glyph_pair() {
+        assert_eq!(
+            Articulation::TenutoAccent.glyph(ArticulationPlacement::Above),
+            Glyph::ArticTenutoAccentAbove
+        );
+        assert_eq!(
+            Articulation::TenutoAccent.glyph(ArticulationPlacement::Below),
+            Glyph::ArticTenutoAccentBelow
+        );
+    }
+
+    #[test]
+    fn all_combined_variants_produce_distinct_above_glyphs() {
+        let glyphs: Vec<Glyph> = COMBINED_VARIANTS
+            .iter()
+            .map(|c| c.glyph(ArticulationPlacement::Above))
+            .collect();
+        for (i, g1) in glyphs.iter().enumerate() {
+            for (j, g2) in glyphs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        g1, g2,
+                        "combined variants {i} and {j} share above-glyph: {g1:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_combined_variants_produce_distinct_below_glyphs() {
+        let glyphs: Vec<Glyph> = COMBINED_VARIANTS
+            .iter()
+            .map(|c| c.glyph(ArticulationPlacement::Below))
+            .collect();
+        for (i, g1) in glyphs.iter().enumerate() {
+            for (j, g2) in glyphs.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        g1, g2,
+                        "combined variants {i} and {j} share below-glyph",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn combined_variants_above_below_differ_within_each() {
+        // Each combined-variant must have distinct above- vs below-glyphs;
+        // Bravura supplies separate glyphs because they aren't mirror-images.
+        for &c in &COMBINED_VARIANTS {
+            assert_ne!(
+                c.glyph(ArticulationPlacement::Above),
+                c.glyph(ArticulationPlacement::Below),
+                "{c:?} above and below glyphs should differ",
+            );
+        }
+    }
+
+    #[test]
+    fn combined_variants_differ_from_simple_articulations() {
+        // Regression net: a wiring typo could collapse e.g. AccentStaccato
+        // back onto plain Accent. Verify no combined glyph aliases any of
+        // the five simple-articulation glyphs (above placement).
+        let simple_above: Vec<Glyph> = [
+            Articulation::Staccato,
+            Articulation::Tenuto,
+            Articulation::Accent,
+            Articulation::Marcato,
+            Articulation::Staccatissimo,
+        ]
+        .iter()
+        .map(|a| a.glyph(ArticulationPlacement::Above))
+        .collect();
+        for &c in &COMBINED_VARIANTS {
+            let g = c.glyph(ArticulationPlacement::Above);
+            for s in &simple_above {
+                assert_ne!(
+                    &g, s,
+                    "{c:?} above glyph {g:?} must not alias simple {s:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn combined_variants_not_flagged_by_is_fermata() {
+        for &c in &COMBINED_VARIANTS {
+            assert!(
+                !c.is_fermata(),
+                "{c:?} must not be flagged as a fermata variant",
+            );
+        }
+    }
+
+    #[test]
+    fn combined_variants_not_flagged_by_is_bow_stroke() {
+        for &c in &COMBINED_VARIANTS {
+            assert!(
+                !c.is_bow_stroke(),
+                "{c:?} must not be flagged as a bow stroke",
+            );
+        }
+    }
+
+    #[test]
+    fn combined_variants_default_placement_follows_stem_opposite() {
+        // Combined articulations must follow the standard "opposite from stem"
+        // rule, not the "always above" rule used for fermatas and bow strokes.
+        for &c in &COMBINED_VARIANTS {
+            assert_eq!(
+                c.default_placement(StemDirection::Up),
+                ArticulationPlacement::Below,
+                "{c:?} with stem-up should default to Below",
+            );
+            assert_eq!(
+                c.default_placement(StemDirection::Down),
+                ArticulationPlacement::Above,
+                "{c:?} with stem-down should default to Above",
+            );
+        }
+    }
+
+    #[test]
+    fn combined_alone_lays_out_opposite_stem() {
+        // A combined articulation alone on a stem-up note must land below
+        // the note (just like a plain Accent would). Specifically: y > note_y
+        // and placement == Below.
+        let staff = test_staff();
+        let layout = layout_articulation(
+            Articulation::AccentStaccato,
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(layout.placement, ArticulationPlacement::Below);
+        assert_eq!(layout.glyph, Glyph::ArticAccentStaccatoBelow);
+        let note_y = staff.y_of(4);
+        assert!(
+            layout.y > note_y,
+            "below-placed combined articulation should have y > note_y: {} > {}",
+            layout.y,
+            note_y,
+        );
+    }
+
+    #[test]
+    fn stack_combined_with_fermata_separates_placement() {
+        // Stem-up: combined articulation goes below, fermata always above.
+        // Locks the bucket-partition rule for the combined variants.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::TenutoAccent, Articulation::Fermata],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticTenutoAccentBelow);
+        assert_eq!(stack[1].glyph, Glyph::FermataAbove);
+        // Fermata above, combined below: fermata y < combined y.
+        assert!(stack[1].y < stack[0].y);
+    }
+
+    #[test]
+    fn stack_combined_with_bow_stem_up_separates_buckets() {
+        // Stem-up: combined goes below (normal bucket), bow stroke above.
+        // Confirms combined variants land in the `normal` bucket, not the
+        // `bow_strokes` bucket — otherwise both would land above and stack.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::AccentStaccato, Articulation::DownBow],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[0].glyph, Glyph::ArticAccentStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsDownBow);
+    }
+
+    #[test]
+    fn stack_combined_with_simple_articulation_stacks_outward_same_side() {
+        // Stem-up: both a plain Staccato and an AccentStaccato should go
+        // below, in input order, stacked outward by one stack-step.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato, Articulation::AccentStaccato],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 2);
+        for l in &stack {
+            assert_eq!(l.placement, ArticulationPlacement::Below);
+        }
+        assert_eq!(stack[0].glyph, Glyph::ArticStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::ArticAccentStaccatoBelow);
+        // Second further from the note (higher y for Below).
+        assert!(stack[1].y > stack[0].y);
+        let expected_gap = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
+        let actual_gap = stack[1].y - stack[0].y;
+        assert!(
+            (actual_gap - expected_gap).abs() < 1e-6,
+            "stack spacing {actual_gap} should match expected {expected_gap}",
+        );
+    }
+
+    #[test]
+    fn stack_combined_full_triple_orders_correctly_stem_up() {
+        // Full triple stack: combined articulation (below) + bow (above) +
+        // fermata (above, outermost). Same ordering rule as a plain
+        // normal+bow+fermata stack, since combined variants sit in the
+        // normal bucket.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[
+                Articulation::MarcatoStaccato,
+                Articulation::UpBow,
+                Articulation::Fermata,
+            ],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack.len(), 3);
+        assert_eq!(stack[0].glyph, Glyph::ArticMarcatoStaccatoBelow);
+        assert_eq!(stack[1].glyph, Glyph::StringsUpBow);
+        assert_eq!(stack[2].glyph, Glyph::FermataAbove);
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Above);
+        assert_eq!(stack[2].placement, ArticulationPlacement::Above);
+        let note_y = staff.y_of(4);
+        assert!(stack[0].y > note_y, "combined below note");
+        assert!(stack[1].y < note_y, "bow above note");
+        assert!(stack[2].y < stack[1].y, "fermata above bow");
+    }
+
+    #[test]
+    fn stack_combined_only_matches_single_layout() {
+        // A single combined-articulation through the stacker must match
+        // calling layout_articulation directly — no spurious offset.
+        let staff = test_staff();
+        let stack = layout_articulation_stack(
+            &[Articulation::TenutoStaccato],
+            175.0,
+            3,
+            StemDirection::Down,
+            &staff,
+        );
+        let direct = layout_articulation(
+            Articulation::TenutoStaccato,
+            175.0,
+            3,
+            StemDirection::Down,
+            &staff,
+        );
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0].x, direct.x);
+        assert!((stack[0].y - direct.y).abs() < 1e-9);
+        assert_eq!(stack[0].glyph, direct.glyph);
+        assert_eq!(stack[0].placement, direct.placement);
     }
 
     #[test]

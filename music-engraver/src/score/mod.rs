@@ -397,12 +397,16 @@ impl ScoreBuilder {
     }
 
     /// Attach an articulation (staccato, tenuto, accent, marcato, staccatissimo,
-    /// or any member of the fermata family — standard, long/short, very-long/
-    /// very-short, Henze long/short) to the most recently added note or chord.
+    /// any member of the fermata family — standard, long/short, very-long/
+    /// very-short, Henze long/short — a bow stroke (up-bow / down-bow), or a
+    /// combined-articulation glyph: accent-staccato, marcato-staccato,
+    /// tenuto-staccato (portato), or tenuto-accent) to the most recently
+    /// added note or chord.
     ///
     /// Placement (above/below) is determined automatically from stem direction.
-    /// All fermata variants are always placed above. No-op if the last event
-    /// was a rest.
+    /// All fermata variants and bow strokes are always placed above. Combined
+    /// articulations follow the standard stem-opposite rule. No-op if the
+    /// last event was a rest.
     pub fn articulation(mut self, artic: Articulation) -> Self {
         if let Some(
             (_, ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }),
