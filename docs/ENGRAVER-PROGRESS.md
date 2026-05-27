@@ -4320,3 +4320,150 @@
   distinction. The pre-existing `multi_staff.rs:394` clippy warning
   and unrelated `music/` crate clippy warnings remain unaddressed
   (out of scope).
+
+## 2026-05-27 — Post-v1, hairpin niente (open-circle to/from silence)
+
+- Did: Added engraver support for the niente "o" — a small open circle at
+  the closed (pointy) end of a hairpin marking to/from silence. Touched
+  four files:
+
+  1. `music-engraver/src/render/svg_writer.rs`: new
+     `SvgWriter::add_circle(cx, cy, r, stroke, stroke_width, fill)`
+     primitive emitting a standard SVG `<circle>` element. Generic
+     enough for any future small-marker callers; the niente convention
+     uses it with `fill="none"` for the open "o".
+
+  2. `music-engraver/src/layout/hairpin.rs`:
+     - New `NienteCircleLayout { cx, cy, radius, stroke_width }` —
+       `#[derive(Clone, Copy, Debug)]` so `Option<NienteCircleLayout>` is
+       Copy and the existing destructure-by-value pattern in the renderer
+       still type-checks.
+     - New `pub const HAIRPIN_NIENTE_RADIUS_SS: f64 = 0.2` (→ 0.4ss
+       diameter, the engraved standard).
+     - New `niente: Option<NienteCircleLayout>` field on `HairpinLayout`,
+       always `None` from the existing `layout_hairpin`. The four
+       existing call sites (system_renderer, page_renderer, two example
+       constructions) are unchanged — backward-compatible.
+     - New `layout_hairpin_with_niente(kind, x_start, x_end,
+       staff_bottom_y, staff_space, stroke_width)` — produces an
+       identical wedge layout to `layout_hairpin` and attaches a niente
+       circle at `(x_start, y_center)` for `Crescendo` (from silence) or
+       `(x_end, y_center)` for `Decrescendo` (to silence). Circle radius
+       scales linearly with `staff_space`; stroke matches parent.
+
+  3. `music-engraver/src/render/hairpin_renderer.rs`:
+     - Added `niente` to the destructure pattern.
+     - When `Some(n)`, draws `svg.add_circle(n.cx, n.cy, n.radius,
+       "black", n.stroke_width, "none")`. The wedge lines are drawn
+       unconditionally — niente is purely additive decoration.
+     - Updated the `draw_hairpin` doc comment to mention the niente path.
+
+  4. `music-engraver/src/layout/mod.rs`: re-exported the two new
+     public items (`layout_hairpin_with_niente`, `NienteCircleLayout`)
+     and the new constant (`HAIRPIN_NIENTE_RADIUS_SS`).
+
+  Anchor placement matches standard engraving: for a crescendo the
+  silent end is the *left tip* (`x_start`), and for a decrescendo the
+  silent end is the *right tip* (`x_end`). Both share `y_center` (the
+  hairpin midline) so the circle visually merges into the wedge tip.
+
+  Design choice — open "o", not filled dot: engraved niente is
+  conventionally a stroked ring (`fill="none"`). A filled circle would
+  read as a staccato or fermata dot and be wrong notation. The renderer
+  test `niente_circle_is_open_o_not_filled_dot` locks both
+  `fill="none"` *and* `stroke="black"` on the emitted circle line so a
+  future "let's just fill it" refactor surfaces immediately.
+
+  Design choice — stroke width inheritance: the niente ring uses the
+  parent hairpin's `stroke_width` so the ring reads as the same line
+  weight as the wedge. `niente_circle_stroke_width_matches_hairpin_stroke`
+  pins this by asserting `stroke-width="<custom>"` appears on exactly
+  three SVG elements (2 wedge lines + 1 circle = 3) under a non-default
+  stroke width.
+
+  Tests added (23 total):
+
+  - `svg_writer.rs` (2): `svg_writer_circle_element` (full attribute
+    coverage on the bare primitive — cx/cy/r/stroke/stroke-width/fill),
+    `svg_writer_circle_filled` (hex stroke + filled fill, catches a
+    refactor that hardcoded `fill="none"`).
+
+  - `hairpin.rs` (10): `plain_hairpin_has_no_niente` (default
+    `niente: None`); `with_niente_crescendo_places_circle_at_start`
+    (cx == x_start, cy == y_center); `with_niente_decrescendo_places_circle_at_end`
+    (cx == x_end, cy == y_center); `niente_radius_matches_const_times_staff_space`
+    (radius locked to `HAIRPIN_NIENTE_RADIUS_SS * staff_space` — catches
+    a refactor that uses the wrong factor); `niente_radius_scales_with_staff_space`
+    (walks two staff spaces, asserts both absolute values and the 2× ratio);
+    `niente_stroke_width_matches_hairpin` (custom stroke flows through);
+    `niente_does_not_alter_wedge_geometry` (byte-equal wedge fields
+    between `layout_hairpin` and `layout_hairpin_with_niente` — niente
+    is purely additive); `niente_y_lives_on_hairpin_midline`
+    (`cy == y_center` to 1e-12 — locks the merge-into-tip invariant);
+    `crescendo_and_decrescendo_nientes_target_opposite_ends` (cross-check
+    that crescendo and decrescendo niente cx differ by the full span,
+    cy and radius are equal); `niente_const_layout_is_copy` (proves
+    `NienteCircleLayout: Copy` — the destructure pattern in the renderer
+    relies on it).
+
+  - `hairpin_renderer.rs` (11): `plain_hairpin_emits_no_circle` (zero
+    `<circle>` elements when `niente: None` — locks the
+    decoration-is-opt-in invariant); `niente_hairpin_emits_exactly_one_circle`;
+    `niente_hairpin_still_emits_two_wedge_lines` (decoration does not
+    displace the wedge — exactly 2 `<line>` elements);
+    `niente_crescendo_circle_anchored_at_x_start` (`cx="100"`);
+    `niente_decrescendo_circle_anchored_at_x_end` (`cx="600"`);
+    `niente_cy_matches_hairpin_y_center`; `niente_circle_is_open_o_not_filled_dot`
+    (both `fill="none"` AND `stroke="black"` on the circle line);
+    `niente_circle_radius_in_svg_matches_layout` (`r="<radius>"`);
+    `niente_circle_stroke_width_matches_hairpin_stroke` (custom stroke
+    appears on exactly 3 elements: 2 wedge lines + 1 circle);
+    `niente_circle_lives_inside_viewbox_bounds_for_typical_layout`
+    (sanity: `0 < radius < staff_space`); `niente_crescendo_and_decrescendo_produce_different_svg`
+    (cross-shape distinguishability — locks that anchor differs).
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo check --workspace` passes (0 errors).
+  `cargo test -p music-engraver --lib` passes — **2689 tests passing,
+  0 failing** (up from 2666 by exactly the 23 new tests; matches the
+  count expectation: 2 SvgWriter + 10 hairpin layout + 11 hairpin
+  renderer = 23).
+  `cargo test -p music-engraver --lib niente` runs the 20 new niente
+  tests plus the pre-existing `niente_maps_to_smufl_niente` dynamic
+  test in isolation: all 21 pass.
+  `cargo test -p music-engraver --lib svg_writer_circle` runs the 2
+  new circle primitives in isolation: both pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings —
+  only the pre-existing `multi_staff.rs:394` warning persists (out of
+  scope, noted across prior progress entries).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). Natural follow-ups on the hairpin surface itself:
+  - Plumb `layout_hairpin_with_niente` through the score → system_renderer
+    → page_renderer chain so a `ScoreBuilder` caller can request a
+    niente hairpin end-to-end (this chunk stopped at the layout +
+    primitive renderer — `system_renderer/mod.rs:414` still calls the
+    plain `layout_hairpin`). Requires a score-event flag for niente,
+    which is out of scope for this chunk.
+  - Dashed-hairpin / "cresc. - - -" text variants for long crescendi.
+  - Nested-dynamic hairpins (start with `p`, end with `f` on the same
+    hairpin).
+  - Niente at the *open* end (rare but used — "from silence open" vs
+    "from silence closed" — currently the layout only supports closed-end
+    niente by anchor choice).
+
+- Open issues: None. The change is purely additive: new struct field
+  defaults to `None` from every existing constructor; the SvgWriter
+  primitive is new public surface; no example or golden baseline
+  touched (no example exercises the niente layer yet — see "Next"
+  above for the plumbing-through chunk). The pre-existing
+  `multi_staff.rs:394` clippy warning and unrelated `music/` crate
+  clippy warnings remain unaddressed (out of scope).

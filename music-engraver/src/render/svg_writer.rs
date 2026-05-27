@@ -227,6 +227,27 @@ impl SvgWriter {
         self.elements.push('\n');
     }
 
+    /// Add a `<circle>` element with explicit stroke + fill.
+    ///
+    /// Used by the niente-circle convention at the closed end of a hairpin
+    /// (`fill="none"` gives the standard "open o"). Generic enough to use
+    /// for any other small marker that wants a stroked circle.
+    pub fn add_circle(
+        &mut self,
+        cx: f64,
+        cy: f64,
+        r: f64,
+        stroke: &str,
+        stroke_width: f64,
+        fill: &str,
+    ) {
+        let _ = write!(
+            self.elements,
+            r#"  <circle cx="{cx}" cy="{cy}" r="{r}" stroke="{stroke}" stroke-width="{stroke_width}" fill="{fill}"/>"#
+        );
+        self.elements.push('\n');
+    }
+
     /// Add a styled rectangle with fill, stroke, and stroke-width.
     pub fn add_styled_rect(&mut self, x: f64, y: f64, width: f64, height: f64, style: &RectStyle<'_>) {
         let _ = write!(
@@ -317,6 +338,31 @@ mod tests {
         assert!(svg.contains(r#"<polygon "#));
         assert!(svg.contains(r#"points="0,0 50,0 50,30 0,30""#));
         assert!(svg.contains(r#"fill="red""#));
+    }
+
+    #[test]
+    fn svg_writer_circle_element() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        w.add_circle(40.0, 60.0, 5.0, "black", 2.0, "none");
+        let svg = w.to_svg();
+        assert!(svg.contains("<circle "));
+        assert!(svg.contains(r#"cx="40""#));
+        assert!(svg.contains(r#"cy="60""#));
+        assert!(svg.contains(r#"r="5""#));
+        assert!(svg.contains(r#"stroke="black""#));
+        assert!(svg.contains(r#"stroke-width="2""#));
+        assert!(svg.contains(r#"fill="none""#));
+    }
+
+    #[test]
+    fn svg_writer_circle_filled() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        w.add_circle(0.0, 0.0, 3.5, "#ff0000", 0.5, "blue");
+        let svg = w.to_svg();
+        assert!(svg.contains(r#"r="3.5""#));
+        assert!(svg.contains(r##"stroke="#ff0000""##));
+        assert!(svg.contains(r#"stroke-width="0.5""#));
+        assert!(svg.contains(r#"fill="blue""#));
     }
 
     #[test]
