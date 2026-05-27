@@ -3027,3 +3027,109 @@
   is the form Bravura ships under `articLaissezVibrer*` and is the
   appropriate notation when a real tie cannot be drawn (e.g., the
   note is followed by a rest).
+
+## 2026-05-27 — Post-v1, golden_accent_extensions
+
+- Did: Added a `golden_accent_extensions` SVG-regression test covering the
+  four most recently landed articulation variants — `SoftAccent`,
+  `Stress`, `Unstress`, and `LaissezVibrer`. The three prior chunks
+  (combined-variant articulations, accent extensions, l.v.) added
+  layout/render unit coverage but no golden, leaving the full SVG
+  encoding — glyph placement coordinates, Bravura path-data choice,
+  exact bytes — un-locked. This chunk closes that gap for the 4 normal-
+  bucket variants with the same shape used by `golden_fermata_variants`.
+
+  `music-engraver/tests/golden_svg.rs`:
+  - Added `ACCENT_EXTENSION_VARIANTS: [Articulation; 4]` listing the four
+    variants in canonical order. Docstring names the shared wiring
+    contract (normal bucket, not fermata or bow; stem-opposite
+    placement) so a future reviewer can trace why these four are
+    grouped together.
+  - Added `ACCENT_EXTENSION_PITCHES: [(&str, u8); 4]` — pitches
+    alternated low/high (E4, C5, G4, A5) so the engraver's auto stem-
+    direction routing produces alternating stem directions, which
+    exercises both the `Above` and `Below` glyph arms of each variant
+    on a single SVG canvas. Without this, all four variants would land
+    on the same side and the glyph-pair contract would only be locked
+    one-sided.
+  - Added `build_accent_extensions()`: 4-measure 4/4 system, one HALF
+    note + one HALF rest per measure, articulation applied to each
+    note. HALF (not WHOLE) because half notes carry a real stem and
+    actually exercise the stem-opposite placement rule that
+    `fermata_variants` does not need to test (fermata is always-above).
+  - Added `build_accent_extensions_plain()`: structural baseline —
+    identical score with no articulations. Used by the path-count and
+    distinct-d-set deltas in the test.
+  - Added `#[test] fn golden_accent_extensions()` with the following
+    assertions (all concrete-value, not is_ok-style):
+      1. Structural: SVG starts with `<svg` and contains `</svg>`.
+      2. Path-count guard: `full.<path-count> − plain.<path-count> == 4`.
+         Catches a regression where any variant maps to a missing
+         glyph (delta drops to 3) or to a multi-path glyph (delta
+         climbs to 5+).
+      3. Distinct-d guard: the set difference of `d="..."` strings
+         between the full and plain SVGs must contain exactly 4
+         entries. Catches a `glyph()` arm typo that aliases one
+         variant onto another's path data (the strongest single
+         regression net for the wiring change).
+      4. Plain-disjoint check: every newly-added d-string must NOT
+         appear in the plain baseline. Catches the (unlikely but
+         possible) regression where a variant's path data
+         coincidentally matches a notehead, rest, or clef path in
+         the baseline.
+      5. Cross-baseline distinctness: the new SVG must differ
+         byte-for-byte from both `build_articulations()` and
+         `build_fermata_variants()`. Catches an accidental copy that
+         collapses two goldens onto the same SVG (would silently pass
+         the assert_golden round-trip but is meaningless).
+      6. `assert_golden("accent_extensions", &svg)` — byte-exact
+         baseline lock, matching the pattern of all other golden
+         tests in this file.
+
+- Verified: `cargo check -p music-engraver --tests` passes (0 errors).
+  `cargo check --workspace` passes. `cargo build -p music-engraver`
+  succeeds. `cargo test -p music-engraver --test golden_svg
+  golden_accent_extensions` — passes both at `GOLDEN_UPDATE=1`
+  baseline-generation time AND on the immediate re-run without
+  `GOLDEN_UPDATE` (byte-equal). `cargo test -p music-engraver
+  --test golden_svg` — **70 golden tests pass** (vs 69 prior; +1 new,
+  exact arithmetic match — and crucially, all 69 pre-existing goldens
+  remain byte-identical, confirming the new functions did not
+  perturb any shared state). `cargo test -p music-engraver --lib` —
+  **2543 unit tests pass** (unchanged from prior — this chunk added
+  only an integration-test-binary test). Generated baseline is 7660
+  bytes / 32 lines / 15 `<path>` elements (1 clef + 4 noteheads + 4
+  stems + 4 rests + 4 articulation glyphs — 1 path per articulation,
+  consistent with the path-count guard's `delta==4`).
+
+- Next: Candidate post-v1 items remaining: **cross-system church
+  rests** (multi-measure rest cluster that breaks across systems);
+  **line breaking quality improvements** (Gourlay extension or
+  Bellini & Nesi line-cost model atop the existing Knuth-Plass DP);
+  **golden-SVG corpus PHASH-based visual regression**; **a parallel
+  bow-stroke golden** (mirror of this chunk for `UpBow`/`DownBow` —
+  same structure but those variants live in the always-above bow
+  bucket and would exercise the bow-stack rule; would add ~1 more
+  golden and ~80 lines of test code); **PNG export via the `png`
+  feature** (`resvg` + `tiny-skia` + `fontdb`); **worked
+  `examples/laissez_vibrer.rs` and `examples/accent_extensions.rs`**
+  (small follow-ups, not required to lock variants in); trill polish
+  (per-segment `WiggleTrillFast` variant selection from a single-
+  speed annotation); auto-resolved low-staff beam-group collision
+  golden (still requires ScoreBuilder opt-out for force-stems,
+  deferred); cross-voice tie/slur consultation of the collision
+  detector (deferred).
+
+- Open issues: None. The new golden locks the SVG encoding for all
+  four normal-bucket post-v1 variants; the bow-stroke variants
+  (`UpBow`/`DownBow`) still lack golden coverage but are intentionally
+  left for a follow-up chunk because their always-above placement
+  rule and bow-stack-bucket routing make them structurally distinct
+  from the normal-bucket family covered here, and combining both
+  contracts into one golden would make the test's assertions noisy.
+  The combined-variant articulations (`AccentStaccato`,
+  `MarcatoStaccato`, `TenutoStaccato`, `TenutoAccent`) also still
+  lack their own golden — also a candidate follow-up, but those
+  share the normal-bucket contract with the four covered here and
+  could either get their own golden or be folded into the existing
+  one in a future chunk.

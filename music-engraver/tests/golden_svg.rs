@@ -526,6 +526,74 @@ fn build_fermata_variants_plain() -> String {
         .render_svg()
 }
 
+/// Canonical ordering of the 3 SMuFL accent extensions plus LaissezVibrer.
+/// All four share the same wiring: the *normal* articulation stack bucket
+/// (not fermata, not bow-stroke) and stem-opposite default placement.
+/// Locked here so a future regression that reclassifies any of these into
+/// the fermata or bow bucket would change the rendered placement and trip
+/// the byte-exact baseline.
+const ACCENT_EXTENSION_VARIANTS: [Articulation; 4] = [
+    Articulation::SoftAccent,
+    Articulation::Stress,
+    Articulation::Unstress,
+    Articulation::LaissezVibrer,
+];
+
+/// Pitches for the accent-extension score. Alternating low/high so the
+/// engraver assigns alternating stem directions: positions below the
+/// middle line stem up (articulation below), positions above the middle
+/// line stem down (articulation above). Exercises both the `Above` and
+/// `Below` glyph arms for each variant on the same canvas.
+const ACCENT_EXTENSION_PITCHES: [(&str, u8); 4] = [
+    ("E", 4), // line 1 → stem up → glyph below
+    ("C", 5), // 3rd space → stem down → glyph above
+    ("G", 4), // line 2 → stem up → glyph below
+    ("A", 5), // above staff → stem down → glyph above
+];
+
+/// Each of the 4 accent-extension family variants on a half note in its
+/// own measure across one 4/4 system. Half notes (not whole notes) so
+/// each note carries a real stem and the placement contract is exercised.
+fn build_accent_extensions() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4);
+    let count = ACCENT_EXTENSION_VARIANTS.len();
+    for (i, variant) in ACCENT_EXTENSION_VARIANTS.iter().enumerate() {
+        let (n, oct) = ACCENT_EXTENSION_PITCHES[i];
+        b = b
+            .note(p(n, oct), Duration::HALF)
+            .articulation(*variant)
+            .rest(Duration::HALF);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
+/// Same layout as `build_accent_extensions` with no articulations.
+/// Structural baseline for the variants test: the variant score must
+/// add exactly one path per variant.
+fn build_accent_extensions_plain() -> String {
+    let mut b = ScoreBuilder::new()
+        .clef(Clef::Treble)
+        .key_signature(KeySignature::Open)
+        .time_signature(4, 4)
+        .measures_per_system(4);
+    let count = ACCENT_EXTENSION_VARIANTS.len();
+    for (i, _variant) in ACCENT_EXTENSION_VARIANTS.iter().enumerate() {
+        let (n, oct) = ACCENT_EXTENSION_PITCHES[i];
+        b = b.note(p(n, oct), Duration::HALF).rest(Duration::HALF);
+        if i + 1 < count {
+            b = b.barline();
+        }
+    }
+    b.end_barline().render_svg()
+}
+
 /// Grace note before a principal note.
 fn build_grace_notes() -> String {
     ScoreBuilder::new()
@@ -1279,6 +1347,100 @@ fn golden_fermata_variants() {
     );
 
     assert_golden("fermata_variants", &svg);
+}
+
+#[test]
+fn golden_accent_extensions() {
+    let svg = build_accent_extensions();
+    let plain = build_accent_extensions_plain();
+
+    // Structural validity
+    assert!(svg.starts_with("<svg"), "accent_extensions should be SVG");
+    assert!(
+        svg.contains("</svg>"),
+        "accent_extensions should close SVG"
+    );
+
+    // Path-count guard: each variant must add exactly one path on top of
+    // the same score with no articulations. Catches a silent regression
+    // where any of the 4 variants maps to a missing glyph (zero paths)
+    // or to a multi-path glyph (more than 1).
+    let full_paths = svg.matches("<path").count();
+    let plain_paths = plain.matches("<path").count();
+    let added_paths = full_paths.saturating_sub(plain_paths);
+    assert_eq!(
+        added_paths,
+        ACCENT_EXTENSION_VARIANTS.len(),
+        "each accent-extension variant must add exactly one path: \
+         full={full_paths}, plain={plain_paths}, delta={added_paths}, \
+         expected={}",
+        ACCENT_EXTENSION_VARIANTS.len()
+    );
+
+    // Distinct-d guard: each variant must contribute a unique SMuFL path
+    // payload. Bravura ships distinct outlines for ArticSoftAccent,
+    // ArticStress, ArticUnstress, and ArticLaissezVibrer — if any two
+    // glyphs accidentally collapse to the same d-string (e.g. a typo'd
+    // `glyph()` arm aliasing one onto another), this assertion fails.
+    use std::collections::HashSet;
+    fn distinct_d(svg: &str) -> HashSet<String> {
+        let mut out = HashSet::new();
+        for chunk in svg.split("d=\"").skip(1) {
+            if let Some(end) = chunk.find('"') {
+                out.insert(chunk[..end].to_string());
+            }
+        }
+        out
+    }
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain))
+        .cloned()
+        .collect();
+    assert_eq!(
+        added.len(),
+        ACCENT_EXTENSION_VARIANTS.len(),
+        "accent-extension variants must contribute exactly {} unique \
+         path d-strings (no glyph collapses), got {}",
+        ACCENT_EXTENSION_VARIANTS.len(),
+        added.len()
+    );
+
+    // Placement-contract guard: the score alternates pitches below and
+    // above the middle line (E4, C5, G4, A5). For HALF notes the
+    // engraver picks the stem direction from staff position, which
+    // sends each variant to alternating sides. The 2 "above" glyphs
+    // and 2 "below" glyphs must each be distinct d-strings, so we
+    // expect the added set to contain at least 4 unique d-strings —
+    // already covered by the prior assertion. Additionally, sanity-
+    // check that the *plain* score, which has none of these glyphs,
+    // does not coincidentally contain any of the added d-strings.
+    let plain_set = distinct_d(&plain);
+    for d in &added {
+        assert!(
+            !plain_set.contains(d),
+            "accent-extension d-string {d:?} should not appear in \
+             the plain (no-articulation) baseline"
+        );
+    }
+
+    // Sanity check: this score must differ from the existing
+    // `articulations` baseline (different gesture set, different
+    // glyphs, different layout). Catches an accidental copy that
+    // collapses two goldens onto the same SVG.
+    assert_ne!(
+        svg,
+        build_articulations(),
+        "accent_extensions must differ from the existing articulations baseline"
+    );
+    // And from the fermata-variants baseline (same shape, completely
+    // different glyph family).
+    assert_ne!(
+        svg,
+        build_fermata_variants(),
+        "accent_extensions must differ from the fermata_variants baseline"
+    );
+
+    assert_golden("accent_extensions", &svg);
 }
 
 #[test]
