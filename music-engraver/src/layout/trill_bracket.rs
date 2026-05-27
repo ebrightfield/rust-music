@@ -194,6 +194,91 @@ impl TrillBracketOptions {
         self.length_ss
     }
 
+    /// Stricter counterpart to
+    /// [`with_hook_length_ss`](Self::with_hook_length_ss) (and its
+    /// byte-equivalent alias [`with_length_ss`](Self::with_length_ss)):
+    /// rejects at the options-bundle construction site the hook lengths that
+    /// either produce a degenerate (invisible) hook or that the renderer
+    /// silently folds via [`f64::abs`], returning `Option<Self>`.
+    ///
+    /// **This validator's accept band is intentionally narrower than the
+    /// renderer's**, unlike
+    /// [`with_extension_length_ss_validated`](Self::with_extension_length_ss_validated)
+    /// which mirrors its renderer's accept band exactly. The
+    /// [`layout_trill_bracket_hook`](crate::layout::trill_bracket::layout_trill_bracket_hook)
+    /// renderer applies `let length = length.abs();` — negative lengths
+    /// silently flip to positive while the explicit
+    /// [`HookDirection`](crate::layout::HookDirection) wins. That fold makes
+    /// a `with_hook_length_ss(-1.0).with_direction(Down)` call indistinguishable
+    /// from `with_hook_length_ss(1.0).with_direction(Down)` at draw time, so
+    /// the "explicit-flip intent" of the caller (probably meaning "flip to
+    /// Up") is silently overridden. This validator surfaces that misuse at
+    /// construction time by rejecting negatives outright; callers wanting a
+    /// flipped hook should set
+    /// [`HookDirection`](crate::layout::HookDirection) explicitly.
+    ///
+    /// Zero is also rejected: a 0.0 length produces a degenerate hook with
+    /// `y_top == y_bottom` (no visible line). NaN is rejected because
+    /// `NaN > 0.0` is false and the renderer would otherwise emit NaN
+    /// coordinates.
+    ///
+    /// The accept-band predicate is therefore `hook_length_ss > 0.0`,
+    /// numerically identical to
+    /// [`with_extension_length_ss_validated`](Self::with_extension_length_ss_validated)
+    /// despite the different rationale (extension-length: renderer collapses
+    /// to no-wiggle; hook-length: renderer silently folds and degenerates at
+    /// zero).
+    ///
+    /// Rejection rules (`None` returned):
+    /// - `hook_length_ss == 0.0` (positive or negative zero — both fail
+    ///   `> 0.0` and both produce a degenerate hook).
+    /// - `hook_length_ss < 0.0` (any negative finite, including `-∞`). The
+    ///   renderer would silently fold via `.abs()`, overriding the caller's
+    ///   apparent flip intent.
+    /// - `hook_length_ss.is_nan()` (any NaN payload — NaN comparisons return
+    ///   false, so `NaN > 0.0` is false; the renderer would otherwise emit
+    ///   NaN hook coordinates).
+    ///
+    /// Acceptance (`Some(self)` returned with `length_ss` populated):
+    /// - `hook_length_ss > 0.0` (any finite positive value, plus `+∞` —
+    ///   matching the permissive setter's storage behaviour byte-for-byte).
+    /// - All other fields on `self` (including `side`, `direction`,
+    ///   `ornament`, `extension_length_ss`) are preserved unchanged (additive
+    ///   contract, matching every other validator-pairing on this bundle).
+    ///
+    /// Writes to the [`length_ss`](Self::length_ss) field — the same field
+    /// targeted by [`with_hook_length_ss`](Self::with_hook_length_ss) and
+    /// [`with_length_ss`](Self::with_length_ss). Distinct from
+    /// [`extension_length_ss`](Self::extension_length_ss) (the wiggle's
+    /// termination length, controlled by
+    /// [`with_extension_length_ss_validated`](Self::with_extension_length_ss_validated)).
+    ///
+    /// `const`-callable, matching every other setter on this bundle. On the
+    /// `None` branch the builder chain is broken at the call site and the
+    /// partially-built bundle is dropped — there is no fallback that silently
+    /// leaves `length_ss` unset, because that would demote a rejection into a
+    /// no-op.
+    ///
+    /// Mirrors the validator-pairing pattern at
+    /// [`crate::layout::trill_options::TrillExtensionFullOptions::with_bracket_length_ss_validated`]
+    /// (which targets the corresponding `bracket_length_ss` field on the
+    /// full-options bundle). [`crate::layout::trill_extension::TrillExtensionSpeedOptions`]
+    /// has no hook-length field and therefore no corresponding validator.
+    pub const fn with_hook_length_ss_validated(mut self, hook_length_ss: f64) -> Option<Self> {
+        // Tighter than the renderer's accept band by deliberate choice — the
+        // renderer's `abs()` fold makes negatives indistinguishable from
+        // their positive counterparts at draw time, silently overriding the
+        // caller's apparent flip intent. Rejecting at construction time
+        // surfaces the misuse and steers callers toward
+        // `HookDirection::{Up, Down}` for explicit direction control.
+        if hook_length_ss > 0.0 {
+            self.length_ss = Some(hook_length_ss);
+            Some(self)
+        } else {
+            None
+        }
+    }
+
     /// Override the ornament glyph. Pass `Ornament::TrillWithMordent` for
     /// a bracketed precomposed compound trill; any other ornament that
     /// satisfies [`Ornament::supports_trill_extension`] (currently only
@@ -1590,5 +1675,244 @@ mod tests {
                  renderer_would_suppress={renderer_would_suppress}"
             );
         }
+    }
+
+    // --- with_hook_length_ss_validated — strict counterpart to
+    // with_hook_length_ss (and its byte-equivalent alias with_length_ss).
+    // The accept band is intentionally narrower than the renderer's: the
+    // renderer's `layout_trill_bracket_hook` applies `length.abs()`, silently
+    // folding negatives to positive and overriding the caller's apparent
+    // flip intent. Zero produces a degenerate (invisible) hook. NaN produces
+    // NaN coordinates. The validator's accept band is therefore
+    // `hook_length_ss > 0.0` — numerically identical to
+    // with_extension_length_ss_validated but with a different rationale
+    // (surface explicit-flip misuse + reject degenerate hooks). These tests
+    // pin the rejection rules, lock down the deliberate deviation from the
+    // renderer's `abs()`-tolerant accept band, and verify byte-equivalence
+    // with the permissive setter on every accepted value.
+
+    #[test]
+    fn options_with_hook_length_ss_validated_rejects_zero() {
+        // 0.0 produces y_top == y_bottom in `layout_trill_bracket_hook` —
+        // degenerate (no visible line). Construction-time rejection surfaces
+        // the misuse before draw time.
+        let result =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss_validated(0.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_rejects_negative_zero() {
+        // -0.0 fails `> 0.0` just like 0.0 and produces an equally
+        // degenerate hook after `.abs()`. Catches a refactor that switched
+        // to `is_sign_negative()` or `!= 0.0`, both of which split -0.0 and
+        // 0.0 differently from the renderer.
+        let result =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss_validated(-0.0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_rejects_negative_finite() {
+        // Negatives are the *headline* rejection on this validator — the
+        // renderer's `length.abs()` fold silently swallows them, overriding
+        // explicit-flip intent. Walks a representative set of negative
+        // magnitudes (small, unit, large, sub-unit) to lock in that the
+        // predicate is `> 0.0` rather than a per-magnitude band.
+        for len in [-0.001, -0.5, -1.0, -10.0, -1.0e6] {
+            let result = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_hook_length_ss_validated(len);
+            assert_eq!(result, None, "expected rejection for len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_rejects_negative_infinity() {
+        // -∞ > 0.0 is false, so the validator rejects. The renderer would
+        // otherwise apply `.abs()` and silently emit +∞ — degenerate at the
+        // SVG layer.
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_hook_length_ss_validated(f64::NEG_INFINITY);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_rejects_nan() {
+        // NaN > 0.0 is false (NaN comparisons always return false). The
+        // renderer would otherwise emit NaN hook coordinates — every SVG
+        // consumer's worst case.
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_hook_length_ss_validated(f64::NAN);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_accepts_positive_finite() {
+        // The headline accept band: typical hook lengths. Walks small
+        // (< 1), unit, and large magnitudes to pin down that the predicate
+        // is `> 0.0` and not band-restricted (e.g. clamping out hooks
+        // smaller than a half-staff-space).
+        for len in [0.001, 0.5, 0.75, 1.0, 2.75, 1.0e6] {
+            let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_hook_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(opts.length_ss, Some(len), "len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_accepts_positive_infinity() {
+        // +∞ > 0.0 is true — the validator accepts it for byte-equivalence
+        // with the permissive setter. The renderer would clamp at draw time
+        // via `.abs()` (no-op on +∞), so accepting here doesn't introduce a
+        // new failure mode.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_hook_length_ss_validated(f64::INFINITY)
+            .expect("+infinity must be accepted to match the permissive setter");
+        assert_eq!(opts.length_ss, Some(f64::INFINITY));
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_writes_to_length_ss_field() {
+        // The validator must write to `length_ss` (the hook length), NOT to
+        // `extension_length_ss` (the wiggle's termination length). Locks
+        // down the field-targeting invariant — a refactor that accidentally
+        // crossed the streams would trip both this test and the parallel
+        // assertion on the permissive setter.
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_hook_length_ss_validated(0.85)
+            .expect("0.85 is valid");
+        assert_eq!(opts.length_ss, Some(0.85));
+        assert_eq!(opts.extension_length_ss, None);
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_some_byte_equals_permissive() {
+        // On any accepted length, the validator must produce a bundle
+        // field-by-field equal to the permissive setter. PartialEq covers
+        // every field. Catches a hypothetical normalization on accept (e.g.
+        // rounding, clamping +∞ to a sentinel).
+        for len in [0.001, 0.5, 0.85, 1.0, 2.75, 1.0e6, f64::INFINITY] {
+            let permissive =
+                TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss(len);
+            let validated = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_hook_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(permissive, validated, "len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_some_byte_equals_with_length_ss() {
+        // `with_length_ss` is the byte-equivalent shorter alias of
+        // `with_hook_length_ss`. Both write the same field, so the
+        // validator must produce a bundle field-by-field equal to *either*
+        // permissive setter. Pins down the three-way equivalence on accept.
+        for len in [0.5, 0.85, 1.5] {
+            let via_legacy =
+                TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(len);
+            let via_validated = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_hook_length_ss_validated(len)
+                .unwrap_or_else(|| panic!("expected accept for len={len}"));
+            assert_eq!(via_legacy, via_validated, "len={len}");
+        }
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_preserves_other_setters_on_some() {
+        // Additive contract: chaining the validator on top of a bundle with
+        // other fields already set leaves those fields intact on the
+        // `Some` branch. Catches a regression where the validator
+        // accidentally cleared a sibling field on accept.
+        let opts = TrillBracketOptions::new(TrillBracketSide::End)
+            .with_direction(HookDirection::Up)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_extension_length_ss(4.0)
+            .with_hook_length_ss_validated(0.85)
+            .expect("0.85 is a valid hook length");
+        assert_eq!(opts.side, TrillBracketSide::End);
+        assert_eq!(opts.direction, Some(HookDirection::Up));
+        assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
+        assert_eq!(opts.extension_length_ss, Some(4.0));
+        assert_eq!(opts.length_ss, Some(0.85));
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_overwrites_prior_value_on_some() {
+        // Same last-write-wins semantic as the permissive setter when both
+        // values are on the accept band. Catches a regression where the
+        // validator switched to "first write wins".
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_hook_length_ss_validated(0.5)
+            .expect("0.5 is valid")
+            .with_hook_length_ss_validated(1.25)
+            .expect("1.25 is valid");
+        assert_eq!(opts.length_ss, Some(1.25));
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_is_const_callable() {
+        // `const fn` symmetry: matches every other setter on this bundle.
+        // Hold one `Some` and one `None` const-binding so a future change
+        // that drops `const` from either branch trips this canary at
+        // compile time.
+        const SOME_OPTS: Option<TrillBracketOptions> =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss_validated(0.85);
+        const NONE_OPTS: Option<TrillBracketOptions> =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss_validated(-0.5);
+        assert!(SOME_OPTS.is_some());
+        assert!(NONE_OPTS.is_none());
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_rejection_matches_visible_unfolded_hook_predicate() {
+        // Cross-validation: for every probe value, the validator's
+        // `is_none()` must equal the complement of the "would draw a
+        // visible non-folded hook" predicate (`!(hook_length_ss > 0.0)`).
+        // Distinct from the extension-length cross-validation — the
+        // renderer's literal accept band on the hook is `!length.is_nan()`
+        // (via `.abs()`), but the validator deliberately tightens it to
+        // surface explicit-flip misuse. The probe set walks every
+        // boundary value (zero, -0.0, ±∞, NaN, small/large magnitudes).
+        for len in [
+            -1.0e6,
+            -2.0,
+            -0.001,
+            -0.0,
+            0.0,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            0.001,
+            0.5,
+            0.85,
+            1.0,
+            1.0e6,
+            f64::INFINITY,
+        ] {
+            let validator_is_none = TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_hook_length_ss_validated(len)
+                .is_none();
+            let visible_unfolded_hook = len > 0.0;
+            assert_eq!(
+                validator_is_none, !visible_unfolded_hook,
+                "drift at len={len}: validator_is_none={validator_is_none} \
+                 visible_unfolded_hook={visible_unfolded_hook}"
+            );
+        }
+    }
+
+    #[test]
+    fn options_with_hook_length_ss_validated_none_does_not_partially_populate() {
+        // On the `None` branch the partially-built bundle is dropped via
+        // the `Option<Self>` shape — there's no "leave length_ss unset and
+        // return Some(self)" fallback that would demote a rejection into a
+        // no-op. Combine with a non-trivial chain to make sure the drop
+        // discards everything chained earlier as well (it does, by
+        // construction; the test pins the contract regardless).
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_direction(HookDirection::Up)
+            .with_ornament(Ornament::TrillWithMordent)
+            .with_hook_length_ss_validated(-1.0);
+        assert!(result.is_none());
     }
 }

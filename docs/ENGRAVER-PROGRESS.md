@@ -4173,3 +4173,150 @@
   altered, no golden baseline regenerated, no example or test
   modified.
   (out of scope for this chunk).
+
+## 2026-05-27 — Post-v1, with_hook_length_ss_validated / with_bracket_length_ss_validated (bracket hook surface)
+
+- Did: Extended the validator-pairing pattern to the *bracket hook
+  length* surface across the two options bundles that expose it. Added:
+  - `TrillBracketOptions::with_hook_length_ss_validated(hook_length_ss: f64) -> Option<Self>`
+    in `music-engraver/src/layout/trill_bracket.rs` (writes `length_ss`,
+    the hook length on this bundle; matches the byte-equivalent
+    `with_length_ss` / `with_hook_length_ss` aliases).
+  - `TrillExtensionFullOptions::with_bracket_length_ss_validated(length_ss: f64) -> Option<Self>`
+    in `music-engraver/src/layout/trill_options.rs` (writes
+    `bracket_length_ss`, the hook length on the full-options bundle).
+
+  `TrillExtensionSpeedOptions` has no hook-length field and therefore
+  no third validator on this surface — only two bundles participate in
+  the cross-validation, matching the structure of the field itself.
+
+  **Deliberate accept-band deviation from the renderer.** Unlike every
+  prior validator-pairing in this stack (which mirrored the renderer's
+  accept band literally), these two validators *tighten* past it. The
+  renderer's `layout_trill_bracket_hook` at
+  `music-engraver/src/layout/trill_bracket.rs:393-411` applies
+  `let length = length.abs();` — silently folding negatives to positive
+  while the explicit `HookDirection` always wins. That fold makes
+  `.with_hook_length_ss(-1.0).with_direction(Down)` indistinguishable
+  from `.with_hook_length_ss(1.0).with_direction(Down)` at draw time,
+  silently overriding the caller's apparent flip intent (they probably
+  meant `HookDirection::Up`). Zero produces a degenerate hook
+  (`y_top == y_bottom` → no visible line). NaN propagates as NaN
+  coordinates. The validators reject all three cases at construction
+  time so the misuse surfaces before the SVG is generated; the doc
+  steers callers toward `HookDirection::{Up, Down}` for explicit
+  direction control.
+
+  Acceptance rules (`Some(self)` returned) — identical on both
+  bundles, numerically identical to the
+  `with_extension_length_ss_validated` predicate (`> 0.0`) but with a
+  different rationale:
+  - `length > 0.0` (any finite positive, plus `+∞` — accepted for
+    byte-equivalence with the permissive setter, which the renderer
+    also tolerates).
+  - All other fields on `self` survive byte-for-byte (additive
+    contract, matching every other validator-pairing on these
+    bundles).
+  - On `TrillBracketOptions`: writes to `length_ss`, NOT to
+    `extension_length_ss`. On `TrillExtensionFullOptions`: writes to
+    `bracket_length_ss`, NOT to `length_ss`. The
+    naming-disambiguation invariant from the permissive setters is
+    preserved at the validated layer.
+
+  Rejection rules (`None` returned) — identical on both bundles:
+  - `length == 0.0` (positive *and* negative zero — both fail
+    `> 0.0` and both produce a degenerate hook).
+  - `length < 0.0` (any finite negative, including `-∞`). This is
+    the headline rejection — the renderer's `.abs()` fold would
+    silently swallow these. Strict rejection at construction time
+    surfaces explicit-flip misuse.
+  - `length.is_nan()` (any NaN payload — NaN comparisons return
+    false, so `NaN > 0.0` is false; the renderer would otherwise emit
+    NaN hook coordinates).
+
+  Both validated methods are `const fn`, matching every other setter
+  on these bundles.
+
+  Tests added (30 total — 15 per bundle): rejects-zero,
+  rejects-negative-zero (catches `is_sign_negative()` or `!= 0.0`
+  refactor), rejects-negative-finite (walks 5 magnitudes),
+  rejects-negative-infinity, rejects-nan, accepts-positive-finite
+  (walks 6 magnitudes), accepts-positive-infinity, writes-to-correct-field
+  (locks the field-targeting invariant — `length_ss` on
+  `TrillBracketOptions`, `bracket_length_ss` on
+  `TrillExtensionFullOptions`), some-branch byte-equality with the
+  permissive setter (walks 7 accepted values including `+∞`),
+  preserves-other-setters-on-some (largest combinable chain —
+  `TrillExtensionFullOptions` covers bracket + direction + speed +
+  ornament + extension length + speed ramp), overwrites-prior-value-on-some
+  (last-write-wins), is-const-callable (one `Some` and one `None` const
+  binding), `rejection_matches_visible_unfolded_hook_predicate`
+  (cross-validates the validator against the deliberately-narrowed
+  `> 0.0` accept band — distinct from the prior surface's
+  `rejection_matches_renderer_accept_band` because the renderer's
+  literal accept band on the hook is `!is_nan` after `.abs()`, not
+  `> 0.0`), and `none_branch_does_not_partially_populate`. The
+  `TrillBracketOptions` set adds one bundle-specific test:
+  - `some_byte_equals_with_length_ss` — pins the three-way equivalence
+    on accept between the validator and *both* permissive aliases
+    (`with_length_ss` and `with_hook_length_ss`), since both write the
+    same `length_ss` field.
+
+  The `TrillExtensionFullOptions` set adds one bundle-specific test:
+  - `two_bundles_agree_on_accept_band` — fourth-layer cross-validation
+    walking 13 probe values across `TrillBracketOptions::with_hook_length_ss_validated`
+    and this bundle's `with_bracket_length_ss_validated`, asserting
+    pairwise agreement on `is_none()`. Narrower than the
+    `three_bundles_agree_on_accept_band` on the extension-length
+    surface only because `TrillExtensionSpeedOptions` has no
+    hook-length field.
+
+- Verified: `cargo check -p music-engraver` passes (0 errors).
+  `cargo check --workspace` passes (0 errors).
+  `cargo build -p music-engraver` succeeds.
+  `cargo test -p music-engraver --lib` passes — **2666 tests passing,
+  0 failing** (up from 2636 by exactly the 30 new tests).
+  `cargo test -p music-engraver --lib with_hook_length_ss_validated`
+  runs the 15 `TrillBracketOptions` tests in isolation: all pass.
+  `cargo test -p music-engraver --lib with_bracket_length_ss_validated`
+  runs the 15 `TrillExtensionFullOptions` tests in isolation: all
+  pass.
+  `cargo clippy -p music-engraver --lib` reports no new warnings on
+  either modified file (pre-existing `multi_staff.rs:394` warning and
+  unrelated `music/` crate clippy warnings persist — out of scope).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **cross-system church rests** (multi-measure rest cluster that
+  breaks across systems); **line breaking quality improvements**
+  (Gourlay extension or Bellini & Nesi line-cost model atop the
+  existing Knuth-Plass DP); **golden-SVG corpus PHASH-based visual
+  regression**; auto-resolved low-staff beam-group collision golden
+  (still requires ScoreBuilder opt-out for force-stems, deferred);
+  cross-voice tie/slur consultation of the collision detector
+  (deferred). The validator-pairing pattern is now consistently
+  applied across (a) the entire trill speed-ramp stack, (b) the
+  entire trill ornament-acceptance surface, (c) the entire trill
+  extension-length surface, and (d) the entire bracket-hook-length
+  surface (this chunk). Natural follow-ups outside the trill stack:
+  apply the same pattern to other options-bundle setters whose values
+  get silently coerced or dropped at draw time. Notable candidates:
+  - `TrillExtensionSpeedOptions::with_speed` already accepts any
+    `TrillWiggleSpeed` and the renderer dispatches on `.to_glyph()` —
+    the accept band is total, no validator needed.
+  - Beyond the trill surface: any options bundle that builds a
+    bracket-like shape (e.g. `HairpinOptions`, `OttavaOptions`,
+    `VoltaOptions`) likely has similar silently-coerced length
+    parameters. Worth a one-pass survey before tackling them
+    individually.
+
+- Open issues: None. The change is additive — no existing public API
+  altered, no golden baseline regenerated, no example or example
+  test modified. `with_hook_length_ss_validated` is the first
+  validator on this stack whose accept band is *deliberately narrower*
+  than the renderer's accept band (every prior validator mirrored the
+  renderer exactly); the cross-validation test name was renamed from
+  `rejection_matches_renderer_accept_band` to
+  `rejection_matches_visible_unfolded_hook_predicate` to reflect the
+  distinction. The pre-existing `multi_staff.rs:394` clippy warning
+  and unrelated `music/` crate clippy warnings remain unaddressed
+  (out of scope).
