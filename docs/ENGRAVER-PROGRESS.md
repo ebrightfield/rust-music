@@ -5442,3 +5442,128 @@
   regenerated. The pre-existing `multi_staff.rs:394` clippy
   warning persists (out of scope, noted across prior progress
   entries).
+
+## 2026-05-27 — Post-v1, examples/cresc_text.rs visual exerciser
+
+- Did: Added `music-engraver/examples/cresc_text.rs` — a four-row
+  visual exerciser for the `layout_cresc_text` / `draw_cresc_text`
+  pair (and its cross-system continuation variant). Picked up the
+  "small `examples/cresc_text.rs` exercising the marking visually
+  so a reviewer can eyeball the placement and the italic+dashed
+  combination" item from the previous "Next" list. No source code
+  in the engraver itself was modified — this is a pure additive
+  example, parallel to the existing `examples/hairpins.rs`
+  (low-level layout/render exerciser, not yet wired through
+  `ScoreBuilder` because the marking isn't plumbed through the
+  score-event chain yet).
+
+  Structure:
+  - Four staves stacked vertically, 4500 FU apart (≈ 18 SS — clears
+    each staff's below-staff dashed-text band with ~2 SS of
+    breathing room before the next staff's clef).
+  - Each row: a treble clef + the same 8-note ascending/descending
+    phrase (E4 → G4 → A4 → B4 → D5 → E5 → D5 → B4), so the only
+    thing varying between rows is the cresc.-text marking.
+  - Row 0: `CrescTextKind::Crescendo` via `layout_cresc_text` →
+    italic "cresc." label + dashed continuation line.
+  - Row 1: `CrescTextKind::Decrescendo` → "decresc." label + dashed
+    line. The longer label naturally pushes its dashed line
+    further right than rows 0 and 2 (confirms the
+    `longer_label_pushes_line_start_further_right` invariant
+    visually).
+  - Row 2: `CrescTextKind::Diminuendo` → "dim." label + dashed line.
+    Shortest of the three labels.
+  - Row 3: `layout_cresc_text_continuation(Crescendo, …)` — the
+    cross-system continuation form. No label rendered (`has_label
+    = false`); just a bare dashed line from `x_start` to `x_end`.
+    Demonstrates the "trailing/incoming half drops the label"
+    convention that mirrors hairpin and trill-extension
+    continuations.
+
+  Each row spans the dashed marking from note 1 to past note 7, so
+  the dashed line covers most of the staff width on every row —
+  the visual placement (3.5 SS below the bottom staff line) is
+  easy to eyeball across rows.
+
+  In-example assertions (so a regression that broke the rendered
+  output would surface as a `cargo run --example cresc_text`
+  failure rather than just a silently-wrong SVG):
+  - `path_count >= 36`: 4 clef glyphs + 4 × 8 noteheads.
+  - `line_count >= 56`: 4 × (5 staff lines + 8 stems) + 4 dashed
+    continuation lines.
+  - `dasharray_count == 4`: exactly one dashed line per row.
+  - `total_cresc_lines == 4` and `total_label_text_elements == 3`:
+    pin the renderer-call accounting at the example level (3
+    plain layouts emit a label, 1 continuation suppresses it).
+  - `>cresc.</text>`, `>decresc.</text>`, `>dim.</text>` all
+    present as literal text content.
+  - `font-style="italic"` present (locks the italic styling
+    invariant).
+  - `layout.has_label` checked on each layout before drawing — a
+    regression that flipped the default would fail the example
+    *before* it even reached the SVG-string assertions.
+
+  Design choice — direct layout/render API (not `ScoreBuilder`):
+  the cresc.-text marking has not yet been plumbed through the
+  score-event chain (carried over from prior "Next" lists), so
+  `ScoreBuilder` doesn't have a `.cresc_text()` / `.decresc_text()`
+  / `.dim_text()` family yet. Once the score-event wiring lands, a
+  follow-up can either rewrite this example through `ScoreBuilder`
+  or add a second `cresc_text_score.rs` example (parallel to
+  `hairpins.rs` ↔ `hairpin_score.rs`).
+
+  Design choice — three plain kinds + one continuation in one
+  example (not four separate examples): the visual reviewer
+  benefit is the ability to compare label widths and dashed-line
+  start offsets *side by side*. Splitting into four files would
+  require the reviewer to open four SVGs and mentally overlay
+  them.
+
+  Design choice — same 8-note phrase on all four rows: keeps the
+  staff/clef/notehead geometry identical between rows so the only
+  thing the reviewer compares is the dashed-text marking. A
+  per-row varying phrase would muddy the comparison.
+
+- Verified: `CARGO_HOME=/repo/rust-music/.cargo cargo check -p
+  music-engraver --offline` passes (0 errors, no new warnings).
+  `cargo build -p music-engraver --offline` succeeds.
+  `cargo check --workspace --offline` passes (0 errors).
+  `cargo test -p music-engraver --lib --offline` passes — **2809
+  tests passing, 0 failing** (unchanged — no library code modified).
+  `cargo run -p music-engraver --example cresc_text --offline`
+  executes cleanly and writes
+  `examples/output/cresc_text.svg` (15863 bytes, 36 paths, 56
+  lines, 4 dashed). All in-example assertions pass. Spot-checked
+  the SVG with grep: exactly one each of `>cresc.</text>`,
+  `>decresc.</text>`, `>dim.</text>`, and four `stroke-dasharray`
+  occurrences (one per row, including the label-less
+  continuation row).
+
+- Next: Remaining post-v1 candidates from the running list:
+  **plumb `draw_cresc_text` into score-event / system_renderer /
+  page_renderer chain** so `ScoreBuilder` callers can request a
+  dashed-text marking (then this example's twin
+  `cresc_text_score.rs` becomes possible); cross-system cresc.-
+  text wiring at the page_renderer level (parallel to
+  `draw_cross_system_ottava_brackets` and
+  `draw_cross_system_hairpins`) — the layout primitive
+  `layout_cresc_text_continuation` exists, the page_renderer just
+  hasn't been taught to call it yet; **golden-SVG corpus PHASH-
+  based visual regression**; **line breaking quality
+  improvements** (Gourlay extension or Bellini & Nesi); **cross-
+  system church rests**; auto-resolved low-staff beam-group
+  collision golden (still requires ScoreBuilder opt-out for
+  force-stems, deferred); cross-voice tie/slur consultation of
+  the collision detector (deferred); plumbing of niente/dashed
+  hairpin constructors through the score → system_renderer →
+  page_renderer chain; cross-system hairpin golden test (carried
+  over).
+
+- Open issues: None. The example is purely additive — no
+  engraver source code changed, no public API touched, no golden
+  baselines regenerated. The pre-existing `multi_staff.rs:394`
+  clippy warning persists (out of scope, noted across prior
+  progress entries). The example uses the low-level layout/render
+  API rather than `ScoreBuilder` because the cresc.-text
+  marking is not yet plumbed through the score-event chain
+  (carried over as the next-most-natural follow-up).
