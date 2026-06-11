@@ -1,5 +1,6 @@
 use crate::note::pitch_class::Pc;
 use std::collections::HashSet;
+use std::fmt;
 use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
@@ -239,6 +240,33 @@ impl Deref for PcContent {
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
+fn write_pc_braces(pcs: &[Pc], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str("{")?;
+    for (i, pc) in pcs.iter().enumerate() {
+        if i > 0 {
+            f.write_str(", ")?;
+        }
+        write!(f, "{}", pc)?;
+    }
+    f.write_str("}")
+}
+
+/// Renders as `{0, 4, 7}` — root-relative integer intervals in braces,
+/// matching the established CLI convention.
+impl fmt::Display for PcShape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_pc_braces(&self.0, f)
+    }
+}
+
+/// Renders as `{0, 4, 7}` — absolute pitch classes in braces, matching the
+/// established CLI convention.
+impl fmt::Display for PcContent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_pc_braces(&self.0, f)
+    }
+}
+
 // REQ-O6
 impl FromIterator<Pc> for PcShape {
     fn from_iter<I: IntoIterator<Item = Pc>>(iter: I) -> Self {
@@ -418,6 +446,16 @@ mod shape_invariant_tests {
         let shape: PcShape = [Pc7, Pc11, Pc2].into_iter().collect();
         assert_eq!(shape, pc_shape!(0, 5, 9));
     }
+
+    #[test]
+    fn display_renders_braces_and_integers() {
+        let major = pc_shape!(0, 4, 7);
+        assert_eq!(format!("{major}"), "{0, 4, 7}");
+        let empty = PcShape::new(vec![]);
+        assert_eq!(format!("{empty}"), "{}");
+        let scale = pc_shape!(0, 2, 4, 5, 7, 9, 11);
+        assert_eq!(format!("{scale}"), "{0, 2, 4, 5, 7, 9, 11}");
+    }
 }
 
 #[cfg(test)]
@@ -447,5 +485,13 @@ mod content_invariant_tests {
         // The shape is preserved only when at_root uses Pc0.
         let c0 = s.at_root(Pc::Pc0);
         assert_eq!(c0.to_shape(), s);
+    }
+
+    #[test]
+    fn display_renders_braces_and_integers() {
+        let c = PcContent::new(vec![Pc7, Pc11, Pc2]);
+        assert_eq!(format!("{c}"), "{2, 7, 11}");
+        let empty = PcContent::new(vec![]);
+        assert_eq!(format!("{empty}"), "{}");
     }
 }

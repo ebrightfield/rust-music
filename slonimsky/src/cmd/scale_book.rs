@@ -160,7 +160,7 @@ fn print_text_report(
         let name = mode_names.get(mode_idx).unwrap_or(&"?");
         writeln!(out)?;
         writeln!(out, "Mode {}: {}", mode_idx + 1, name)?;
-        writeln!(out, "  Parent intervals: {mode:?}")?;
+        writeln!(out, "  Parent intervals: {mode}")?;
         writeln!(out, "{}", "-".repeat(40))?;
 
         for &key in keys {
