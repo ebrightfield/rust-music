@@ -23,7 +23,7 @@ use music::fretboard::fretboard_shape::melodic_shape_search::{
 use music::fretboard::STD_6STR_GTR;
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
-use music::note_collections::PcSet;
+use music::note_collections::pc_set::PcShape;
 use music::svg::fretboard::{FretPosition, FretboardBuilder, Orientation};
 use music::svg::SvgTheme;
 
@@ -209,8 +209,8 @@ fn main() {
     for (cardinality, entries) in &groups {
         items.push(DocItem::Heading((*cardinality).to_string()));
         for entry in entries {
-            let pc_set = PcSet::new(entry.pcs.clone());
-            let spelled = match pc_set.try_spell(&entry.root) {
+            let pc_shape = PcShape::new(entry.pcs.clone());
+            let spelled = match pc_shape.try_spell(&entry.root) {
                 Ok(notes) => notes,
                 Err(err) => {
                     eprintln!("skip {}: spelling failed: {:?}", entry.slug, err);

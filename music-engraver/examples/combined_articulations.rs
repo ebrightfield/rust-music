@@ -32,8 +32,8 @@ use music_engraver::layout::articulation::Articulation;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;
 
-fn p(name: Note, octave: u8) -> Pitch {
-    Pitch::new(name, octave).expect("valid pitch")
+fn p(name: Note, octave: i8) -> Pitch {
+    Pitch::new(name, octave)
 }
 
 fn main() {

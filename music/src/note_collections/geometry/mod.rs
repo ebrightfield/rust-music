@@ -3,12 +3,12 @@ pub mod sets;
 pub mod contour;
 
 use crate::note::pitch_class::Pc;
-use crate::note_collections::PcSet;
+use crate::note_collections::pc_set::PcShape;
 use crate::note_collections::interval_class::IntervalClass;
 
 /// A matrix showing the interval between every pair of pitch classes in a set.
 ///
-/// The matrix is square with dimensions equal to the cardinality of the PcSet.
+/// The matrix is square with dimensions equal to the cardinality of the PcShape.
 /// Entry (i, j) contains the interval from pc[i] to pc[j], calculated as
 /// (pc[j] - pc[i]) mod 12.
 ///
@@ -16,21 +16,23 @@ use crate::note_collections::interval_class::IntervalClass;
 /// - Computing interval vectors
 /// - Finding pitch class pairs with specific intervals
 /// - Set-theoretical analysis of pitch collections
+// REQ-O15
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntervalMatrix {
-    /// The pitch class set this matrix represents
-    pcs: PcSet,
+    /// The pitch class shape this matrix represents
+    pcs: PcShape,
     /// The interval matrix, where matrix[i][j] = interval from pc[i] to pc[j]
     matrix: Vec<Vec<IntervalClass>>,
 }
 
 impl IntervalMatrix {
-    /// Creates a new IntervalMatrix from a PcSet.
+    /// Creates a new IntervalMatrix from a PcShape.
     ///
     /// The matrix is computed by calculating the interval (mod 12) between
-    /// every ordered pair of pitch classes in the set.
-    pub fn new(pc_set: &PcSet) -> Self {
-        let pcs_vec: &[Pc] = pc_set;  // Uses Deref
+    /// every ordered pair of pitch classes in the shape.
+    // REQ-O15
+    pub fn new(pc_shape: &PcShape) -> Self {
+        let pcs_vec: &[Pc] = pc_shape;  // Uses Deref
         let n = pcs_vec.len();
         let mut matrix = Vec::with_capacity(n);
 
@@ -46,7 +48,7 @@ impl IntervalMatrix {
         }
 
         Self {
-            pcs: pc_set.clone(),
+            pcs: pc_shape.clone(),
             matrix,
         }
     }
@@ -57,12 +59,12 @@ impl IntervalMatrix {
         self.matrix.get(row).and_then(|r| r.get(col))
     }
 
-    /// Returns the pitch class set this matrix represents.
-    pub fn pcs(&self) -> &PcSet {
+    /// Returns the pitch class shape this matrix represents.
+    pub fn pcs(&self) -> &PcShape {
         &self.pcs
     }
 
-    /// Returns the dimension of the matrix (equal to the cardinality of the PcSet).
+    /// Returns the dimension of the matrix (equal to the cardinality of the PcShape).
     pub fn dimension(&self) -> usize {
         self.matrix.len()
     }
@@ -102,20 +104,23 @@ impl IntervalMatrix {
     /// Returns an array of 6 elements: [ic1_count, ic2_count, ic3_count, ic4_count, ic5_count, ic6_count]
     pub fn reduced_interval_vector(&self) -> [usize; 6] {
         let full_vector = self.interval_vector();
+        // The full vector counts ordered pairs (both directions), so each
+        // unordered pair is counted twice. Divide by 2 to get the standard
+        // music-theory interval-class vector.
         [
-            full_vector[1] + full_vector[11], // IC1 + IC11 -> ic1
-            full_vector[2] + full_vector[10], // IC2 + IC10 -> ic2
-            full_vector[3] + full_vector[9],  // IC3 + IC9 -> ic3
-            full_vector[4] + full_vector[8],  // IC4 + IC8 -> ic4
-            full_vector[5] + full_vector[7],  // IC5 + IC7 -> ic5
-            full_vector[6],                    // IC6 (tritone, its own inverse)
+            (full_vector[1] + full_vector[11]) / 2, // IC1 + IC11 -> ic1
+            (full_vector[2] + full_vector[10]) / 2, // IC2 + IC10 -> ic2
+            (full_vector[3] + full_vector[9]) / 2,  // IC3 + IC9 -> ic3
+            (full_vector[4] + full_vector[8]) / 2,  // IC4 + IC8 -> ic4
+            (full_vector[5] + full_vector[7]) / 2,  // IC5 + IC7 -> ic5
+            full_vector[6] / 2,                      // IC6 (tritone, its own inverse)
         ]
     }
 
     /// Finds all pairs of pitch classes that have the given interval.
     /// Returns a vector of (from_pc, to_pc) tuples.
     pub fn find_interval(&self, ic: IntervalClass) -> Vec<(Pc, Pc)> {
-        let pcs_vec: &[Pc] = &self.pcs;  // Uses Deref
+        let pcs_vec: &[Pc] = &*self.pcs;  // Uses Deref
         let n = pcs_vec.len();
         let mut pairs = Vec::new();
 
@@ -139,7 +144,7 @@ mod tests {
     #[test]
     fn test_interval_matrix_creation() {
         // C major triad: C, E, G (Pc0, Pc4, Pc7)
-        let pc_set = PcSet::from(vec![Pc0, Pc4, Pc7]);
+        let pc_set = PcShape::new(vec![Pc0, Pc4, Pc7]);
         let matrix = IntervalMatrix::new(&pc_set);
 
         assert_eq!(matrix.dimension(), 3);
@@ -162,7 +167,7 @@ mod tests {
     #[test]
     fn test_interval_vector() {
         // C major triad: C, E, G
-        let pc_set = PcSet::from(vec![Pc0, Pc4, Pc7]);
+        let pc_set = PcShape::new(vec![Pc0, Pc4, Pc7]);
         let matrix = IntervalMatrix::new(&pc_set);
         let vector = matrix.interval_vector();
 
@@ -181,19 +186,19 @@ mod tests {
     #[test]
     fn test_reduced_interval_vector() {
         // C major triad: C, E, G
-        let pc_set = PcSet::from(vec![Pc0, Pc4, Pc7]);
+        let pc_set = PcShape::new(vec![Pc0, Pc4, Pc7]);
         let matrix = IntervalMatrix::new(&pc_set);
         let reduced = matrix.reduced_interval_vector();
 
         // In traditional set theory notation: <001110>
-        // ic1: 0, ic2: 0, ic3: 2 (IC3 + IC9), ic4: 2 (IC4 + IC8), ic5: 2 (IC5 + IC7), ic6: 0
-        assert_eq!(reduced, [0, 0, 2, 2, 2, 0]);
+        // ic1: 0, ic2: 0, ic3: 1, ic4: 1, ic5: 1, ic6: 0
+        assert_eq!(reduced, [0, 0, 1, 1, 1, 0]);
     }
 
     #[test]
     fn test_find_interval() {
         // C major triad: C, E, G
-        let pc_set = PcSet::from(vec![Pc0, Pc4, Pc7]);
+        let pc_set = PcShape::new(vec![Pc0, Pc4, Pc7]);
         let matrix = IntervalMatrix::new(&pc_set);
 
         // Find all major thirds (IC4)
@@ -215,14 +220,14 @@ mod tests {
     fn test_diminished_seventh_chord() {
         // Diminished seventh: C, Eb, Gb, A (Pc0, Pc3, Pc6, Pc9)
         // This is a symmetrical structure with interval vector <004002>
-        let pc_set = PcSet::from(vec![Pc0, Pc3, Pc6, Pc9]);
+        let pc_set = PcShape::new(vec![Pc0, Pc3, Pc6, Pc9]);
         let matrix = IntervalMatrix::new(&pc_set);
         let reduced = matrix.reduced_interval_vector();
 
         // Diminished seventh: ic3 appears 4 times (each note is a minor third from 2 others)
         // ic6 appears 2 times (two tritone pairs: C-Gb, Eb-A)
-        assert_eq!(reduced[2], 8); // ic3: 4 pairs × 2 directions
-        assert_eq!(reduced[5], 4); // ic6: 2 pairs × 2 directions
+        assert_eq!(reduced[2], 4); // ic3: 4 unordered pairs
+        assert_eq!(reduced[5], 2); // ic6: 2 unordered tritone pairs
     }
 }
 

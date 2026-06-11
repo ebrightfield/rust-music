@@ -5,7 +5,6 @@ use crate::notation::clef::Clef;
 use crate::notation::rhythm::duration::{Duration, DurationKind};
 use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};
 use crate::notation::rhythm::meter::Meter;
-use crate::note::pitch::MIDDLE_C;
 use crate::note::spelling::Accidental;
 
 /// Lilypond represents time signatures as simple fractions
@@ -69,23 +68,28 @@ impl ToLilypondString for Note {
     }
 }
 
-/// Does not use relative pitch
+/// Does not use relative pitch.
+///
+/// The `Ces`/`Bis` adjustments compensate for the fact that those spellings
+/// cross the octave boundary (Ces4 sounds like B3, Bis3 sounds like C4), so
+/// the emitted LilyPond octave differs from `self.octave` by one. Math is done
+/// in `i32` because the adjustment can push the LilyPond octave outside
+/// `u8` range at the edges.
 impl ToLilypondString for Pitch {
     fn to_lilypond_string(&self) -> String {
         let note = self.note.to_lilypond_string();
-        let mut octave = self.octave;
+        let mut octave = self.octave as i32;
         if self.note == Note::Ces {
             octave += 1;
         } else if self.note == Note::Bis {
             octave -= 1;
         }
-        let octave = if self.midi_note < MIDDLE_C {
-            // Octave will always be <= 3 here
+        let marks = if octave < 3 {
             ",".repeat((3 - octave) as usize)
         } else {
             "'".repeat((octave - 3) as usize)
         };
-        format!("{}{}", note, octave)
+        format!("{}{}", note, marks)
     }
 }
 
@@ -138,6 +142,61 @@ impl<'a> ToLilypondString for RhythmicNotatedEvent<'a> {
                     .join(" ");
                 // Notate the tuplet
                 format!("\\tuplet {} {{ {} }}", ratio, content)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod pitch_to_lilypond_tests {
+    use super::*;
+
+    fn render(note: Note, octave: i8) -> String {
+        Pitch::new(note, octave).to_lilypond_string()
+    }
+
+    #[test]
+    fn natural_pitches() {
+        assert_eq!(render(Note::C, 0), "c,,,");
+        assert_eq!(render(Note::C, 3), "c");
+        assert_eq!(render(Note::C, 4), "c'");
+        assert_eq!(render(Note::C, 5), "c''");
+        assert_eq!(render(Note::A, 4), "a'");
+    }
+
+    #[test]
+    fn ces_adjustment() {
+        // Ces3 sounds like B2, but keeps its spelling — LilyPond octave is 4.
+        assert_eq!(render(Note::Ces, 3), "ces'");
+        assert_eq!(render(Note::Ces, 4), "ces''");
+        assert_eq!(render(Note::Ces, 2), "ces");
+        assert_eq!(render(Note::Ces, 1), "ces,");
+        assert_eq!(render(Note::Ces, 0), "ces,,");
+    }
+
+    #[test]
+    fn bis_adjustment() {
+        // Bis3 sounds like C4, but keeps its spelling — LilyPond octave is 2.
+        assert_eq!(render(Note::Bis, 4), "bis");
+        assert_eq!(render(Note::Bis, 5), "bis'");
+        assert_eq!(render(Note::Bis, 3), "bis,");
+        assert_eq!(render(Note::Bis, 0), "bis,,,,");
+    }
+
+    #[test]
+    fn no_overflow_across_full_range() {
+        // Every valid (Note, octave) must render without panicking.
+        use crate::note::note::Note::*;
+        let notes = [
+            C, Cis, Cisis, Ces, Deses, D, Dis, Disis, Des, Eeses,
+            E, Eis, Ees, Fes, F, Fis, Fisis, Geses, Ges, G, Gis,
+            Gisis, Aeses, Aes, A, Ais, Aisis, Beses, Bes, B, Bis,
+        ];
+        for n in notes {
+            for oct in -1i8..=9i8 {
+                if let Ok(p) = Pitch::try_new(n, oct) {
+                    let _ = p.to_lilypond_string();
+                }
             }
         }
     }

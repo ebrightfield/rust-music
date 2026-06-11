@@ -2908,7 +2908,7 @@ mod tests {
 
             let standard_png = NotationScoreBuilder::new()
                 .clef(Clef::Treble)
-                .note(Pitch::new(Note::C, 4).expect("pitch"), Duration::QTR)
+                .note(Pitch::new(Note::C, 4), Duration::QTR)
                 .end_barline()
                 .render_png(1.0);
             let tab_png = rich_tab_score().render_png(1.0);

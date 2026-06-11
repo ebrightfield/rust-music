@@ -1,0 +1,10 @@
+=== Sight-Reading Exercise ===
+Key: C major
+Difficulty: 1/5
+Measures: 4 (4/4 time)
+Notes: 16
+
+  m1: C4 (quarter)  B3 (quarter)  C4 (quarter)  B3 (quarter)
+  m2: A3 (quarter)  B3 (quarter)  C4 (quarter)  D4 (quarter)
+  m3: E4 (quarter)  F4 (quarter)  E4 (quarter)  F4 (quarter)
+  m4: E4 (quarter)  D4 (quarter)  E4 (quarter)  F4 (quarter)

@@ -28,6 +28,7 @@ cargo run --example generate_lilypond --features lilypond
 
 ### Workspace Structure
 - **`music/`** - Core music theory library
+- **`music-engraver/`** (in progress) - Native Rust SVG engraver consuming `music` types. Built per `docs/vexflow-port-research/00-port-plan.md`; progress tracked in `docs/ENGRAVER-PROGRESS.md`. Bravura OTF + SMuFL metadata bundled in `music-engraver/fonts/`. Bravura-first but font-agnostic architecture.
 - **`musical-combinatorics/`** - Enumerated chord/scale quality types (depends on `music`)
 
 ### Core Type Hierarchy (music crate)

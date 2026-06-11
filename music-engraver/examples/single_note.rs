@@ -18,11 +18,11 @@ fn main() {
 
     // Notes to render: middle C (ledger below), E4 (bottom line), B4 (middle), F5 (top), A5 (ledger above)
     let notes: Vec<(Pitch, NoteheadKind)> = vec![
-        (Pitch::new(Note::C, 4).unwrap(), NoteheadKind::Filled),
-        (Pitch::new(Note::E, 4).unwrap(), NoteheadKind::Filled),
-        (Pitch::new(Note::B, 4).unwrap(), NoteheadKind::Half),
-        (Pitch::new(Note::F, 5).unwrap(), NoteheadKind::Filled),
-        (Pitch::new(Note::A, 5).unwrap(), NoteheadKind::Whole),
+        (Pitch::new(Note::C, 4), NoteheadKind::Filled),
+        (Pitch::new(Note::E, 4), NoteheadKind::Filled),
+        (Pitch::new(Note::B, 4), NoteheadKind::Half),
+        (Pitch::new(Note::F, 5), NoteheadKind::Filled),
+        (Pitch::new(Note::A, 5), NoteheadKind::Whole),
     ];
 
     let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 7000.0, 2500.0);

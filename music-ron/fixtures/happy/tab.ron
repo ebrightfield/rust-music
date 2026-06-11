@@ -1,0 +1,9 @@
+// Happy-path Tab fixture (REQ-O36, O22, spec §6.2).
+(
+  kind: "Tab",
+  tuning: "standard",
+  events: [
+    (string: 1, fret: 3, duration: "4"),
+    (string: 2, fret: 0, duration: "4"),
+  ],
+)

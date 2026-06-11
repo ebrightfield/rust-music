@@ -17,11 +17,11 @@ use music_engraver::layout::multi_staff::SubBracket;
 use music_engraver::score::multi_staff::MultiStaffScore;
 use music_engraver::score::ScoreBuilder;
 
-fn p(note: Note, octave: u8) -> Pitch {
-    Pitch::new(note, octave).expect("valid pitch")
+fn p(note: Note, octave: i8) -> Pitch {
+    Pitch::new(note, octave)
 }
 
-fn line(clef: Clef, pitches: &[(Note, u8)]) -> ScoreBuilder {
+fn line(clef: Clef, pitches: &[(Note, i8)]) -> ScoreBuilder {
     let mut b = ScoreBuilder::new().clef(clef).time_signature(4, 4);
     for (n, oct) in pitches {
         b = b.note(p(*n, *oct), Duration::QTR);

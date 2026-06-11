@@ -19,57 +19,57 @@ fn main() {
         .tuplet(
             3,
             vec![
-                (Pitch::new(Note::C, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::C, 4), Duration::EIGHTH),
+                (Pitch::new(Note::E, 4), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4), Duration::EIGHTH),
             ],
         )
-        .note(Pitch::new(Note::C, 5).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::C, 5), Duration::QTR)
         .rest(Duration::QTR)
         .barline()
         // Measure 2: quarter-note triplet filling 2 beats + half note
         .tuplet(
             3,
             vec![
-                (Pitch::new(Note::D, 5).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::B, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::D, 5), Duration::EIGHTH),
+                (Pitch::new(Note::C, 5), Duration::EIGHTH),
+                (Pitch::new(Note::B, 4), Duration::EIGHTH),
             ],
         )
-        .note(Pitch::new(Note::A, 4).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
         // Measure 3: sixteenth-note quintuplet + dotted quarter + eighth
         .tuplet(
             5,
             vec![
-                (Pitch::new(Note::G, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::A, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::B, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::C, 5).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::D, 5).unwrap(), Duration::SIXTEENTH),
+                (Pitch::new(Note::G, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::A, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::B, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::C, 5), Duration::SIXTEENTH),
+                (Pitch::new(Note::D, 5), Duration::SIXTEENTH),
             ],
         )
         .note(
-            Pitch::new(Note::E, 5).unwrap(),
+            Pitch::new(Note::E, 5),
             Duration::new(music::notation::rhythm::duration::DurationKind::Qtr, 1),
         )
-        .note(Pitch::new(Note::D, 5).unwrap(), Duration::EIGHTH)
+        .note(Pitch::new(Note::D, 5), Duration::EIGHTH)
         .barline()
         // Measure 4: two separate triplets filling the bar
         .tuplet(
             3,
             vec![
-                (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::B, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::C, 5), Duration::EIGHTH),
+                (Pitch::new(Note::B, 4), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4), Duration::EIGHTH),
             ],
         )
         .tuplet(
             3,
             vec![
-                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4), Duration::EIGHTH),
+                (Pitch::new(Note::F, 4), Duration::EIGHTH),
+                (Pitch::new(Note::E, 4), Duration::EIGHTH),
             ],
         )
         .end_barline()

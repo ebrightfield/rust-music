@@ -4,4 +4,8 @@ members = [
     "music",
     "music-engraver",
     "musical-combinatorics",
+    "lilypond-parser",
+    "music-midi",
+    "music-ron",
+    "slonimsky",
 ]

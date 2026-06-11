@@ -25,13 +25,13 @@ fn main() {
 
     // Notes with dynamics underneath
     let entries: Vec<(Pitch, Dynamic)> = vec![
-        (Pitch::new(Note::E, 4).unwrap(), Dynamic::Pp),
-        (Pitch::new(Note::G, 4).unwrap(), Dynamic::Piano),
-        (Pitch::new(Note::A, 4).unwrap(), Dynamic::Mp),
-        (Pitch::new(Note::B, 4).unwrap(), Dynamic::Mf),
-        (Pitch::new(Note::D, 5).unwrap(), Dynamic::Forte),
-        (Pitch::new(Note::E, 5).unwrap(), Dynamic::Ff),
-        (Pitch::new(Note::G, 5).unwrap(), Dynamic::Fff),
+        (Pitch::new(Note::E, 4), Dynamic::Pp),
+        (Pitch::new(Note::G, 4), Dynamic::Piano),
+        (Pitch::new(Note::A, 4), Dynamic::Mp),
+        (Pitch::new(Note::B, 4), Dynamic::Mf),
+        (Pitch::new(Note::D, 5), Dynamic::Forte),
+        (Pitch::new(Note::E, 5), Dynamic::Ff),
+        (Pitch::new(Note::G, 5), Dynamic::Fff),
     ];
 
     // Larger viewBox to accommodate dynamics below staff

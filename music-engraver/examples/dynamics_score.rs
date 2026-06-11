@@ -17,29 +17,29 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: ascending line with crescendo-like dynamics
-        .note(Pitch::new(Note::Bes, 3).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::Bes, 3), Duration::QTR)
         .dynamic(Dynamic::Piano)
-        .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .dynamic(Dynamic::Mp)
-        .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::F, 4), Duration::QTR)
         .dynamic(Dynamic::Mf)
-        .note(Pitch::new(Note::Bes, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::Bes, 4), Duration::QTR)
         .dynamic(Dynamic::Forte)
         .barline()
         // Measure 2: descending with diminuendo-like dynamics
-        .note(Pitch::new(Note::A, 4).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::A, 4), Duration::HALF)
         .dynamic(Dynamic::Ff)
-        .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::F, 4), Duration::QTR)
         .dynamic(Dynamic::Mf)
-        .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .dynamic(Dynamic::Piano)
         .barline()
         // Measure 3: chord with dynamic + rest (no dynamic on rest)
         .chord(
             vec![
-                Pitch::new(Note::Bes, 3).unwrap(),
-                Pitch::new(Note::D, 4).unwrap(),
-                Pitch::new(Note::F, 4).unwrap(),
+                Pitch::new(Note::Bes, 3),
+                Pitch::new(Note::D, 4),
+                Pitch::new(Note::F, 4),
             ],
             Duration::HALF,
         )
@@ -48,13 +48,13 @@ fn main() {
         .barline()
         // Measure 4: accents and rinforzando family — exercise the
         // newly-added composite glyphs (sf, sfp, rfz, fz, niente).
-        .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .dynamic(Dynamic::Sf)
-        .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::F, 4), Duration::QTR)
         .dynamic(Dynamic::Rfz)
-        .note(Pitch::new(Note::Ees, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::Ees, 4), Duration::QTR)
         .dynamic(Dynamic::Fz)
-        .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .dynamic(Dynamic::Niente)
         .end_barline()
         .render_svg();

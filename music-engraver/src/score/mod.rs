@@ -16,10 +16,10 @@
 //!     .clef(Clef::Treble)
 //!     .key_signature(KeySignature::Sharps(2))
 //!     .time_signature(4, 4)
-//!     .note(Pitch::new(Note::D, 4).expect("valid pitch"), Duration::QTR)
-//!     .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::QTR)
-//!     .note(Pitch::new(Note::Fis, 4).expect("valid pitch"), Duration::QTR)
-//!     .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+//!     .note(Pitch::new(Note::D, 4), Duration::QTR)
+//!     .note(Pitch::new(Note::E, 4), Duration::QTR)
+//!     .note(Pitch::new(Note::Fis, 4), Duration::QTR)
+//!     .note(Pitch::new(Note::G, 4), Duration::QTR)
 //!     .barline()
 //!     .rest(Duration::WHOLE)
 //!     .end_barline()
@@ -1275,10 +1275,10 @@ impl ScoreBuilder {
     ///
     /// let svg = ScoreBuilder::new()
     ///     .beam_group(vec![
-    ///         (Pitch::new(Note::E, 4).expect("valid pitch"), Duration::EIGHTH),
-    ///         (Pitch::new(Note::F, 4).expect("valid pitch"), Duration::EIGHTH),
-    ///         (Pitch::new(Note::G, 4).expect("valid pitch"), Duration::EIGHTH),
-    ///         (Pitch::new(Note::A, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::E, 4), Duration::EIGHTH),
+    ///         (Pitch::new(Note::F, 4), Duration::EIGHTH),
+    ///         (Pitch::new(Note::G, 4), Duration::EIGHTH),
+    ///         (Pitch::new(Note::A, 4), Duration::EIGHTH),
     ///     ])
     ///     .end_barline()
     ///     .render_svg();
@@ -1302,9 +1302,9 @@ impl ScoreBuilder {
     ///
     /// let svg = ScoreBuilder::new()
     ///     .tuplet(3, vec![
-    ///         (Pitch::new(Note::E, 4).expect("valid pitch"), Duration::EIGHTH),
-    ///         (Pitch::new(Note::F, 4).expect("valid pitch"), Duration::EIGHTH),
-    ///         (Pitch::new(Note::G, 4).expect("valid pitch"), Duration::EIGHTH),
+    ///         (Pitch::new(Note::E, 4), Duration::EIGHTH),
+    ///         (Pitch::new(Note::F, 4), Duration::EIGHTH),
+    ///         (Pitch::new(Note::G, 4), Duration::EIGHTH),
     ///     ])
     ///     .end_barline()
     ///     .render_svg();
@@ -1538,11 +1538,11 @@ impl ScoreBuilder {
     ///     .clef(Clef::Treble)
     ///     .time_signature(4, 4)
     ///     // Voice 0: melody (stems up)
-    ///     .note(Pitch::new(Note::E, 5).unwrap(), Duration::HALF)
-    ///     .note(Pitch::new(Note::D, 5).unwrap(), Duration::HALF)
+    ///     .note(Pitch::new(Note::E, 5), Duration::HALF)
+    ///     .note(Pitch::new(Note::D, 5), Duration::HALF)
     ///     // Voice 1: bass (stems down)
     ///     .voice(1)
-    ///     .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+    ///     .note(Pitch::new(Note::C, 4), Duration::WHOLE)
     ///     .voice(0) // back to primary
     ///     .end_barline()
     ///     .render_svg();

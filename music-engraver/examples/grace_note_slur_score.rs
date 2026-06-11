@@ -20,62 +20,62 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: acciaccatura with slur (canonical "crushed note")
-        .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
         .grace_note_slur(
-            Pitch::new(Note::D, 4).expect("valid pitch"),
+            Pitch::new(Note::D, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .grace_note_slur(
-            Pitch::new(Note::Fis, 4).expect("valid pitch"),
+            Pitch::new(Note::Fis, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::A, 4).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
         // Measure 2: appoggiatura with slur (stem-up & stem-down principal)
-        .note(Pitch::new(Note::C, 5).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::C, 5), Duration::HALF)
         .grace_note_slur(
-            Pitch::new(Note::B, 4).expect("valid pitch"),
+            Pitch::new(Note::B, 4),
             GraceNoteKind::Appoggiatura,
         )
-        .note(Pitch::new(Note::D, 5).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::D, 5), Duration::HALF)
         .grace_note_slur(
-            Pitch::new(Note::Cis, 5).expect("valid pitch"),
+            Pitch::new(Note::Cis, 5),
             GraceNoteKind::Appoggiatura,
         )
         .barline()
         // Measure 3: wide intervals (grace below, principal above; and vice versa)
-        .note(Pitch::new(Note::A, 5).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::A, 5), Duration::QTR)
         .grace_note_slur(
-            Pitch::new(Note::E, 5).expect("valid pitch"),
+            Pitch::new(Note::E, 5),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::C, 4), Duration::QTR)
         .grace_note_slur(
-            Pitch::new(Note::F, 4).expect("valid pitch"),
+            Pitch::new(Note::F, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::G, 4), Duration::HALF)
         .barline()
         // Measure 4: slurred grace on a chord, plus a rest (slur should be no-op on rest)
         .chord(
             vec![
-                Pitch::new(Note::C, 4).expect("valid pitch"),
-                Pitch::new(Note::E, 4).expect("valid pitch"),
-                Pitch::new(Note::G, 4).expect("valid pitch"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
             ],
             Duration::HALF,
         )
         .grace_note_slur(
-            Pitch::new(Note::B, 3).expect("valid pitch"),
+            Pitch::new(Note::B, 3),
             GraceNoteKind::Acciaccatura,
         )
         .rest(Duration::QTR)
         .grace_note_slur(
-            Pitch::new(Note::A, 4).expect("valid pitch"),
+            Pitch::new(Note::A, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::D, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .end_barline()
         .render_svg();
 

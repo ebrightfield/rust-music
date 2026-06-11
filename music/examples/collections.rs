@@ -1,21 +1,20 @@
-use music::{Pc, Note, Pitch, PcSet, NoteSet, Voicing, pcs, pc, pitch, voicing, StackedIntervals};
-use music::geometry::symmetry::transpositional::{Modes, Transpose};
+use music::prelude::*;
 use music::notation::clef::Clef;
 
 fn main() {
 
-    // A collection of Pc make up a PcSet.
+    // A collection of Pc make up a PcShape.
     // They are deduplicated, ordered, and zeroed (in that order)
     {
-        let major_triad = PcSet::new(vec![pc!(0), pc!(4), pc!(7)]);
+        let major_triad = PcShape::new(vec![pc!(0), pc!(4), pc!(7)]);
 
         // You can get the modes / inversions
         let modes = major_triad.modes();
         assert!(modes.contains(&major_triad));
-        assert!(modes.contains(&pcs!(0, 3, 8)));
-        assert!(modes.contains(&pcs!(0, 5, 9)));
-        assert_eq!(major_triad.rotate(1), pcs!(0, 3, 8));
-        assert_eq!(major_triad.rotate(2), pcs!(0, 5, 9));
+        assert!(modes.contains(&pc_shape!(0, 3, 8)));
+        assert!(modes.contains(&pc_shape!(0, 5, 9)));
+        assert_eq!(major_triad.rotate(1), pc_shape!(0, 3, 8));
+        assert_eq!(major_triad.rotate(2), pc_shape!(0, 5, 9));
 
         // You can test whether something is a transposed version of something else
         assert!(major_triad.is_transposed_version_of(&vec![pc!(2), pc!(6), pc!(9)]));
@@ -23,7 +22,7 @@ fn main() {
         // Spelling is possible via heuristics and a given starting note
         let spelled = major_triad.try_spell(&Note::C).unwrap();
         assert_eq!(spelled, vec![Note::C, Note::E, Note::G]);
-        let major7 = PcSet::new(vec![pc!(0), pc!(4), pc!(7), pc!(11)]);
+        let major7 = PcShape::new(vec![pc!(0), pc!(4), pc!(7), pc!(11)]);
         let spelled = major7.try_spell(&Note::Bes).unwrap();
         assert_eq!(spelled, vec![Note::Bes, Note::D, Note::F, Note::A]);
         let spelled = major7.try_spell(&Note::A).unwrap();
@@ -31,23 +30,24 @@ fn main() {
 
         // Spelling should be able to handle strange things pretty well,
         // and even take into account the other notes as context
-        let min7b5 = pcs!(0, 3, 6, 10);
+        let min7b5 = pc_shape!(0, 3, 6, 10);
         let spelled = min7b5.try_spell(&Note::A).unwrap();
         assert_eq!(spelled, vec![Note::A, Note::C, Note::Ees, Note::G]);
-        let dom7sharp11 = pcs!(0, 4, 6, 7, 10);
+        let dom7sharp11 = pc_shape!(0, 4, 6, 7, 10);
         let spelled = dom7sharp11.try_spell(&Note::A).unwrap();
         assert_eq!(spelled, vec![Note::A, Note::Cis, Note::Dis, Note::E, Note::G]);
 
-        // They are transposable into a nonzeroed vec of Pc.
-        let vii_chord = min7b5.transpose(11);
-        assert_eq!(vii_chord, vec![pc!(11), pc!(2), pc!(5), pc!(9)]);
+        // They can be rooted at a specific pitch class to produce a PcContent.
+        // PcContent is sorted, unzeroed absolute pitch class content.
+        let vii_chord = min7b5.at_root(pc!(11));
+        assert_eq!(vii_chord, content!(2, 5, 9, 11));
     }
 
-    // A [NoteSet] contains collection of [Note] objects,
+    // A [NoteSet] contains a collection of [Note] objects,
     // sorted (where C = Pc0 = the "lowest" note), then deduplicated.
-    // The sorting can be overridden to treat a different note as Pc0.
+    // Use `with_root` to override the "lowest" note.
     {
-        let notes = NoteSet::new(vec![Note::Ees, Note::G, Note::Ees, Note::C], None);
+        let notes = NoteSet::new(vec![Note::Ees, Note::G, Note::Ees, Note::C]);
         assert_eq!(notes.to_vec(), vec![Note::C, Note::Ees, Note::G]);
 
         // It's easy to step through them.
@@ -62,6 +62,10 @@ fn main() {
         assert_eq!(note, Note::G);
         note = notes.down_n_steps(&note, 5).unwrap();
         assert_eq!(note, Note::C);
+
+        // Rooted from a specific note.
+        let rooted = NoteSet::with_root(vec![Note::C, Note::E, Note::G], &Note::E);
+        assert_eq!(rooted[0], Note::E);
     }
 
     // Voicings are collections of pitches.
@@ -126,16 +130,63 @@ fn main() {
         );
     }
 
-    // These collections all dereference to their inner collection,
-    // making iteration easy
+    // Collections implement IntoIterator for both owned and borrowed access,
+    // so you can iterate idiomatically without calling .iter() explicitly.
     {
-        let major_triad = PcSet::new(vec![pc!(0), pc!(4), pc!(7)]);
-        major_triad.iter().for_each(|_| {});
+        let major_triad = PcShape::new(vec![pc!(0), pc!(4), pc!(7)]);
+
+        // Borrowed iteration.
+        for pc in &major_triad {
+            let _ = pc;
+        }
+
+        // Owned iteration (consumes the collection).
+        let collected: Vec<Pc> = major_triad.into_iter().collect();
+        assert_eq!(collected.len(), 3);
+
+        // FromIterator on PcShape lets you collect directly.
+        let triad_pcs = vec![pc!(0), pc!(4), pc!(7)];
+        let transposed: PcShape = triad_pcs
+            .into_iter()
+            .map(|p| p.transpose(2))
+            .collect();
+        assert_eq!(transposed.len(), 3);
+
         let v = Voicing::new(vec![
             pitch!(c, 4),
             pitch!(g, 4),
             pitch!(e, 5),
         ]);
-        v.iter().for_each(|_| {});
+        for p in &v {
+            let _ = p.midi_note;
+        }
+    }
+
+    // Chord names can be built from a symbol string.
+    {
+        let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
+        // Cmaj7 = C, E, G, B interval template = Pc0, Pc4, Pc7, Pc11.
+        assert_eq!(cmaj7.pc_shape, pc_shape!(0, 4, 7, 11));
+        match cmaj7.tonality {
+            TonalSpecification::RootPosition(root) => assert_eq!(root, Note::C),
+            _ => panic!("expected root position"),
+        }
+
+        // A sharp root and a minor-seven-flat-five.
+        let fsm7b5 = ChordName::from_symbol("F#m7b5").unwrap();
+        // F#m7b5 interval template (zero-anchored): semitones from root = 0,3,6,10.
+        assert_eq!(fsm7b5.pc_shape, pc_shape!(0, 3, 6, 10));
+        match fsm7b5.tonality {
+            TonalSpecification::RootPosition(root) => assert_eq!(root, Note::Fis),
+            _ => panic!("expected root position"),
+        }
+
+        // Or constructed directly when you have the parts.
+        let custom = ChordName::new(
+            TonalSpecification::RootPosition(Note::D),
+            ChordQuality::SingleNote,
+            pc_shape!(0),
+        );
+        assert_eq!(custom.pc_shape, pc_shape!(0));
     }
 }

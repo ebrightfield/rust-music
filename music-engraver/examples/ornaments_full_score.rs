@@ -20,7 +20,7 @@ fn main() {
     // collision between adjacent measures. The pitches are deliberately
     // monotonic — variation in the visual output should come from the
     // ornament glyph, not the notehead position.
-    let pitches: [(Note, u8); 15] = [
+    let pitches: [(Note, i8); 15] = [
         (Note::C, 4), (Note::D, 4), (Note::E, 4), (Note::F, 4),
         (Note::G, 4), (Note::A, 4), (Note::B, 4), (Note::C, 5),
         (Note::D, 5), (Note::E, 5), (Note::F, 5), (Note::G, 5),
@@ -38,7 +38,7 @@ fn main() {
     for (i, ornament) in Ornament::ALL.iter().enumerate() {
         let (note, octave) = pitches[i];
         b = b
-            .note(Pitch::new(note, octave).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(note, octave), Duration::QTR)
             .ornament(*ornament);
         // Barline after every 4th ornament (i.e. when 1, 5, 9, 13 notes
         // have been laid down → completed beat-4s of measures 1, 2, 3).
@@ -49,7 +49,7 @@ fn main() {
     // Measure 4 already has 3 ornament-bearing quarters (indices 12, 13, 14);
     // add one ornamentless quarter to round it out to 4/4.
     let svg = b
-        .note(Pitch::new(Note::D, 6).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::D, 6), Duration::QTR)
         .end_barline()
         .render_svg();
 

@@ -1,0 +1,1 @@
+\tuplet 3/2 { c'8 d'8 e'8 } \tuplet 5/4 { f'16 g'16 a'16 b'16 c''16 } \tuplet 7/4 { c'16 d'16 e'16 f'16 g'16 a'16 b'16 }

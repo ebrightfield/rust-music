@@ -1,0 +1,259 @@
+╔══════════════════════════════════════════════════════════════════╗
+║           Set-Class Analysis Report — slonimsky CLI            ║
+╚══════════════════════════════════════════════════════════════════╝
+
+Generated: 2026-04-23 05:29 UTC
+
+================================================================
+  Major Triad (C): C E G
+================================================================
+
+--- Chord Name ---
+CMaj
+
+--- Interval Matrix ---
+      0   4   7
+    ------------
+ 0 |  0   4   7
+ 4 |  8   0   3
+ 7 |  5   9   0
+
+Interval vector: <0, 0, 1, 1, 1, 0>
+
+--- Interval Vector ---
+PcSet: {0, 4, 7}
+
+Interval vector: <0, 0, 1, 1, 1, 0>
+
+  ic1: 0 (m2/M7)
+  ic2: 0 (M2/m7)
+  ic3: 1 (m3/M6)
+  ic4: 1 (M3/m6)
+  ic5: 1 (P4/P5)
+  ic6: 0 (tritone)
+
+(SVG diagrams written: analysis_major_triad_{circle,matrix,vector}.svg)
+
+================================================================
+  Dominant 7th (C7): C E G Bb
+================================================================
+
+--- Chord Name ---
+C7
+
+--- Interval Matrix ---
+      0   4   7  10
+    ----------------
+ 0 |  0   4   7  10
+ 4 |  8   0   3   6
+ 7 |  5   9   0   3
+10 |  2   6   9   0
+
+Interval vector: <0, 1, 2, 1, 1, 1>
+
+--- Interval Vector ---
+PcSet: {0, 4, 7, 10}
+
+Interval vector: <0, 1, 2, 1, 1, 1>
+
+  ic1: 0 (m2/M7)
+  ic2: 1 (M2/m7)
+  ic3: 2 (m3/M6)
+  ic4: 1 (M3/m6)
+  ic5: 1 (P4/P5)
+  ic6: 1 (tritone)
+
+--- Subchords (size 3) ---
+Subchords of {0,4,7,10} (size 3):
+
+    1. {0,4,7}  CMaj
+    2. {0,4,10}  C7 (no5)
+    3. {0,7,10}  C7
+    4. {4,7,10}  Edim
+
+Total: 4 subchords
+
+(SVG diagrams written: analysis_dom7_{circle,matrix,vector}.svg)
+
+================================================================
+  Diminished 7th: C Eb Gb A
+================================================================
+
+--- Chord Name ---
+Cdim7
+
+--- Interval Matrix ---
+      0   3   6   9
+    ----------------
+ 0 |  0   3   6   9
+ 3 |  9   0   3   6
+ 6 |  6   9   0   3
+ 9 |  3   6   9   0
+
+Interval vector: <0, 0, 4, 0, 0, 2>
+
+--- Interval Vector ---
+PcSet: {0, 3, 6, 9}
+
+Interval vector: <0, 0, 4, 0, 0, 2>
+
+  ic1: 0 (m2/M7)
+  ic2: 0 (M2/m7)
+  ic3: 4 (m3/M6)
+  ic4: 0 (M3/m6)
+  ic5: 0 (P4/P5)
+  ic6: 2 (tritone)
+
+--- Subchords (size 3) ---
+Subchords of {0,3,6,9} (size 3):
+
+    1. {0,3,6}  Cdim
+    2. {0,3,9}  Cmin6
+    3. {0,6,9}  Cdim7
+    4. {3,6,9}  D#/Ebdim
+
+Total: 4 subchords
+
+(SVG diagrams written: analysis_dim7_{circle,matrix,vector}.svg)
+
+================================================================
+  Augmented Triad (C+): C E Ab
+================================================================
+
+--- Chord Name ---
+CAug
+
+--- Interval Matrix ---
+      0   4   8
+    ------------
+ 0 |  0   4   8
+ 4 |  8   0   4
+ 8 |  4   8   0
+
+Interval vector: <0, 0, 0, 3, 0, 0>
+
+--- Interval Vector ---
+PcSet: {0, 4, 8}
+
+Interval vector: <0, 0, 0, 3, 0, 0>
+
+  ic1: 0 (m2/M7)
+  ic2: 0 (M2/m7)
+  ic3: 0 (m3/M6)
+  ic4: 3 (M3/m6)
+  ic5: 0 (P4/P5)
+  ic6: 0 (tritone)
+
+(SVG diagrams written: analysis_aug_{circle,matrix,vector}.svg)
+
+================================================================
+  Whole-Tone Scale (6-35): C D E Gb Ab Bb
+================================================================
+
+--- Chord Name ---
+C+7 (9, ♯11)
+
+--- Interval Matrix ---
+      0   2   4   6   8  10
+    ------------------------
+ 0 |  0   2   4   6   8  10
+ 2 | 10   0   2   4   6   8
+ 4 |  8  10   0   2   4   6
+ 6 |  6   8  10   0   2   4
+ 8 |  4   6   8  10   0   2
+10 |  2   4   6   8  10   0
+
+Interval vector: <0, 6, 0, 6, 0, 3>
+
+--- Interval Vector ---
+PcSet: {0, 2, 4, 6, 8, 10}
+
+Interval vector: <0, 6, 0, 6, 0, 3>
+
+  ic1: 0 (m2/M7)
+  ic2: 6 (M2/m7)
+  ic3: 0 (m3/M6)
+  ic4: 6 (M3/m6)
+  ic5: 0 (P4/P5)
+  ic6: 3 (tritone)
+
+--- Subchords (size 3) ---
+Subchords of {0,2,4,6,8,10} (size 3):
+
+    1. {0,2,4}  CMaj (9)
+    2. {0,2,6}  ?
+    3. {0,2,8}  ?
+    4. {0,2,10}  C7 (9)
+    5. {0,4,6}  CMaj (♭5)
+    6. {0,4,8}  CAug
+    7. {0,4,10}  C7 (no5)
+    8. {0,6,8}  ?
+    9. {0,6,10}  Cmin7 (♭5)
+   10. {0,8,10}  ?
+   11. {2,4,6}  DMaj (9)
+   12. {2,4,8}  ?
+   13. {2,4,10}  ?
+   14. {2,6,8}  DMaj (♭5)
+   15. {2,6,10}  DAug
+   16. {2,8,10}  ?
+   17. {4,6,8}  EMaj (9)
+   18. {4,6,10}  ?
+   19. {4,8,10}  EMaj (♭5)
+   20. {6,8,10}  F#/GbMaj (9)
+
+Total: 20 subchords
+
+(SVG diagrams written: analysis_wholetone_{circle,matrix,vector}.svg)
+
+================================================================
+  Chromatic Tetrachord: C Db D Eb
+================================================================
+
+--- Chord Name ---
+(no recognized chord name)
+
+--- Interval Matrix ---
+      0   1   2   3
+    ----------------
+ 0 |  0   1   2   3
+ 1 | 11   0   1   2
+ 2 | 10  11   0   1
+ 3 |  9  10  11   0
+
+Interval vector: <3, 2, 1, 0, 0, 0>
+
+--- Interval Vector ---
+PcSet: {0, 1, 2, 3}
+
+Interval vector: <3, 2, 1, 0, 0, 0>
+
+  ic1: 3 (m2/M7)
+  ic2: 2 (M2/m7)
+  ic3: 1 (m3/M6)
+  ic4: 0 (M3/m6)
+  ic5: 0 (P4/P5)
+  ic6: 0 (tritone)
+
+--- Subchords (size 3) ---
+Subchords of {0,1,2,3} (size 3):
+
+    1. {0,1,2}  ?
+    2. {0,1,3}  Cmin (♭9)
+    3. {0,2,3}  Cmin (9)
+    4. {1,2,3}  ?
+
+Total: 4 subchords
+
+(SVG diagrams written: analysis_chrom4_{circle,matrix,vector}.svg)
+
+================================================================
+  Summary
+================================================================
+
+Sets analyzed: 6
+SVG artifacts: 18 (3 per set: circle, matrix, vector)
+Text report:   slonimsky/examples/output/analysis_report.txt
+
+Total SVG files produced: 18
+
+Done.

@@ -12,7 +12,7 @@ pub mod voicing;
 pub mod geometry;
 pub mod interval_class;
 
-pub use pc_set::PcSet;
+pub use pc_set::{PcShape, PcContent, AsPcSlice};
 pub use interval_class::IntervalClass;
 pub use octave_partition::OctavePartition;
 pub use voicing::{StackedIntervals, Voicing};
@@ -21,41 +21,51 @@ use crate::note_collections::geometry::symmetry::transpositional::Transpositiona
 
 /// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
 ///
-/// It entails all the same intervallic information as a [PcSet], but also
+/// It entails all the same intervallic information as a [PcShape], but also
 /// conveys note spelling information.
-/// So you can think of it as "a [PcSet] with a defined note spelling."
+/// So you can think of it as "a [PcShape] with a defined note spelling."
 /// It's the minimal required information to talk about e.g. "a C major chord"
 /// in the abstract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteSet(Vec<Note>);
 
 impl NoteSet {
-    /// This is the preferred way to created a [NoteSet], as it guarantees
-    /// deduplication and sorting by [Pc].
-    /// It is normalized to Pc::0 by default, or whatever Pc is passed in.
-    pub fn new(mut notes: Vec<Note>, starting_note: Option<&Note>) -> Self {
+    /// Create a [NoteSet], sorted by [Pc] ascending from Pc::0 and deduplicated
+    /// by pitch class.
+    ///
+    /// For a sort anchored to a specific root note, use [`NoteSet::with_root`].
+    pub fn new(notes: Vec<Note>) -> Self {
+        Self::build(notes, None)
+    }
+
+    /// Create a [NoteSet], sorted by [Pc] ascending from `root` and deduplicated
+    /// by pitch class. The `root` does not need to appear in `notes`.
+    pub fn with_root(notes: Vec<Note>, root: &Note) -> Self {
+        Self::build(notes, Some(root))
+    }
+
+    /// Same as [`NoteSet::new`], but treats the first element of the vector
+    /// as the root.
+    pub fn starting_from_first_note(notes: Vec<Note>) -> Self {
         if notes.is_empty() {
             return Self(vec![]);
         }
-        let orientation = starting_note.map_or(0, |n| u8::from(&Pc::from(n)));
+        let starting_note = notes[0].clone();
+        Self::with_root(notes, &starting_note)
+    }
+
+    fn build(mut notes: Vec<Note>, root: Option<&Note>) -> Self {
+        if notes.is_empty() {
+            return Self(vec![]);
+        }
+        let orientation = root.map_or(0, |n| u8::from(&Pc::from(n)));
         notes.sort_by(|a, b| {
-            // We add 12 in the arithmetic because we want to ensure
             let a = (u8::from(&Pc::from(a)) + 12 - orientation).rem_euclid(12);
             let b = (u8::from(&Pc::from(b)) + 12 - orientation).rem_euclid(12);
             a.partial_cmp(&b).unwrap()
         });
         notes.dedup_by(|a, b| Pc::from(&*a) == Pc::from(&*b));
         Self(notes)
-    }
-
-    /// Same as [NoteSet::new], but orders elements treating
-    /// the first element of the [Vec] as [Pc::Pc0].
-    pub fn starting_from_first_note(notes: Vec<Note>) -> Self {
-        if notes.is_empty() {
-            return Self(vec![]);
-        }
-        let starting_note = notes[0].clone();
-        Self::new(notes, Some(&starting_note))
     }
 
     /// Retrieves the note n "steps" up in a [NoteSet], starting from a given
@@ -83,7 +93,8 @@ impl NoteSet {
     /// [crate::note_collections::geometry::symmetry::find_transpositional_symmetries].
     /// See that function's docs for more details.
     pub fn find_transpositional_symmetries(&self) -> TranspositionalSymmetryMap {
-        let pcs = PcSet::from(self);
+        let content = PcContent::from(self);
+        let pcs = content.to_shape();
         let mut symmetries = pcs.transpositional_symmetry();
         let mut indexed_by_note = HashMap::new();
         for (i, note) in self.iter().enumerate() {
@@ -141,8 +152,9 @@ impl NoteSet {
             (new_pos_raw - len + 1) / len
         };
 
-        let new_octave = (from.octave as i32 + octave_change) as u8;
-        Pitch::new(new_note.clone(), new_octave)
+        let new_octave = i8::try_from(from.octave as i32 + octave_change)
+            .map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
+        Pitch::try_new(new_note.clone(), new_octave)
     }
 
     /// Find the note in this set closest (by pitch class distance) to the given pitch.
@@ -204,27 +216,54 @@ impl Deref for NoteSet {
     }
 }
 
+impl IntoIterator for NoteSet {
+    type Item = Note;
+    type IntoIter = std::vec::IntoIter<Note>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a NoteSet {
+    type Item = &'a Note;
+    type IntoIter = std::slice::Iter<'a, Note>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn note_set_constructor() {
-        let notes = NoteSet::new(vec![Note::D, Note::Cisis, Note::C], None);
-        let could_be = NoteSet::new(vec![Note::C, Note::D], None);
-        let could_be2 = NoteSet(vec![Note::C, Note::Cisis]);
-        assert!(could_be == notes || could_be2 == notes);
-        let notes = NoteSet::new(vec![Note::D, Note::Cis, Note::C], None);
-        let should_be = NoteSet::new(vec![Note::C, Note::Cis, Note::D], None);
+        // Stable sort by pitch class preserves the relative order of enharmonics,
+        // and dedup_by keeps the first of adjacent equal elements.
+        //
+        // Input [D, Cisis, C]: sort keys are [2, 2, 0] → stably sorted to
+        // [C(0), D(2), Cisis(2)] → deduped → [C, D].
+        let notes = NoteSet::new(vec![Note::D, Note::Cisis, Note::C]);
+        assert_eq!(notes, NoteSet(vec![Note::C, Note::D]));
+
+        // To make Cisis win, it must come before D in the input:
+        // [Cisis, D, C] → [C, Cisis, D] → [C, Cisis].
+        let notes = NoteSet::new(vec![Note::Cisis, Note::D, Note::C]);
+        assert_eq!(notes, NoteSet(vec![Note::C, Note::Cisis]));
+
+        let notes = NoteSet::new(vec![Note::D, Note::Cis, Note::C]);
+        let should_be = NoteSet::new(vec![Note::C, Note::Cis, Note::D]);
         assert_eq!(notes, should_be);
-        let notes = NoteSet::new(vec![Note::D, Note::Cis, Note::C], Some(&Note::Cis));
+        let notes = NoteSet::with_root(vec![Note::D, Note::Cis, Note::C], &Note::Cis);
         let should_be = NoteSet(vec![Note::Cis, Note::D, Note::C]);
         assert_eq!(notes, should_be);
     }
 
     #[test]
     fn test_n_steps_up() {
-        let notes = NoteSet::new(vec![Note::C, Note::E, Note::G], None);
+        let notes = NoteSet::new(vec![Note::C, Note::E, Note::G]);
         assert_eq!(notes.up_n_steps(&Note::C, 1).unwrap(), Note::E);
         assert_eq!(notes.up_n_steps(&Note::C, 2).unwrap(), Note::G);
         assert_eq!(notes.up_n_steps(&Note::C, 3).unwrap(), Note::C);
@@ -237,7 +276,7 @@ mod tests {
     #[test]
     fn test_closest_to_note() {
         // C major triad: C, E, G
-        let notes = NoteSet::new(vec![Note::C, Note::E, Note::G], None);
+        let notes = NoteSet::new(vec![Note::C, Note::E, Note::G]);
 
         // Exact matches
         assert_eq!(notes.closest_to_note(&Note::C).unwrap(), &Note::C);
@@ -266,10 +305,9 @@ mod tests {
         // C major scale: C, D, E, F, G, A, B
         let scale = NoteSet::new(
             vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B],
-            None,
         );
 
-        let c4 = Pitch::new(Note::C, 4).unwrap();
+        let c4 = Pitch::new(Note::C, 4);
 
         // Step up within octave
         let d4 = scale.pitch_n_steps_from(&c4, 1).unwrap();
@@ -309,8 +347,8 @@ mod tests {
         use crate::note::pitch::Pitch;
 
         // C major triad: C, E, G (3 notes per octave)
-        let triad = NoteSet::new(vec![Note::C, Note::E, Note::G], None);
-        let c4 = Pitch::new(Note::C, 4).unwrap();
+        let triad = NoteSet::new(vec![Note::C, Note::E, Note::G]);
+        let c4 = Pitch::new(Note::C, 4);
 
         // Up through triad
         let e4 = triad.pitch_n_steps_from(&c4, 1).unwrap();
@@ -345,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_find_enharmonic() {
-        let notes = NoteSet::new(vec![Note::C, Note::Des, Note::E], None);
+        let notes = NoteSet::new(vec![Note::C, Note::Des, Note::E]);
 
         // Exact match
         assert_eq!(notes.find_enharmonic(&Note::Des), Some(&Note::Des));

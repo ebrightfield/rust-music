@@ -38,29 +38,29 @@ fn main() {
     let pairs: Vec<(Pitch, Pitch, SlurDirection, f64)> = vec![
         // Ascending slur under (stems up)
         (
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::G, 4).unwrap(),
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::G, 4),
             SlurDirection::Under,
             0.0,
         ),
         // Descending slur over (stems down)
         (
-            Pitch::new(Note::B, 4).unwrap(),
-            Pitch::new(Note::E, 4).unwrap(),
+            Pitch::new(Note::B, 4),
+            Pitch::new(Note::E, 4),
             SlurDirection::Over,
             2200.0,
         ),
         // Same-pitch slur under
         (
-            Pitch::new(Note::A, 4).unwrap(),
-            Pitch::new(Note::A, 4).unwrap(),
+            Pitch::new(Note::A, 4),
+            Pitch::new(Note::A, 4),
             SlurDirection::Under,
             4400.0,
         ),
         // Wide ascending slur over (ledger line territory)
         (
-            Pitch::new(Note::C, 4).unwrap(),
-            Pitch::new(Note::A, 5).unwrap(),
+            Pitch::new(Note::C, 4),
+            Pitch::new(Note::A, 5),
             SlurDirection::Over,
             6600.0,
         ),

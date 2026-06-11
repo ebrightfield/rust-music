@@ -10,9 +10,7 @@
 /// - [Pitch] -- Represents a note with both spelling and octave information.
 /// This value only needs a duration to be notated, and is the most "specific" we need to be
 /// with for twelve-tone equal temperament systems or MIDI.
-use music::{Pc, pc, Note, Pitch, pitch, Spelling};
-use music::geometry::symmetry::transpositional::{Transpose, TryTranspose};
-use music::note::spelling::{Accidental, Letter};
+use music::prelude::*;
 
 fn main() {
 
@@ -66,11 +64,14 @@ fn main() {
         assert_eq!(spelling.acc, Accidental::Natural);
     }
 
-    // Pitches are just notes with octave information
-    // They can't be higher than what the MIDI protocol allows (128)
-    // Middle C = C4 = midi-note 60
+    // Pitches are just notes with octave information.
+    // They can't be higher than what the MIDI protocol allows (128).
+    // Middle C = C4 = midi-note 60.
+    //
+    // `Pitch::new` is infallible for octaves 0..=8 (it panics otherwise);
+    // use `Pitch::try_new` if you need to handle out-of-range octaves.
     {
-        let p = Pitch::new(Note::C, 4).unwrap();
+        let p = Pitch::new(Note::C, 4);
         assert_eq!(
             p,
             Pitch::from_midi(60).unwrap(),
@@ -91,18 +92,17 @@ fn main() {
         assert_eq!(p.diatonic_distance(&pitch!(g, 5)), 11);
         assert_eq!(p.diatonic_distance(&pitch!(g, 2)), -10);
 
-        // There's a macro to condense that constructor,
-        // but beware, it's going to unwrap it!
+        // The `pitch!` macro is a shorthand for the infallible constructor.
         assert_eq!(
             pitch!(fis, 4),
-            Pitch::new(Note::Fis, 4).unwrap(),
+            Pitch::new(Note::Fis, 4),
         );
 
         // Since pitches are bounded, we have to try_transpose instead.
         let transposed = pitch!(fis, 4).try_transpose(13).unwrap();
         assert_eq!(
             transposed,
-            Pitch::new(Note::G, 5).unwrap(),
+            Pitch::new(Note::G, 5),
         );
         assert_eq!(
             p.raise_octaves(2).unwrap(),

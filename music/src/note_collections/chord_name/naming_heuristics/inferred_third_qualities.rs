@@ -21,6 +21,13 @@ pub fn assumed_third_common_prefix(pcs: &HashSet<Pc>) -> Option<ChordQuality> {
 
 
 /// A perfect fifth, and possibly a sharp fourth, a sixth, and/or a seventh.
+///
+/// After Tier 1.3, bare P5 (`{Pc0, Pc7}`) is handled by the fast-path in
+/// [`infer_chord_quality`] as `Interval(Ic7)` → "P5", so this heuristic must
+/// not claim it. We additionally require at least one upper extension
+/// (Pc2/Pc5/Pc6/Pc8/Pc9/Pc10/Pc11) before inferring a triad-quality here;
+/// otherwise a minimal P5 fragment risks being promoted to a full major /
+/// minor chord (see Tier 1.5).
 #[derive(Debug)]
 pub struct FifthAndUpperNotes;
 
@@ -41,9 +48,49 @@ impl NamingHeuristic for FifthAndUpperNotes {
         ]
     }
 
+    fn validate(&self, pcs: &HashSet<Pc>) -> bool {
+        // Delegate to the default required/optional cover check first.
+        if !default_validate(self, pcs) { return false; }
+        // Additional guard: at least one upper-extension pc must be present.
+        // Pc6 alone is not enough — see Tier 1.5: a bare P5 + sharp-fourth is
+        // not a triad-with-inferred-third.
+        const UPPER_EXT: &[Pc] = &[Pc2, Pc5, Pc9, Pc10, Pc11];
+        pcs.iter().any(|pc| UPPER_EXT.contains(pc))
+    }
+
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
         assumed_third_common_prefix(pcs)
     }
+}
+
+/// Helper: run the trait's default validator logic over a `NamingHeuristic`
+/// impl. This lets custom `validate` overrides compose with the shared
+/// required/optional cover check without duplicating that logic.
+fn default_validate<H: NamingHeuristic + ?Sized>(h: &H, pcs: &HashSet<Pc>) -> bool {
+    let mut pcs = pcs.clone();
+    pcs.remove(&Pc0);
+    let mut matched = vec![];
+    for subset in h.required().iter() {
+        let intersection: Vec<Pc> = subset
+            .intersection(&pcs)
+            .copied()
+            .collect();
+        if intersection.len() == 1 {
+            matched.extend(intersection);
+        } else {
+            return false;
+        }
+    }
+    for subset in h.optional().iter() {
+        let intersection: Vec<Pc> = subset
+            .intersection(&pcs)
+            .copied()
+            .collect();
+        if intersection.len() == 1 {
+            matched.extend(intersection);
+        }
+    }
+    matched.len() == pcs.len()
 }
 
 #[derive(Debug)]

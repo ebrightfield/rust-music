@@ -17,46 +17,46 @@ fn main() {
         .measures_per_system(2)
         // Measure 1: four beamed eighth notes + quarter + quarter rest
         .beam_group(vec![
-            (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::B, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::G, 4), Duration::EIGHTH),
+            (Pitch::new(Note::A, 4), Duration::EIGHTH),
+            (Pitch::new(Note::B, 4), Duration::EIGHTH),
+            (Pitch::new(Note::C, 5), Duration::EIGHTH),
         ])
-        .note(Pitch::new(Note::D, 5).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::D, 5), Duration::QTR)
         .rest(Duration::QTR)
         .barline()
         // Measure 2: two beamed sixteenths + eighth rest + beamed descending eighths + half
         .beam_group(vec![
-            (Pitch::new(Note::E, 5).unwrap(), Duration::SIXTEENTH),
-            (Pitch::new(Note::D, 5).unwrap(), Duration::SIXTEENTH),
+            (Pitch::new(Note::E, 5), Duration::SIXTEENTH),
+            (Pitch::new(Note::D, 5), Duration::SIXTEENTH),
         ])
         .rest(Duration::EIGHTH)
         .beam_group(vec![
-            (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::B, 4).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::C, 5), Duration::EIGHTH),
+            (Pitch::new(Note::B, 4), Duration::EIGHTH),
         ])
-        .note(Pitch::new(Note::A, 4).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
         // Measure 3: beamed sixteenth-note flourish + dotted half note
         .beam_group(vec![
-            (Pitch::new(Note::G, 4).unwrap(), Duration::SIXTEENTH),
-            (Pitch::new(Note::A, 4).unwrap(), Duration::SIXTEENTH),
-            (Pitch::new(Note::B, 4).unwrap(), Duration::SIXTEENTH),
-            (Pitch::new(Note::C, 5).unwrap(), Duration::SIXTEENTH),
+            (Pitch::new(Note::G, 4), Duration::SIXTEENTH),
+            (Pitch::new(Note::A, 4), Duration::SIXTEENTH),
+            (Pitch::new(Note::B, 4), Duration::SIXTEENTH),
+            (Pitch::new(Note::C, 5), Duration::SIXTEENTH),
         ])
         .note(
-            Pitch::new(Note::D, 5).unwrap(),
+            Pitch::new(Note::D, 5),
             Duration::new(DurationKind::Half, 1),
         )
         .barline()
         // Measure 4: mixed beam group (eighth + two sixteenths) + quarter + quarter
         .beam_group(vec![
-            (Pitch::new(Note::D, 5).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::C, 5).unwrap(), Duration::SIXTEENTH),
-            (Pitch::new(Note::B, 4).unwrap(), Duration::SIXTEENTH),
+            (Pitch::new(Note::D, 5), Duration::EIGHTH),
+            (Pitch::new(Note::C, 5), Duration::SIXTEENTH),
+            (Pitch::new(Note::B, 4), Duration::SIXTEENTH),
         ])
-        .note(Pitch::new(Note::A, 4).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::A, 4), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .end_barline()
         .render_svg();
 

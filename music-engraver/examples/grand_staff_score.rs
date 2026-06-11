@@ -18,14 +18,14 @@ fn main() {
         .key_signature(KeySignature::Sharps(2))
         .time_signature(4, 4)
         // Measure 1: ascending quarter notes
-        .note(Pitch::new(Note::D, 5).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::E, 5).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::Fis, 5).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::G, 5).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::D, 5), Duration::QTR)
+        .note(Pitch::new(Note::E, 5), Duration::QTR)
+        .note(Pitch::new(Note::Fis, 5), Duration::QTR)
+        .note(Pitch::new(Note::G, 5), Duration::QTR)
         .barline()
         // Measure 2: half notes
-        .note(Pitch::new(Note::A, 5).unwrap(), Duration::HALF)
-        .note(Pitch::new(Note::D, 5).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::A, 5), Duration::HALF)
+        .note(Pitch::new(Note::D, 5), Duration::HALF)
         .end_barline();
 
     let bass = ScoreBuilder::new()
@@ -33,11 +33,11 @@ fn main() {
         .key_signature(KeySignature::Sharps(2))
         .time_signature(4, 4)
         // Measure 1: whole note
-        .note(Pitch::new(Note::D, 3).unwrap(), Duration::WHOLE)
+        .note(Pitch::new(Note::D, 3), Duration::WHOLE)
         .barline()
         // Measure 2: half notes
-        .note(Pitch::new(Note::A, 2).unwrap(), Duration::HALF)
-        .note(Pitch::new(Note::D, 3).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::A, 2), Duration::HALF)
+        .note(Pitch::new(Note::D, 3), Duration::HALF)
         .end_barline();
 
     let svg = MultiStaffScore::grand_staff(treble, bass).render_svg();

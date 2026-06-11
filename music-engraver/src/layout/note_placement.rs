@@ -20,7 +20,7 @@ fn letter_diatonic_index(letter: Letter) -> i16 {
 /// Absolute diatonic position: octave * 7 + letter index.
 /// This gives a unique monotonic value for every diatonic pitch,
 /// independent of accidentals.
-fn absolute_diatonic(letter: Letter, octave: u8) -> i16 {
+fn absolute_diatonic(letter: Letter, octave: i8) -> i16 {
     octave as i16 * 7 + letter_diatonic_index(letter)
 }
 
@@ -30,7 +30,7 @@ fn absolute_diatonic(letter: Letter, octave: u8) -> i16 {
 /// Bass: F3 sits on staff position 6 (fourth line from bottom).
 /// Octave transposing clefs share the same staff position as the
 /// base clef but shift the reference pitch by an octave.
-fn clef_reference(clef: &Clef) -> (Letter, u8, StaffPosition) {
+fn clef_reference(clef: &Clef) -> (Letter, i8, StaffPosition) {
     match clef {
         Clef::Treble => (Letter::G, 4, 2),
         Clef::Treble8va => (Letter::G, 5, 2),
@@ -60,8 +60,8 @@ mod tests {
     use super::*;
     use music::note::note::Note;
 
-    fn p(note: Note, octave: u8) -> Pitch {
-        Pitch::new(note, octave).unwrap()
+    fn p(note: Note, octave: i8) -> Pitch {
+        Pitch::new(note, octave)
     }
 
     // --- Treble clef ---

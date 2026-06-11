@@ -1,0 +1,11 @@
+Key: C major (estimated, confidence: 7/7)
+
+  Chord        PcSet          Quality      Deg    Roman   
+  ──────────── ────────────── ──────────── ────── ────────
+  C,E,G        {0, 4, 7}      CMaj         1      I       
+  A,C,E        {0, 4, 9}      Amin         6      vi      
+  F,A,C        {0, 5, 9}      FMaj         4      IV      
+  G,B,D        {2, 7, 11}     GMaj         5      V       
+
+Common tones: C,E,G→A,C,E: {0, 4}  A,C,E→F,A,C: {0, 9}  F,A,C→G,B,D: ∅
+Voice-leading cost (L1): 2 → 1 → 6  total: 9

@@ -8,7 +8,7 @@ use music_engraver::score::tab::TabScoreBuilder;
 use music_engraver::score::ScoreBuilder;
 
 fn main() {
-    let p = |note: Note, oct: u8| Pitch::new(note, oct).expect("valid pitch");
+    let p = |note: Note, oct: i8| Pitch::new(note, oct);
 
     // Standard notation: E minor arpeggio across 2 measures
     let notation = ScoreBuilder::new()

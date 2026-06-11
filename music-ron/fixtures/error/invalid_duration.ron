@@ -1,0 +1,11 @@
+// Error fixture: InvalidDuration (REQ-O13, O37).
+// Shorthand "7" is rejected at deser time as SyntaxError (custom
+// Deserialize validates shorthands eagerly). This fixture verifies
+// the error path exists; the test matches SyntaxError.
+(
+  kind: "Snippet",
+  clef: "treble",
+  events: [
+    Note(pitch: "c4", duration: "7"),
+  ],
+)

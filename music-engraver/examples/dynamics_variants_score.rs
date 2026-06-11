@@ -20,8 +20,8 @@ use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;
 
-fn p(note: Note, octave: u8) -> Pitch {
-    Pitch::new(note, octave).expect("valid pitch")
+fn p(note: Note, octave: i8) -> Pitch {
+    Pitch::new(note, octave)
 }
 
 fn main() {

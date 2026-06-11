@@ -31,7 +31,7 @@ fn main() {
     draw_clef(&mut svg, &staff, &clef, &font).unwrap();
 
     // --- Pair 1: E4 quarter tied to E4 quarter (stems up → tie under) ---
-    let p1 = Pitch::new(Note::E, 4).unwrap();
+    let p1 = Pitch::new(Note::E, 4);
     let sp1 = pitch_to_staff_position(&p1, &Clef::Treble);
     let x1a = 1800.0;
     let x1b = 3000.0;
@@ -58,7 +58,7 @@ fn main() {
     draw_tie(&mut svg, &tie_layout1);
 
     // --- Pair 2: B4 half tied to B4 quarter (stems down → tie over) ---
-    let p2 = Pitch::new(Note::B, 4).unwrap();
+    let p2 = Pitch::new(Note::B, 4);
     let sp2 = pitch_to_staff_position(&p2, &Clef::Treble);
     let x2a = 4500.0;
     let x2b = 6500.0;
@@ -85,7 +85,7 @@ fn main() {
     draw_tie(&mut svg, &tie_layout2);
 
     // --- Pair 3: A5 quarter tied to A5 quarter (above staff, stems down → tie over) ---
-    let p3 = Pitch::new(Note::A, 5).unwrap();
+    let p3 = Pitch::new(Note::A, 5);
     let sp3 = pitch_to_staff_position(&p3, &Clef::Treble);
     let x3a = 8000.0;
     let x3b = 9500.0;
@@ -112,7 +112,7 @@ fn main() {
     draw_tie(&mut svg, &tie_layout3);
 
     // --- Pair 4: C4 (ledger line) tied to C4 — short tie, stems up → tie under ---
-    let p4 = Pitch::new(Note::C, 4).unwrap();
+    let p4 = Pitch::new(Note::C, 4);
     let sp4 = pitch_to_staff_position(&p4, &Clef::Treble);
     let x4a = 11000.0;
     let x4b = 12200.0;
@@ -139,7 +139,7 @@ fn main() {
     draw_tie(&mut svg, &tie_layout4);
 
     // --- Pair 5: forced direction — G4 with explicit Over tie ---
-    let p5 = Pitch::new(Note::G, 4).unwrap();
+    let p5 = Pitch::new(Note::G, 4);
     let sp5 = pitch_to_staff_position(&p5, &Clef::Treble);
     let x5a = 13500.0;
     let x5b = 14800.0;

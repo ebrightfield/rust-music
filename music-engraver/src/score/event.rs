@@ -71,7 +71,7 @@ pub(crate) fn duration_kind_to_log2(kind: DurationKind) -> u8 {
 
 /// Key for tracking accidentals within a measure: (diatonic letter index 0–6, octave).
 /// Uses `i32::from(&Letter)` since `Letter` doesn't implement `Hash`/`Eq`.
-type NoteKey = (i32, u8);
+type NoteKey = (i32, i8);
 
 /// Map tracking which accidental was last shown for each note (letter+octave) in a measure.
 pub(crate) type AccidentalTracker = HashMap<NoteKey, Accidental>;

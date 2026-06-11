@@ -20,13 +20,13 @@ fn main() {
 
     // Notes spanning from below the staff to above, to show stem direction switching
     let notes: Vec<(Pitch, NoteheadKind)> = vec![
-        (Pitch::new(Note::C, 4).unwrap(), NoteheadKind::Filled),  // middle C, ledger below, stem up
-        (Pitch::new(Note::E, 4).unwrap(), NoteheadKind::Filled),  // bottom line, stem up
-        (Pitch::new(Note::G, 4).unwrap(), NoteheadKind::Filled),  // second line, stem up
-        (Pitch::new(Note::B, 4).unwrap(), NoteheadKind::Half),    // middle line, stem down
-        (Pitch::new(Note::D, 5).unwrap(), NoteheadKind::Filled),  // fourth line space, stem down
-        (Pitch::new(Note::F, 5).unwrap(), NoteheadKind::Filled),  // top line, stem down
-        (Pitch::new(Note::A, 5).unwrap(), NoteheadKind::Half),    // ledger above, stem down
+        (Pitch::new(Note::C, 4), NoteheadKind::Filled),  // middle C, ledger below, stem up
+        (Pitch::new(Note::E, 4), NoteheadKind::Filled),  // bottom line, stem up
+        (Pitch::new(Note::G, 4), NoteheadKind::Filled),  // second line, stem up
+        (Pitch::new(Note::B, 4), NoteheadKind::Half),    // middle line, stem down
+        (Pitch::new(Note::D, 5), NoteheadKind::Filled),  // fourth line space, stem down
+        (Pitch::new(Note::F, 5), NoteheadKind::Filled),  // top line, stem down
+        (Pitch::new(Note::A, 5), NoteheadKind::Half),    // ledger above, stem down
     ];
 
     let mut svg = SvgWriter::new(900.0, 250.0, -100.0, -1200.0, 8000.0, 3500.0);

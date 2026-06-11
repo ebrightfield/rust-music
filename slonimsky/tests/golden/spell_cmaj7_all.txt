@@ -1,0 +1,3 @@
+Notes:     C E G B
+PCs:       0 4 7 11
+Intervals: R 3 5 7

@@ -23,44 +23,44 @@ fn main() {
         // Measure 1: upward arpeggio on C major triad, then plain quarter for contrast
         .chord(
             vec![
-                Pitch::new(Note::C, 4).expect("valid pitch"),
-                Pitch::new(Note::E, 4).expect("valid pitch"),
-                Pitch::new(Note::G, 4).expect("valid pitch"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
             ],
             Duration::HALF,
         )
         .arpeggio(ArpeggioDirection::Up)
-        .note(Pitch::new(Note::C, 5).expect("valid pitch"), Duration::QTR)
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::C, 5), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .barline()
         // Measure 2: downward arpeggio on D minor triad + arpeggio on single note
         .chord(
             vec![
-                Pitch::new(Note::D, 4).expect("valid pitch"),
-                Pitch::new(Note::F, 4).expect("valid pitch"),
-                Pitch::new(Note::A, 4).expect("valid pitch"),
+                Pitch::new(Note::D, 4),
+                Pitch::new(Note::F, 4),
+                Pitch::new(Note::A, 4),
             ],
             Duration::HALF,
         )
         .arpeggio(ArpeggioDirection::Down)
-        .note(Pitch::new(Note::E, 5).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::E, 5), Duration::QTR)
         .arpeggio(ArpeggioDirection::Up)
         .rest(Duration::QTR)
         .barline()
         // Measure 3: wide voicing with arpeggio (C4-G4-E5, spans ledger line territory)
         .chord(
             vec![
-                Pitch::new(Note::C, 4).expect("valid pitch"),
-                Pitch::new(Note::G, 4).expect("valid pitch"),
-                Pitch::new(Note::E, 5).expect("valid pitch"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::G, 4),
+                Pitch::new(Note::E, 5),
             ],
             Duration::HALF,
         )
         .arpeggio(ArpeggioDirection::Up)
         .chord(
             vec![
-                Pitch::new(Note::B, 4).expect("valid pitch"),
-                Pitch::new(Note::D, 5).expect("valid pitch"),
+                Pitch::new(Note::B, 4),
+                Pitch::new(Note::D, 5),
             ],
             Duration::HALF,
         )
@@ -69,10 +69,10 @@ fn main() {
         // Measure 4: whole-note arpeggio on 4-note chord (C-E-G-B)
         .chord(
             vec![
-                Pitch::new(Note::C, 4).expect("valid pitch"),
-                Pitch::new(Note::E, 4).expect("valid pitch"),
-                Pitch::new(Note::G, 4).expect("valid pitch"),
-                Pitch::new(Note::B, 4).expect("valid pitch"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
+                Pitch::new(Note::B, 4),
             ],
             Duration::WHOLE,
         )

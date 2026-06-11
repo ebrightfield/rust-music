@@ -1,0 +1,14 @@
+=== Sight-Reading Exercise ===
+Key: E major
+Difficulty: 3/5
+Measures: 8 (4/4 time)
+Notes: 40
+
+  m1: E4 (quarter)  F#4 (eighth)  D#4 (eighth)  E4 (half)  D#4 (quarter)
+  m2: E4 (quarter)  G#4 (eighth)  F#4 (eighth)  B4 (half)  C#5 (quarter)
+  m3: D#5 (quarter)  B4 (eighth)  C#5 (eighth)  B4 (half)  C#5 (quarter)
+  m4: E5 (quarter)  D#5 (eighth)  G#5 (eighth)  A5 (half)  B5 (quarter)
+  m5: G#5 (quarter)  A5 (eighth)  G#5 (eighth)  A5 (half)  F#5 (quarter)
+  m6: G#5 (quarter)  D#5 (eighth)  C#5 (eighth)  B4 (half)  D#5 (quarter)
+  m7: C#5 (quarter)  D#5 (eighth)  C#5 (eighth)  A4 (half)  B4 (quarter)
+  m8: F#4 (quarter)  E4 (eighth)  D#4 (eighth)  F#4 (half)  E4 (quarter)

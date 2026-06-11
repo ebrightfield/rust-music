@@ -34,8 +34,8 @@ use music_engraver::render::{draw_clef, draw_staff_lines, SvgWriter};
 /// gives roughly 2 SS of breathing room above each label band.
 const ROW_SPACING_FU: f64 = 4500.0;
 
-fn p(note: Note, oct: u8) -> Pitch {
-    Pitch::new(note, oct).unwrap()
+fn p(note: Note, oct: i8) -> Pitch {
+    Pitch::new(note, oct)
 }
 
 fn main() {

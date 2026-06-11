@@ -1,0 +1,8 @@
+// Error fixture: UnknownClef (REQ-O38 prep, O37).
+(
+  kind: "Snippet",
+  clef: "soprano",
+  events: [
+    Note(pitch: "c4", duration: "4"),
+  ],
+)

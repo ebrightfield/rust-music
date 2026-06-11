@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1986" viewBox="0 0 800 1986">
+<style>
+  text { font-family: sans-serif; }
+  .title { font-size: 20px; font-weight: bold; }
+  .section { font-size: 14px; font-weight: bold; }
+  .body { font-size: 12px; }
+  .small { font-size: 10px; }
+</style>
+<rect width="800" height="1986" fill="#ffffff"/>
+<text x="400" y="30" text-anchor="middle" class="title" fill="#000000">E Harmonic Minor — Practice Sheet</text>
+<g transform="translate(20,50) scale(0.55)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 265" width="240" height="265">
+  <style>
+    .note-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; }
+    .title-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; }
+    .fret-text { font-family: Arial, sans-serif; font-size: 10px; text-anchor: middle; }
+    .string-text { font-family: Arial, sans-serif; font-size: 11px; font-weight: bold; text-anchor: middle; }
+  </style>
+  <text x="120.0" y="18.0" class="title-text">E Harmonic Minor</text>
+  <circle cx="120.0" cy="145.0" r="80" fill="none" stroke="#999999" stroke-width="1"/>
+  <g class="interval-lines">
+  <line x1="120.0" y1="65.0" x2="200.0" y2="145.0" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="200.0" y1="145.0" x2="189.3" y2="185.0" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="189.3" y1="185.0" x2="120.0" y2="225.0" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="120.0" y1="225.0" x2="80.0" y2="214.3" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="80.0" y1="214.3" x2="40.0" y2="145.0" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="40.0" y1="145.0" x2="80.0" y2="75.7" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  <line x1="80.0" y1="75.7" x2="120.0" y2="65.0" stroke="#000000" stroke-width="2" stroke-opacity="0.5"/>
+  </g>
+  <circle cx="120.0" cy="65.0" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="120.0" y="65.0" class="note-text" fill="#ffffff">C</text>
+  <circle cx="160.0" cy="75.7" r="14" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <text x="160.0" y="75.7" class="note-text" fill="#000000">C#</text>
+  <circle cx="189.3" cy="105.0" r="14" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <text x="189.3" y="105.0" class="note-text" fill="#000000">D</text>
+  <circle cx="200.0" cy="145.0" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="200.0" y="145.0" class="note-text" fill="#ffffff">Eb</text>
+  <circle cx="189.3" cy="185.0" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="189.3" y="185.0" class="note-text" fill="#ffffff">E</text>
+  <circle cx="160.0" cy="214.3" r="14" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <text x="160.0" y="214.3" class="note-text" fill="#000000">F</text>
+  <circle cx="120.0" cy="225.0" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="120.0" y="225.0" class="note-text" fill="#ffffff">F#</text>
+  <circle cx="80.0" cy="214.3" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="80.0" y="214.3" class="note-text" fill="#ffffff">G</text>
+  <circle cx="50.7" cy="185.0" r="14" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <text x="50.7" y="185.0" class="note-text" fill="#000000">Ab</text>
+  <circle cx="40.0" cy="145.0" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="40.0" y="145.0" class="note-text" fill="#ffffff">A</text>
+  <circle cx="50.7" cy="105.0" r="14" fill="#ffffff" stroke="#000000" stroke-width="1.5"/>
+  <text x="50.7" y="105.0" class="note-text" fill="#000000">Bb</text>
+  <circle cx="80.0" cy="75.7" r="14" fill="#000000" stroke="#000000" stroke-width="1.5"/>
+  <text x="80.0" y="75.7" class="note-text" fill="#ffffff">B</text>
+</svg></g>
+<text x="340" y="80" class="section" fill="#000000">Scale Notes</text>
+<text x="340" y="100" class="body" fill="#000000">C  D#/Eb  E  F#/Gb  G  A  B</text>
+<text x="340" y="120" class="body" fill="#000000">Interval Vector: &lt;3, 3, 5, 4, 4, 2&gt;</text>
+<text x="340" y="150" class="section" fill="#000000">Modes</text>
+<text x="340" y="168" class="small" fill="#000000">1. Harmonic Minor — E F#/Gb G A B C D#/Eb</text>
+<text x="340" y="184" class="small" fill="#000000">2. Locrian #6 — E F G A A#/Bb C#/Db D</text>
+<text x="340" y="200" class="small" fill="#000000">3. Ionian Augmented — E F#/Gb G#/Ab A C C#/Db D#/Eb</text>
+<text x="340" y="216" class="small" fill="#000000">4. Dorian #4 — E F#/Gb G A#/Bb B C#/Db D</text>
+<text x="340" y="232" class="small" fill="#000000">5. Phrygian Dominant — E F G#/Ab A B C D</text>
+<text x="340" y="248" class="small" fill="#000000">6. Lydian #2 — E G G#/Ab A#/Bb B C#/Db D#/Eb</text>
+<text x="340" y="264" class="small" fill="#000000">7. Ultralocrian — E F G G#/Ab A#/Bb C C#/Db</text>
+<text x="340" y="290" class="section" fill="#000000">Diatonic Triads</text>
+<text x="340" y="308" class="small" fill="#000000">CMaj (♯9)    C D#/Eb E</text>
+<text x="340" y="324" class="small" fill="#000000">Cdim         C D#/Eb F#/Gb</text>
+<text x="340" y="340" class="small" fill="#000000">Cmin         C D#/Eb G</text>
+<text x="340" y="356" class="small" fill="#000000">Cmin6        C D#/Eb A</text>
+<text x="340" y="372" class="small" fill="#000000">Cmin7 (no5)  C D#/Eb B</text>
+<text x="340" y="388" class="small" fill="#000000">CMaj (♭5)    C E F#/Gb</text>
+<text x="340" y="404" class="small" fill="#000000">CMaj         C E G</text>
+<text x="340" y="420" class="small" fill="#000000">CMaj6        C E A</text>
+<text x="340" y="436" class="small" fill="#000000">CMaj7 (no5)  C E B</text>
+<text x="340" y="452" class="small" fill="#000000">?            C F#/Gb G</text>
+<text x="340" y="468" class="small" fill="#000000">Cdim7        C F#/Gb A</text>
+<text x="340" y="484" class="small" fill="#000000">CminMaj7 (♭5) C F#/Gb B</text>
+<text x="340" y="500" class="small" fill="#000000">CMaj6        C G A</text>
+<text x="340" y="516" class="small" fill="#000000">CMaj7        C G B</text>
+<text x="340" y="532" class="small" fill="#000000">?            C A B</text>
+<text x="340" y="548" class="small" fill="#000000">D#/Ebmin (♭9) D#/Eb E F#/Gb</text>
+<text x="340" y="564" class="small" fill="#000000">D#/EbMaj (♭9) D#/Eb E G</text>
+<text x="340" y="580" class="small" fill="#000000">?            D#/Eb E A</text>
+<text x="340" y="596" class="small" fill="#000000">?            D#/Eb E B</text>
+<text x="340" y="612" class="small" fill="#000000">D#/EbMaj (♯9) D#/Eb F#/Gb G</text>
+<text x="340" y="628" class="small" fill="#000000">D#/Ebdim     D#/Eb F#/Gb A</text>
+<text x="340" y="644" class="small" fill="#000000">?            D#/Eb F#/Gb B</text>
+<text x="340" y="660" class="small" fill="#000000">D#/EbMaj (♭5) D#/Eb G A</text>
+<text x="340" y="676" class="small" fill="#000000">D#/EbAug     D#/Eb G B</text>
+<text x="340" y="692" class="small" fill="#000000">?            D#/Eb A B</text>
+<text x="340" y="708" class="small" fill="#000000">Emin (9)     E F#/Gb G</text>
+<text x="340" y="724" class="small" fill="#000000">Esus4        E F#/Gb A</text>
+<text x="340" y="740" class="small" fill="#000000">Esus2        E F#/Gb B</text>
+<text x="340" y="756" class="small" fill="#000000">Emin (11)    E G A</text>
+<text x="340" y="772" class="small" fill="#000000">Emin         E G B</text>
+<text x="340" y="788" class="small" fill="#000000">Esus4        E A B</text>
+<text x="340" y="804" class="small" fill="#000000">F#/Gbmin (♭9) F#/Gb G A</text>
+<text x="340" y="820" class="small" fill="#000000">F#/Gbsus4 (♭9) F#/Gb G B</text>
+<text x="340" y="836" class="small" fill="#000000">F#/Gbmin (11) F#/Gb A B</text>
+<text x="340" y="852" class="small" fill="#000000">GMaj (9)     G A B</text>
+<text x="340" y="878" class="section" fill="#000000">Diatonic Seventh Chords</text>
+<text x="340" y="896" class="small" fill="#000000">Cdim (♭11)   C D#/Eb E F#/Gb</text>
+<text x="340" y="912" class="small" fill="#000000">CMaj (♯9)    C D#/Eb E G</text>
+<text x="340" y="928" class="small" fill="#000000">CMaj6 (♯9)   C D#/Eb E A</text>
+<text x="340" y="944" class="small" fill="#000000">CMaj7 (♯9)   C D#/Eb E B</text>
+<text x="340" y="960" class="small" fill="#000000">Cmin (♯11)   C D#/Eb F#/Gb G</text>
+<text x="340" y="976" class="small" fill="#000000">Cdim7        C D#/Eb F#/Gb A</text>
+<text x="340" y="992" class="small" fill="#000000">CdimMaj7     C D#/Eb F#/Gb B</text>
+<text x="340" y="1008" class="small" fill="#000000">Cmin6        C D#/Eb G A</text>
+<text x="340" y="1024" class="small" fill="#000000">CminMaj7     C D#/Eb G B</text>
+<text x="340" y="1040" class="small" fill="#000000">Cmin7 (no5) (13) C D#/Eb A B</text>
+<text x="340" y="1056" class="small" fill="#000000">CMaj (♯11)   C E F#/Gb G</text>
+<text x="340" y="1072" class="small" fill="#000000">CMaj6 (♭5)   C E F#/Gb A</text>
+<text x="340" y="1088" class="small" fill="#000000">CMaj7 (♭5)   C E F#/Gb B</text>
+<text x="340" y="1104" class="small" fill="#000000">CMaj6        C E G A</text>
+<text x="340" y="1120" class="small" fill="#000000">CMaj7        C E G B</text>
+<text x="340" y="1136" class="small" fill="#000000">CMaj7 (no5) (13) C E A B</text>
+<text x="340" y="1152" class="small" fill="#000000">Cmin6 (♯11)  C F#/Gb G A</text>
+<text x="340" y="1168" class="small" fill="#000000">CminMaj7 (♯11) C F#/Gb G B</text>
+<text x="340" y="1184" class="small" fill="#000000">?            C F#/Gb A B</text>
+<text x="340" y="1200" class="small" fill="#000000">CMaj7 (13)   C G A B</text>
+<text x="340" y="1216" class="small" fill="#000000">D#/EbMaj (♭9, ♯9) D#/Eb E F#/Gb G</text>
+<text x="340" y="1232" class="small" fill="#000000">D#/Ebdim (♭9) D#/Eb E F#/Gb A</text>
+<text x="340" y="1248" class="small" fill="#000000">?            D#/Eb E F#/Gb B</text>
+<text x="340" y="1264" class="small" fill="#000000">D#/EbMaj (♭9, ♭5) D#/Eb E G A</text>
+<text x="340" y="1280" class="small" fill="#000000">D#/EbAug (♭9) D#/Eb E G B</text>
+<text x="340" y="1296" class="small" fill="#000000">?            D#/Eb E A B</text>
+<text x="340" y="1312" class="small" fill="#000000">D#/Ebdim (♭11) D#/Eb F#/Gb G A</text>
+<text x="340" y="1328" class="small" fill="#000000">?            D#/Eb F#/Gb G B</text>
+<text x="340" y="1344" class="small" fill="#000000">D#/Ebdim (♭13) D#/Eb F#/Gb A B</text>
+<text x="340" y="1360" class="small" fill="#000000">D#/EbAug (♯11) D#/Eb G A B</text>
+<text x="340" y="1376" class="small" fill="#000000">?            E F#/Gb G A</text>
+<text x="340" y="1392" class="small" fill="#000000">Emin (9)     E F#/Gb G B</text>
+<text x="340" y="1408" class="small" fill="#000000">Esus4        E F#/Gb A B</text>
+<text x="340" y="1424" class="small" fill="#000000">Emin (11)    E G A B</text>
+<text x="340" y="1440" class="small" fill="#000000">?            F#/Gb G A B</text>
+</svg>

@@ -9,7 +9,7 @@ use music::note::pitch::Pitch;
 use music_engraver::layout::rehearsal::RehearsalStyle;
 use music_engraver::score::ScoreBuilder;
 
-fn p(name: &str, octave: u8) -> Pitch {
+fn p(name: &str, octave: i8) -> Pitch {
     let note = match name {
         "C" => Note::C,
         "D" => Note::D,
@@ -21,7 +21,7 @@ fn p(name: &str, octave: u8) -> Pitch {
         "Bb" => Note::Bes,
         _ => panic!("unknown note: {name}"),
     };
-    Pitch::new(note, octave).unwrap()
+    Pitch::new(note, octave)
 }
 
 fn main() {

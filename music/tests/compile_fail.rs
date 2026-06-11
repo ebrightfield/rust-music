@@ -1,0 +1,6 @@
+// REQ-O7
+#[test]
+fn compile_fail_suite() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile_fail/*.rs");
+}

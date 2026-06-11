@@ -19,43 +19,43 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: I–vi–IV–V in C major
-        .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::C, 4), Duration::QTR)
         .chord_symbol("C")
-        .note(Pitch::new(Note::A, 3).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::A, 3), Duration::QTR)
         .chord_symbol("Am")
-        .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::F, 4), Duration::QTR)
         .chord_symbol("F")
-        .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .chord_symbol("G")
         .barline()
         // Measure 2: extended jazz chords
-        .note(Pitch::new(Note::D, 4).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::D, 4), Duration::HALF)
         .chord_symbol("Dm7")
-        .note(Pitch::new(Note::G, 4).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::G, 4), Duration::HALF)
         .chord_symbol("G7")
         .barline()
         // Measure 3: complex symbols over a chord voicing + single notes
         .chord(
             vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::E, 4).unwrap(),
-                Pitch::new(Note::G, 4).unwrap(),
-                Pitch::new(Note::B, 4).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
+                Pitch::new(Note::B, 4),
             ],
             Duration::HALF,
         )
         .chord_symbol("Cmaj7")
-        .note(Pitch::new(Note::A, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::A, 4), Duration::QTR)
         .chord_symbol("Am")
         .rest(Duration::QTR)
         // No chord symbol on rest (no-op)
         .barline()
         // Measure 4: altered/extended chord symbols
-        .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::Fis, 4), Duration::QTR)
         .chord_symbol("F#m7b5")
-        .note(Pitch::new(Note::B, 3).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::B, 3), Duration::QTR)
         .chord_symbol("B7alt")
-        .note(Pitch::new(Note::E, 4).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::E, 4), Duration::HALF)
         .chord_symbol("Em")
         .end_barline()
         .render_svg();

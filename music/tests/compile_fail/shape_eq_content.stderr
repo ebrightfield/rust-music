@@ -1,0 +1,12 @@
+error[E0308]: mismatched types
+ --> tests/compile_fail/shape_eq_content.rs:9:18
+  |
+9 |     let _ = s == c;   // must NOT compile
+  |             -    ^ expected `PcShape`, found `PcContent`
+  |             |
+  |             expected because this is `PcShape`
+  |
+help: call `Into::into` on this expression to convert `PcContent` into `PcShape`
+  |
+9 |     let _ = s == c.into();   // must NOT compile
+  |                   +++++++

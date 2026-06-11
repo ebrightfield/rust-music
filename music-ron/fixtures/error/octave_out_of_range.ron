@@ -1,0 +1,9 @@
+// Error fixture: OctaveOutOfRange (REQ-O16, O37).
+// Long-form pitch with octave 200 passes parse but fails convert.
+(
+  kind: "Snippet",
+  clef: "treble",
+  events: [
+    Note(pitch: (note: "C", octave: 200), duration: "4"),
+  ],
+)

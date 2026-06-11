@@ -31,14 +31,14 @@ fn main() {
 
     // Place 4 notes with different tempo marks above them
     let notes = [
-        (Note::C, 5u8, 500.0f64),
+        (Note::C, 5i8, 500.0f64),
         (Note::E, 5, 3000.0),
         (Note::G, 4, 5500.0),
         (Note::D, 5, 8000.0),
     ];
 
     for &(note, octave, x) in &notes {
-        let pitch = Pitch::new(note, octave).unwrap();
+        let pitch = Pitch::new(note, octave);
         let pos = pitch_to_staff_position(&pitch, &clef);
         let dir = auto_stem_direction(pos);
         draw_stemmed_note(

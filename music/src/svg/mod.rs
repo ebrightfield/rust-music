@@ -64,7 +64,7 @@ pub use pitch_circle::{NoteLabels, PitchCircleBuilder, PitchCircleConfig};
 pub use theme::SvgTheme;
 
 use crate::fretboard::fretboard_shape::FretboardShape;
-use crate::note_collections::{NoteSet, PcSet};
+use crate::note_collections::{NoteSet, pc_set::{PcShape, PcContent}};
 
 use std::io;
 use std::path::Path;
@@ -75,16 +75,16 @@ pub trait ToPitchCircleSvg {
     fn to_pitch_circle_svg(&self) -> PitchCircleBuilder;
 }
 
-impl ToPitchCircleSvg for PcSet {
+impl ToPitchCircleSvg for PcShape {
     fn to_pitch_circle_svg(&self) -> PitchCircleBuilder {
-        PitchCircleBuilder::new().from_pc_set(self)
+        PitchCircleBuilder::new().from_pc_shape(self)
     }
 }
 
 impl ToPitchCircleSvg for NoteSet {
     fn to_pitch_circle_svg(&self) -> PitchCircleBuilder {
-        let pc_set = PcSet::from(self);
-        PitchCircleBuilder::new().from_pc_set(&pc_set)
+        let content = PcContent::from(self);
+        PitchCircleBuilder::new().from_pc_shape(&content.to_shape())
     }
 }
 
@@ -106,16 +106,16 @@ pub trait ToIntervalSvg {
     fn to_interval_svg(&self) -> IntervalBuilder;
 }
 
-impl ToIntervalSvg for PcSet {
+impl ToIntervalSvg for PcShape {
     fn to_interval_svg(&self) -> IntervalBuilder {
-        IntervalBuilder::new().from_pc_set(self)
+        IntervalBuilder::new().from_pc_shape(self)
     }
 }
 
 impl ToIntervalSvg for NoteSet {
     fn to_interval_svg(&self) -> IntervalBuilder {
-        let pc_set = PcSet::from(self);
-        IntervalBuilder::new().from_pc_set(&pc_set)
+        let content = PcContent::from(self);
+        IntervalBuilder::new().from_pc_shape(&content.to_shape())
     }
 }
 
@@ -186,11 +186,11 @@ mod tests {
 
     #[test]
     fn test_integration_with_pc_set() {
-        let c_major = PcSet::new(vec![
+        let c_major = PcShape::new(vec![
             Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
         ]);
         let svg = PitchCircleBuilder::new()
-            .from_pc_set(&c_major)
+            .from_pc_shape(&c_major)
             .root(Pc::Pc0)
             .title("C Major Scale")
             .build();
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_pc_set_to_pitch_circle_svg_trait() {
-        let c_major = PcSet::new(vec![
+        let c_major = PcShape::new(vec![
             Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
         ]);
 
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_note_set_to_pitch_circle_svg_trait() {
-        let c_major = NoteSet::new(
+        let c_major = NoteSet::with_root(
             vec![
                 Note::C,
                 Note::D,
@@ -232,7 +232,7 @@ mod tests {
                 Note::A,
                 Note::B,
             ],
-            Some(&Note::C),
+            &Note::C,
         );
 
         let svg = c_major
@@ -271,7 +271,7 @@ mod tests {
             .title("C Major Chord")
             .build();
 
-        let c_major_triad = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
+        let c_major_triad = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
         let circle_svg = c_major_triad
             .to_pitch_circle_svg()
             .root(Pc::Pc0)
@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn test_pc_set_to_interval_svg_trait() {
-        let c_major_triad = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
+        let c_major_triad = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
 
         // Use the extension trait
         let svg = c_major_triad
@@ -299,9 +299,9 @@ mod tests {
 
     #[test]
     fn test_note_set_to_interval_svg_trait() {
-        let c_major = NoteSet::new(
+        let c_major = NoteSet::with_root(
             vec![Note::C, Note::E, Note::G],
-            Some(&Note::C),
+            &Note::C,
         );
 
         let svg = c_major

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
 use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
-use crate::note_collections::chord_name::quality::chord::{Alt, ChordQuality, SusSubtype};
+use crate::note_collections::chord_name::quality::chord::{ChordQuality, SusSubtype};
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
 
@@ -11,9 +11,10 @@ pub fn search_for_sus_quality(pcs: &HashSet<Pc>) -> ChordQuality {
         let alt = generate_alt(pcs, TriadContext::Sus);
         return ChordQuality::Sus(SusSubtype::Sus4(alt));
     }
-    if *pcs == HashSet::from([Pc0, Pc2, Pc5, Pc7, Pc9]) {
-        return ChordQuality::Sus(SusSubtype::SixNineSus(Alt::empty()));
-    }
+    // Note: the dedicated `6/9sus` special-case for {Pc0, Pc2, Pc5, Pc7, Pc9}
+    // was removed per plan Tier 3.1. The set now falls through to the
+    // `Sus4`/`Sus2` branches and renders via `generate_alt`. `6/9` notation
+    // as a general construct may be reintroduced later.
     if pcs.contains(&Pc2) && !pcs.contains(&Pc5) {
         let alt = generate_alt(pcs, TriadContext::Sus);
         return ChordQuality::Sus(SusSubtype::Sus2(alt));

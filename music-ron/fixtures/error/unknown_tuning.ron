@@ -1,0 +1,8 @@
+// Error fixture: UnknownTuning (REQ-O24, O37).
+(
+  kind: "Tab",
+  tuning: "open_g",
+  events: [
+    (string: 1, fret: 0, duration: "4"),
+  ],
+)

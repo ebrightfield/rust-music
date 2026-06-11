@@ -47,14 +47,14 @@ use super::ScoreBuilder;
 ///     .clef(Clef::Treble)
 ///     .key_signature(KeySignature::Sharps(2))
 ///     .time_signature(4, 4)
-///     .note(Pitch::new(Note::D, 5).expect("valid"), Duration::WHOLE)
+///     .note(Pitch::new(Note::D, 5), Duration::WHOLE)
 ///     .end_barline();
 ///
 /// let bass = ScoreBuilder::new()
 ///     .clef(Clef::Bass)
 ///     .key_signature(KeySignature::Sharps(2))
 ///     .time_signature(4, 4)
-///     .note(Pitch::new(Note::D, 3).expect("valid"), Duration::WHOLE)
+///     .note(Pitch::new(Note::D, 3), Duration::WHOLE)
 ///     .end_barline();
 ///
 /// let svg = MultiStaffScore::grand_staff(treble, bass).render_svg();
@@ -155,7 +155,7 @@ impl MultiStaffScore {
     /// let notation = ScoreBuilder::new()
     ///     .clef(Clef::Treble)
     ///     .time_signature(4, 4)
-    ///     .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+    ///     .note(Pitch::new(Note::E, 4), Duration::QTR)
     ///     .end_barline();
     ///
     /// let tab = TabScoreBuilder::guitar()
@@ -695,8 +695,8 @@ mod tests {
     use music::note::pitch::Pitch;
     use crate::layout::key_signature::KeySignature;
 
-    fn pitch(note: Note, octave: u8) -> Pitch {
-        Pitch::new(note, octave).expect("valid pitch")
+    fn pitch(note: Note, octave: i8) -> Pitch {
+        Pitch::new(note, octave)
     }
 
     fn simple_treble() -> ScoreBuilder {

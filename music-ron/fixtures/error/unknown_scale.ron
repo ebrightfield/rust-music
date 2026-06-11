@@ -1,0 +1,9 @@
+// Error fixture: UnknownScale (REQ-O39 prep, O37).
+(
+  kind: "ScaleDiagram",
+  scale: "superlocrian_bebop_99",
+  tuning: "standard",
+  start_fret: 0,
+  num_frets: 5,
+  orientation: "vertical",
+)

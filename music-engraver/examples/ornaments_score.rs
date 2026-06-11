@@ -20,39 +20,39 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: trill on E4, mordent on F4, turn on G4, inverted turn on A4
-        .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
         .ornament(Ornament::Trill)
-        .note(Pitch::new(Note::F, 4).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::F, 4), Duration::QTR)
         .ornament(Ornament::Mordent)
-        .note(Pitch::new(Note::G, 4).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .ornament(Ornament::Turn)
-        .note(Pitch::new(Note::A, 4).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::A, 4), Duration::QTR)
         .ornament(Ornament::InvertedTurn)
         .barline()
         // Measure 2: inverted mordent, turn with slash, short trill, plain quarter
-        .note(Pitch::new(Note::B, 4).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::B, 4), Duration::QTR)
         .ornament(Ornament::InvertedMordent)
-        .note(Pitch::new(Note::C, 5).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::C, 5), Duration::QTR)
         .ornament(Ornament::TurnSlash)
-        .note(Pitch::new(Note::D, 5).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::D, 5), Duration::QTR)
         .ornament(Ornament::ShortTrill)
-        .note(Pitch::new(Note::E, 5).expect("valid"), Duration::QTR)
+        .note(Pitch::new(Note::E, 5), Duration::QTR)
         .barline()
         // Measure 3: trill on high note (above staff), trill on chord
-        .note(Pitch::new(Note::A, 5).expect("valid"), Duration::HALF)
+        .note(Pitch::new(Note::A, 5), Duration::HALF)
         .ornament(Ornament::Trill)
         .chord(
             vec![
-                Pitch::new(Note::C, 4).expect("valid"),
-                Pitch::new(Note::E, 4).expect("valid"),
-                Pitch::new(Note::G, 4).expect("valid"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
             ],
             Duration::HALF,
         )
         .ornament(Ornament::Turn)
         .barline()
         // Measure 4: whole note with mordent
-        .note(Pitch::new(Note::G, 4).expect("valid"), Duration::WHOLE)
+        .note(Pitch::new(Note::G, 4), Duration::WHOLE)
         .ornament(Ornament::Mordent)
         .end_barline()
         .render_svg();

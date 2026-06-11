@@ -8,8 +8,8 @@ use music::note::pitch::Pitch;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;
 
-fn p(note: Note, oct: u8) -> Pitch {
-    Pitch::new(note, oct).unwrap()
+fn p(note: Note, oct: i8) -> Pitch {
+    Pitch::new(note, oct)
 }
 
 fn main() {
@@ -39,9 +39,9 @@ fn main() {
         .barline()
         // Measure 3: G-B quarter (tie destination from measure 2), then single note ties
         .chord(vec![p(Note::G, 4), p(Note::B, 4)], Duration::QTR)
-        .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
         .tie()
-        .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
         .rest(Duration::QTR)
         .barline()
         // Measure 4: whole-note chord (no ties) — final measure for contrast

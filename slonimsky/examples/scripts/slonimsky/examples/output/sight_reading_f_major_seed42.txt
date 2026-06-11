@@ -1,0 +1,10 @@
+=== Sight-Reading Exercise ===
+Key: F major
+Difficulty: 3/5
+Measures: 4 (4/4 time)
+Notes: 20
+
+  m1: F4 (quarter)  E4 (eighth)  A4 (eighth)  A#4 (half)  G4 (quarter)
+  m2: A4 (quarter)  G4 (eighth)  A4 (eighth)  C5 (half)  D5 (quarter)
+  m3: C5 (quarter)  F5 (eighth)  G5 (eighth)  E5 (half)  F5 (quarter)
+  m4: E5 (quarter)  F5 (eighth)  A5 (eighth)  A#5 (half)  A5 (quarter)

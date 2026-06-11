@@ -33,8 +33,8 @@ fn main() {
         .measures_per_system(2)
         // Measure 1: per-note collision targets in a beam group.
         // Voice 0 (primary): C5 half, E5 half. Stems up by default.
-        .note(Pitch::new(Note::C, 5).unwrap(), Duration::HALF)
-        .note(Pitch::new(Note::E, 5).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::C, 5), Duration::HALF)
+        .note(Pitch::new(Note::E, 5), Duration::HALF)
         .voice(1)
         // Voice 1: beam of four eighth notes. Beat positions:
         //  beat 0: C5 → unison with primary's C5 → collision (note 0)
@@ -42,22 +42,22 @@ fn main() {
         //  beat 1: E5 → unison with primary's E5 → collision (note 2)
         //  beat 1.5: G4 → primary has no element at this x → no collision
         .beam_group(vec![
-            (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::E, 5).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::C, 5), Duration::EIGHTH),
+            (Pitch::new(Note::A, 4), Duration::EIGHTH),
+            (Pitch::new(Note::E, 5), Duration::EIGHTH),
+            (Pitch::new(Note::G, 4), Duration::EIGHTH),
         ])
         .voice(0)
         .barline()
         // Measure 2: no-collision control — beam group sits below the
         // primary's note so nothing collides.
-        .note(Pitch::new(Note::G, 5).unwrap(), Duration::WHOLE)
+        .note(Pitch::new(Note::G, 5), Duration::WHOLE)
         .voice(1)
         .beam_group(vec![
-            (Pitch::new(Note::D, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::D, 4), Duration::EIGHTH),
+            (Pitch::new(Note::E, 4), Duration::EIGHTH),
+            (Pitch::new(Note::F, 4), Duration::EIGHTH),
+            (Pitch::new(Note::G, 4), Duration::EIGHTH),
         ])
         .voice(0)
         .end_barline()

@@ -25,11 +25,11 @@ fn main() {
 
     // Notes with rehearsal marks above
     let entries: Vec<(Pitch, &str, RehearsalStyle)> = vec![
-        (Pitch::new(Note::E, 4).unwrap(), "A", RehearsalStyle::Boxed),
-        (Pitch::new(Note::G, 4).unwrap(), "B", RehearsalStyle::Boxed),
-        (Pitch::new(Note::B, 4).unwrap(), "C", RehearsalStyle::Plain),
-        (Pitch::new(Note::D, 5).unwrap(), "1", RehearsalStyle::Boxed),
-        (Pitch::new(Note::F, 5).unwrap(), "12", RehearsalStyle::Boxed),
+        (Pitch::new(Note::E, 4), "A", RehearsalStyle::Boxed),
+        (Pitch::new(Note::G, 4), "B", RehearsalStyle::Boxed),
+        (Pitch::new(Note::B, 4), "C", RehearsalStyle::Plain),
+        (Pitch::new(Note::D, 5), "1", RehearsalStyle::Boxed),
+        (Pitch::new(Note::F, 5), "12", RehearsalStyle::Boxed),
     ];
 
     // Extended viewBox to accommodate rehearsal marks above staff

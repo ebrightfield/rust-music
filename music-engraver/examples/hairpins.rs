@@ -27,14 +27,14 @@ fn main() {
 
     // Notes: p — cresc — — — f — decresc — — pp
     let pitches: Vec<Pitch> = vec![
-        Pitch::new(Note::E, 4).unwrap(),
-        Pitch::new(Note::G, 4).unwrap(),
-        Pitch::new(Note::A, 4).unwrap(),
-        Pitch::new(Note::B, 4).unwrap(),
-        Pitch::new(Note::D, 5).unwrap(),
-        Pitch::new(Note::E, 5).unwrap(),
-        Pitch::new(Note::D, 5).unwrap(),
-        Pitch::new(Note::B, 4).unwrap(),
+        Pitch::new(Note::E, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::A, 4),
+        Pitch::new(Note::B, 4),
+        Pitch::new(Note::D, 5),
+        Pitch::new(Note::E, 5),
+        Pitch::new(Note::D, 5),
+        Pitch::new(Note::B, 4),
     ];
 
     let mut svg = SvgWriter::new(1200.0, 400.0, -100.0, -1200.0, 11000.0, 5000.0);

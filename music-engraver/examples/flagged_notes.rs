@@ -22,13 +22,13 @@ fn main() {
 
     // (pitch, flag_count): various flagged notes across the staff
     let notes: Vec<(Pitch, u8)> = vec![
-        (Pitch::new(Note::C, 4).unwrap(), 1),  // middle C, 8th, stem up, ledger below
-        (Pitch::new(Note::E, 4).unwrap(), 2),  // bottom line, 16th, stem up
-        (Pitch::new(Note::G, 4).unwrap(), 1),  // second line, 8th, stem up
-        (Pitch::new(Note::B, 4).unwrap(), 3),  // middle line, 32nd, stem down
-        (Pitch::new(Note::D, 5).unwrap(), 1),  // fourth space, 8th, stem down
-        (Pitch::new(Note::F, 5).unwrap(), 2),  // top line, 16th, stem down
-        (Pitch::new(Note::A, 5).unwrap(), 1),  // ledger above, 8th, stem down
+        (Pitch::new(Note::C, 4), 1),  // middle C, 8th, stem up, ledger below
+        (Pitch::new(Note::E, 4), 2),  // bottom line, 16th, stem up
+        (Pitch::new(Note::G, 4), 1),  // second line, 8th, stem up
+        (Pitch::new(Note::B, 4), 3),  // middle line, 32nd, stem down
+        (Pitch::new(Note::D, 5), 1),  // fourth space, 8th, stem down
+        (Pitch::new(Note::F, 5), 2),  // top line, 16th, stem down
+        (Pitch::new(Note::A, 5), 1),  // ledger above, 8th, stem down
     ];
 
     let mut svg = SvgWriter::new(1100.0, 300.0, -100.0, -1500.0, 10000.0, 4000.0);

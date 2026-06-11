@@ -37,7 +37,7 @@ use music_engraver::layout::tab_bend::BendAmount;
 use music_engraver::score::tab::TabScoreBuilder;
 use music_engraver::score::ScoreBuilder;
 
-fn p(name: &str, octave: u8) -> Pitch {
+fn p(name: &str, octave: i8) -> Pitch {
     let note = match name {
         "C" => Note::C,
         "D" => Note::D,
@@ -53,7 +53,7 @@ fn p(name: &str, octave: u8) -> Pitch {
         "Ab" => Note::Aes,
         _ => panic!("unknown note: {name}"),
     };
-    Pitch::new(note, octave).expect("valid pitch")
+    Pitch::new(note, octave)
 }
 
 fn golden_dir() -> PathBuf {
@@ -287,7 +287,7 @@ fn build_dynamics_variants_plain() -> String {
 /// (which would crowd the dynamics' below-staff baseline). Shared between
 /// `build_dynamics_full`, its no-dynamic sibling, and the golden test so
 /// all three see the same list.
-const DYNAMICS_FULL_PITCHES: [(&str, u8); 28] = [
+const DYNAMICS_FULL_PITCHES: [(&str, i8); 28] = [
     ("C", 4), ("D", 4), ("E", 4), ("F", 4),
     ("G", 4), ("A", 4), ("B", 4), ("C", 5),
     ("D", 5), ("E", 5), ("F", 5), ("G", 5),
@@ -469,7 +469,7 @@ const FERMATA_VARIANTS: [Articulation; 7] = [
 /// Pitches for the fermata-variant score. Staggered so successive variants
 /// don't all sit at the same staff position — keeps the visual gap between
 /// glyphs honest at golden-comparison time.
-const FERMATA_PITCHES: [(&str, u8); 7] = [
+const FERMATA_PITCHES: [(&str, i8); 7] = [
     ("G", 4),
     ("A", 4),
     ("B", 4),
@@ -545,7 +545,7 @@ const ACCENT_EXTENSION_VARIANTS: [Articulation; 4] = [
 /// middle line stem up (articulation below), positions above the middle
 /// line stem down (articulation above). Exercises both the `Above` and
 /// `Below` glyph arms for each variant on the same canvas.
-const ACCENT_EXTENSION_PITCHES: [(&str, u8); 4] = [
+const ACCENT_EXTENSION_PITCHES: [(&str, i8); 4] = [
     ("E", 4), // line 1 → stem up → glyph below
     ("C", 5), // 3rd space → stem down → glyph above
     ("G", 4), // line 2 → stem up → glyph below
@@ -618,7 +618,7 @@ const BOW_STROKE_VARIANTS: [Articulation; 2] = [
 /// stem direction. (Compare with `ACCENT_EXTENSION_PITCHES`, where
 /// alternation is what *causes* both Above and Below arms to be
 /// exercised.)
-const BOW_STROKE_PITCHES: [(&str, u8); 2] = [
+const BOW_STROKE_PITCHES: [(&str, i8); 2] = [
     ("E", 4), // line 1 → stem up; bow still above
     ("C", 5), // 3rd space → stem down; bow still above
 ];
@@ -700,7 +700,7 @@ const COMBINED_ARTICULATION_VARIANTS: [Articulation; 4] = [
 /// byte-exact baseline must still differ from the accent-extensions
 /// baseline because the glyphs themselves are distinct, so reusing the
 /// same pitches isolates glyph routing as the only source of difference.
-const COMBINED_ARTICULATION_PITCHES: [(&str, u8); 4] = [
+const COMBINED_ARTICULATION_PITCHES: [(&str, i8); 4] = [
     ("E", 4), // line 1 → stem up → glyph below
     ("C", 5), // 3rd space → stem down → glyph above
     ("G", 4), // line 2 → stem up → glyph below
@@ -929,7 +929,7 @@ fn build_grand_staff() -> String {
 /// `MultiStaffScore::with_sub_brackets(...)` builder end-to-end and locks
 /// the SVG output against unintended layout/render drift.
 fn build_sub_brackets_score() -> String {
-    fn line(clef: Clef, pitches: &[(&str, u8)]) -> ScoreBuilder {
+    fn line(clef: Clef, pitches: &[(&str, i8)]) -> ScoreBuilder {
         let mut b = ScoreBuilder::new().clef(clef).time_signature(4, 4);
         for (n, oct) in pitches {
             b = b.note(p(n, *oct), Duration::QTR);

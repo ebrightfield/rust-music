@@ -21,7 +21,7 @@ use crate::error::MusicSemanticsError;
 /// This module starts from approach (2), and enhances it with a collection of (3).
 /// The result is a pretty "smart" spelling engine to convert from
 /// collections of [Pc] to collections of [Note].
-use crate::note_collections::pc_set::PcSet;
+use crate::note_collections::pc_set::{PcShape, PcContent, AsPcSlice};
 use crate::note::note::*;
 use crate::note::pitch_class::Pc;
 use crate::note::Pitch;
@@ -36,7 +36,7 @@ impl HasSpelling for Pitch {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         for note in notes {
             if Pc::from(note) == Pc::from(&self.note) {
-                return Self::new(*note, self.octave);
+                return Self::try_new(*note, self.octave);
             }
         }
         Err(MusicSemanticsError::NotAMember(self.note, notes.clone()))
@@ -55,29 +55,70 @@ impl HasSpelling for Voicing {
     }
 }
 
-/// Spell a [PcSet] as a [Vec] of [Note], first using a root [Note] as the starting point
-/// as dictated by [default_spelling]. Then, we maybe convert that default spelling
-/// to its enharmonic equivalent as dictated by heuristics defined in [spell_rules].
-pub fn spell_pc_set(root: &Note, pc_set: &PcSet) -> Result<Vec<Note>, MusicSemanticsError> {
+/// Internal helper: the spelling algorithm, generic over any `&[Pc]`.
+/// Keeps a single source of truth for the spelling algorithm.
+fn spell_slice(root: &Note, pcs: &[Pc]) -> Result<Vec<Note>, MusicSemanticsError> {
     if Spelling::from(root).acc.is_double() {
-        return Err(MusicSemanticsError::NoDoubleAccidentalRoot(root.clone()))
+        return Err(MusicSemanticsError::NoDoubleAccidentalRoot(root.clone()));
     }
-    Ok(pc_set
-        .iter()
+    Ok(pcs.iter()
         .map(|pc| {
-            // Unwraps are safe here because we screened out double-accidentals
-            let default_spelling = default_spelling(root, pc).unwrap();
+            let default = default_spelling(root, pc).unwrap();
             let rules = spell_rules(root).unwrap();
-            // Iterate over the rule set for the given root note, if any apply,
-            // then we enharmonically flip the note, and move on.
             for rule in rules {
-                if rule.applied(*pc, pc_set) {
-                    return default_spelling.enharmonic_flip_bcef();
+                if rule.applied(*pc, pcs) {
+                    return default.enharmonic_flip_bcef();
                 }
             }
-            default_spelling
+            default
         })
         .collect())
+}
+
+/// Spell an intervallic shape as notes above `root`.
+///
+/// Each PC in `shape` is interpreted as an interval above `root` (Pc0 = root,
+/// Pc4 = major third, etc.). The spelling heuristics in [`spell_rules`] are
+/// applied to choose between enharmonic equivalents.
+///
+/// Returns an error if `root` is a double-accidental note (e.g. `Cisis`).
+// REQ-O18
+pub fn spell_shape(root: &Note, shape: &PcShape) -> Result<Vec<Note>, MusicSemanticsError> {
+    spell_slice(root, shape.as_pc_slice())
+}
+
+/// Spell pitch-class content as notes, using `root` to drive the spelling heuristics.
+///
+/// # Important: interval-relative semantics
+/// Despite the type being [`PcContent`] (which typically represents absolute
+/// sounding PCs), this function **interprets its input as intervals above
+/// `root`**, exactly as [`spell_shape`] does. The PCs in `content` are treated
+/// as semitone offsets from `root`, NOT as absolute pitch classes.
+///
+/// This is consistent with the pre-refactor `spell_pc_set` behavior, but it
+/// means the function name can be misleading. For example, passing
+/// `PcContent([0, 4, 6, 9])` with root `Fis` will give interval-based
+/// spellings (Fis, Ais, …), NOT the sounding-chord spellings (C, E, F#, A)
+/// that the absolute pitch classes `[0, 4, 6, 9]` would naively imply.
+///
+/// ```
+/// use music::note_collections::pc_set::PcContent;
+/// use music::note_collections::spelling::spell_content;
+/// use music::note::note::Note;
+/// use music::note::pitch_class::Pc;
+///
+/// // F#m7b5 interval template: [0, 3, 6, 10].
+/// // With root Fis, PCs are interpreted as intervals above F#:
+/// // Pc0=Fis, Pc3=A, Pc6=C, Pc10=E
+/// let content = PcContent::new(vec![Pc::Pc0, Pc::Pc3, Pc::Pc6, Pc::Pc10]);
+/// let notes = spell_content(&Note::Fis, &content).unwrap();
+/// assert_eq!(notes, vec![Note::Fis, Note::A, Note::C, Note::E]);
+/// ```
+///
+/// Returns an error if `root` is a double-accidental note (e.g. `Cisis`).
+// REQ-O18
+pub fn spell_content(root: &Note, content: &PcContent) -> Result<Vec<Note>, MusicSemanticsError> {
+    spell_slice(root, content.as_pc_slice())
 }
 
 /// A data descriptor for the logical pieces that make up a "rule" for whether or not
@@ -86,11 +127,11 @@ pub struct SpellingRule {
     /// The [Pc] in question. If the rule is flagged, the note should be enharmonically flipped
     /// from its [default_spelling].
     pc: Pc,
-    /// For the rule to be flagged, the [PcSet] *must contain all* of these [Pc]s.
+    /// For the rule to be flagged, the pc slice *must contain all* of these [Pc]s.
     incl: Vec<Pc>,
-    /// For the rule to be flagged, the [PcSet] *must not contain any* of these [Pc]s.
+    /// For the rule to be flagged, the pc slice *must not contain any* of these [Pc]s.
     excl: Vec<Pc>,
-    /// For the rule to be flagged, the [PcSet] *must not contain all* of these [Pc]s.
+    /// For the rule to be flagged, the pc slice *must not contain all* of these [Pc]s.
     not_all: Vec<Pc>,
 }
 
@@ -121,21 +162,21 @@ impl SpellingRule {
 
     // Returns true when a rule is flagged,
     // meaning a note needs to be flipped enharmonically.
-    pub fn applied(&self, pc: Pc, pc_set: &PcSet) -> bool {
+    pub fn applied(&self, pc: Pc, pcs: &[Pc]) -> bool {
         // We pass if the rule does not pertain to the given pc.
         if self.pc != pc {
             return false;
         }
-        // We pass if not all the pcs in self.incl are in pc_set
-        if !self.incl.iter().all(|incl_pc| pc_set.contains(incl_pc)) {
+        // We pass if not all the pcs in self.incl are in pcs
+        if !self.incl.iter().all(|incl_pc| pcs.contains(incl_pc)) {
             return false;
         }
-        // We pass if pc_set contains anything that the rule indicates should be excluded
-        if self.excl.iter().any(|excl_pc| pc_set.contains(excl_pc)) {
+        // We pass if pcs contains anything that the rule indicates should be excluded
+        if self.excl.iter().any(|excl_pc| pcs.contains(excl_pc)) {
             return false;
         }
-        // We pass if self.not_all is not empty, and pc_set contains all of them.
-        if !self.not_all.is_empty() && self.not_all.iter().all(|not_all_pc| pc_set.contains(not_all_pc)) {
+        // We pass if self.not_all is not empty, and pcs contains all of them.
+        if !self.not_all.is_empty() && self.not_all.iter().all(|not_all_pc| pcs.contains(not_all_pc)) {
             return false;
         }
         // Otherwise, the rule is flagging the spelling, and suggests an aggressive
@@ -937,19 +978,20 @@ pub fn default_spelling(root: &Note, pc: &Pc) -> Option<Note> {
 mod tests {
 
     use super::*;
+    use crate::note_collections::pc_set::{PcShape, PcContent};
 
     #[test]
     fn test_basic_spelling() {
-        let pc_set = PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]);
+        let shape = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]);
         let root = Note::C;
-        let spelling = spell_pc_set(&root, &pc_set).unwrap();
+        let spelling = spell_shape(&root, &shape).unwrap();
         assert_eq!(
             spelling,
             vec![Note::C, Note::E, Note::G, Note::B],
         );
-        let spelling = spell_pc_set(
+        let spelling = spell_shape(
             &Note::D,
-            &PcSet::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]),
+            &PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]),
         ).unwrap();
         assert_eq!(
             spelling,
@@ -1018,5 +1060,47 @@ mod tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod spelling_parity_tests {
+    use super::*;
+    use crate::note::note::Note;
+    use crate::note::pitch_class::Pc::*;
+    use crate::note_collections::pc_set::{PcShape, PcContent};
+
+    #[test]
+    fn spell_shape_matches_prior_pcset_try_spell_cmaj7() {
+        let shape = PcShape::new(vec![Pc0, Pc4, Pc7, Pc11]);
+        let notes = spell_shape(&Note::C, &shape).unwrap();
+        // Parity with pre-refactor: Cmaj7 spells as C, E, G, B.
+        assert_eq!(notes.len(), 4);
+        assert_eq!(notes[0], Note::C);
+        assert_eq!(notes[1], Note::E);
+        assert_eq!(notes[2], Note::G);
+        assert_eq!(notes[3], Note::B);
+    }
+
+    #[test]
+    fn spell_content_fsm7b5_shape_via_content() {
+        // F#m7b5 interval template: [0, 3, 6, 10].
+        // spell_content delegates to spell_slice which interprets PCs as intervals above root.
+        // root = F# = Pc6; Pc0 = root (Fis), Pc3 = minor third (A),
+        // Pc6 = diminished fifth (C), Pc10 = minor seventh (E).
+        let content = PcContent::new(vec![Pc0, Pc3, Pc6, Pc10]);
+        let notes = spell_content(&Note::Fis, &content).unwrap();
+        assert_eq!(notes.len(), 4);
+        assert_eq!(notes[0], Note::Fis);
+        assert_eq!(notes[1], Note::A);
+        assert_eq!(notes[2], Note::C);
+        assert_eq!(notes[3], Note::E);
+    }
+
+    #[test]
+    fn double_accidental_root_errors() {
+        let shape = PcShape::new(vec![Pc0, Pc4, Pc7]);
+        let err = spell_shape(&Note::Cisis, &shape);
+        assert!(matches!(err, Err(MusicSemanticsError::NoDoubleAccidentalRoot(_))));
     }
 }

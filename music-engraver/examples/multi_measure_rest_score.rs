@@ -19,17 +19,17 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(4)
         // Measure 1: notated entry
-        .note(Pitch::new(Note::C, 5).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::D, 5).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::E, 5).unwrap(), Duration::QTR)
-        .note(Pitch::new(Note::F, 5).unwrap(), Duration::QTR)
+        .note(Pitch::new(Note::C, 5), Duration::QTR)
+        .note(Pitch::new(Note::D, 5), Duration::QTR)
+        .note(Pitch::new(Note::E, 5), Duration::QTR)
+        .note(Pitch::new(Note::F, 5), Duration::QTR)
         .barline()
         // Measures 2-9 compressed into one frame: tacet 8 bars
         .multi_measure_rest(8)
         .barline()
         // Measure 10: re-entry
-        .note(Pitch::new(Note::G, 5).unwrap(), Duration::HALF)
-        .note(Pitch::new(Note::E, 5).unwrap(), Duration::HALF)
+        .note(Pitch::new(Note::G, 5), Duration::HALF)
+        .note(Pitch::new(Note::E, 5), Duration::HALF)
         .barline()
         // Measures 11-26 compressed into one frame: tacet 16 bars
         .multi_measure_rest(16)

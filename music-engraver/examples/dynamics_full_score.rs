@@ -19,7 +19,7 @@ fn main() {
     // 28 pitches: two passes through C4-B4-C5-B5 so noteheads stay within
     // the staff's comfortable range and don't introduce ledger lines below
     // the staff (which would crowd the dynamics' below-staff baseline).
-    let pitches: [(Note, u8); 28] = [
+    let pitches: [(Note, i8); 28] = [
         (Note::C, 4), (Note::D, 4), (Note::E, 4), (Note::F, 4),
         (Note::G, 4), (Note::A, 4), (Note::B, 4), (Note::C, 5),
         (Note::D, 5), (Note::E, 5), (Note::F, 5), (Note::G, 5),
@@ -38,7 +38,7 @@ fn main() {
     for (i, dynamic) in Dynamic::ALL.iter().enumerate() {
         let (note, octave) = pitches[i];
         b = b
-            .note(Pitch::new(note, octave).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(note, octave), Duration::QTR)
             .dynamic(*dynamic);
         // Barline after every 4th note, except the last (closed by end_barline).
         if (i + 1) % 4 == 0 && (i + 1) < pitches.len() {

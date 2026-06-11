@@ -31,10 +31,10 @@ fn main() {
 
     // --- Group 1: four ascending eighth notes (stems up) ---
     let group1_pitches = [
-        Pitch::new(Note::C, 4).unwrap(), // middle C (ledger line)
-        Pitch::new(Note::D, 4).unwrap(),
-        Pitch::new(Note::E, 4).unwrap(),
-        Pitch::new(Note::F, 4).unwrap(),
+        Pitch::new(Note::C, 4), // middle C (ledger line)
+        Pitch::new(Note::D, 4),
+        Pitch::new(Note::E, 4),
+        Pitch::new(Note::F, 4),
     ];
     let group1_start_x = 1500.0;
     let group1_spacing = 400.0;
@@ -64,8 +64,8 @@ fn main() {
 
     // --- Group 2: two sixteenth notes descending (stems down) ---
     let group2_pitches = [
-        Pitch::new(Note::B, 4).unwrap(),
-        Pitch::new(Note::A, 4).unwrap(),
+        Pitch::new(Note::B, 4),
+        Pitch::new(Note::A, 4),
     ];
     let group2_start_x = 4000.0;
 
@@ -93,9 +93,9 @@ fn main() {
 
     // --- Group 3: three notes with mixed durations (eighth + two sixteenths, stems up) ---
     let group3_pitches = [
-        Pitch::new(Note::E, 4).unwrap(),
-        Pitch::new(Note::G, 4).unwrap(),
-        Pitch::new(Note::A, 4).unwrap(),
+        Pitch::new(Note::E, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::A, 4),
     ];
     let group3_start_x = 5500.0;
     let group3_durs: [u8; 3] = [3, 4, 4]; // eighth, 16th, 16th
@@ -125,9 +125,9 @@ fn main() {
 
     // --- Group 4: high notes stems down (F5, E5, D5), 32nd notes ---
     let group4_pitches = [
-        Pitch::new(Note::F, 5).unwrap(),
-        Pitch::new(Note::E, 5).unwrap(),
-        Pitch::new(Note::D, 5).unwrap(),
+        Pitch::new(Note::F, 5),
+        Pitch::new(Note::E, 5),
+        Pitch::new(Note::D, 5),
     ];
     let group4_start_x = 7500.0;
 

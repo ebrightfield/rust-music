@@ -98,7 +98,7 @@
 
     #[test]
     fn sharp_note_shows_sharp_glyph() {
-        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fis, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Open);
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalSharp));
     }
@@ -107,7 +107,7 @@
     fn sharp_note_suppressed_when_in_sharp_key() {
         // F# in D major (2 sharps) — F is sharped in the key sig, so the
         // accidental is redundant and suppressed.
-        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fis, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
         assert_eq!(glyph, None);
     }
@@ -115,21 +115,21 @@
     #[test]
     fn natural_note_in_sharp_key_shows_natural() {
         // F natural in D major — F is sharped in key sig, so we show a natural
-        let pitch = Pitch::new(Note::F, 4).unwrap();
+        let pitch = Pitch::new(Note::F, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalNatural));
     }
 
     #[test]
     fn natural_note_in_open_key_no_accidental() {
-        let pitch = Pitch::new(Note::C, 4).unwrap();
+        let pitch = Pitch::new(Note::C, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Open);
         assert_eq!(glyph, None);
     }
 
     #[test]
     fn flat_note_shows_flat() {
-        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let pitch = Pitch::new(Note::Bes, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Open);
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalFlat));
     }
@@ -137,7 +137,7 @@
     #[test]
     fn sharp_note_shown_in_flat_key() {
         // F# in Bb major (2 flats) — F is not flatted, so sharp is shown
-        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fis, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalSharp));
     }
@@ -145,7 +145,7 @@
     #[test]
     fn sharp_note_shown_when_not_in_key() {
         // G# in D major (2 sharps: F#, C#) — G is not altered, so show the sharp
-        let pitch = Pitch::new(Note::Gis, 4).unwrap();
+        let pitch = Pitch::new(Note::Gis, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalSharp));
     }
@@ -153,7 +153,7 @@
     #[test]
     fn flat_note_suppressed_when_in_flat_key() {
         // Bb in Bb major (2 flats: Bb, Eb) — B is flatted in key sig, suppress
-        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let pitch = Pitch::new(Note::Bes, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
         assert_eq!(glyph, None);
     }
@@ -161,7 +161,7 @@
     #[test]
     fn flat_note_shown_in_sharp_key() {
         // Bb in G major (1 sharp) — B is not altered, show the flat
-        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let pitch = Pitch::new(Note::Bes, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(1));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalFlat));
     }
@@ -169,14 +169,14 @@
     #[test]
     fn flat_note_shown_when_not_in_key() {
         // Ab in Bb major (2 flats: Bb, Eb) — A is not flatted, show the flat
-        let pitch = Pitch::new(Note::Aes, 4).unwrap();
+        let pitch = Pitch::new(Note::Aes, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalFlat));
     }
 
     #[test]
     fn double_sharp_shows_double_sharp() {
-        let pitch = Pitch::new(Note::Fisis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fisis, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Open);
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalDoubleSharp));
     }
@@ -184,14 +184,14 @@
     #[test]
     fn double_sharp_shown_even_in_sharp_key() {
         // F## in D major — double sharps are never in key signatures
-        let pitch = Pitch::new(Note::Fisis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fisis, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Sharps(2));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalDoubleSharp));
     }
 
     #[test]
     fn double_flat_shown_even_in_flat_key() {
-        let pitch = Pitch::new(Note::Beses, 4).unwrap();
+        let pitch = Pitch::new(Note::Beses, 4);
         let glyph = should_show_accidental(&pitch, &KeySignature::Flats(2));
         assert_eq!(glyph, Some(smufl::Glyph::AccidentalDoubleFlat));
     }
@@ -209,7 +209,7 @@
     fn single_note_score_produces_svg_with_path() {
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .render_svg();
         assert!(svg.starts_with("<svg"));
         assert!(svg.contains("<path"), "should contain glyph paths");
@@ -221,7 +221,7 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .key_signature(KeySignature::Sharps(2))
-            .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::D, 4), Duration::QTR)
             .render_svg();
         // Key sig has 2 sharps → at least 2 extra paths beyond clef+notehead
         let path_count = svg.matches("<path").count();
@@ -237,9 +237,9 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(3, 4)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
+            .note(Pitch::new(Note::F, 4), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .render_svg();
         // Time sig numerals are paths
         let path_count = svg.matches("<path").count();
@@ -255,9 +255,9 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::D, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::D, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         assert!(svg.starts_with("<svg"));
@@ -283,11 +283,11 @@
     fn bass_clef_score() {
         let svg_treble = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 3).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 3), Duration::QTR)
             .render_svg();
         let svg_bass = ScoreBuilder::new()
             .clef(Clef::Bass)
-            .note(Pitch::new(Note::C, 3).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 3), Duration::QTR)
             .render_svg();
         // Different clef → different clef glyph path data
         assert_ne!(svg_treble, svg_bass);
@@ -298,7 +298,7 @@
         let dotted_qtr = Duration::new(DurationKind::Qtr, 1);
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), dotted_qtr)
+            .note(Pitch::new(Note::E, 4), dotted_qtr)
             .render_svg();
         let path_count = svg.matches("<path").count();
         // clef + notehead + dot = at least 3 paths
@@ -313,7 +313,7 @@
     fn eighth_note_produces_flag() {
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH)
+            .note(Pitch::new(Note::G, 4), Duration::EIGHTH)
             .render_svg();
         let path_count = svg.matches("<path").count();
         // clef + notehead + flag = at least 3 paths
@@ -330,13 +330,13 @@
             ScoreBuilder::new()
                 .clef(Clef::Treble)
                 .time_signature(4, 4)
-                .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+                .note(Pitch::new(Note::C, 4), Duration::WHOLE)
                 .barline()
-                .note(Pitch::new(Note::D, 4).unwrap(), Duration::WHOLE)
+                .note(Pitch::new(Note::D, 4), Duration::WHOLE)
                 .barline()
-                .note(Pitch::new(Note::E, 4).unwrap(), Duration::WHOLE)
+                .note(Pitch::new(Note::E, 4), Duration::WHOLE)
                 .barline()
-                .note(Pitch::new(Note::F, 4).unwrap(), Duration::WHOLE)
+                .note(Pitch::new(Note::F, 4), Duration::WHOLE)
                 .end_barline()
         };
 
@@ -361,7 +361,7 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .key_signature(KeySignature::Sharps(2))
-            .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::F, 4), Duration::QTR)
             .render_svg();
         let path_count = svg.matches("<path").count();
         // clef + 2 key sig sharps + notehead + natural accidental = 5
@@ -375,7 +375,7 @@
     #[test]
     fn convert_event_note_preserves_staff_position() {
         let builder = ScoreBuilder::new().clef(Clef::Treble);
-        let pitch = Pitch::new(Note::B, 4).unwrap();
+        let pitch = Pitch::new(Note::B, 4);
         let event = ScoreEvent::Note {
             pitch,
             duration: Duration::QTR,
@@ -413,14 +413,14 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .common_time()
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .render_svg();
         // Common time uses a single glyph (timeSigCommon), not two digit glyphs.
         // With numeric 4/4 we'd get 2 digit paths; with common we get 1 symbol path.
         let svg_numeric = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .render_svg();
         // The SVGs should differ because different glyphs are used
         assert_ne!(svg, svg_numeric);
@@ -431,12 +431,12 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .cut_time()
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .render_svg();
         let svg_common = ScoreBuilder::new()
             .clef(Clef::Treble)
             .common_time()
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .render_svg();
         // Cut time and common time produce different SVGs
         assert_ne!(svg, svg_common);
@@ -447,12 +447,12 @@
         let svg_cut = ScoreBuilder::new()
             .clef(Clef::Treble)
             .cut_time()
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .render_svg();
         let svg_numeric = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(2, 2)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .render_svg();
         assert_ne!(svg_cut, svg_numeric);
     }
@@ -462,7 +462,7 @@
         // Not calling barline() or end_barline() — events should still render
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .render_svg();
         assert!(svg.starts_with("<svg"));
         assert!(svg.contains("<path"));
@@ -472,7 +472,7 @@
     fn try_render_svg_returns_ok_for_valid_input() {
         let result = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .try_render_svg();
         assert!(result.is_ok());
         let svg = result.unwrap();
@@ -495,8 +495,8 @@
             .clef(Clef::Treble)
             .key_signature(KeySignature::Sharps(2))
             .time_signature(4, 4)
-            .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::D, 4), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .barline()
             .rest(Duration::WHOLE)
             .end_barline()
@@ -506,8 +506,8 @@
             .clef(Clef::Treble)
             .key_signature(KeySignature::Sharps(2))
             .time_signature(4, 4)
-            .note(Pitch::new(Note::D, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::D, 4), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .barline()
             .rest(Duration::WHOLE)
             .end_barline()
@@ -521,7 +521,7 @@
     fn resolve_accidental_with_tracking_suppresses_repeated_sharp() {
         let key = KeySignature::Open;
         let mut seen: AccidentalTracker = HashMap::new();
-        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fis, 4);
 
         // First occurrence: show sharp
         let first = resolve_accidental(&pitch, &key, Some(&seen));
@@ -539,7 +539,7 @@
     fn resolve_accidental_with_tracking_suppresses_repeated_flat() {
         let key = KeySignature::Open;
         let mut seen: AccidentalTracker = HashMap::new();
-        let pitch = Pitch::new(Note::Bes, 4).unwrap();
+        let pitch = Pitch::new(Note::Bes, 4);
 
         let first = resolve_accidental(&pitch, &key, Some(&seen));
         assert_eq!(first, Some(smufl::Glyph::AccidentalFlat));
@@ -553,8 +553,8 @@
     fn resolve_accidental_shows_courtesy_natural_after_sharp() {
         let key = KeySignature::Open;
         let mut seen: AccidentalTracker = HashMap::new();
-        let sharp_pitch = Pitch::new(Note::Fis, 4).unwrap();
-        let natural_pitch = Pitch::new(Note::F, 4).unwrap();
+        let sharp_pitch = Pitch::new(Note::Fis, 4);
+        let natural_pitch = Pitch::new(Note::F, 4);
 
         // Show sharp on F#4
         seen.insert(note_key(&sharp_pitch), Accidental::Sharp);
@@ -572,8 +572,8 @@
     fn resolve_accidental_shows_courtesy_natural_after_flat() {
         let key = KeySignature::Open;
         let mut seen: AccidentalTracker = HashMap::new();
-        let flat_pitch = Pitch::new(Note::Bes, 4).unwrap();
-        let natural_pitch = Pitch::new(Note::B, 4).unwrap();
+        let flat_pitch = Pitch::new(Note::Bes, 4);
+        let natural_pitch = Pitch::new(Note::B, 4);
 
         seen.insert(note_key(&flat_pitch), Accidental::Flat);
 
@@ -589,8 +589,8 @@
     fn resolve_accidental_different_octaves_independent() {
         let key = KeySignature::Open;
         let mut seen: AccidentalTracker = HashMap::new();
-        let fis4 = Pitch::new(Note::Fis, 4).unwrap();
-        let fis5 = Pitch::new(Note::Fis, 5).unwrap();
+        let fis4 = Pitch::new(Note::Fis, 4);
+        let fis5 = Pitch::new(Note::Fis, 5);
 
         // Show sharp on F#4
         seen.insert(note_key(&fis4), Accidental::Sharp);
@@ -608,7 +608,7 @@
     fn convert_event_with_tracking_suppresses_repeated_accidental() {
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let mut seen: AccidentalTracker = HashMap::new();
-        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fis, 4);
 
         let ev1 = ScoreEvent::Note {
             pitch,
@@ -645,12 +645,12 @@
         let mut seen: AccidentalTracker = HashMap::new();
 
         let ev_sharp = ScoreEvent::Note {
-            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            pitch: Pitch::new(Note::Fis, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
         };
         let ev_natural = ScoreEvent::Note {
-            pitch: Pitch::new(Note::F, 4).unwrap(),
+            pitch: Pitch::new(Note::F, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
         };
@@ -676,10 +676,10 @@
         // (tracking resets at barline)
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR) // suppressed
+            .note(Pitch::new(Note::Fis, 4), Duration::QTR)
+            .note(Pitch::new(Note::Fis, 4), Duration::QTR) // suppressed
             .barline()
-            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR) // should show (new measure)
+            .note(Pitch::new(Note::Fis, 4), Duration::QTR) // should show (new measure)
             .end_barline()
             .render_svg();
 
@@ -700,15 +700,15 @@
         // Two F#4 in one measure — second should not show sharp
         let svg_tracked = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::Fis, 4), Duration::QTR)
+            .note(Pitch::new(Note::Fis, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
         // One F#4 alone for comparison
         let svg_single = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::Fis, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::Fis, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -727,44 +727,44 @@
 
     #[test]
     fn effective_accidental_natural_on_altered() {
-        let pitch = Pitch::new(Note::F, 4).unwrap();
+        let pitch = Pitch::new(Note::F, 4);
         let eff = effective_accidental(&pitch, &KeySignature::Sharps(1));
         assert_eq!(eff, Some(Accidental::Natural));
     }
 
     #[test]
     fn effective_accidental_natural_on_unaltered() {
-        let pitch = Pitch::new(Note::C, 4).unwrap();
+        let pitch = Pitch::new(Note::C, 4);
         let eff = effective_accidental(&pitch, &KeySignature::Open);
         assert_eq!(eff, None);
     }
 
     #[test]
     fn effective_accidental_sharp() {
-        let pitch = Pitch::new(Note::Fis, 4).unwrap();
+        let pitch = Pitch::new(Note::Fis, 4);
         let eff = effective_accidental(&pitch, &KeySignature::Open);
         assert_eq!(eff, Some(Accidental::Sharp));
     }
 
     #[test]
     fn note_key_same_letter_different_octave() {
-        let p1 = Pitch::new(Note::C, 3).unwrap();
-        let p2 = Pitch::new(Note::C, 5).unwrap();
+        let p1 = Pitch::new(Note::C, 3);
+        let p2 = Pitch::new(Note::C, 5);
         assert_ne!(note_key(&p1), note_key(&p2));
     }
 
     #[test]
     fn note_key_same_note_same_octave() {
-        let p1 = Pitch::new(Note::C, 4).unwrap();
-        let p2 = Pitch::new(Note::C, 4).unwrap();
+        let p1 = Pitch::new(Note::C, 4);
+        let p2 = Pitch::new(Note::C, 4);
         assert_eq!(note_key(&p1), note_key(&p2));
     }
 
     #[test]
     fn note_key_enharmonic_different() {
         // C# and Db are different letters
-        let p1 = Pitch::new(Note::Cis, 4).unwrap();
-        let p2 = Pitch::new(Note::Des, 4).unwrap();
+        let p1 = Pitch::new(Note::Cis, 4);
+        let p2 = Pitch::new(Note::Des, 4);
         assert_ne!(note_key(&p1), note_key(&p2));
     }
 
@@ -776,9 +776,9 @@
             .clef(Clef::Treble)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).unwrap(),
-                    Pitch::new(Note::E, 4).unwrap(),
-                    Pitch::new(Note::G, 4).unwrap(),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::QTR,
             )
@@ -796,14 +796,14 @@
     fn chord_has_more_paths_than_single_note() {
         let svg_note = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .render_svg();
         let svg_chord = ScoreBuilder::new()
             .clef(Clef::Treble)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).unwrap(),
-                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::QTR,
             )
@@ -827,8 +827,8 @@
             .key_signature(KeySignature::Sharps(2))
             .chord(
                 vec![
-                    Pitch::new(Note::Fis, 4).unwrap(),
-                    Pitch::new(Note::A, 4).unwrap(),
+                    Pitch::new(Note::Fis, 4),
+                    Pitch::new(Note::A, 4),
                 ],
                 Duration::QTR,
             )
@@ -850,8 +850,8 @@
             .key_signature(KeySignature::Sharps(2))
             .chord(
                 vec![
-                    Pitch::new(Note::F, 4).unwrap(),
-                    Pitch::new(Note::G, 4).unwrap(),
+                    Pitch::new(Note::F, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::QTR,
             )
@@ -870,8 +870,8 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::E, 4).unwrap(),
-                Pitch::new(Note::G, 4).unwrap(),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
             ],
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
@@ -898,7 +898,7 @@
 
         // First: single F#4 note
         let ev1 = ScoreEvent::Note {
-            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            pitch: Pitch::new(Note::Fis, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
         };
@@ -907,8 +907,8 @@
         // Then: chord with F#4 (should be suppressed) and A4
         let ev2 = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::Fis, 4).unwrap(),
-                Pitch::new(Note::A, 4).unwrap(),
+                Pitch::new(Note::Fis, 4),
+                Pitch::new(Note::A, 4),
             ],
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
@@ -933,10 +933,10 @@
             .clef(Clef::Treble)
             .time_signature(4, 4)
             .beam_group(vec![
-                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::E, 4), Duration::EIGHTH),
+                (Pitch::new(Note::F, 4), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4), Duration::EIGHTH),
             ])
             .end_barline()
             .render_svg();
@@ -952,8 +952,8 @@
 
     #[test]
     fn beam_group_differs_from_individual_eighth_notes() {
-        let e4 = Pitch::new(Note::E, 4).unwrap();
-        let f4 = Pitch::new(Note::F, 4).unwrap();
+        let e4 = Pitch::new(Note::E, 4);
+        let f4 = Pitch::new(Note::F, 4);
 
         let svg_beamed = ScoreBuilder::new()
             .clef(Clef::Treble)
@@ -981,8 +981,8 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::BeamGroup {
             notes: vec![
-                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::E, 4), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4), Duration::EIGHTH),
             ],
         };
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
@@ -1007,7 +1007,7 @@
 
         // First F#4 note (standalone)
         let ev1 = ScoreEvent::Note {
-            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            pitch: Pitch::new(Note::Fis, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
         };
@@ -1016,8 +1016,8 @@
         // Then beam group with F#4 again — should suppress repeated accidental
         let ev2 = ScoreEvent::BeamGroup {
             notes: vec![
-                (Pitch::new(Note::Fis, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::Fis, 4), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4), Duration::EIGHTH),
             ],
         };
         let result = convert_event(&ev2, &Clef::Treble, &builder.key_sig, Some(&mut seen));
@@ -1037,9 +1037,9 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .tie()
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1055,10 +1055,10 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .tie()
             .barline()
-            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1070,8 +1070,8 @@
     fn no_tie_without_tie_call() {
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1085,7 +1085,7 @@
             .clef(Clef::Treble)
             .rest(Duration::QTR)
             .tie() // Should have no effect since last event is a rest
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1097,16 +1097,16 @@
     fn tie_differs_from_untied() {
         let svg_tied = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
             .tie()
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
             .end_barline()
             .render_svg();
 
         let svg_untied = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
             .end_barline()
             .render_svg();
 
@@ -1122,7 +1122,7 @@
     fn convert_event_preserves_tie_forward() {
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::E, 4).unwrap(),
+            pitch: Pitch::new(Note::E, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations { tie_forward: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
@@ -1141,8 +1141,8 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::E, 4).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
             ],
             duration: Duration::QTR,
             annotations: NoteAnnotations { tie_forward: true, ..NoteAnnotations::default() },};
@@ -1162,18 +1162,18 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).unwrap(),
-                    Pitch::new(Note::E, 4).unwrap(),
-                    Pitch::new(Note::G, 4).unwrap(),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::HALF,
             )
             .tie()
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).unwrap(),
-                    Pitch::new(Note::E, 4).unwrap(),
-                    Pitch::new(Note::G, 4).unwrap(),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::HALF,
             )
@@ -1192,8 +1192,8 @@
                 .clef(Clef::Treble)
                 .chord(
                     vec![
-                        Pitch::new(Note::E, 4).unwrap(),
-                        Pitch::new(Note::G, 4).unwrap(),
+                        Pitch::new(Note::E, 4),
+                        Pitch::new(Note::G, 4),
                     ],
                     Duration::HALF,
                 )
@@ -1203,8 +1203,8 @@
             .tie()
             .chord(
                 vec![
-                    Pitch::new(Note::E, 4).unwrap(),
-                    Pitch::new(Note::G, 4).unwrap(),
+                    Pitch::new(Note::E, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::HALF,
             )
@@ -1214,8 +1214,8 @@
         let svg_untied = build()
             .chord(
                 vec![
-                    Pitch::new(Note::E, 4).unwrap(),
-                    Pitch::new(Note::G, 4).unwrap(),
+                    Pitch::new(Note::E, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::HALF,
             )
@@ -1234,11 +1234,11 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .chord(
-                vec![Pitch::new(Note::C, 4).unwrap(), Pitch::new(Note::E, 4).unwrap()],
+                vec![Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)],
                 Duration::HALF,
             )
             .chord(
-                vec![Pitch::new(Note::C, 4).unwrap(), Pitch::new(Note::E, 4).unwrap()],
+                vec![Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)],
                 Duration::HALF,
             )
             .end_barline()
@@ -1254,8 +1254,8 @@
         let mut seen: AccidentalTracker = HashMap::new();
         let event = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::G, 4).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::G, 4),
             ],
             duration: Duration::QTR,
             annotations: NoteAnnotations { tie_forward: true, ..NoteAnnotations::default() },};
@@ -1274,13 +1274,13 @@
     fn dynamic_on_note_produces_extra_path() {
         let svg_with = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .dynamic(Dynamic::Forte)
             .end_barline()
             .render_svg();
         let svg_without = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1297,12 +1297,12 @@
     fn different_dynamics_produce_different_svg() {
         let svg_p = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .dynamic(Dynamic::Piano)
             .render_svg();
         let svg_f = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .dynamic(Dynamic::Forte)
             .render_svg();
         assert_ne!(svg_p, svg_f, "p and f should produce different SVGs");
@@ -1314,8 +1314,8 @@
             .clef(Clef::Treble)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).unwrap(),
-                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::QTR,
             )
@@ -1326,8 +1326,8 @@
             .clef(Clef::Treble)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).unwrap(),
-                    Pitch::new(Note::E, 4).unwrap(),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::QTR,
             )
@@ -1364,7 +1364,7 @@
     fn convert_event_preserves_dynamic() {
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::E, 4).unwrap(),
+            pitch: Pitch::new(Note::E, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations { dynamic: Some(Dynamic::Pp), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
@@ -1381,7 +1381,7 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let mut seen: AccidentalTracker = HashMap::new();
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::E, 4).unwrap(),
+            pitch: Pitch::new(Note::E, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations { dynamic: Some(Dynamic::Fff), ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, Some(&mut seen));
@@ -1398,8 +1398,8 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::E, 4).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
             ],
             duration: Duration::QTR,
             annotations: NoteAnnotations { dynamic: Some(Dynamic::Sfz), ..NoteAnnotations::default() },};
@@ -1417,12 +1417,12 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .dynamic(Dynamic::Piano)
-            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::B, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
+            .note(Pitch::new(Note::B, 4), Duration::QTR)
             .dynamic(Dynamic::Forte)
-            .note(Pitch::new(Note::D, 5).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::D, 5), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1443,9 +1443,9 @@
             .clef(Clef::Treble)
             .time_signature(4, 4)
             .tuplet(3, vec![
-                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::E, 4), Duration::EIGHTH),
+                (Pitch::new(Note::F, 4), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4), Duration::EIGHTH),
             ])
             .end_barline()
             .render_svg();
@@ -1466,9 +1466,9 @@
     #[test]
     fn tuplet_differs_from_beam_group() {
         let notes = vec![
-            (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::F, 4).unwrap(), Duration::EIGHTH),
-            (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
+            (Pitch::new(Note::E, 4), Duration::EIGHTH),
+            (Pitch::new(Note::F, 4), Duration::EIGHTH),
+            (Pitch::new(Note::G, 4), Duration::EIGHTH),
         ];
 
         let svg_beam = ScoreBuilder::new()
@@ -1502,9 +1502,9 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::TupletGroup {
             notes: vec![
-                (Pitch::new(Note::E, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::G, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::B, 4).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::E, 4), Duration::EIGHTH),
+                (Pitch::new(Note::G, 4), Duration::EIGHTH),
+                (Pitch::new(Note::B, 4), Duration::EIGHTH),
             ],
             tuplet_number: 3,
         };
@@ -1529,7 +1529,7 @@
 
         // First F#4 note (standalone)
         let ev1 = ScoreEvent::Note {
-            pitch: Pitch::new(Note::Fis, 4).unwrap(),
+            pitch: Pitch::new(Note::Fis, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations::default(),
         };
@@ -1538,9 +1538,9 @@
         // Then tuplet with F#4 again — should suppress repeated accidental
         let ev2 = ScoreEvent::TupletGroup {
             notes: vec![
-                (Pitch::new(Note::Fis, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::A, 4).unwrap(), Duration::EIGHTH),
-                (Pitch::new(Note::C, 5).unwrap(), Duration::EIGHTH),
+                (Pitch::new(Note::Fis, 4), Duration::EIGHTH),
+                (Pitch::new(Note::A, 4), Duration::EIGHTH),
+                (Pitch::new(Note::C, 5), Duration::EIGHTH),
             ],
             tuplet_number: 3,
         };
@@ -1559,11 +1559,11 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .tuplet(5, vec![
-                (Pitch::new(Note::C, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::D, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::E, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::F, 4).unwrap(), Duration::SIXTEENTH),
-                (Pitch::new(Note::G, 4).unwrap(), Duration::SIXTEENTH),
+                (Pitch::new(Note::C, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::D, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::E, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::F, 4), Duration::SIXTEENTH),
+                (Pitch::new(Note::G, 4), Duration::SIXTEENTH),
             ])
             .end_barline()
             .render_svg();
@@ -1580,10 +1580,10 @@
     fn slur_start_end_produces_filled_path() {
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .slur_start()
-            .note(Pitch::new(Note::F, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::G, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::F, 4), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .slur_end()
             .end_barline()
             .render_svg();
@@ -1598,17 +1598,17 @@
     fn slurred_differs_from_unslurred() {
         let slurred = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .slur_start()
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .slur_end()
             .end_barline()
             .render_svg();
 
         let unslurred = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).unwrap(), Duration::QTR)
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1621,7 +1621,7 @@
             .clef(Clef::Treble)
             .rest(Duration::QTR)
             .slur_start()
-            .note(Pitch::new(Note::E, 4).unwrap(), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
 
@@ -1634,7 +1634,7 @@
     fn convert_event_preserves_slur_flags() {
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::E, 4).unwrap(),
+            pitch: Pitch::new(Note::E, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations { slur_start: true, ..NoteAnnotations::default() },};
         let clef = Clef::Treble;
@@ -1653,7 +1653,7 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let mut seen: AccidentalTracker = HashMap::new();
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::G, 4).unwrap(),
+            pitch: Pitch::new(Note::G, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations { slur_end: true, ..NoteAnnotations::default() },};
         let result = convert_event(&event, &Clef::Treble, &builder.key_sig, Some(&mut seen));
@@ -1671,8 +1671,8 @@
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::C, 4).unwrap(),
-                Pitch::new(Note::E, 4).unwrap(),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
             ],
             duration: Duration::QTR,
             annotations: NoteAnnotations { slur_start: true, ..NoteAnnotations::default() },};
@@ -1691,7 +1691,7 @@
     use crate::layout::hairpin::HairpinType;
 
     /// Helper to create a Pitch from a note name string and octave.
-    fn p(name: &str, octave: u8) -> Pitch {
+    fn p(name: &str, octave: i8) -> Pitch {
         let note = match name {
             "C" => Note::C,
             "D" => Note::D,
@@ -1702,7 +1702,7 @@
             "B" => Note::B,
             _ => panic!("unsupported note name: {name}"),
         };
-        Pitch::new(note, octave).unwrap()
+        Pitch::new(note, octave)
     }
 
     #[test]
@@ -4206,9 +4206,9 @@
             .clef(Clef::Treble)
             .time_signature(4, 4)
             .show_measure_numbers()
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::D, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
 
@@ -4222,13 +4222,13 @@
             .time_signature(4, 4)
             .measures_per_system(2)
             .show_measure_numbers()
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::D, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::E, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::F, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::F, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
 
@@ -4242,7 +4242,7 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
 
@@ -4256,9 +4256,9 @@
             ScoreBuilder::new()
                 .clef(Clef::Treble)
                 .time_signature(4, 4)
-                .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+                .note(Pitch::new(Note::C, 4), Duration::WHOLE)
                 .barline()
-                .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+                .note(Pitch::new(Note::D, 4), Duration::WHOLE)
                 .end_barline()
         };
 
@@ -4277,12 +4277,12 @@
             .clef(Clef::Treble)
             .time_signature(4, 4)
             .optimal_line_breaks()
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::QTR)
-            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::QTR)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
-            .note(Pitch::new(Note::F, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
+            .note(Pitch::new(Note::D, 4), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
+            .note(Pitch::new(Note::F, 4), Duration::QTR)
             .barline()
-            .note(Pitch::new(Note::G, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::G, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
 
@@ -4307,10 +4307,10 @@
                 _ => Note::F,
             };
             builder = builder
-                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
-                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
-                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
-                .note(Pitch::new(note, 4).expect("valid"), Duration::QTR)
+                .note(Pitch::new(note, 4), Duration::QTR)
+                .note(Pitch::new(note, 4), Duration::QTR)
+                .note(Pitch::new(note, 4), Duration::QTR)
+                .note(Pitch::new(note, 4), Duration::QTR)
                 .barline();
         }
         let optimal_svg = builder.clone().optimal_line_breaks().render_svg();
@@ -4336,7 +4336,7 @@
             .time_signature(4, 4)
             .auto_line_breaks()
             .optimal_line_breaks()
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         assert!(svg.starts_with("<svg"));
@@ -4350,7 +4350,7 @@
             .time_signature(4, 4)
             .optimal_line_breaks()
             .auto_line_breaks()
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         assert!(svg.starts_with("<svg"));
@@ -4363,13 +4363,13 @@
             .time_signature(4, 4)
             .optimal_line_breaks()
             .measures_per_system(2)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::D, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::E, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::F, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::F, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         assert!(svg.starts_with("<svg"));
@@ -4386,7 +4386,7 @@
             .clef(Clef::Treble)
             .time_signature(4, 4)
             .volta_start("1.")
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .volta_end()
             .end_barline()
             .render_svg();
@@ -4396,7 +4396,7 @@
         let without_volta = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         assert!(!without_volta.contains(">1.</text>"));
@@ -4413,14 +4413,14 @@
             .time_signature(4, 4)
             // First ending: 2 measures
             .volta_start("1.")
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .barline()
-            .note(Pitch::new(Note::D, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::D, 4), Duration::WHOLE)
             .volta_end()
             .barline()
             // Second ending: 1 measure
             .volta_start("2.")
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::E, 4), Duration::WHOLE)
             .volta_end()
             .end_barline()
             .render_svg();
@@ -4433,13 +4433,13 @@
         let with = ScoreBuilder::new()
             .clef(Clef::Treble)
             .volta_start("1.")
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .volta_end()
             .end_barline()
             .render_svg();
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         assert_ne!(with, without);
@@ -4450,7 +4450,7 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .volta_start("1.")
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .volta_end()
             .end_barline()
             .render_svg();
@@ -4462,7 +4462,7 @@
     fn volta_no_bracket_without_volta_calls() {
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         // No volta-related text should appear
@@ -4476,13 +4476,13 @@
         // 1 horizontal top line + 1 left hook + 1 right hook
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         let with = ScoreBuilder::new()
             .clef(Clef::Treble)
             .volta_start("1.")
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .volta_end()
             .end_barline()
             .render_svg();
@@ -4497,12 +4497,12 @@
         use crate::layout::navigation::NavigationSign;
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         let with = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .navigation_sign(NavigationSign::Segno)
             .end_barline()
             .render_svg();
@@ -4517,12 +4517,12 @@
         use crate::layout::navigation::NavigationSign;
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         let with = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .navigation_sign(NavigationSign::Coda)
             .end_barline()
             .render_svg();
@@ -4557,13 +4557,13 @@
         use crate::layout::navigation::NavigationSign;
         let segno = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .navigation_sign(NavigationSign::Segno)
             .end_barline()
             .render_svg();
         let coda = ScoreBuilder::new()
             .clef(Clef::Treble)
-            .note(Pitch::new(Note::C, 4).expect("valid"), Duration::WHOLE)
+            .note(Pitch::new(Note::C, 4), Duration::WHOLE)
             .navigation_sign(NavigationSign::Coda)
             .end_barline()
             .render_svg();
@@ -4577,8 +4577,8 @@
             .clef(Clef::Treble)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid"),
-                    Pitch::new(Note::E, 4).expect("valid"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::WHOLE,
             )
@@ -4588,8 +4588,8 @@
             .clef(Clef::Treble)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid"),
-                    Pitch::new(Note::E, 4).expect("valid"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::WHOLE,
             )
@@ -4607,7 +4607,7 @@
         use crate::layout::navigation::NavigationSign;
         let builder = ScoreBuilder::new().clef(Clef::Treble);
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::C, 4).expect("valid"),
+            pitch: Pitch::new(Note::C, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
                 navigation_sign: Some(NavigationSign::Segno),
@@ -4634,12 +4634,12 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 6).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::C, 6), Duration::QTR)
             .ottava_start(OttavaKind::Ottava8va)
-            .note(Pitch::new(Note::D, 6).expect("valid"), Duration::QTR)
-            .note(Pitch::new(Note::E, 6).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::D, 6), Duration::QTR)
+            .note(Pitch::new(Note::E, 6), Duration::QTR)
             .ottava_end()
-            .note(Pitch::new(Note::F, 6).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::F, 6), Duration::QTR)
             .end_barline()
             .render_svg();
         assert!(svg.contains(">8va</text>"), "should have 8va label");
@@ -4665,18 +4665,18 @@
         let svg_8va = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 5).expect("valid"), Duration::HALF)
+            .note(Pitch::new(Note::C, 5), Duration::HALF)
             .ottava_start(OttavaKind::Ottava8va)
-            .note(Pitch::new(Note::D, 5).expect("valid"), Duration::HALF)
+            .note(Pitch::new(Note::D, 5), Duration::HALF)
             .ottava_end()
             .end_barline()
             .render_svg();
         let svg_8vb = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 3).expect("valid"), Duration::HALF)
+            .note(Pitch::new(Note::C, 3), Duration::HALF)
             .ottava_start(OttavaKind::Ottava8vb)
-            .note(Pitch::new(Note::D, 3).expect("valid"), Duration::HALF)
+            .note(Pitch::new(Note::D, 3), Duration::HALF)
             .ottava_end()
             .end_barline()
             .render_svg();
@@ -4689,8 +4689,8 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 5).expect("valid"), Duration::HALF)
-            .note(Pitch::new(Note::D, 5).expect("valid"), Duration::HALF)
+            .note(Pitch::new(Note::C, 5), Duration::HALF)
+            .note(Pitch::new(Note::D, 5), Duration::HALF)
             .end_barline()
             .render_svg();
         assert!(!svg.contains("8va"), "no 8va without ottava calls");
@@ -4703,7 +4703,7 @@
             .clef(Clef::Treble)
             .key_signature(KeySignature::Open);
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::C, 5).expect("valid"),
+            pitch: Pitch::new(Note::C, 5),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
                 ottava_start: Some(OttavaKind::Ottava8va),
@@ -4725,7 +4725,7 @@
             .clef(Clef::Treble)
             .key_signature(KeySignature::Open);
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::C, 5).expect("valid"),
+            pitch: Pitch::new(Note::C, 5),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
                 ottava_end: true,
@@ -5104,14 +5104,14 @@
         let with = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .tremolo(TremoloCount::Single)
             .end_barline()
             .render_svg();
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .end_barline()
             .render_svg();
         let with_paths = with.matches("<path ").count();
@@ -5142,14 +5142,14 @@
         let single = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .tremolo(TremoloCount::Single)
             .end_barline()
             .render_svg();
         let triple = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .tremolo(TremoloCount::Triple)
             .end_barline()
             .render_svg();
@@ -5163,8 +5163,8 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid"),
-                    Pitch::new(Note::E, 4).expect("valid"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::QTR,
             )
@@ -5176,8 +5176,8 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid"),
-                    Pitch::new(Note::E, 4).expect("valid"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::QTR,
             )
@@ -5192,7 +5192,7 @@
     #[test]
     fn convert_event_preserves_tremolo() {
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::G, 4).expect("valid"),
+            pitch: Pitch::new(Note::G, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
                 tremolo: Some(TremoloCount::Triple),
@@ -5218,9 +5218,9 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid pitch"),
-                    Pitch::new(Note::E, 4).expect("valid pitch"),
-                    Pitch::new(Note::G, 4).expect("valid pitch"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
+                    Pitch::new(Note::G, 4),
                 ],
                 Duration::HALF,
             )
@@ -5260,9 +5260,9 @@
                 .time_signature(4, 4)
                 .chord(
                     vec![
-                        Pitch::new(Note::C, 4).expect("valid pitch"),
-                        Pitch::new(Note::E, 4).expect("valid pitch"),
-                        Pitch::new(Note::G, 4).expect("valid pitch"),
+                        Pitch::new(Note::C, 4),
+                        Pitch::new(Note::E, 4),
+                        Pitch::new(Note::G, 4),
                     ],
                     Duration::WHOLE,
                 )
@@ -5282,13 +5282,13 @@
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::WHOLE)
+            .note(Pitch::new(Note::E, 4), Duration::WHOLE)
             .end_barline()
             .render_svg();
         let with = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::WHOLE)
+            .note(Pitch::new(Note::E, 4), Duration::WHOLE)
             .arpeggio(ArpeggioDirection::Up)
             .end_barline()
             .render_svg();
@@ -5304,8 +5304,8 @@
     fn convert_event_preserves_arpeggio() {
         let event = ScoreEvent::Chord {
             pitches: vec![
-                Pitch::new(Note::C, 4).expect("valid pitch"),
-                Pitch::new(Note::E, 4).expect("valid pitch"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
             ],
             duration: Duration::HALF,
             annotations: NoteAnnotations {
@@ -5331,9 +5331,9 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
             .breath_mark(BreathMark::Comma)
-            .note(Pitch::new(Note::G, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .rest(Duration::HALF)
             .end_barline()
             .render_svg();
@@ -5341,8 +5341,8 @@
         let without = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::E, 4).expect("valid"), Duration::QTR)
-            .note(Pitch::new(Note::G, 4).expect("valid"), Duration::QTR)
+            .note(Pitch::new(Note::E, 4), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .rest(Duration::HALF)
             .end_barline()
             .render_svg();
@@ -5381,7 +5381,7 @@
             ScoreBuilder::new()
                 .clef(Clef::Treble)
                 .time_signature(4, 4)
-                .note(Pitch::new(Note::C, 5).expect("valid"), Duration::HALF)
+                .note(Pitch::new(Note::C, 5), Duration::HALF)
                 .breath_mark(mark)
                 .rest(Duration::HALF)
                 .end_barline()
@@ -5402,8 +5402,8 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid"),
-                    Pitch::new(Note::E, 4).expect("valid"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::HALF,
             )
@@ -5416,8 +5416,8 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid"),
-                    Pitch::new(Note::E, 4).expect("valid"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::HALF,
             )
@@ -5435,7 +5435,7 @@
     fn convert_event_preserves_breath_mark() {
         use crate::layout::breath::BreathMark;
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::A, 4).expect("valid"),
+            pitch: Pitch::new(Note::A, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
                 breath_mark: Some(BreathMark::Tick),
@@ -5459,9 +5459,9 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .glissando(GlissandoStyle::Line)
-            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .rest(Duration::HALF)
             .end_barline()
             .render_svg();
@@ -5470,8 +5470,8 @@
         let no_gliss_svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
-            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
+            .note(Pitch::new(Note::G, 4), Duration::QTR)
             .rest(Duration::HALF)
             .end_barline()
             .render_svg();
@@ -5488,7 +5488,7 @@
             .time_signature(4, 4)
             .rest(Duration::QTR)
             .glissando(GlissandoStyle::Line)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .rest(Duration::HALF)
             .end_barline()
             .render_svg();
@@ -5496,7 +5496,7 @@
             .clef(Clef::Treble)
             .time_signature(4, 4)
             .rest(Duration::QTR)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+            .note(Pitch::new(Note::C, 4), Duration::QTR)
             .rest(Duration::HALF)
             .end_barline()
             .render_svg();
@@ -5508,9 +5508,9 @@
         let svg = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
             .glissando(GlissandoStyle::LineWithText)
-            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+            .note(Pitch::new(Note::G, 4), Duration::HALF)
             .end_barline()
             .render_svg();
         assert!(svg.contains("gliss."), "LineWithText should show 'gliss.' label");
@@ -5521,17 +5521,17 @@
         let svg_line = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
             .glissando(GlissandoStyle::Line)
-            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+            .note(Pitch::new(Note::G, 4), Duration::HALF)
             .end_barline()
             .render_svg();
         let svg_text = ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+            .note(Pitch::new(Note::C, 4), Duration::HALF)
             .glissando(GlissandoStyle::LineWithText)
-            .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+            .note(Pitch::new(Note::G, 4), Duration::HALF)
             .end_barline()
             .render_svg();
         assert_ne!(svg_line, svg_text, "Line and LineWithText should produce different SVGs");
@@ -5544,16 +5544,16 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid pitch"),
-                    Pitch::new(Note::E, 4).expect("valid pitch"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::HALF,
             )
             .glissando(GlissandoStyle::Line)
             .chord(
                 vec![
-                    Pitch::new(Note::G, 4).expect("valid pitch"),
-                    Pitch::new(Note::B, 4).expect("valid pitch"),
+                    Pitch::new(Note::G, 4),
+                    Pitch::new(Note::B, 4),
                 ],
                 Duration::HALF,
             )
@@ -5564,15 +5564,15 @@
             .time_signature(4, 4)
             .chord(
                 vec![
-                    Pitch::new(Note::C, 4).expect("valid pitch"),
-                    Pitch::new(Note::E, 4).expect("valid pitch"),
+                    Pitch::new(Note::C, 4),
+                    Pitch::new(Note::E, 4),
                 ],
                 Duration::HALF,
             )
             .chord(
                 vec![
-                    Pitch::new(Note::G, 4).expect("valid pitch"),
-                    Pitch::new(Note::B, 4).expect("valid pitch"),
+                    Pitch::new(Note::G, 4),
+                    Pitch::new(Note::B, 4),
                 ],
                 Duration::HALF,
             )
@@ -5584,7 +5584,7 @@
     #[test]
     fn convert_event_preserves_glissando_start() {
         let event = ScoreEvent::Note {
-            pitch: Pitch::new(Note::C, 4).expect("valid pitch"),
+            pitch: Pitch::new(Note::C, 4),
             duration: Duration::QTR,
             annotations: NoteAnnotations {
                 glissando_start: Some(GlissandoStyle::Line),
@@ -6016,8 +6016,8 @@
 
     #[test]
     fn multi_voice_unison_collision_differs_from_no_collision() {
-        let pitch_c4 = Pitch::new(Note::C, 4).expect("valid pitch");
-        let pitch_g5 = Pitch::new(Note::G, 5).expect("valid pitch");
+        let pitch_c4 = Pitch::new(Note::C, 4);
+        let pitch_g5 = Pitch::new(Note::G, 5);
 
         // Unison: both voices play C4
         let svg_unison = ScoreBuilder::new()
@@ -6047,9 +6047,9 @@
 
     #[test]
     fn multi_voice_second_collision_differs_from_third() {
-        let pitch_e4 = Pitch::new(Note::E, 4).expect("valid pitch");
-        let pitch_f4 = Pitch::new(Note::F, 4).expect("valid pitch");
-        let pitch_g4 = Pitch::new(Note::G, 4).expect("valid pitch");
+        let pitch_e4 = Pitch::new(Note::E, 4);
+        let pitch_f4 = Pitch::new(Note::F, 4);
+        let pitch_g4 = Pitch::new(Note::G, 4);
 
         // Second apart (E4 vs F4): collision
         let svg_second = ScoreBuilder::new()

@@ -1,0 +1,6 @@
+// Happy-path IntervalMatrix fixture (REQ-O36, O28).
+(
+  kind: "IntervalMatrix",
+  pcs: [0, 3, 7],
+  style: "matrix",
+)

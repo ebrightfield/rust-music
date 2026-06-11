@@ -1,10 +1,15 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use crate::error::MusicSemanticsError;
-use crate::note_collections::chord_name::{ChordNameDisplayConfig, ExtensionStyle};
+use crate::note_collections::chord_name::{ChordNameDisplayConfig, ExtensionStyle, MajNotation};
 use crate::note_collections::interval_class::IntervalClass;
 
 /// The "ninth", "eleventh", etc in Maj9th or min11th chords, etc.
+///
+/// `FlatFive` and `SharpFive` were added in Tier 1.1 for `7♭5` / `Maj7♭5`
+/// style naming. These are distinct from `SharpEleven` and `FlatThirteenth`:
+/// the "five" variants are emitted only when the corresponding triad lacks a
+/// natural P5, so the symbol is understood as *replacing* the fifth.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AltChoice {
     FlatNine,
@@ -16,11 +21,23 @@ pub enum AltChoice {
     FlatThirteenth,
     Thirteenth,
     SharpThirteenth,
+    /// Pc6 with no P5 present over a major/minor triad (Tier 1.1).
+    FlatFive,
+    /// Pc8 with no P5 present over a major/minor triad. Parallel to FlatFive;
+    /// added for API symmetry. Not emitted automatically yet.
+    SharpFive,
 }
 
 impl Display for AltChoice {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
+        write!(f, "{}", self.to_ascii())
+    }
+}
+
+impl AltChoice {
+    /// ASCII rendering (`b9`, `#11`, …). The `Display` impl calls this.
+    pub fn to_ascii(&self) -> String {
+        match self {
             AltChoice::FlatNine => "b9".to_string(),
             AltChoice::Nine => "9".to_string(),
             AltChoice::SharpNine => "#9".to_string(),
@@ -30,7 +47,27 @@ impl Display for AltChoice {
             AltChoice::FlatThirteenth => "b13".to_string(),
             AltChoice::Thirteenth => "13".to_string(),
             AltChoice::SharpThirteenth => "#13".to_string(),
-        })
+            AltChoice::FlatFive => "b5".to_string(),
+            AltChoice::SharpFive => "#5".to_string(),
+        }
+    }
+
+    /// utf-8 rendering (`♭9`, `♯11`, …). Used when
+    /// `ChordNameDisplayConfig::utf8_accidentals` is `true`.
+    pub fn to_utf8(&self) -> String {
+        match self {
+            AltChoice::FlatNine => "♭9".to_string(),
+            AltChoice::Nine => "9".to_string(),
+            AltChoice::SharpNine => "♯9".to_string(),
+            AltChoice::FlatEleven => "♭11".to_string(),
+            AltChoice::Eleven => "11".to_string(),
+            AltChoice::SharpEleven => "♯11".to_string(),
+            AltChoice::FlatThirteenth => "♭13".to_string(),
+            AltChoice::Thirteenth => "13".to_string(),
+            AltChoice::SharpThirteenth => "♯13".to_string(),
+            AltChoice::FlatFive => "♭5".to_string(),
+            AltChoice::SharpFive => "♯5".to_string(),
+        }
     }
 }
 
@@ -76,6 +113,38 @@ impl Display for Alt {
     }
 }
 
+impl Alt {
+    /// Render the alterations honoring [`ChordNameDisplayConfig`].
+    /// When the Alt is empty returns the empty string.
+    pub fn to_string_with(&self, cfg: &ChordNameDisplayConfig) -> String {
+        if self.is_empty() {
+            return String::new();
+        }
+        let s: Vec<String> = self
+            .iter()
+            .map(|alt| {
+                if cfg.utf8_accidentals {
+                    alt.to_utf8()
+                } else {
+                    alt.to_ascii()
+                }
+            })
+            .collect();
+        format!("({})", s.join(", "))
+    }
+
+    /// Like [`Self::to_string_with`] but returns a leading-space-prefixed
+    /// string when non-empty. Lets the caller concatenate without trailing
+    /// whitespace in the empty case. Introduced in Tier 3.4 so chord
+    /// rendering no longer relies on a trailing `.trim()`.
+    pub fn to_string_prefixed(&self, cfg: &ChordNameDisplayConfig) -> String {
+        if self.is_empty() {
+            return String::new();
+        }
+        format!(" {}", self.to_string_with(cfg))
+    }
+}
+
 impl From<Vec<AltChoice>> for Alt {
     fn from(value: Vec<AltChoice>) -> Self {
         Self(value)
@@ -93,6 +162,24 @@ impl Deref for Alt {
 impl DerefMut for Alt {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl IntoIterator for Alt {
+    type Item = AltChoice;
+    type IntoIter = std::vec::IntoIter<AltChoice>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Alt {
+    type Item = &'a AltChoice;
+    type IntoIter = std::slice::Iter<'a, AltChoice>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 
@@ -204,6 +291,28 @@ pub fn resolve_extension(
     }
 }
 
+/// A member of an "add" chord (Tier 2.2). Only 6, 9, 11, and 13 are valid
+/// adds; `Add6` is kept alongside `Add9`/`Add11`/`Add13` so 6-chord variants
+/// route through the same code path when `prefer_add_notation` is on.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum AddMember {
+    Add6,
+    Add9,
+    Add11,
+    Add13,
+}
+
+impl AddMember {
+    pub fn label(&self) -> &'static str {
+        match self {
+            AddMember::Add6 => "6",
+            AddMember::Add9 => "9",
+            AddMember::Add11 => "11",
+            AddMember::Add13 => "13",
+        }
+    }
+}
+
 /// Chords based around a Major triad.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MajorSubtype {
@@ -211,6 +320,21 @@ pub enum MajorSubtype {
     Maj6(Alt),
     MajN(Vec<Extension>, Alt),
     N(Vec<Extension>, Alt),
+    /// `add9`/`add11`/`add13` family — extensions over a triad with no 7th.
+    /// Emitted when `NamingConfig::prefer_add_notation` is `true`. Tier 2.2.
+    Add(Vec<AddMember>, Alt),
+    /// Dominant-altered ("7alt"): a dominant 7 chord with three-plus
+    /// alterations spanning both the 9-axis (♭9 / ♯9) and the 5-axis
+    /// (♭5 / ♯5 / ♯11 / ♭13). Tier 1.4.
+    DomAlt,
+    /// Inferred major triad with the 3rd missing from the pc-set. Tier 2.3
+    /// `show_omissions`: only emitted when the config opts in.
+    NoThird(Alt),
+    /// `CMaj7(no5)` — Maj triad with a 7th/9th/11th/13th extension but no
+    /// P5. Tier 2.3 `show_omissions`.
+    NoFifth(Vec<Extension>, Alt),
+    /// `C7(no5)` — dominant with no P5. Tier 2.3 `show_omissions`.
+    DomNoFifth(Vec<Extension>, Alt),
 }
 
 /// Chords based around a minor triad.
@@ -220,6 +344,10 @@ pub enum MinorSubtype {
     Min6(Alt),
     MinMajN(Vec<Extension>, Alt),
     MinN(Vec<Extension>, Alt),
+    /// `madd9`/`madd11`/`madd13` family. Tier 2.2.
+    Add(Vec<AddMember>, Alt),
+    /// `Cm7(no5)` — min triad with extension but no P5. Tier 2.3.
+    NoFifth(Vec<Extension>, Alt),
 }
 
 /// Chords based around an Augmented triad.
@@ -246,14 +374,13 @@ pub enum DimSubtype {
     DimMajN(Vec<Extension>, Alt),
 }
 
-/// Chords based around a diminished triad.
+/// Chords based around a sus triad (sus2 or sus4).
 #[derive(Debug, Clone, PartialEq)]
 pub enum SusSubtype {
     Sus2(Alt),
     Sus4(Alt),
     DomNSus(Vec<Extension>, Alt),
     MajNSus(Vec<Extension>, Alt),
-    SixNineSus(Alt),
 }
 
 /// Represents ambiguity in chord naming analysis.
@@ -332,9 +459,41 @@ pub enum ChordQuality {
     SingleNote,
 }
 
+/// Render the "major" root-label fragment per `maj_notation`.
+/// Examples: `maj_label(Delta) == "Δ"`, `maj_label(Maj) == "Maj"`,
+/// `maj_label(MajCap) == "M"`, `maj_label(LowerMaj) == "maj"`.
+fn maj_label(kind: MajNotation) -> &'static str {
+    match kind {
+        MajNotation::Delta => "Δ",
+        MajNotation::Maj => "Maj",
+        MajNotation::MajCap => "M",
+        MajNotation::LowerMaj => "maj",
+    }
+}
+
+/// The letter used for the minor triad label. Chord-chart convention ties
+/// minor casing to the major label style: `Maj` / `maj` pair with `m`,
+/// `M` pairs with `m`, and `Δ` pairs with `m` as well. We therefore always
+/// render `m` (lowercase) here; the prior implementation used `min` which is
+/// preserved when `maj_notation == Maj` for backward-compat.
+fn min_label(kind: MajNotation) -> &'static str {
+    match kind {
+        // Historical default: `min` with `Maj`. Preserved so tier-1 matrix
+        // outputs (which pin `"min7"`, `"minMaj7"`, `"Maj"`) still pass.
+        MajNotation::Maj => "min",
+        // All other styles use short `m`.
+        MajNotation::Delta | MajNotation::MajCap | MajNotation::LowerMaj => "m",
+    }
+}
+
 impl ChordQuality {
+    /// Render honoring [`ChordNameDisplayConfig::maj_notation`] and
+    /// [`ChordNameDisplayConfig::utf8_accidentals`].
     pub fn to_string(&self, cfg: &ChordNameDisplayConfig) -> String {
         let style = cfg.extension_style;
+        let maj = maj_label(cfg.maj_notation);
+        let min = min_label(cfg.maj_notation);
+        let alt_px = |alt: &Alt| alt.to_string_prefixed(cfg);
         let ext_and_alts = |alt: &Alt, ext: &[Extension], style| {
             let (ext, mut alts) = resolve_extension(ext, style);
             alts.extend(alt.0.clone());
@@ -344,97 +503,151 @@ impl ChordQuality {
             ChordQuality::Major(subtype) => {
                 match subtype {
                     MajorSubtype::Maj(alt) => {
-                        format!("Maj {}", alt)
+                        format!("Maj{}", alt_px(alt))
                     }
                     MajorSubtype::Maj6(alt) => {
-                        format!("Maj {}", alt)
+                        format!("Maj6{}", alt_px(alt))
                     }
                     MajorSubtype::MajN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("Maj{} {}", ext, alt)
+                        format!("{}{}{}", maj, ext, alt_px(&alt))
                     }
                     MajorSubtype::N(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{} {}", ext, alt)
+                        format!("{}{}", ext, alt_px(&alt))
+                    }
+                    MajorSubtype::Add(adds, alt) => {
+                        format_add(None, adds, alt, cfg)
+                    }
+                    MajorSubtype::DomAlt => "7alt".to_string(),
+                    MajorSubtype::NoThird(alt) => {
+                        format!("Maj (no3){}", alt_px(alt))
+                    }
+                    MajorSubtype::NoFifth(ext, alt) => {
+                        let (ext, alt) = ext_and_alts(alt, ext, style);
+                        format!("{}{} (no5){}", maj, ext, alt_px(&alt))
+                    }
+                    MajorSubtype::DomNoFifth(ext, alt) => {
+                        let (ext, alt) = ext_and_alts(alt, ext, style);
+                        format!("{} (no5){}", ext, alt_px(&alt))
                     }
                 }
             },
             ChordQuality::Minor(subtype) => {
                 match subtype {
                     MinorSubtype::Min(alt) => {
-                        format!("min {}", alt)
+                        format!("{}{}", min, alt_px(alt))
                     }
                     MinorSubtype::Min6(alt) => {
-                        format!("min {}", alt)
+                        format!("{}6{}", min, alt_px(alt))
                     }
                     MinorSubtype::MinMajN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("minMaj{} {}", ext, alt)
+                        format!("{}{}{}{}", min, maj, ext, alt_px(&alt))
                     }
                     MinorSubtype::MinN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("min{} {}", ext, alt)
+                        format!("{}{}{}", min, ext, alt_px(&alt))
+                    }
+                    MinorSubtype::Add(adds, alt) => {
+                        format_add(Some(min), adds, alt, cfg)
+                    }
+                    MinorSubtype::NoFifth(ext, alt) => {
+                        let (ext, alt) = ext_and_alts(alt, ext, style);
+                        format!("{}{} (no5){}", min, ext, alt_px(&alt))
                     }
                 }
             },
             ChordQuality::Aug(subtype) => {
                 match subtype {
                     AugSubtype::Aug(alt) => {
-                        format!("Aug {}", alt)
+                        format!("Aug{}", alt_px(alt))
                     }
                     AugSubtype::AugMajN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("+Maj{} {}", ext, alt)
+                        format!("+{}{}{}", maj, ext, alt_px(&alt))
                     }
                     AugSubtype::AugN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("+{} {}", ext, alt)
+                        format!("+{}{}", ext, alt_px(&alt))
                     }
                 }
             },
             ChordQuality::Dim(subtype) => {
                 match subtype {
                     DimSubtype::Dim(alt) => {
-                        format!("dim {}", alt)
+                        format!("dim{}", alt_px(alt))
                     }
                     DimSubtype::MinNb5(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("min{}b5 {}", ext, alt)
+                        let b5 = if cfg.utf8_accidentals { "♭5" } else { "b5" };
+                        format!("{}{}{}{}", min, ext, b5, alt_px(&alt))
                     }
                     DimSubtype::DimN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("dim{} {}", ext, alt)
+                        format!("dim{}{}", ext, alt_px(&alt))
                     }
                     DimSubtype::DimMajN(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("dimMaj{} {}", ext, alt)
+                        format!("dim{}{}{}", maj, ext, alt_px(&alt))
                     }
                 }
             },
             ChordQuality::Sus(subtype) => {
                 match subtype {
                     SusSubtype::Sus2(alt) => {
-                        format!("sus2 {}", alt)
+                        format!("sus2{}", alt_px(alt))
                     }
                     SusSubtype::Sus4(alt) => {
-                        format!("sus4 {}", alt)
+                        format!("sus4{}", alt_px(alt))
                     }
                     SusSubtype::DomNSus(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}sus {}", ext, alt)
+                        format!("{}sus{}", ext, alt_px(&alt))
                     }
                     SusSubtype::MajNSus(ext, alt) => {
                         let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("Maj{}sus {}", ext, alt)
-                    }
-                    SusSubtype::SixNineSus(alt) => {
-                        format!("6/9sus {}", alt)
+                        format!("{}{}sus{}", maj, ext, alt_px(&alt))
                     }
                 }
             },
             ChordQuality::Interval(ic) => ic.to_string(),
             ChordQuality::SingleNote => "note".to_owned(),
-        }.trim().to_string()
+        }
+    }
+}
+
+/// Render an `add` subtype: `Cadd9`, `Cmadd11`, `C6/9`, etc. `prefix` is the
+/// minor label when rendering a minor add chord; `None` leaves no prefix
+/// (major add).
+fn format_add(
+    prefix: Option<&str>,
+    adds: &[AddMember],
+    alt: &Alt,
+    cfg: &ChordNameDisplayConfig,
+) -> String {
+    let head = prefix.unwrap_or("");
+    let alt_str = alt.to_string_with(cfg);
+    // Special shorthand: adds == [Add6, Add9] renders as "6/9".
+    if adds.len() == 2
+        && adds.contains(&AddMember::Add6)
+        && adds.contains(&AddMember::Add9)
+    {
+        return if alt.is_empty() {
+            format!("{}6/9", head)
+        } else {
+            format!("{}6/9 {}", head, alt_str)
+        };
+    }
+    let body = adds
+        .iter()
+        .map(|m| format!("add{}", m.label()))
+        .collect::<Vec<_>>()
+        .join("");
+    if alt.is_empty() {
+        format!("{}{}", head, body)
+    } else {
+        format!("{}{} {}", head, body, alt_str)
     }
 }
 

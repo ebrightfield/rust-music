@@ -290,7 +290,7 @@ pub fn find_open_scale_shape<'a>(
     }
     let first_note = first_note.spelled_as_in(chord)?;
     let chord_vec = chord.clone();
-    let chord = NoteSet::new(chord.clone(), Some(&first_note.pitch.note));
+    let chord = NoteSet::with_root(chord.clone(), &first_note.pitch.note);
     // Re-spell every step result in the caller's scale so that subsequent
     // `next_note_*_string` lookups (which compare Notes by literal equality)
     // always see a scale member rather than an enharmonic stranger.
@@ -335,7 +335,7 @@ pub fn n_note_per_string_shape<'a>(
         return Err(MusicSemanticsError::InvalidNNotesPerString(n));
     }
     let starting_note = starting_note.spelled_as_in(chord)?;
-    let chord = NoteSet::new(chord.clone(), Some(&starting_note));
+    let chord = NoteSet::with_root(chord.clone(), &starting_note);
     let first_fretted_note = fretboard.note_on_string(&starting_note, 0)?;
     let mut using_value_1 = true;
     let mut shape = vec![first_fretted_note];
@@ -554,7 +554,7 @@ pub fn melodic_shapes_at_starting_note<'a>(
     // TODO We're normalizing the spelling because this is done in the Python, is this necessary?
     let starting_note = starting_note.spelled_as_in(chord)?;
     let chord_vec = chord.clone();
-    let chord = NoteSet::new(chord.clone(), Some(&starting_note));
+    let chord = NoteSet::with_root(chord.clone(), &starting_note);
     // Initialize the recursive search. We re-spell every freshly-constructed
     // SoundedNote into the caller's scale so that Note-equality lookups inside
     // NoteSet::up_n_steps succeed (SoundedNote construction uses default

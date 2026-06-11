@@ -37,8 +37,8 @@ use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillW
 use music_engraver::layout::trill_options::TrillExtensionFullOptions;
 use music_engraver::score::ScoreBuilder;
 
-fn p(note: Note, octave: u8) -> Pitch {
-    Pitch::new(note, octave).expect("valid pitch")
+fn p(note: Note, octave: i8) -> Pitch {
+    Pitch::new(note, octave)
 }
 
 /// The featured score: bracket+length on M1/M2, speed+length on M3/M4.

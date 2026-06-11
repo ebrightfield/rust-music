@@ -17,41 +17,41 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: pedal down on first note, up on last
-        .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::C, 4), Duration::QTR)
         .pedal_down()
-        .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::QTR)
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
-        .note(Pitch::new(Note::C, 5).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
+        .note(Pitch::new(Note::C, 5), Duration::QTR)
         .pedal_up()
         .barline()
         // Measure 2: pedal down on chord, up on last note
         .chord(
             vec![
-                Pitch::new(Note::F, 4).expect("valid pitch"),
-                Pitch::new(Note::A, 4).expect("valid pitch"),
-                Pitch::new(Note::C, 5).expect("valid pitch"),
+                Pitch::new(Note::F, 4),
+                Pitch::new(Note::A, 4),
+                Pitch::new(Note::C, 5),
             ],
             Duration::HALF,
         )
         .pedal_down()
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
-        .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
         .pedal_up()
         .barline()
         // Measure 3: quick pedal changes (re-pedaling technique)
-        .note(Pitch::new(Note::D, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .pedal_down()
-        .note(Pitch::new(Note::F, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::F, 4), Duration::QTR)
         .pedal_up()
-        .note(Pitch::new(Note::A, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::A, 4), Duration::QTR)
         .pedal_down()
-        .note(Pitch::new(Note::D, 5).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::D, 5), Duration::QTR)
         .pedal_up()
         .barline()
         // Measure 4: sustained pedal across the bar
-        .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::C, 4), Duration::HALF)
         .pedal_down()
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::G, 4), Duration::HALF)
         .pedal_up()
         .end_barline()
         .render_svg();

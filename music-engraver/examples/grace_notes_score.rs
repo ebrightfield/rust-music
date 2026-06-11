@@ -18,63 +18,63 @@ fn main() {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: acciaccatura grace notes (slashed)
-        .note(Pitch::new(Note::E, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
         .grace_note(
-            Pitch::new(Note::D, 4).expect("valid pitch"),
+            Pitch::new(Note::D, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::G, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::G, 4), Duration::QTR)
         .grace_note(
-            Pitch::new(Note::Fis, 4).expect("valid pitch"),
+            Pitch::new(Note::Fis, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::A, 4).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
         // Measure 2: appoggiatura grace notes (no slash)
-        .note(Pitch::new(Note::C, 5).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::C, 5), Duration::HALF)
         .grace_note(
-            Pitch::new(Note::B, 4).expect("valid pitch"),
+            Pitch::new(Note::B, 4),
             GraceNoteKind::Appoggiatura,
         )
-        .note(Pitch::new(Note::D, 5).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::D, 5), Duration::HALF)
         .grace_note(
-            Pitch::new(Note::Cis, 5).expect("valid pitch"),
+            Pitch::new(Note::Cis, 5),
             GraceNoteKind::Appoggiatura,
         )
         .barline()
         // Measure 3: grace notes on low and high notes
-        .note(Pitch::new(Note::C, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::C, 4), Duration::QTR)
         .grace_note(
-            Pitch::new(Note::B, 3).expect("valid pitch"),
+            Pitch::new(Note::B, 3),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::A, 5).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::A, 5), Duration::QTR)
         .grace_note(
-            Pitch::new(Note::G, 5).expect("valid pitch"),
+            Pitch::new(Note::G, 5),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::F, 4).expect("valid pitch"), Duration::HALF)
+        .note(Pitch::new(Note::F, 4), Duration::HALF)
         .barline()
         // Measure 4: grace note on a chord + rest (rest should be no-op)
         .chord(
             vec![
-                Pitch::new(Note::C, 4).expect("valid pitch"),
-                Pitch::new(Note::E, 4).expect("valid pitch"),
-                Pitch::new(Note::G, 4).expect("valid pitch"),
+                Pitch::new(Note::C, 4),
+                Pitch::new(Note::E, 4),
+                Pitch::new(Note::G, 4),
             ],
             Duration::HALF,
         )
         .grace_note(
-            Pitch::new(Note::B, 3).expect("valid pitch"),
+            Pitch::new(Note::B, 3),
             GraceNoteKind::Acciaccatura,
         )
         .rest(Duration::QTR)
         // Grace note on rest — should be no-op
         .grace_note(
-            Pitch::new(Note::A, 4).expect("valid pitch"),
+            Pitch::new(Note::A, 4),
             GraceNoteKind::Acciaccatura,
         )
-        .note(Pitch::new(Note::D, 4).expect("valid pitch"), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .end_barline()
         .render_svg();
 

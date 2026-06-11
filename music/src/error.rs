@@ -4,7 +4,7 @@ use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 use crate::note::spelling::{Accidental, Letter};
 use crate::note_collections::interval_class::IntervalClass;
-use crate::note_collections::PcSet;
+use crate::note_collections::pc_set::PcShape;
 
 #[derive(Debug, Clone, Error)]
 pub enum MusicSemanticsError {
@@ -37,8 +37,6 @@ pub enum MusicSemanticsError {
     /// This variant should never be seen by a user.
     #[error("Not a proper Pc for an alteration: {0:?}")]
     PcNotAnAlteration(usize),
-    #[error("A bad thing occurred that the developer didn't anticipate.")]
-    Unreachable,
     #[error("Moving midi_note {0} down an octave would put it below midi_note zero.")]
     OutOfBoundsLower(u8),
     #[error("Moving midi_note {0} up an octave would put it above midi_note bounds.")]
@@ -46,7 +44,7 @@ pub enum MusicSemanticsError {
     #[error("Not a valid choice for N notes per string: {0:?}")]
     InvalidNNotesPerString((usize, usize)),
     #[error("Size {0} too large for subchords on {1:?}")]
-    SizeTooLargeForSubchords(u8, PcSet),
+    SizeTooLargeForSubchords(u8, PcShape),
     #[error("Size {0} too small for chords")]
     SizeTooSmallForChords(usize),
     #[error("Collection size is not the same: {0} != {1}")]

@@ -56,6 +56,29 @@ impl<'a> LilypondStaff<'a> {
         self.automatic_bar_lines = draw_bar_lines;
         self
     }
+
+    /// Returns all voices in this staff, each as a slice of `LilypondVoiceElement`.
+    /// Used by `music::notation::rhythm::flatten::iter_events` (REQ-O16).
+    pub fn voices(&self) -> &[Vec<LilypondVoiceElement<'_>>] {
+        &self.voices
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::notation::lilypond::staff_elements::LilypondVoiceElement;
+    use crate::notation::rhythm::{RhythmicNotatedEvent, duration::Duration, duration::DurationKind};
+    use crate::note::pitch::Pitch;
+
+    #[test]
+    fn voices_returns_slice() {
+        let pitch = Pitch::from_midi(60).unwrap();
+        let event = RhythmicNotatedEvent::pitch(pitch, Duration::new(DurationKind::Qtr, 0));
+        let voice = vec![LilypondVoiceElement::Common(event)];
+        let staff = LilypondStaff::new().add_voice(voice);
+        assert_eq!(staff.voices().len(), 1);
+    }
 }
 
 impl<'a> ToLilypondString for LilypondStaff<'a> {

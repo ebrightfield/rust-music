@@ -1,0 +1,5 @@
+error[E0599]: no method named `modes` found for struct `PcContent` in the current scope
+  --> tests/compile_fail/content_modes.rs:10:15
+   |
+10 |     let _ = c.modes();   // must NOT compile: Modes not implemented for PcContent
+   |               ^^^^^ method not found in `PcContent`

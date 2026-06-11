@@ -1,0 +1,5 @@
+Set 1: {0, 4, 7} = C E G
+Set 2: {0, 4, 9} = C E A
+
+Common tones: {0, 4} = C E
+Count: 2

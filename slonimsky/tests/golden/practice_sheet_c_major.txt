@@ -1,0 +1,103 @@
+Practice Sheet: C Major
+============================================================
+
+SCALE
+-----
+  Notes: C D E F G A B
+  PCs:   {0, 2, 4, 5, 7, 9, 11}
+  Interval Vector: <2, 5, 4, 3, 6, 1>
+
+MODES
+-----
+   1. Ionian               C D E F G A B
+   2. Dorian               C D D#/Eb F G A A#/Bb
+   3. Phrygian             C C#/Db D#/Eb F G G#/Ab A#/Bb
+   4. Lydian               C D E F#/Gb G A B
+   5. Mixolydian           C D E F G A A#/Bb
+   6. Aeolian              C D D#/Eb F G G#/Ab A#/Bb
+   7. Locrian              C C#/Db D#/Eb F F#/Gb G#/Ab A#/Bb
+
+3-NOTE SUBCHORDS (35 total)
+----------------
+   1. CMaj (9)     C D E
+   2. Csus4        C D F
+   3. Csus2        C D G
+   4. CMaj6 (9)    C D A
+   5. CMaj7 (9)    C D B
+   6. CMaj (11)    C E F
+   7. CMaj         C E G
+   8. CMaj6        C E A
+   9. CMaj7 (no5)  C E B
+  10. Csus4        C F G
+  11. ?            C F A
+  12. CMaj7sus     C F B
+  13. CMaj6        C G A
+  14. CMaj7        C G B
+  15. ?            C A B
+  16. Dmin (9)     D E F
+  17. Dsus4        D E G
+  18. Dsus2        D E A
+  19. DMaj6 (9)    D E B
+  20. Dmin (11)    D F G
+  21. Dmin         D F A
+  22. Dmin6        D F B
+  23. Dsus4        D G A
+  24. ?            D G B
+  25. DMaj6        D A B
+  26. Emin (♭9)    E F G
+  27. Esus4 (♭9)   E F A
+  28. ?            E F B
+  29. Emin (11)    E G A
+  30. Emin         E G B
+  31. Esus4        E A B
+  32. FMaj (9)     F G A
+  33. ?            F G B
+  34. FMaj (♭5)    F A B
+  35. GMaj (9)     G A B
+
+4-NOTE SUBCHORDS (35 total)
+----------------
+   1. ?            C D E F
+   2. CMaj (9)     C D E G
+   3. CMaj6 (9)    C D E A
+   4. CMaj7 (no5) (9) C D E B
+   5. Csus4        C D F G
+   6. Csus4 (13)   C D F A
+   7. CMaj7sus     C D F B
+   8. Csus2 (13)   C D G A
+   9. Csus2        C D G B
+  10. CMaj7 (9, 13) C D A B
+  11. CMaj (11)    C E F G
+  12. ?            C E F A
+  13. CMaj7 (no5) (11) C E F B
+  14. CMaj6        C E G A
+  15. CMaj7        C E G B
+  16. CMaj7 (no5) (13) C E A B
+  17. Csus4 (13)   C F G A
+  18. CMaj7sus     C F G B
+  19. ?            C F A B
+  20. CMaj7 (13)   C G A B
+  21. ?            D E F G
+  22. Dmin (9)     D E F A
+  23. Dmin6 (9)    D E F B
+  24. Dsus4        D E G A
+  25. Dsus4 (13)   D E G B
+  26. Dsus2 (13)   D E A B
+  27. Dmin (11)    D F G A
+  28. ?            D F G B
+  29. Dmin6        D F A B
+  30. Dsus4 (13)   D G A B
+  31. ?            E F G A
+  32. Emin (♭9)    E F G B
+  33. ?            E F A B
+  34. Emin (11)    E G A B
+  35. FMaj (9, ♭5) F G A B
+
+PRACTICE SUGGESTIONS
+--------------------
+  1. Play the scale ascending and descending across all strings
+  2. Play each mode starting from its root degree
+  3. Arpeggiate each diatonic triad through the scale
+  4. Arpeggiate each diatonic seventh chord through the scale
+  5. Play the ii-V-I progression in this key:
+     ii:  D minor  →  V:  G dom7  →  I:  C major

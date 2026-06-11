@@ -9,8 +9,8 @@ use music::note::pitch::Pitch;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;
 
-fn p(note: Note, oct: u8) -> Pitch {
-    Pitch::new(note, oct).unwrap()
+fn p(note: Note, oct: i8) -> Pitch {
+    Pitch::new(note, oct)
 }
 
 fn main() {
