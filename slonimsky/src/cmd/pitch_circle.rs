@@ -75,9 +75,8 @@ mod tests {
 
     #[test]
     fn run_produces_svg_to_file() {
-        let dir = std::env::temp_dir().join("slonimsky_test_pc");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test.svg");
         let args = PitchCircleArgs {
             input: vec!["0".into(), "4".into(), "7".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -93,7 +92,5 @@ mod tests {
         assert!(content.contains("</svg>"), "SVG should be closed");
         assert!(content.contains("<circle") || content.contains("<text"),
             "SVG should contain graphical elements");
-        // Clean up
-        let _ = std::fs::remove_file(&out);
     }
 }

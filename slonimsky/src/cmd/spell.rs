@@ -39,17 +39,22 @@ impl SpellFormat {
 }
 
 /// Spell the notes of a chord from a root note, given the PcSet.
+///
+/// `pcs` is the chord's root-relative `PcShape` (zeroed so the root is `Pc0`),
+/// so each `Pc`'s integer value is already the interval from the root.
 /// Returns notes in root-based order (root first, ascending).
 fn spell_from_root(root: Note, pcs: &[Pc]) -> Vec<Note> {
-    let root_pc = Pc::from(&root);
-    let root_val = u8::from(&root_pc);
+    let root_val = u8::from(&Pc::from(&root));
 
-    // Build (interval_from_root, pc) pairs and sort by interval
+    // Build (interval_from_root, absolute_pc) pairs and sort by interval.
+    // pcs are root-relative, so the pc value IS the interval; shift to absolute
+    // before looking up enharmonic candidates.
     let mut entries: Vec<(u8, Pc)> = pcs
         .iter()
-        .map(|&pc| {
-            let interval = (u8::from(&pc) + 12 - root_val) % 12;
-            (interval, pc)
+        .map(|&zeroed_pc| {
+            let interval = u8::from(&zeroed_pc);
+            let absolute_pc = Pc::from((interval + root_val) % 12);
+            (interval, absolute_pc)
         })
         .collect();
     entries.sort_by_key(|(interval, _)| *interval);
@@ -63,43 +68,57 @@ fn spell_from_root(root: Note, pcs: &[Pc]) -> Vec<Note> {
 
 /// Choose the most contextually appropriate Note spelling for a Pc,
 /// preferring spellings consistent with the root's accidental tendency.
+///
+/// Priority:
+///   1. A natural (no-accidental) spelling, if one exists.
+///   2. A single-accidental spelling matching the root's flat/sharp tendency.
+///   3. Any single-accidental spelling.
+///   4. The first candidate (fallback; avoids double accidentals).
 fn pick_spelling(root: Note, pc: Pc) -> Note {
     let candidates = pc.notes();
     if candidates.len() == 1 {
         return candidates[0];
     }
 
-    // If the root is sharp-flavored, prefer sharp spellings; if flat, prefer flats
+    if let Some(n) = candidates.iter().find(|n| is_natural(n)) {
+        return *n;
+    }
+
     let root_prefers_flats = matches!(
         root,
         Note::F | Note::Bes | Note::Ees | Note::Aes | Note::Des | Note::Ges | Note::Ces
     );
 
-    if root_prefers_flats {
-        // Prefer flat spelling: Bes over Ais, Es over Dis, etc.
-        // Flats tend to be listed second in notes() for chromatic pcs
-        candidates
-            .iter()
-            .find(|n| is_flat_spelling(n))
-            .or(candidates.first())
-            .copied()
-            .unwrap()
+    let preferred = if root_prefers_flats {
+        candidates.iter().find(|n| is_single_flat(n))
     } else {
-        // Prefer natural or sharp spelling
-        candidates
-            .iter()
-            .find(|n| !is_flat_spelling(n))
-            .or(candidates.first())
-            .copied()
-            .unwrap()
-    }
+        candidates.iter().find(|n| is_single_sharp(n))
+    };
+
+    preferred
+        .or_else(|| candidates.iter().find(|n| is_single_flat(n) || is_single_sharp(n)))
+        .copied()
+        .unwrap_or(candidates[0])
 }
 
-fn is_flat_spelling(note: &Note) -> bool {
+fn is_natural(note: &Note) -> bool {
     matches!(
         note,
-        Note::Des | Note::Ees | Note::Ges | Note::Aes | Note::Bes
-            | Note::Deses | Note::Fes | Note::Eeses
+        Note::C | Note::D | Note::E | Note::F | Note::G | Note::A | Note::B
+    )
+}
+
+fn is_single_flat(note: &Note) -> bool {
+    matches!(
+        note,
+        Note::Des | Note::Ees | Note::Fes | Note::Ges | Note::Aes | Note::Bes | Note::Ces
+    )
+}
+
+fn is_single_sharp(note: &Note) -> bool {
+    matches!(
+        note,
+        Note::Cis | Note::Dis | Note::Eis | Note::Fis | Note::Gis | Note::Ais | Note::Bis
     )
 }
 
@@ -136,13 +155,9 @@ pub fn run(args: SpellArgs) -> Result<()> {
 
     let pcs: Vec<Pc> = chord.pc_shape.iter().copied().collect();
     let notes = spell_from_root(root, &pcs);
-    let root_val = u8::from(&Pc::from(&root));
 
-    // Intervals sorted by distance from root
-    let mut intervals: Vec<u8> = pcs
-        .iter()
-        .map(|pc| (u8::from(pc) + 12 - root_val) % 12)
-        .collect();
+    // pc_shape is root-relative, so each Pc value IS the interval from the root.
+    let mut intervals: Vec<u8> = pcs.iter().map(|pc| u8::from(pc)).collect();
     intervals.sort();
 
     // Display config for the chord quality label in verbose mode
@@ -225,7 +240,23 @@ mod tests {
         let notes = spell_from_root(root, &pcs);
         // Dm7 = D F A C — four notes
         assert_eq!(notes.len(), 4);
-        assert_eq!(notes[0], Note::D);
+        assert_eq!(notes, vec![Note::D, Note::F, Note::A, Note::C]);
+    }
+
+    #[test]
+    fn spell_ebmaj7_notes_prefers_flats() {
+        // Eb is in the flat-preferring list; verifies pick_spelling + the
+        // zeroed-pc → absolute-pc shift land on Eb G Bb D rather than the
+        // sharp enharmonics.
+        let chord = ChordName::from_symbol("Ebmaj7").unwrap();
+        let root = match &chord.tonality {
+            TonalSpecification::RootPosition(r) => *r,
+            _ => panic!("expected root position"),
+        };
+        assert_eq!(root, Note::Ees);
+        let pcs: Vec<Pc> = chord.pc_shape.iter().copied().collect();
+        let notes = spell_from_root(root, &pcs);
+        assert_eq!(notes, vec![Note::Ees, Note::G, Note::Bes, Note::D]);
     }
 
     #[test]

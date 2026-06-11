@@ -146,9 +146,8 @@ mod tests {
             full: false,
         };
         // Capture by writing to file
-        let dir = std::env::temp_dir().join("slonimsky_test_im");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("matrix.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("matrix.txt");
         let args = IntervalMatrixArgs {
             output: Some(out.to_string_lossy().into_owned()),
             ..args
@@ -166,14 +165,12 @@ mod tests {
         let inner = iv_line.split('<').nth(1).unwrap().split('>').next().unwrap();
         let vals: Vec<usize> = inner.split(',').map(|s| s.trim().parse().unwrap()).collect();
         assert_eq!(vals.len(), 6, "reduced IV should have 6 elements");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn text_output_with_title() {
-        let dir = std::env::temp_dir().join("slonimsky_test_im2");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("titled.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("titled.txt");
         let args = IntervalMatrixArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -185,14 +182,12 @@ mod tests {
         run(args).unwrap();
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(content.starts_with("C Major Triad"));
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn svg_output_valid() {
-        let dir = std::env::temp_dir().join("slonimsky_test_im3");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("matrix.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("matrix.svg");
         let args = IntervalMatrixArgs {
             input: vec!["0".into(), "3".into(), "6".into(), "9".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -210,14 +205,12 @@ mod tests {
             content.contains("<text") || content.contains("<rect"),
             "SVG should contain matrix elements"
         );
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn full_vector_mode() {
-        let dir = std::env::temp_dir().join("slonimsky_test_im4");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("full.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("full.txt");
         let args = IntervalMatrixArgs {
             input: vec!["0".into(), "4".into(), "7".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -232,7 +225,6 @@ mod tests {
             content.contains("Full interval vector:"),
             "should show full vector"
         );
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]

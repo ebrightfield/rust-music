@@ -127,18 +127,18 @@ fn write_text(pc_set: &PcContent, args: &IntervalVectorArgs) -> Result<()> {
 mod tests {
     use super::*;
 
+    /// Run with a fresh per-call tempdir and return the text the command wrote
+    /// to its output path. The tempdir is dropped (and deleted) when this
+    /// function returns, including on panic.
     fn run_to_string(args: IntervalVectorArgs) -> String {
-        let dir = std::env::temp_dir().join("slonimsky_test_iv");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("iv_test.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("iv.txt");
         let args = IntervalVectorArgs {
             output: Some(out.to_string_lossy().into_owned()),
             ..args
         };
         run(args).unwrap();
-        let content = std::fs::read_to_string(&out).unwrap();
-        let _ = std::fs::remove_file(&out);
-        content
+        std::fs::read_to_string(&out).unwrap()
     }
 
     #[test]
@@ -217,9 +217,8 @@ mod tests {
 
     #[test]
     fn svg_output_valid() {
-        let dir = std::env::temp_dir().join("slonimsky_test_iv_svg");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("vector.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("vector.svg");
         let args = IntervalVectorArgs {
             input: vec!["0".into(), "4".into(), "7".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -234,14 +233,12 @@ mod tests {
         assert!(content.contains("</svg>"), "SVG should close");
         assert!(content.contains("<rect") || content.contains("<text"),
             "SVG should contain bar chart elements");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn svg_full_vector_output() {
-        let dir = std::env::temp_dir().join("slonimsky_test_iv_svg_full");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("vector_full.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("vector_full.svg");
         let args = IntervalVectorArgs {
             input: vec!["0".into(), "4".into(), "7".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -254,6 +251,5 @@ mod tests {
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(content.starts_with("<svg"));
         assert!(content.contains("</svg>"));
-        let _ = std::fs::remove_file(&out);
     }
 }

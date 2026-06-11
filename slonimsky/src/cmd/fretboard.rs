@@ -132,9 +132,8 @@ mod tests {
 
     #[test]
     fn run_c_major_shape() {
-        let dir = std::env::temp_dir().join("slonimsky_test_fb");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_fretboard.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_fretboard.svg");
         let args = FretboardArgs {
             frets: "x-3-2-0-1-0".into(),
             output: Some(out.to_string_lossy().into_owned()),
@@ -155,7 +154,6 @@ mod tests {
             content.contains("<circle") || content.contains("<rect"),
             "SVG should contain fret position markers"
         );
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
