@@ -268,9 +268,8 @@ mod tests {
 
     #[test]
     fn text_output_has_header_and_total() {
-        let dir = std::env::temp_dir().join("slonimsky_test_cd");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_cd.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_cd.txt");
         let args = ChordDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -285,14 +284,12 @@ mod tests {
         assert!(content.contains("Chord dictionary:"), "should have header");
         assert!(content.contains("Total:"), "should have total line");
         assert!(content.contains("Max span: 4"), "should show max span");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn svg_output_valid() {
-        let dir = std::env::temp_dir().join("slonimsky_test_cd");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_cd.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_cd.svg");
         let args = ChordDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -307,14 +304,12 @@ mod tests {
         assert!(content.starts_with("<svg"), "should start with <svg");
         assert!(content.contains("</svg>"), "should close with </svg>");
         assert!(content.contains("<g transform"), "should have positioned groups");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn reject_bad_extension() {
-        let dir = std::env::temp_dir().join("slonimsky_test_cd");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_cd.pdf");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_cd.pdf");
         let args = ChordDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),

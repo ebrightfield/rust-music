@@ -323,9 +323,8 @@ mod tests {
 
     #[test]
     fn svg_output_valid() {
-        let dir = std::env::temp_dir().join("slonimsky_test_sb");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test.svg");
         let args = ScaleBookArgs {
             scale: "major".into(),
             keys: Some("C,G".into()),
@@ -340,6 +339,5 @@ mod tests {
         assert!(content.contains("Ionian"), "should contain mode name");
         assert!(content.contains("Locrian"), "should contain last mode");
         assert!(content.contains("Scale Book"), "should contain title");
-        let _ = std::fs::remove_file(&out);
     }
 }

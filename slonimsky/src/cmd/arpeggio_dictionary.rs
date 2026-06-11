@@ -362,9 +362,8 @@ mod tests {
 
     #[test]
     fn single_key_produces_output() {
-        let dir = std::env::temp_dir().join("slonimsky_test_arp");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_arp.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_arp.txt");
         let args = ArpeggioDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -380,14 +379,12 @@ mod tests {
         assert!(content.contains("Arpeggio Dictionary:"), "should have header");
         assert!(content.contains("Key: C"), "should have key header");
         assert!(content.contains("Total:"), "should have total line");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn svg_output_valid() {
-        let dir = std::env::temp_dir().join("slonimsky_test_arp");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_arp.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_arp.svg");
         let args = ArpeggioDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -404,14 +401,12 @@ mod tests {
         assert!(content.contains("</svg>"), "should close with </svg>");
         assert!(content.contains("Arpeggio Dictionary:"), "should have title");
         assert!(content.contains("<g transform"), "should have positioned groups");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn reject_bad_extension() {
-        let dir = std::env::temp_dir().join("slonimsky_test_arp");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_arp.pdf");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_arp.pdf");
         let args = ArpeggioDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out.to_string_lossy().into_owned()),
@@ -427,10 +422,9 @@ mod tests {
 
     #[test]
     fn multiple_keys_multiply_shapes() {
-        let dir = std::env::temp_dir().join("slonimsky_test_arp");
-        let _ = std::fs::create_dir_all(&dir);
-        let out1 = dir.join("test_arp_1key.txt");
-        let out3 = dir.join("test_arp_3keys.txt");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out1 = tmp.path().join("test_arp_1key.txt");
+        let out3 = tmp.path().join("test_arp_3keys.txt");
         let args1 = ArpeggioDictionaryArgs {
             input: vec!["C".into(), "E".into(), "G".into()],
             output: Some(out1.to_string_lossy().into_owned()),
@@ -461,7 +455,5 @@ mod tests {
         assert!(content3.contains("Key: C"));
         assert!(content3.contains("Key: G"));
         assert!(content3.contains("Key: D"));
-        let _ = std::fs::remove_file(&out1);
-        let _ = std::fs::remove_file(&out3);
     }
 }

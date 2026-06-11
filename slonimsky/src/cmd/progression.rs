@@ -609,9 +609,8 @@ mod tests {
     #[test]
     #[cfg(feature = "midi")]
     fn progression_midi_output() {
-        let dir = std::env::temp_dir().join("slonimsky_test_prog_midi");
-        let _ = std::fs::create_dir_all(&dir);
-        let midi_path = dir.join("test_prog.mid");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let midi_path = tmp.path().join("test_prog.mid");
         let args = ProgressionArgs {
             chords: vec!["C,E,G".to_string(), "F,A,C".to_string(), "G,B,D".to_string()],
             no_crossings: false,
@@ -628,7 +627,6 @@ mod tests {
         // Check MTrk marker exists at least twice
         let mtrk_count = bytes.windows(4).filter(|w| w == b"MTrk").count();
         assert_eq!(mtrk_count, 2, "should have 2 tracks (conductor + notes)");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

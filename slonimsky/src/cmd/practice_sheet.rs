@@ -495,9 +495,8 @@ mod tests {
 
     #[test]
     fn svg_output_valid() {
-        let dir = std::env::temp_dir().join("slonimsky_test_ps");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test.svg");
         let args = PracticeSheetArgs {
             key: Some("C".into()),
             scale: Some("major".into()),
@@ -514,14 +513,12 @@ mod tests {
         assert!(content.contains("Modes"), "should contain modes section");
         assert!(content.contains("3-Note Subchords"), "should contain triads");
         assert!(content.contains("4-Note Subchords"), "should contain sevenths");
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
     fn svg_dark_theme() {
-        let dir = std::env::temp_dir().join("slonimsky_test_ps_dark");
-        let _ = std::fs::create_dir_all(&dir);
-        let out = dir.join("test_dark.svg");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("test_dark.svg");
         let args = PracticeSheetArgs {
             key: Some("D".into()),
             scale: Some("harmonic-minor".into()),
@@ -533,7 +530,6 @@ mod tests {
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(content.starts_with("<svg"));
         assert!(content.contains("D Harmonic Minor"));
-        let _ = std::fs::remove_file(&out);
     }
 
     #[test]
