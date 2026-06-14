@@ -1,3 +1,7 @@
 /target
 .idea
 docs/.obsidian
+
+# Vendored cargo registry/home from containerized runs — never commit
+/.cargo
+/.cargo-home
