@@ -2823,6 +2823,55 @@
         assert_eq!(via_try, via_convenience);
     }
 
+    #[cfg(feature = "png")]
+    #[test]
+    fn save_png_writes_same_bytes_as_render_png() {
+        let builder = || {
+            ScoreBuilder::new()
+                .clef(Clef::Treble)
+                .time_signature(4, 4)
+                .note(p("C", 4), Duration::QTR)
+                .note(p("E", 4), Duration::QTR)
+                .end_barline()
+        };
+
+        // Unique path under the OS temp dir; no extra dev-dependency needed.
+        let path = std::env::temp_dir().join(format!(
+            "music-engraver-save-png-{}.png",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+
+        builder().save_png(&path, 1.0).expect("save_png should succeed");
+        let on_disk = std::fs::read(&path).expect("read written PNG");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(&on_disk[0..4], &[0x89, b'P', b'N', b'G'], "PNG magic bytes");
+        assert_eq!(
+            on_disk,
+            builder().render_png(1.0),
+            "save_png must write exactly the render_png bytes"
+        );
+    }
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn save_png_to_unwritable_path_returns_io_error() {
+        // A path whose parent directory does not exist must surface as Io, not panic.
+        let bad = std::path::Path::new("/nonexistent-dir-xyz/score.png");
+        let err = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .time_signature(4, 4)
+            .note(p("C", 4), Duration::QTR)
+            .end_barline()
+            .save_png(bad, 1.0)
+            .expect_err("writing to a nonexistent dir should fail");
+        assert!(
+            matches!(err, crate::error::EngraverError::Io(_)),
+            "expected Io error, got {err:?}"
+        );
+    }
+
     // ---- Articulation tests ----
 
     #[test]

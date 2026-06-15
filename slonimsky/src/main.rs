@@ -329,6 +329,36 @@ enum Commands {
         /// Random seed for reproducible exercises
         #[arg(long)]
         seed: Option<u64>,
+
+        /// Clef for notation output: treble (default), treble-8 (guitar), bass
+        #[arg(long)]
+        clef: Option<String>,
+    },
+    /// Generate a rhythm-dictation / clapping drill (text or staff notation)
+    RhythmDrill {
+        /// Time signature as N/D (default: 4/4)
+        #[arg(long)]
+        time_sig: Option<String>,
+
+        /// Feel: straight (default), swing, latin
+        #[arg(long)]
+        style: Option<String>,
+
+        /// Syncopation level 0–3 (default: 1)
+        #[arg(long, default_value = "1")]
+        syncopation: u8,
+
+        /// Number of measures to generate (default: 4)
+        #[arg(long, default_value = "4")]
+        measures: usize,
+
+        /// Clef for notation output: treble (default), treble-8 (guitar), bass
+        #[arg(long)]
+        clef: Option<String>,
+
+        /// Random seed for reproducible drills
+        #[arg(long)]
+        seed: Option<u64>,
     },
     /// Analyze a chord progression: key estimation, Roman numerals, common tones, voice-leading cost
     Analyze {
@@ -650,6 +680,7 @@ fn main() -> Result<()> {
             difficulty,
             measures,
             seed,
+            clef,
         } => {
             cmd::sight_reading::run(cmd::sight_reading::SightReadingArgs {
                 key,
@@ -657,6 +688,27 @@ fn main() -> Result<()> {
                 difficulty,
                 measures,
                 seed,
+                clef,
+                output: cli.output,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::RhythmDrill {
+            time_sig,
+            style,
+            syncopation,
+            measures,
+            clef,
+            seed,
+        } => {
+            cmd::rhythm_drill::run(cmd::rhythm_drill::RhythmDrillArgs {
+                time_sig,
+                style,
+                syncopation,
+                measures,
+                clef,
+                seed,
+                output: cli.output,
                 verbose: cli.verbose,
             })?;
         }

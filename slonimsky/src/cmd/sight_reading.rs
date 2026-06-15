@@ -5,7 +5,8 @@ use music::melody::sequencer::{MelodicEvent, MelodicSequencer, MelodicSequencerC
 use music::melody::{Direction, PitchBounds, TurnaroundMode};
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::{AsPcSlice, PcShape};
+use music::note_collections::pc_set::PcShape;
+use music::note_collections::spelling::spell_shape;
 use music::note_collections::NoteSet;
 use music::note_collections::OctavePartition;
 use music::note::pitch::Pitch;
@@ -13,6 +14,17 @@ use music::notation::rhythm::duration::{Duration, DurationKind};
 use musical_combinatorics::seven_note_scales::SevenNoteScaleQuality;
 
 use super::input::parse_pc;
+use super::notation_out::{key_signature_for, render_melody_to_file, ClefChoice};
+
+/// Whether a scale quality should be notated with a minor-style key signature
+/// (based on its parent natural minor). Melodic/harmonic minor are
+/// minor-flavored; major and harmonic major use the major signature.
+fn is_minor_flavored(quality: &SevenNoteScaleQuality) -> bool {
+    matches!(
+        quality,
+        SevenNoteScaleQuality::MelodicMinor | SevenNoteScaleQuality::HarmonicMinor
+    )
+}
 
 pub struct SightReadingArgs {
     pub key: Option<String>,
@@ -20,16 +32,72 @@ pub struct SightReadingArgs {
     pub difficulty: u8,
     pub measures: usize,
     pub seed: Option<u64>,
+    pub clef: Option<String>,
+    pub output: Option<String>,
     pub verbose: bool,
 }
 
-/// Resolve key name to a root Note.
+/// Resolve a key name to a root `Note`, preserving the user's spelling intent.
+///
+/// When the user types a note name (`Bb`, `F#`, `Eb`, …) we honor that exact
+/// spelling so the key reads and notates conventionally (`Bb major`, not
+/// `A# major`). For an integer pitch-class input we fall back to the
+/// conventional key spelling for that pitch class (flat-preferring for the keys
+/// usually written with flats).
 fn resolve_key(key_str: Option<&str>) -> Result<Note> {
-    let s = key_str.unwrap_or("C");
+    let s = key_str.unwrap_or("C").trim();
+    // First, honor an explicit spelled note name.
+    if let Some(note) = parse_key_note(s) {
+        return Ok(note);
+    }
+    // Otherwise it must be an integer pitch class — map to a conventional key.
     let pc = parse_pc(s).with_context(|| format!("Invalid key: '{s}'"))?;
-    // Pick the first (sharpward) spelling for the root
-    let notes = pc.notes();
-    Ok(notes[0])
+    Ok(conventional_key_note(pc))
+}
+
+/// Parse an explicit note-name key into a spelled `Note`, or `None` if the
+/// token isn't a recognized note name (e.g. an integer pitch class).
+fn parse_key_note(token: &str) -> Option<Note> {
+    match token.to_lowercase().as_str() {
+        "c" => Some(Note::C),
+        "c#" | "cis" | "c♯" => Some(Note::Cis),
+        "db" | "des" | "d♭" => Some(Note::Des),
+        "d" => Some(Note::D),
+        "d#" | "dis" | "d♯" => Some(Note::Dis),
+        "eb" | "es" | "ees" | "e♭" => Some(Note::Ees),
+        "e" => Some(Note::E),
+        "f" => Some(Note::F),
+        "f#" | "fis" | "f♯" => Some(Note::Fis),
+        "gb" | "ges" | "g♭" => Some(Note::Ges),
+        "g" => Some(Note::G),
+        "g#" | "gis" | "g♯" => Some(Note::Gis),
+        "ab" | "as" | "aes" | "a♭" => Some(Note::Aes),
+        "a" => Some(Note::A),
+        "a#" | "ais" | "a♯" => Some(Note::Ais),
+        "bb" | "bes" | "b♭" => Some(Note::Bes),
+        "b" => Some(Note::B),
+        _ => None,
+    }
+}
+
+/// Conventional major-key spelling for a pitch class given only an integer.
+/// Prefers the flat spelling for the keys usually written with flats
+/// (Db, Eb, Ab, Bb) and sharps elsewhere — matching how players name keys.
+fn conventional_key_note(pc: Pc) -> Note {
+    match u8::from(&pc) {
+        0 => Note::C,
+        1 => Note::Des,  // Db major
+        2 => Note::D,
+        3 => Note::Ees,  // Eb major
+        4 => Note::E,
+        5 => Note::F,
+        6 => Note::Fis,  // F# major (could be Gb; F# is the common choice)
+        7 => Note::G,
+        8 => Note::Aes,  // Ab major
+        9 => Note::A,
+        10 => Note::Bes, // Bb major
+        _ => Note::B,
+    }
 }
 
 /// Resolve scale name to a SevenNoteScaleQuality.
@@ -46,22 +114,23 @@ fn resolve_scale(name: Option<&str>) -> Result<SevenNoteScaleQuality> {
     }
 }
 
-/// Transpose a slice of pitch classes by semitones.
-fn transpose_pcs(pcs: &[Pc], semitones: u8) -> Vec<Pc> {
-    pcs.iter()
-        .map(|&pc| Pc::from((u8::from(pc) + semitones) % 12))
-        .collect()
-}
-
-/// Build a NoteSet for the given key and scale quality.
-fn build_scale_noteset(root: Note, quality: SevenNoteScaleQuality) -> NoteSet {
+/// Build a NoteSet for the given key and scale quality, with key-aware
+/// enharmonic spelling.
+///
+/// The scale's interval template (a root-relative [`PcShape`]) is spelled
+/// against `root` via [`spell_shape`], which assigns each scale degree a
+/// distinct letter name and the correct accidental for the key (e.g. Bb major
+/// → `Bb C D Eb F G A`, not `A# C D D# F G A`). The resulting notes are anchored
+/// to `root` so the sequencer's step logic starts on the tonic.
+///
+/// Errors only when `root` is a double-accidental spelling (not a valid
+/// practice key), propagated from [`spell_shape`].
+fn build_scale_noteset(root: Note, quality: SevenNoteScaleQuality) -> Result<NoteSet> {
     let partition = OctavePartition::from(&quality);
-    let parent_pcs = PcShape::from(&partition);
-    let root_pc = Pc::from(&root);
-    let transposed = transpose_pcs(parent_pcs.as_pc_slice(), u8::from(root_pc));
-    // Map PCs to Notes via first available spelling
-    let notes: Vec<Note> = transposed.iter().map(|pc| pc.notes()[0]).collect();
-    NoteSet::new(notes)
+    let parent_shape = PcShape::from(&partition);
+    let notes = spell_shape(&root, &parent_shape)
+        .map_err(|e| anyhow::anyhow!("cannot spell {root} scale: {e:?}"))?;
+    Ok(NoteSet::with_root(notes, &root))
 }
 
 /// Build an IntervalPattern and rhythm pattern based on difficulty (1–5).
@@ -178,7 +247,9 @@ fn format_pitch(pitch: &Pitch) -> String {
 pub fn run(args: SightReadingArgs) -> Result<()> {
     let root = resolve_key(args.key.as_deref())?;
     let quality = resolve_scale(args.scale.as_deref())?;
-    let scale = build_scale_noteset(root, quality);
+    // Capture before `quality` is moved into the noteset builder.
+    let minor_flavored = is_minor_flavored(&quality);
+    let scale = build_scale_noteset(root, quality)?;
 
     if args.difficulty < 1 || args.difficulty > 5 {
         anyhow::bail!("difficulty must be 1–5 (got {})", args.difficulty);
@@ -216,6 +287,20 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
     let mut sequencer = MelodicSequencer::new(config);
     let melody = sequencer.generate()
         .map_err(|e| anyhow::anyhow!("Melody generation failed: {e:?}"))?;
+
+    // If an output file was requested, render staff notation via the engraver
+    // and return — the text report is the no-output default.
+    if let Some(ref path) = args.output {
+        let clef = ClefChoice::from_str_opt(args.clef.as_deref())?;
+        let key_sig = key_signature_for(root, minor_flavored);
+        let n = render_melody_to_file(&melody, clef, key_sig, path)?;
+        if args.verbose {
+            eprintln!("wrote {path} ({n} bytes)");
+        } else {
+            println!("Wrote {path}");
+        }
+        return Ok(());
+    }
 
     // Print header
     let scale_name = args.scale.as_deref().unwrap_or("major");
@@ -298,6 +383,53 @@ mod tests {
     }
 
     #[test]
+    fn resolve_key_preserves_flat_spelling() {
+        // Bb must stay Bb, not collapse to the sharpward A#.
+        assert_eq!(resolve_key(Some("Bb")).unwrap(), Note::Bes);
+        assert_eq!(resolve_key(Some("Eb")).unwrap(), Note::Ees);
+        assert_eq!(resolve_key(Some("Ab")).unwrap(), Note::Aes);
+        assert_eq!(resolve_key(Some("F#")).unwrap(), Note::Fis);
+    }
+
+    #[test]
+    fn resolve_key_integer_uses_conventional_spelling() {
+        // Pc 10 → Bb (flat key), Pc 6 → F#.
+        assert_eq!(resolve_key(Some("10")).unwrap(), Note::Bes);
+        assert_eq!(resolve_key(Some("3")).unwrap(), Note::Ees);
+        assert_eq!(resolve_key(Some("6")).unwrap(), Note::Fis);
+    }
+
+    #[test]
+    fn bb_major_scale_is_flat_spelled() {
+        // The headline gaps-doc bug: Bb major must spell Bb C D Eb F G A,
+        // never A# / D#.
+        let scale = build_scale_noteset(Note::Bes, SevenNoteScaleQuality::Major).unwrap();
+        let notes: Vec<Note> = scale.iter().copied().collect();
+        assert!(notes.contains(&Note::Bes), "should contain Bb");
+        assert!(notes.contains(&Note::Ees), "should contain Eb");
+        assert!(!notes.contains(&Note::Ais), "must NOT contain A#");
+        assert!(!notes.contains(&Note::Dis), "must NOT contain D#");
+    }
+
+    #[test]
+    fn g_melodic_minor_has_correct_accidentals() {
+        // G melodic minor: G A Bb C D E F# — flat 3, raised 7.
+        let scale = build_scale_noteset(Note::G, SevenNoteScaleQuality::MelodicMinor).unwrap();
+        let notes: Vec<Note> = scale.iter().copied().collect();
+        assert!(notes.contains(&Note::Bes), "b3 should be Bb");
+        assert!(notes.contains(&Note::Fis), "raised 7 should be F#");
+        assert!(!notes.contains(&Note::Ais), "must NOT contain A#");
+    }
+
+    #[test]
+    fn fsharp_major_spells_eis() {
+        // F# major's 7th degree is E#, not F natural.
+        let scale = build_scale_noteset(Note::Fis, SevenNoteScaleQuality::Major).unwrap();
+        let notes: Vec<Note> = scale.iter().copied().collect();
+        assert!(notes.contains(&Note::Eis), "leading tone should be E#");
+    }
+
+    #[test]
     fn resolve_scale_major() {
         let q = resolve_scale(Some("major")).unwrap();
         assert_eq!(q, SevenNoteScaleQuality::Major);
@@ -330,7 +462,7 @@ mod tests {
     fn generate_melody_produces_events() {
         let root = resolve_key(Some("C")).unwrap();
         let quality = resolve_scale(Some("major")).unwrap();
-        let scale = build_scale_noteset(root, quality);
+        let scale = build_scale_noteset(root, quality).unwrap();
         let (pattern, rhythm) = difficulty_config(2, Some(42));
 
         let config = MelodicSequencerConfig {

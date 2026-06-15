@@ -1672,6 +1672,25 @@ impl ScoreBuilder {
         self.try_render_png(scale)
             .expect("bundled Bravura font and PNG pipeline should not fail for valid input")
     }
+
+    /// Render the score to PNG at the given scale factor and write it to `path`.
+    ///
+    /// Convenience wrapper combining [`try_render_png`](Self::try_render_png)
+    /// with [`std::fs::write`]. Returns an [`EngraverError::Io`] if the file
+    /// cannot be written, or [`EngraverError::Png`] if rendering fails.
+    ///
+    /// [`EngraverError::Io`]: crate::error::EngraverError::Io
+    /// [`EngraverError::Png`]: crate::error::EngraverError::Png
+    #[cfg(feature = "png")]
+    pub fn save_png(
+        self,
+        path: impl AsRef<std::path::Path>,
+        scale: f32,
+    ) -> Result<(), crate::error::EngraverError> {
+        let bytes = self.try_render_png(scale)?;
+        std::fs::write(path, bytes)?;
+        Ok(())
+    }
 }
 
 impl Default for ScoreBuilder {

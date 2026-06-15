@@ -22,4 +22,10 @@ pub enum EngraverError {
     #[cfg(feature = "png")]
     #[error(transparent)]
     Png(#[from] crate::render::png::PngError),
+
+    /// Writing rendered output to disk failed (requires the `png` feature,
+    /// used by the `save_png` convenience methods).
+    #[cfg(feature = "png")]
+    #[error("failed to write PNG to disk: {0}")]
+    Io(#[from] std::io::Error),
 }

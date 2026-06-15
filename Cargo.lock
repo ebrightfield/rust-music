@@ -1913,6 +1913,7 @@ dependencies = [
  "clap",
  "midly",
  "music",
+ "music-engraver",
  "music-midi",
  "musical-combinatorics",
  "predicates",

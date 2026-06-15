@@ -58,6 +58,18 @@ impl PngRenderer {
         Self { fontdb, scale }
     }
 
+    /// Create a new renderer targeting the given output resolution in dots per
+    /// inch, with the bundled Bravura font loaded.
+    ///
+    /// The engraver's SVG declares its `width`/`height` in unitless user units,
+    /// which resvg treats as CSS pixels at the [`BASELINE_DPI`] reference of 96
+    /// px/in. This constructor maps a physical DPI onto the scale factor as
+    /// `scale = dpi / BASELINE_DPI`, so `dpi_to_scale(96.0)` is `1.0` and
+    /// `dpi_to_scale(300.0)` (print resolution) is `3.125`.
+    pub fn with_dpi(dpi: f32) -> Self {
+        Self::new(dpi_to_scale(dpi))
+    }
+
     /// Load system fonts into the font database.
     ///
     /// Required if the SVG contains `<text>` elements that reference
@@ -130,6 +142,21 @@ pub fn svg_to_png(svg: &str, scale: f32) -> Result<Vec<u8>, PngError> {
 /// guards — they can call this at runtime instead.
 pub const fn is_available() -> bool {
     true
+}
+
+/// Reference resolution, in dots per inch, that scale factor `1.0` corresponds
+/// to. The engraver's SVG dimensions are unitless and rasterized as CSS pixels,
+/// which the SVG/CSS standard pins at 96 px per inch.
+pub const BASELINE_DPI: f32 = 96.0;
+
+/// Convert a target output resolution (dots per inch) to the scale factor that
+/// [`PngRenderer::new`] expects, relative to the [`BASELINE_DPI`] of 96 px/in.
+///
+/// `dpi_to_scale(96.0) == 1.0`; `dpi_to_scale(192.0) == 2.0` (retina);
+/// `dpi_to_scale(300.0) == 3.125` (typical print).
+#[must_use]
+pub fn dpi_to_scale(dpi: f32) -> f32 {
+    dpi / BASELINE_DPI
 }
 
 /// Pixel-content verification helpers shared across PNG-rendering test modules.
@@ -361,6 +388,29 @@ mod tests {
         let (w, h) = png_dimensions(&png_3x);
         assert_eq!(w, 90, "width at 3× should be 3 * 30");
         assert_eq!(h, 60, "height at 3× should be 3 * 20");
+    }
+
+    #[test]
+    fn dpi_to_scale_anchors_at_baseline() {
+        assert!((dpi_to_scale(BASELINE_DPI) - 1.0).abs() < f32::EPSILON);
+        assert!((dpi_to_scale(192.0) - 2.0).abs() < f32::EPSILON);
+        // 300 DPI print resolution: 300 / 96 = 3.125
+        assert!((dpi_to_scale(300.0) - 3.125).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn with_dpi_matches_equivalent_scale() {
+        // 192 DPI == 2× the 96 px/in baseline, so dimensions must match new(2.0).
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40" viewBox="0 0 60 40">
+  <rect x="0" y="0" width="60" height="40" fill="green"/>
+</svg>"#;
+        let via_scale = PngRenderer::new(2.0).render_png(svg_str).unwrap();
+        let via_dpi = PngRenderer::with_dpi(192.0).render_png(svg_str).unwrap();
+        assert_eq!(
+            png_dimensions(&via_scale),
+            png_dimensions(&via_dpi),
+            "with_dpi(192) should match new(2.0) dimensions"
+        );
     }
 
     #[test]
