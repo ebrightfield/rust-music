@@ -7051,3 +7051,137 @@
   moved, no existing tests touched. The pre-existing
   `multi_staff.rs:394` and other clippy warnings noted
   on prior entries remain unaddressed (out of scope).
+
+## 2026-06-14 — Post-v1, PNG pipeline ergonomics (save_png + DPI)
+
+- Did: Closed the two deferred PNG-ergonomics gaps the
+  log named (save-to-file convenience; DPI-based scale).
+  The rasterizer itself was already complete (44 tests,
+  full API on all three score types) — this is surface
+  polish, not new pipeline.
+  - `render/png.rs`: added `PngRenderer::with_dpi(dpi)`,
+    a `BASELINE_DPI` const (96 px/in, the CSS reference
+    the engraver's unitless SVG rasterizes at), and a
+    free `dpi_to_scale(dpi)` fn (`scale = dpi /
+    BASELINE_DPI`). No physical-size guesswork — the
+    96 px/in mapping is the SVG/CSS standard and is
+    documented as such.
+  - `error.rs`: added `EngraverError::Io(std::io::Error)`
+    (the variant the module doc already anticipated),
+    `#[cfg(feature = "png")]`-gated since file writes
+    only happen on the PNG path.
+  - `save_png(path, scale)` on `ScoreBuilder`,
+    `MultiStaffScore`, and `TabScoreBuilder` — thin
+    `try_render_png` + `std::fs::write` wrappers
+    returning `Result<(), EngraverError>`.
+  - New `examples/tab_png_export.rs` (registered with
+    `required-features = ["png"]`) — the backlog's
+    missing tab PNG example; exercises `save_png` +
+    `dpi_to_scale` at 300 DPI print resolution.
+
+- Verified:
+  - `cargo build -p music-engraver --features png
+    --examples --tests` → 0 errors, 0 warnings.
+  - `cargo test -p music-engraver --features png` →
+    **2939 lib / 77 golden / 3 glyph / 13 doc, 0
+    failed** (lib was 2935; +4: `dpi_to_scale_anchors_
+    at_baseline`, `with_dpi_matches_equivalent_scale`,
+    `save_png_writes_same_bytes_as_render_png`,
+    `save_png_to_unwritable_path_returns_io_error`).
+  - `cargo build --workspace` (no feature) → clean,
+    confirming the `Io` variant and `save_png` are
+    correctly gated and don't leak into the default
+    build.
+  - `cargo run --example tab_png_export --features png`
+    → writes `examples/output/tab_score.png`; `file`
+    reports a valid 918×153 RGBA PNG at 300 DPI.
+  - `cargo clippy -p music-engraver --features png
+    --tests --examples` → none of the new files flagged
+    (only the pre-existing `music`-crate and
+    `measure_renderer/tests.rs` warnings remain).
+
+- Next: Cross-system church rests. Line-breaking
+  quality (Gourlay / Bellini & Nesi). Golden-SVG PHASH
+  visual regression. PNG golden-image regression (still
+  deferred — needs perceptual-hash or tolerance compare,
+  not byte-freeze, since PNG output is not deterministic
+  across resvg/font versions). Tablature polish
+  (per-string bend presets, tab-stem styling). Grand-
+  staff structural layout work.
+
+- Open issues: None. Additive only — new methods/consts/
+  example + one new error variant; no existing
+  signatures changed (additive enum variant), no
+  baselines moved, no tests touched. Pre-existing
+  clippy warnings remain out of scope.
+
+## 2026-06-15 — Post-v1, tablature combined bend-and-release arc
+
+- Did: Tablature polish from the backlog — added a
+  single-event "bend up then release down" gesture
+  (`bend_release`). Previously this idiomatic move
+  required `.bend()` on one struck note plus `.release()`
+  on a following event; now the whole inverted-V arc is
+  one note. Bends/pre-bends/releases already existed —
+  this is the missing combined form, built to match their
+  exact patterns.
+  - `layout/tab_bend.rs`: new `TabBendReleaseLayout` +
+    `layout_tab_bend_release(...)`. Geometry is an
+    inverted V — an up-curve from the fret number to an
+    apex (shifted right by the same `BEND_HALF_WIDTH_RATIO`
+    the regular bend uses), then a down-curve back to the
+    string. Apex height reuses `BEND_HEIGHT_RATIO` so a
+    bend-release reads at the same scale as a plain bend
+    (asserted: `bend_release_apex_matches_regular_bend_tip`).
+    Up-arrowhead at the apex, down-arrowhead at the
+    release landing, amount label at the apex.
+  - `render/tab_bend_renderer.rs`: `draw_tab_bend_release`
+    — two quadratic Béziers (up + down) + two filled
+    arrowheads + one bold sans-serif apex label, same
+    style block as the other bend renderers.
+  - `score/tab.rs`: additive `bend_release: Option<BendAmount>`
+    field on `TabEvent::Fret` (+ doc), `pending_bend_release`
+    builder state, `.bend_release(amount)` builder method
+    (mirrors `.pre_bend`'s pending/last-mut dual path so it
+    works both before and after `.next()`), flush wiring,
+    and a third-pass draw block (per-string for chords).
+  - Golden: new `tab_bend_release` baseline +
+    `golden_tab_bend_release` (asserts apex labels present
+    and that output differs from plain `tab_bends`);
+    registered in `golden_baselines_are_valid_svgs`.
+
+- Verified:
+  - `cargo build -p music-engraver` → clean.
+  - `cargo test -p music-engraver --lib --test golden_svg`
+    → **2911 lib / 78 golden, 0 failed** (golden +1 for
+    `tab_bend_release`; lib gains 8 layout + 5 renderer +
+    5 builder bend-release tests). Full suite (glyph +
+    doc-tests included) also green.
+  - `GOLDEN_UPDATE=1` baseline rasterized via
+    `rsvg-convert` and eyeballed: each event shows the
+    up-then-down arc with the amount label ("full",
+    "1/2", "1/4") at the apex; the chord case spans both
+    struck strings. Gesture is correct.
+  - `cargo clippy -p music-engraver --tests` → none of
+    the new tab/bend code flagged (only the pre-existing
+    `music`-crate `vextab.rs` useless-conversion warning
+    remains, out of scope).
+
+- Next: Configurable tab-stem styling (length/direction —
+  `STEM_LENGTH_SS` is still a hardcoded const). More bend
+  presets (¾, 2-step) if wanted, though `Custom` covers
+  them. Then the larger layout items: Gourlay spring-rod
+  spacing (current model in `layout/measure.rs` is a
+  simplified power-of-ratio, not the port plan's spring-
+  rod), line-breaking quality (Gourlay / Bellini & Nesi),
+  grand-staff structural layout, and golden-SVG PHASH
+  visual regression. ("Cross-system church rests" from the
+  prior backlog was investigated and found to be a non-gap
+  — church rests are single-measure and already render
+  fine across system breaks.)
+
+- Open issues: None. Additive only — new layout/renderer
+  fns, one additive `Option` field on `TabEvent::Fret`
+  (internal `pub(crate)` enum), new builder method, new
+  golden. No existing signatures changed, no baselines
+  moved.

@@ -262,6 +262,122 @@ pub fn layout_tab_release(
     }
 }
 
+/// Layout result for a combined bend-and-release at a fret position.
+///
+/// A bend-release is the common gesture where the string is picked, bent up
+/// to a target pitch, then released back to the original pitch — drawn as a
+/// single inverted-V arc (up-curve to an apex, down-curve back to the string)
+/// with one amount label at the apex, an upward arrowhead at the apex, and a
+/// downward arrowhead where the release lands near the string.
+#[derive(Clone, Debug)]
+pub struct TabBendReleaseLayout {
+    /// The bend amount (determines the apex text label).
+    pub amount: BendAmount,
+    /// X-coordinate of the gesture origin (at the fret number).
+    pub x: f64,
+    /// Y-coordinate of the string line (both the up-curve base and the
+    /// down-curve landing reference).
+    pub y_string: f64,
+    /// Y-coordinate of the arc base, just above the fret number text.
+    pub y_base: f64,
+    /// Y-coordinate of the apex (highest point of the arc, lowest y in SVG).
+    pub y_apex: f64,
+    /// X-coordinate of the apex (shifted right of `x` so the two halves of the
+    /// arc are visually distinct).
+    pub x_apex: f64,
+    /// X-coordinate of the up-curve control point.
+    pub x_control_up: f64,
+    /// Y-coordinate of the up-curve control point (between base and apex).
+    pub y_control_up: f64,
+    /// X-coordinate of the down-curve control point.
+    pub x_control_down: f64,
+    /// Y-coordinate of the down-curve control point (between apex and base).
+    pub y_control_down: f64,
+    /// Left x of the up-arrowhead base (at the apex).
+    pub up_arrow_x_left: f64,
+    /// Right x of the up-arrowhead base (at the apex).
+    pub up_arrow_x_right: f64,
+    /// Y-coordinate of the up-arrowhead base (below the apex tip).
+    pub up_arrow_y_base: f64,
+    /// Left x of the down-arrowhead base (at the release landing).
+    pub down_arrow_x_left: f64,
+    /// Right x of the down-arrowhead base (at the release landing).
+    pub down_arrow_x_right: f64,
+    /// Y-coordinate of the down-arrowhead base (above the landing tip).
+    pub down_arrow_y_base: f64,
+    /// X-coordinate for the apex text label.
+    pub x_text: f64,
+    /// Y-coordinate for the apex text label (above the apex).
+    pub y_text: f64,
+    /// Font size for the label text.
+    pub font_size: f64,
+    /// Stroke width for the arc.
+    pub stroke_width: f64,
+}
+
+/// Compute combined bend-and-release geometry at a fret position on a string.
+///
+/// The arc rises from just above the fret number to an apex (an upward
+/// arrowhead and the amount label sit at the apex), then descends back to the
+/// string with a downward arrowhead. The apex shares the regular bend's height
+/// so a bend-release reads at the same scale as a plain bend.
+pub fn layout_tab_bend_release(
+    tab_staff: &TabStaffLayout,
+    string: u8,
+    x: f64,
+    amount: BendAmount,
+    stroke_width: f64,
+) -> TabBendReleaseLayout {
+    let ss = tab_staff.staff_space;
+    let y_string = tab_staff.string_y(string);
+
+    // Same vertical extent as a regular bend so the two read at one scale.
+    let bend_height = ss * BEND_HEIGHT_RATIO;
+    let y_base = y_string - ss * 0.45;
+    let y_apex = y_base - bend_height;
+
+    // The apex sits to the right of the origin; the up-curve climbs to it and
+    // the down-curve returns from it, giving the inverted-V its width.
+    let half_width = ss * BEND_HALF_WIDTH_RATIO;
+    let x_apex = x + half_width;
+
+    // Control points bow each half of the arc outward from the apex.
+    let x_control_up = x + half_width * 0.5;
+    let y_control_up = (y_base + y_apex) / 2.0;
+    let x_control_down = x_apex + half_width * 0.5;
+    let y_control_down = (y_apex + y_base) / 2.0;
+
+    let arrow_half_w = ss * ARROWHEAD_HALF_WIDTH_RATIO;
+    let arrow_h = ss * ARROWHEAD_HEIGHT_RATIO;
+
+    let font_size = ss * 0.55;
+
+    TabBendReleaseLayout {
+        amount,
+        x,
+        y_string,
+        y_base,
+        y_apex,
+        x_apex,
+        x_control_up,
+        y_control_up,
+        x_control_down,
+        y_control_down,
+        // Up-arrowhead at the apex, pointing up.
+        up_arrow_x_left: x_apex - arrow_half_w,
+        up_arrow_x_right: x_apex + arrow_half_w,
+        up_arrow_y_base: y_apex + arrow_h,
+        // Down-arrowhead where the release lands, pointing down.
+        down_arrow_x_left: x - arrow_half_w,
+        down_arrow_x_right: x + arrow_half_w,
+        down_arrow_y_base: y_base - arrow_h,
+        x_text: x_apex,
+        y_text: y_apex - font_size * 0.3,
+        font_size,
+        stroke_width,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,5 +640,99 @@ mod tests {
         let layout = layout_tab_release(&staff, 1, 500.0, 5.0);
         assert!(layout.arrow_x_left < 500.0);
         assert!(layout.arrow_x_right > 500.0);
+    }
+
+    // --- Bend-release layout tests ---
+
+    #[test]
+    fn bend_release_apex_above_base() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            l.y_apex < l.y_base,
+            "apex ({}) should be above base ({}) in SVG coords",
+            l.y_apex, l.y_base
+        );
+    }
+
+    #[test]
+    fn bend_release_apex_matches_regular_bend_tip() {
+        let staff = test_staff();
+        let br = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let b = layout_tab_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            (br.y_apex - b.y_tip).abs() < 0.001,
+            "bend-release apex ({}) should match bend tip ({}) for one scale",
+            br.y_apex, b.y_tip
+        );
+    }
+
+    #[test]
+    fn bend_release_apex_right_of_origin() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            l.x_apex > l.x,
+            "apex x ({}) should be right of origin x ({})",
+            l.x_apex, l.x
+        );
+    }
+
+    #[test]
+    fn bend_release_up_arrowhead_below_apex() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 3, 500.0, BendAmount::Half, 5.0);
+        assert!(
+            l.up_arrow_y_base > l.y_apex,
+            "up-arrowhead base ({}) should be below apex ({}) in SVG coords",
+            l.up_arrow_y_base, l.y_apex
+        );
+    }
+
+    #[test]
+    fn bend_release_down_arrowhead_above_base() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 3, 500.0, BendAmount::Half, 5.0);
+        assert!(
+            l.down_arrow_y_base < l.y_base,
+            "down-arrowhead base ({}) should be above landing base ({}) in SVG coords",
+            l.down_arrow_y_base, l.y_base
+        );
+    }
+
+    #[test]
+    fn bend_release_text_above_apex() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            l.y_text < l.y_apex,
+            "text ({}) should be above apex ({}) in SVG coords",
+            l.y_text, l.y_apex
+        );
+    }
+
+    #[test]
+    fn bend_release_up_control_between_base_and_apex() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        assert!(
+            l.y_control_up < l.y_base && l.y_control_up > l.y_apex,
+            "up control ({}) should sit between base ({}) and apex ({})",
+            l.y_control_up, l.y_base, l.y_apex
+        );
+    }
+
+    #[test]
+    fn bend_release_amount_preserved() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Quarter, 5.0);
+        assert_eq!(l.amount, BendAmount::Quarter);
+    }
+
+    #[test]
+    fn bend_release_stroke_width_preserved() {
+        let staff = test_staff();
+        let l = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 7.5);
+        assert!((l.stroke_width - 7.5).abs() < 0.001);
     }
 }

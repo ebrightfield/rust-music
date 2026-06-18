@@ -1,6 +1,8 @@
 //! SVG rendering for tablature bend arrows (bend, pre-bend, release).
 
-use crate::layout::tab_bend::{TabBendLayout, TabPreBendLayout, TabReleaseLayout};
+use crate::layout::tab_bend::{
+    TabBendLayout, TabBendReleaseLayout, TabPreBendLayout, TabReleaseLayout,
+};
 use crate::render::{SvgWriter, TextStyle};
 
 /// Draw a bend arrow at a fret position on the tab staff.
@@ -133,11 +135,87 @@ pub fn draw_tab_release(svg: &mut SvgWriter, layout: &TabReleaseLayout) {
     ));
 }
 
+/// Draw a combined bend-and-release arc at a fret position on the tab staff.
+///
+/// Renders the gesture as an inverted V: a curve rising from the fret position
+/// to an apex (with an upward arrowhead and the amount label), then a curve
+/// descending back to the string (with a downward arrowhead). This is the
+/// single-event form of "bend up, then release back down".
+pub fn draw_tab_bend_release(svg: &mut SvgWriter, layout: &TabBendReleaseLayout) {
+    // Up-curve: from the arc base near the fret number to the apex arrowhead.
+    let up_start = layout.up_arrow_y_base + (layout.y_base - layout.up_arrow_y_base) * 0.5;
+    let up_path = format!(
+        "M{},{} Q{},{} {},{}",
+        layout.x, up_start,
+        layout.x_control_up, layout.y_control_up,
+        layout.x_apex, layout.up_arrow_y_base,
+    );
+    svg.add_raw(&format!(
+        "<path d=\"{}\" fill=\"none\" stroke=\"black\" stroke-width=\"{}\"/>",
+        up_path, layout.stroke_width,
+    ));
+
+    // Down-curve: from the apex back down to the release arrowhead near the string.
+    let down_path = format!(
+        "M{},{} Q{},{} {},{}",
+        layout.x_apex, layout.y_apex,
+        layout.x_control_down, layout.y_control_down,
+        layout.x, layout.down_arrow_y_base,
+    );
+    svg.add_raw(&format!(
+        "<path d=\"{}\" fill=\"none\" stroke=\"black\" stroke-width=\"{}\"/>",
+        down_path, layout.stroke_width,
+    ));
+
+    // Up-arrowhead: filled triangle at the apex, pointing up.
+    let up_arrow = format!(
+        "M{},{} L{},{} L{},{} Z",
+        layout.x_apex, layout.y_apex,
+        layout.up_arrow_x_left, layout.up_arrow_y_base,
+        layout.up_arrow_x_right, layout.up_arrow_y_base,
+    );
+    svg.add_raw(&format!(
+        "<path d=\"{}\" fill=\"black\" stroke=\"none\"/>",
+        up_arrow,
+    ));
+
+    // Down-arrowhead: filled triangle at the release landing, pointing down.
+    let down_arrow = format!(
+        "M{},{} L{},{} L{},{} Z",
+        layout.x, layout.y_base,
+        layout.down_arrow_x_left, layout.down_arrow_y_base,
+        layout.down_arrow_x_right, layout.down_arrow_y_base,
+    );
+    svg.add_raw(&format!(
+        "<path d=\"{}\" fill=\"black\" stroke=\"none\"/>",
+        down_arrow,
+    ));
+
+    // Bend amount text above the apex.
+    svg.add_text(
+        layout.x_text,
+        layout.y_text,
+        layout.amount.label(),
+        &TextStyle {
+            font_family: "sans-serif",
+            font_size: layout.font_size,
+            fill: "black",
+            anchor: "middle",
+            font_weight: "bold",
+            font_style: "normal",
+            dominant_baseline: "auto",
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::layout::tab::TabStaffLayout;
-    use crate::layout::tab_bend::{layout_tab_bend, layout_tab_pre_bend, layout_tab_release, BendAmount};
+    use crate::layout::tab_bend::{
+        layout_tab_bend, layout_tab_bend_release, layout_tab_pre_bend, layout_tab_release,
+        BendAmount,
+    };
 
     fn test_staff() -> TabStaffLayout {
         TabStaffLayout::new(0.0, 0.0, 5000.0, 250.0, 6)
@@ -350,5 +428,67 @@ mod tests {
         let mut svg_bend = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_bend(&mut svg_bend, &bend);
         assert_ne!(svg_rel.to_svg(), svg_bend.to_svg(), "release and bend should differ");
+    }
+
+    // --- Bend-release renderer tests ---
+
+    #[test]
+    fn bend_release_adds_four_paths_and_text() {
+        let staff = test_staff();
+        let layout = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        draw_tab_bend_release(&mut svg, &layout);
+        let output = svg.to_svg();
+        // up-curve + down-curve + up-arrowhead + down-arrowhead = 4 paths
+        assert_eq!(
+            output.matches("<path ").count(),
+            4,
+            "should have up/down curves + up/down arrowheads = 4 paths"
+        );
+        assert_eq!(output.matches("<text ").count(), 1, "should have 1 apex label");
+    }
+
+    #[test]
+    fn bend_release_shows_amount_label() {
+        let staff = test_staff();
+        let layout = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Half, 5.0);
+        let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        draw_tab_bend_release(&mut svg, &layout);
+        assert!(svg.to_svg().contains(">1/2</text>"), "should show '1/2' label");
+    }
+
+    #[test]
+    fn bend_release_uses_two_quadratic_beziers() {
+        let staff = test_staff();
+        let layout = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        draw_tab_bend_release(&mut svg, &layout);
+        let output = svg.to_svg();
+        assert_eq!(
+            output.matches(" Q").count(),
+            2,
+            "bend-release should draw two quadratic Bézier curves (up + down)"
+        );
+    }
+
+    #[test]
+    fn bend_release_arrowheads_filled() {
+        let staff = test_staff();
+        let layout = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        draw_tab_bend_release(&mut svg, &layout);
+        assert!(svg.to_svg().contains("fill=\"black\""), "arrowheads should be filled");
+    }
+
+    #[test]
+    fn bend_release_differs_from_bend() {
+        let staff = test_staff();
+        let br = layout_tab_bend_release(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let b = layout_tab_bend(&staff, 1, 500.0, BendAmount::Full, 5.0);
+        let mut svg_br = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        draw_tab_bend_release(&mut svg_br, &br);
+        let mut svg_b = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
+        draw_tab_bend(&mut svg_b, &b);
+        assert_ne!(svg_br.to_svg(), svg_b.to_svg(), "bend-release and bend should differ");
     }
 }

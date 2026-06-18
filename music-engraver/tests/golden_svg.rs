@@ -3432,6 +3432,50 @@ fn golden_tab_pre_bends() {
     assert_golden("tab_pre_bends", &svg);
 }
 
+fn build_tab_bend_release() -> String {
+    TabScoreBuilder::guitar()
+        .measures_per_system(2)
+        .system_width_fu(10000.0)
+        // Measure 1: full bend-release, half bend-release
+        .fret(2, 8)
+        .bend_release(BendAmount::Full)
+        .next()
+        .fret(1, 7)
+        .bend_release(BendAmount::Half)
+        .next()
+        .fret(3, 9)
+        .next()
+        .fret(1, 5)
+        .barline()
+        // Measure 2: quarter bend-release, chord bend-release (two strings)
+        .fret(1, 7)
+        .bend_release(BendAmount::Quarter)
+        .next()
+        .fret(1, 10)
+        .fret(2, 10)
+        .bend_release(BendAmount::Full)
+        .next()
+        .fret(1, 12)
+        .end_barline()
+        .render_svg()
+}
+
+#[test]
+fn golden_tab_bend_release() {
+    let svg = build_tab_bend_release();
+    // Labels appear at the apex of each arc.
+    assert!(svg.contains(">full</text>"), "should have 'full' bend-release label");
+    assert!(svg.contains(">1/2</text>"), "should have '1/2' bend-release label");
+    assert!(svg.contains(">1/4</text>"), "should have '1/4' bend-release label");
+    // A bend-release is visually distinct from a plain bend of the same amount.
+    let plain_bends = build_tab_bends();
+    assert_ne!(
+        svg, plain_bends,
+        "bend-release should differ from plain bends"
+    );
+    assert_golden("tab_bend_release", &svg);
+}
+
 /// Tremolo slashes on stems: single, double, triple across notes.
 fn build_tremolo() -> String {
     ScoreBuilder::new()
@@ -6296,6 +6340,7 @@ fn golden_baselines_are_valid_svgs() {
         "cross_system_ottava",
         "pedal_marks",
         "tab_pre_bends",
+        "tab_bend_release",
         "tremolo",
         "tab_vibrato",
         "tab_harmonics",

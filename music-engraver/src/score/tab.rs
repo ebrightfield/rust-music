@@ -24,7 +24,9 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, layout_muted_string, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_rhythm::layout_tab_rhythm;
-use crate::layout::tab_bend::{layout_tab_bend, layout_tab_pre_bend, layout_tab_release, BendAmount};
+use crate::layout::tab_bend::{
+    layout_tab_bend, layout_tab_bend_release, layout_tab_pre_bend, layout_tab_release, BendAmount,
+};
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_harmonic::layout_tab_harmonic;
@@ -34,7 +36,9 @@ use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
-use crate::render::tab_bend_renderer::{draw_tab_bend, draw_tab_pre_bend, draw_tab_release};
+use crate::render::tab_bend_renderer::{
+    draw_tab_bend, draw_tab_bend_release, draw_tab_pre_bend, draw_tab_release,
+};
 use crate::render::tab_harmonic_renderer::draw_tab_harmonic;
 use crate::render::tab_let_ring_renderer::{draw_tab_let_ring, draw_tab_let_ring_dash};
 use crate::render::tab_palm_mute_renderer::{draw_tab_palm_mute, draw_tab_palm_mute_dash};
@@ -53,6 +57,7 @@ pub(crate) enum TabEvent {
     /// `legato_out`: when Some, draw a hammer-on/pull-off arc to the next event.
     /// `bend`: when Some, draw a bend arrow above the fret number(s).
     /// `pre_bend`: when Some, draw a straight vertical pre-bend arrow.
+    /// `bend_release`: when Some, draw a combined bend-up-then-release-down arc.
     /// `release`: when true, draw a downward release arrow.
     /// `vibrato`: when Some, draw a wavy vibrato line above the fret number.
     /// `harmonic`: when true, draw a natural harmonic indicator (○) above the fret number.
@@ -66,6 +71,7 @@ pub(crate) enum TabEvent {
         legato_out: Option<LegatoKind>,
         bend: Option<BendAmount>,
         pre_bend: Option<BendAmount>,
+        bend_release: Option<BendAmount>,
         release: bool,
         vibrato: Option<VibratoKind>,
         harmonic: bool,
@@ -128,6 +134,8 @@ pub struct TabScoreBuilder {
     pending_bend: Option<BendAmount>,
     /// When Some, the next flushed Fret event gets `pre_bend` set.
     pending_pre_bend: Option<BendAmount>,
+    /// When Some, the next flushed Fret event gets `bend_release` set.
+    pending_bend_release: Option<BendAmount>,
     /// When true, the next flushed Fret event gets `release = true`.
     pending_release: bool,
     /// When Some, the next flushed Fret event gets `vibrato` set.
@@ -160,6 +168,7 @@ impl TabScoreBuilder {
             pending_legato: None,
             pending_bend: None,
             pending_pre_bend: None,
+            pending_bend_release: None,
             pending_release: false,
             pending_vibrato: None,
             pending_harmonic: false,
@@ -209,6 +218,7 @@ impl TabScoreBuilder {
                 let legato_out = self.pending_legato.take();
                 let bend = self.pending_bend.take();
                 let pre_bend = self.pending_pre_bend.take();
+                let bend_release = self.pending_bend_release.take();
                 let release = std::mem::take(&mut self.pending_release);
                 let vibrato = self.pending_vibrato.take();
                 let harmonic = std::mem::take(&mut self.pending_harmonic);
@@ -222,6 +232,7 @@ impl TabScoreBuilder {
                     legato_out,
                     bend,
                     pre_bend,
+                    bend_release,
                     release,
                     vibrato,
                     harmonic,
@@ -393,6 +404,22 @@ impl TabScoreBuilder {
             self.pending_pre_bend = Some(amount);
         } else if let Some(TabEvent::Fret { pre_bend, .. }) = self.current_events.last_mut() {
             *pre_bend = Some(amount);
+        }
+        self
+    }
+
+    /// Mark the current fret event for a combined bend-and-release arc.
+    ///
+    /// A single inverted-V arc with the bend amount label at its apex is drawn
+    /// above the fret number: the string is picked, bent up to the target
+    /// pitch, then released back to the original pitch — all on one event. Use
+    /// this instead of `.bend()` on one event plus `.release()` on the next
+    /// when the whole gesture happens on a single struck note.
+    pub fn bend_release(mut self, amount: BendAmount) -> Self {
+        if !self.current_frets.is_empty() {
+            self.pending_bend_release = Some(amount);
+        } else if let Some(TabEvent::Fret { bend_release, .. }) = self.current_events.last_mut() {
+            *bend_release = Some(amount);
         }
         self
     }
@@ -863,7 +890,7 @@ pub(crate) fn draw_tab_measure(
 
     // Third pass: draw bend/pre-bend/release arrows, vibrato, and harmonics at fret events
     for (e_idx, event) in measure.events.iter().enumerate() {
-        if let TabEvent::Fret { frets, bend, pre_bend, release, vibrato, harmonic, palm_mute, let_ring, .. } = event {
+        if let TabEvent::Fret { frets, bend, pre_bend, bend_release, release, vibrato, harmonic, palm_mute, let_ring, .. } = event {
             let event_x = if event_count == 1 {
                 measure_x + padding + usable_width / 2.0
             } else {
@@ -885,6 +912,15 @@ pub(crate) fn draw_tab_measure(
                 for &(string, _) in frets {
                     let pb_layout = layout_tab_pre_bend(tab_staff, string, event_x, *amount, bend_stroke);
                     draw_tab_pre_bend(svg, &pb_layout);
+                }
+            }
+
+            // Combined bend-and-release arc
+            if let Some(amount) = bend_release {
+                for &(string, _) in frets {
+                    let br_layout =
+                        layout_tab_bend_release(tab_staff, string, event_x, *amount, bend_stroke);
+                    draw_tab_bend_release(svg, &br_layout);
                 }
             }
 
@@ -2259,6 +2295,84 @@ mod tests {
             .end_barline()
             .render_svg();
         assert_ne!(svg_release, svg_bend, "release and bend should differ");
+    }
+
+    // --- Bend-release tests ---
+
+    #[test]
+    fn bend_release_adds_arc_paths_and_label() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend_release(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        // 1 TAB clef + 2 curves (up/down) + 2 arrowheads (up/down) = 5 paths
+        assert_eq!(
+            svg.matches("<path ").count(),
+            5,
+            "should have TAB clef + 2 curves + 2 arrowheads = 5 paths"
+        );
+        assert!(svg.contains(">full</text>"), "should show 'full' apex label");
+    }
+
+    #[test]
+    fn no_bend_release_without_method_call() {
+        let with = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend_release(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        let without = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .end_barline()
+            .render_svg();
+        assert_ne!(with, without, "bend_release should change the output");
+    }
+
+    #[test]
+    fn bend_release_differs_from_bend() {
+        let svg_br = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend_release(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        let svg_bend = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .bend(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        assert_ne!(svg_br, svg_bend, "bend-release and bend should differ");
+    }
+
+    #[test]
+    fn bend_release_on_chord_draws_per_string() {
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 10)
+            .fret(2, 10)
+            .bend_release(BendAmount::Full)
+            .end_barline()
+            .render_svg();
+        // TAB clef + per-string (2 curves + 2 arrowheads) = 1 + 4*2 = 9 paths
+        assert_eq!(
+            svg.matches("<path ").count(),
+            9,
+            "chord bend-release on 2 strings: 1 TAB + 2*(2 curves + 2 arrowheads) = 9 paths"
+        );
+    }
+
+    #[test]
+    fn bend_release_after_already_flushed_event() {
+        // Call .bend_release() after .next() — marks the already-flushed event.
+        let svg = TabScoreBuilder::guitar()
+            .fret(1, 7)
+            .next()
+            .bend_release(BendAmount::Half)
+            .end_barline()
+            .render_svg();
+        assert!(
+            svg.contains(">1/2</text>"),
+            "bend_release after flush should still show label"
+        );
     }
 
     #[test]

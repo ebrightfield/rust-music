@@ -137,22 +137,44 @@ impl NoteSet {
             .ok_or(MusicSemanticsError::EmptySetOfNotes)?;
 
         let len = self.0.len() as i32;
-        let new_pos_raw = pos as i32 + steps as i32;
 
-        // Calculate position within the set (with wrapping)
-        let new_pos = new_pos_raw.rem_euclid(len) as usize;
-        let new_note = &self.0[new_pos];
-
-        // Calculate octave change
-        // Each full cycle through the set is one octave
-        let octave_change = if new_pos_raw >= 0 {
-            new_pos_raw / len
+        // Walk one note at a time, tracking the octave by detecting crossings of
+        // the C boundary (the convention `Pitch` uses: the octave number
+        // increments going B→C and decrements going C→B). We cannot infer the
+        // octave from how many times the array index wraps, because the set may
+        // be anchored to any root (e.g. a Bb-rooted scale is ordered
+        // [Bb, C, D, …]); the C boundary then falls *inside* the array, not at
+        // the wrap point. See `test_pitch_n_steps_from_non_c_root`.
+        let mut cur = pos as i32;
+        let mut octave = from.octave as i32;
+        if steps > 0 {
+            for _ in 0..steps {
+                let next = cur + 1;
+                let next_idx = next.rem_euclid(len) as usize;
+                let cur_idx = cur.rem_euclid(len) as usize;
+                // Moving up: we crossed into a new octave if the next note's
+                // pitch class is not strictly higher than the current one.
+                if Pc::from(&self.0[next_idx]) <= Pc::from(&self.0[cur_idx]) {
+                    octave += 1;
+                }
+                cur = next;
+            }
         } else {
-            // For negative, we need to handle the division differently
-            (new_pos_raw - len + 1) / len
-        };
+            for _ in 0..(-steps) {
+                let prev = cur - 1;
+                let prev_idx = prev.rem_euclid(len) as usize;
+                let cur_idx = cur.rem_euclid(len) as usize;
+                // Moving down: we crossed into a lower octave if the previous
+                // note's pitch class is not strictly lower than the current one.
+                if Pc::from(&self.0[prev_idx]) >= Pc::from(&self.0[cur_idx]) {
+                    octave -= 1;
+                }
+                cur = prev;
+            }
+        }
 
-        let new_octave = i8::try_from(from.octave as i32 + octave_change)
+        let new_note = &self.0[cur.rem_euclid(len) as usize];
+        let new_octave = i8::try_from(octave)
             .map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
         Pitch::try_new(new_note.clone(), new_octave)
     }
@@ -379,6 +401,61 @@ mod tests {
         let c3 = triad.pitch_n_steps_from(&c4, -3).unwrap();
         assert_eq!(c3.note, Note::C);
         assert_eq!(c3.octave, 3);
+    }
+
+    #[test]
+    fn test_pitch_n_steps_from_non_c_root() {
+        use crate::note::pitch::Pitch;
+
+        // Bb major scale anchored to Bb: ordered [Bb, C, D, Eb, F, G, A].
+        // Regression: octave must increment at the C boundary (mid-array), not
+        // at the array wrap point. Previously stepping up from Bb4 gave C4
+        // (midi 60, a major-7th DOWN) instead of C5 (midi 72).
+        let scale = NoteSet::with_root(
+            vec![Note::Bes, Note::C, Note::D, Note::Ees, Note::F, Note::G, Note::A],
+            &Note::Bes,
+        );
+        let bb4 = Pitch::new(Note::Bes, 4);
+
+        // Ascending one step crosses the C boundary → C5, monotonically up.
+        let c5 = scale.pitch_n_steps_from(&bb4, 1).unwrap();
+        assert_eq!(c5.note, Note::C);
+        assert_eq!(c5.octave, 5);
+        assert_eq!(c5.midi_note, 72);
+
+        // The whole ascending scale must be strictly increasing in MIDI.
+        let mut prev = bb4.midi_note;
+        for steps in 1..=7 {
+            let p = scale.pitch_n_steps_from(&bb4, steps).unwrap();
+            assert!(
+                p.midi_note > prev,
+                "step {steps}: {}{} (midi {}) should be higher than previous midi {prev}",
+                p.note, p.octave, p.midi_note,
+            );
+            prev = p.midi_note;
+        }
+        // Top of the scale: Bb5 an octave above the start.
+        let bb5 = scale.pitch_n_steps_from(&bb4, 7).unwrap();
+        assert_eq!(bb5.note, Note::Bes);
+        assert_eq!(bb5.octave, 5);
+        assert_eq!(bb5.midi_note, bb4.midi_note + 12);
+
+        // Descending must be strictly decreasing too.
+        let mut prev = bb4.midi_note;
+        for steps in 1..=7 {
+            let p = scale.pitch_n_steps_from(&bb4, -(steps as i8)).unwrap();
+            assert!(
+                p.midi_note < prev,
+                "step -{steps}: {}{} (midi {}) should be lower than previous midi {prev}",
+                p.note, p.octave, p.midi_note,
+            );
+            prev = p.midi_note;
+        }
+        // A is the note just below Bb (a step down), at octave 4.
+        let a4 = scale.pitch_n_steps_from(&bb4, -1).unwrap();
+        assert_eq!(a4.note, Note::A);
+        assert_eq!(a4.octave, 4);
+        assert_eq!(a4.midi_note, 69);
     }
 
     #[test]
