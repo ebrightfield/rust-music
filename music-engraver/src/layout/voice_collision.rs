@@ -331,15 +331,20 @@ mod tests {
     }
 
     fn layout_with(elements: Vec<(f64, MeasureElement)>) -> MeasureLayout {
+        let positioned: Vec<PositionedElement> = elements
+            .into_iter()
+            .map(|(x, element)| PositionedElement {
+                x,
+                element,
+                width: 250.0,
+                rod: 250.0,
+                spring: 0.0,
+            })
+            .collect();
         MeasureLayout {
-            elements: elements
-                .into_iter()
-                .map(|(x, element)| PositionedElement {
-                    x,
-                    element,
-                    width: 250.0,
-                })
-                .collect(),
+            total_rod: positioned.iter().map(|p| p.rod).sum(),
+            total_spring: 0.0,
+            elements: positioned,
             total_width: 1000.0,
         }
     }
@@ -384,15 +389,20 @@ mod tests {
     fn layout_with_widths(
         elements: Vec<(f64, MeasureElement, f64)>,
     ) -> MeasureLayout {
+        let positioned: Vec<PositionedElement> = elements
+            .into_iter()
+            .map(|(x, element, width)| PositionedElement {
+                x,
+                element,
+                width,
+                rod: width,
+                spring: 0.0,
+            })
+            .collect();
         MeasureLayout {
-            elements: elements
-                .into_iter()
-                .map(|(x, element, width)| PositionedElement {
-                    x,
-                    element,
-                    width,
-                })
-                .collect(),
+            total_rod: positioned.iter().map(|p| p.rod).sum(),
+            total_spring: 0.0,
+            elements: positioned,
             total_width: 1000.0,
         }
     }

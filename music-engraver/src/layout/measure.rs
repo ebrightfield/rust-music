@@ -351,14 +351,29 @@ pub struct RestEvent {
 }
 
 /// A positioned element within a laid-out measure.
+///
+/// Each element's horizontal extent is decomposed into a Gourlay
+/// **rod** (incompressible: notehead + accidental cluster + dot cluster +
+/// minimum padding) and a **spring** (compressible: the duration-driven rest
+/// length). The natural-layout `width` is always `rod + spring`. The system
+/// layer compresses/extends a system to a target width by scaling springs only
+/// and leaving rods fixed (see `layout::system`).
 #[derive(Clone, Debug)]
 pub struct PositionedElement {
     /// X-coordinate (in font design units) from the start of the measure.
     pub x: f64,
     /// The element.
     pub element: MeasureElement,
-    /// Advance width of this element (in font design units).
+    /// Advance width of this element at natural layout (`rod + spring`),
+    /// in font design units.
     pub width: f64,
+    /// Incompressible rod width (in font design units). Prefix elements
+    /// (clef/key/time), barlines, and multi-measure rests are fully rod
+    /// (`spring == 0`).
+    pub rod: f64,
+    /// Compressible spring width (in font design units). Scaled by the system
+    /// layer to fit a target width. Invariant: `width == rod + spring`.
+    pub spring: f64,
 }
 
 /// The result of laying out a measure: elements with assigned x-positions.
@@ -366,8 +381,14 @@ pub struct PositionedElement {
 pub struct MeasureLayout {
     /// Positioned elements in left-to-right order.
     pub elements: Vec<PositionedElement>,
-    /// Total width of the measure in font design units.
+    /// Total width of the measure at natural layout, in font design units
+    /// (`total_rod + total_spring`).
     pub total_width: f64,
+    /// Sum of all element rods (incompressible).
+    pub total_rod: f64,
+    /// Sum of all element springs (compressible). Invariant:
+    /// `total_width == total_rod + total_spring`.
+    pub total_spring: f64,
 }
 
 /// Configuration for measure layout.
@@ -387,12 +408,23 @@ pub struct MeasureLayoutConfig {
     pub time_sig_padding: f64,
     /// Width for a barline.
     pub barline_width: f64,
-    /// Minimum note spacing (in font design units) for the shortest note in the measure.
-    pub min_note_spacing: f64,
-    /// Spacing ratio base: longer notes get proportionally more space.
-    /// A quarter note gets `min_note_spacing * spacing_ratio`, a half note gets
-    /// `min_note_spacing * spacing_ratio^2`, etc.
-    pub spacing_ratio: f64,
+    /// Gourlay spacing exponent `c` in the spring rest length `k · duration^c`.
+    /// Default 0.6 (Gould/Gourlay empirical range 0.5–0.7). Larger `c` widens
+    /// the gap between long and short notes.
+    pub spacing_exponent: f64,
+    /// Gourlay spring constant `k` (in font design units): the rest length of
+    /// the spring following a note of the shortest duration in the measure
+    /// (where `duration == 1`).
+    pub spring_constant: f64,
+    /// Incompressible rod estimate for one notehead (in font design units).
+    pub notehead_rod: f64,
+    /// Additional rod width when an event carries an accidental
+    /// (in font design units).
+    pub accidental_rod: f64,
+    /// Additional rod width per augmentation dot (in font design units).
+    pub dot_rod: f64,
+    /// Minimum padding included in every rhythmic rod (in font design units).
+    pub min_rod_padding: f64,
 }
 
 impl MeasureLayoutConfig {
@@ -406,33 +438,62 @@ impl MeasureLayoutConfig {
             time_sig_width: 2.0 * ss,
             time_sig_padding: 0.75 * ss,
             barline_width: 0.5 * ss,
-            min_note_spacing: 1.5 * ss,
-            spacing_ratio: 1.6,
+            spacing_exponent: 0.6,
+            // Tuned (Phase 4) so a typical measure's natural width tracks the
+            // legacy power-of-ratio model: shortest-note spring ≈ 1.0·ss.
+            spring_constant: 1.0 * ss,
+            // Notehead advance estimate matches the value used elsewhere
+            // (e.g. `layout/glissando.rs`): ~1.18 staff spaces.
+            notehead_rod: 1.18 * ss,
+            accidental_rod: 1.0 * ss,
+            dot_rod: 0.35 * ss,
+            min_rod_padding: 0.3 * ss,
         }
     }
 }
 
-/// Compute the horizontal spacing factor for a given duration.
+/// Compute the Gourlay spring rest length for a note of the given duration.
 ///
-/// Uses a power-of-ratio model (similar to Gourlay's approach): the shortest
-/// duration gets factor 1.0, each doubling of duration multiplies by `ratio`.
+/// The shortest note in the measure (`duration_log2 == shortest_log2`) has
+/// duration `1.0`; a note twice as long has duration `2.0`, etc. The rest
+/// length is `spring_constant · duration^spacing_exponent`.
 /// `duration_log2`: 0=whole, 1=half, 2=quarter, 3=eighth, etc.
 /// `shortest_log2`: the largest log2 value (shortest note) in the measure.
-fn duration_spacing_factor(duration_log2: u8, shortest_log2: u8, ratio: f64) -> f64 {
+fn spring_rest_length(
+    duration_log2: u8,
+    shortest_log2: u8,
+    spring_constant: f64,
+    spacing_exponent: f64,
+) -> f64 {
     let steps = shortest_log2 as f64 - duration_log2 as f64;
-    ratio.powf(steps)
+    let duration = 2.0_f64.powf(steps);
+    spring_constant * duration.powf(spacing_exponent)
+}
+
+/// Compute the incompressible rod width for a rhythmic event.
+fn event_rod(
+    has_accidental: bool,
+    dots: u8,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    config.min_rod_padding
+        + config.notehead_rod
+        + if has_accidental { config.accidental_rod } else { 0.0 }
+        + dots as f64 * config.dot_rod
 }
 
 /// Lay out a sequence of measure elements with horizontal positions.
 ///
-/// Non-rhythmic elements (clef, key sig, time sig, barline) get fixed widths.
-/// Rhythmic elements (notes, rests) get proportional spacing based on duration.
+/// Non-rhythmic elements (clef, key sig, time sig, barline) are fully
+/// incompressible (all rod, no spring). Rhythmic elements (notes, rests,
+/// chords, beam/tuplet groups) decompose into a Gourlay rod (notehead +
+/// accidental + dot + padding) and a duration-driven spring. The system layer
+/// later scales springs only to fit a target width.
 pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig) -> MeasureLayout {
-    // First pass: separate fixed-width prefix/suffix from rhythmic content
     let mut positioned = Vec::with_capacity(elements.len());
     let mut x = 0.0;
 
-    // Find the shortest duration for proportional spacing
+    // Find the shortest duration; springs scale relative to it.
     let shortest_log2 = elements
         .iter()
         .filter_map(|e| match e {
@@ -446,113 +507,119 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
         .max()
         .unwrap_or(2); // default to quarter note if no rhythmic content
 
+    let spring = |duration_log2: u8| {
+        spring_rest_length(
+            duration_log2,
+            shortest_log2,
+            config.spring_constant,
+            config.spacing_exponent,
+        )
+    };
+
     for elem in elements {
-        let width = match elem {
-            MeasureElement::Clef(_) => {
-                let w = config.clef_width;
-                positioned.push(PositionedElement {
-                    x,
-                    element: elem.clone(),
-                    width: w,
-                });
-                x += w + config.clef_padding;
-                continue;
-            }
+        // Each arm yields (rod, spring, trailing_padding). Prefix elements use
+        // trailing padding (e.g. clef_padding) that sits outside the element's
+        // own width; rhythmic elements fold all spacing into rod + spring.
+        let (rod, spr, trailing) = match elem {
+            MeasureElement::Clef(_) => (config.clef_width, 0.0, config.clef_padding),
             MeasureElement::KeySignature(key) => {
                 let count = match key {
                     KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
                     KeySignature::Open => 0.0,
                 };
                 let w = count * config.key_sig_accidental_width;
-                positioned.push(PositionedElement {
-                    x,
-                    element: elem.clone(),
-                    width: w,
-                });
-                if w > 0.0 {
-                    x += w + config.key_sig_padding;
-                }
-                continue;
+                let trailing = if w > 0.0 { config.key_sig_padding } else { 0.0 };
+                (w, 0.0, trailing)
             }
             MeasureElement::TimeSignature(_) => {
-                let w = config.time_sig_width;
-                positioned.push(PositionedElement {
-                    x,
-                    element: elem.clone(),
-                    width: w,
-                });
-                x += w + config.time_sig_padding;
-                continue;
+                (config.time_sig_width, 0.0, config.time_sig_padding)
             }
             MeasureElement::Note(n) => {
-                let factor =
-                    duration_spacing_factor(n.duration_log2, shortest_log2, config.spacing_ratio);
-                config.min_note_spacing * factor
+                (event_rod(n.accidental.is_some(), n.dots, config), spring(n.duration_log2), 0.0)
             }
             MeasureElement::Rest(r) => {
-                let factor =
-                    duration_spacing_factor(r.duration_log2, shortest_log2, config.spacing_ratio);
-                config.min_note_spacing * factor
+                // A rest has no notehead/accidental, but reuse the notehead rod
+                // as the glyph-extent estimate; dots still apply.
+                (event_rod(false, r.dots, config), spring(r.duration_log2), 0.0)
             }
             MeasureElement::Chord(c) => {
-                let factor =
-                    duration_spacing_factor(c.duration_log2, shortest_log2, config.spacing_ratio);
-                config.min_note_spacing * factor
+                // A chord shares one stem column (one notehead rod). Accidentals
+                // stack leftward; estimate the cluster as one accidental rod when
+                // any note carries one.
+                let has_acc = c.accidentals.iter().any(|a| a.is_some());
+                (event_rod(has_acc, c.dots, config), spring(c.duration_log2), 0.0)
             }
             MeasureElement::BeamGroup(bg) => {
-                // Total width is the sum of each note's proportional spacing
-                let total: f64 = bg
-                    .notes
-                    .iter()
-                    .map(|n| {
-                        let factor = duration_spacing_factor(
-                            n.duration_log2,
-                            shortest_log2,
-                            config.spacing_ratio,
-                        );
-                        config.min_note_spacing * factor
-                    })
-                    .sum();
-                total
+                // Each inner note contributes its own rod + spring; the group's
+                // rod/spring are the sums (inner x-offsets come from
+                // `beam_group_note_x_offsets` fed the group's total width).
+                let (rod, spr) = bg.notes.iter().fold((0.0, 0.0), |(r, s), n| {
+                    (r + event_rod(n.accidental.is_some(), n.dots, config), s + spring(n.duration_log2))
+                });
+                (rod, spr, 0.0)
             }
             MeasureElement::TupletGroup(tg) => {
-                let total: f64 = tg.beam_group
-                    .notes
-                    .iter()
-                    .map(|n| {
-                        let factor = duration_spacing_factor(
-                            n.duration_log2,
-                            shortest_log2,
-                            config.spacing_ratio,
-                        );
-                        config.min_note_spacing * factor
-                    })
-                    .sum();
-                total
+                let (rod, spr) = tg.beam_group.notes.iter().fold((0.0, 0.0), |(r, s), n| {
+                    (r + event_rod(n.accidental.is_some(), n.dots, config), s + spring(n.duration_log2))
+                });
+                (rod, spr, 0.0)
             }
             MeasureElement::MultiMeasureRest { .. } => {
-                // Multi-measure rest occupies the full rhythmic width of the measure.
-                // Use whole-note spacing as the base allocation; the renderer draws
-                // the H-bar (or church-rest cluster) spanning from the preceding
-                // element to the barline.
-                let factor =
-                    duration_spacing_factor(0, shortest_log2, config.spacing_ratio);
-                config.min_note_spacing * factor
+                // Occupies the full rhythmic width of the measure as an
+                // incompressible block; the renderer draws the H-bar (or
+                // church-rest cluster) spanning to the barline. Use whole-note
+                // (longest) spring length as the block allocation, but treat it
+                // as rod so it neither compresses nor stretches.
+                (event_rod(false, 0, config) + spring(0), 0.0, 0.0)
             }
-            MeasureElement::Barline(_) => config.barline_width,
+            MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
         };
 
+        let width = rod + spr;
         positioned.push(PositionedElement {
             x,
             element: elem.clone(),
             width,
+            rod,
+            spring: spr,
         });
-        x += width;
+        x += width + trailing;
     }
+
+    let total_rod: f64 = positioned.iter().map(|p| p.rod).sum::<f64>()
+        + positioned
+            .iter()
+            .zip(elements.iter())
+            .map(|(_p, e)| trailing_padding(e, config))
+            .sum::<f64>();
+    let total_spring: f64 = positioned.iter().map(|p| p.spring).sum();
 
     MeasureLayout {
         total_width: x,
+        total_rod,
+        total_spring,
         elements: positioned,
+    }
+}
+
+/// Trailing padding that sits after a prefix element but outside its `width`
+/// (clef/key-sig/time-sig). Counted as incompressible rod at the measure level.
+fn trailing_padding(elem: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
+    match elem {
+        MeasureElement::Clef(_) => config.clef_padding,
+        MeasureElement::KeySignature(key) => {
+            let count = match key {
+                KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
+                KeySignature::Open => 0.0,
+            };
+            if count * config.key_sig_accidental_width > 0.0 {
+                config.key_sig_padding
+            } else {
+                0.0
+            }
+        }
+        MeasureElement::TimeSignature(_) => config.time_sig_padding,
+        _ => 0.0,
     }
 }
 
@@ -586,11 +653,16 @@ mod tests {
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
         assert!((layout.elements[0].x - 0.0).abs() < f64::EPSILON);
-        // Single note: shortest is quarter (log2=2), factor=1.0, width = min_note_spacing
-        let expected_width = cfg.min_note_spacing;
+        // Single note: it is the shortest, so duration = 1.0 and spring = k.
+        // Width = rod + spring; rod is the bare notehead rod (no accidental/dots).
+        let el = &layout.elements[0];
+        let expected_rod = event_rod(false, 0, &cfg);
+        let expected_spring = cfg.spring_constant;
+        assert!((el.rod - expected_rod).abs() < f64::EPSILON, "rod");
+        assert!((el.spring - expected_spring).abs() < f64::EPSILON, "spring");
         assert!(
-            (layout.elements[0].width - expected_width).abs() < f64::EPSILON,
-            "quarter note width should be min_note_spacing"
+            (el.width - (el.rod + el.spring)).abs() < f64::EPSILON,
+            "width must equal rod + spring"
         );
     }
 
@@ -710,13 +782,18 @@ mod tests {
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
-        // Whole note should get significantly more space than eighth
-        let ratio = layout.elements[0].width / layout.elements[1].width;
+        // The spring is the duration-driven part. A whole note is 8x an eighth
+        // in duration, so its spring is 8^c times larger (c = 0.6 → ~3.48x).
+        // Rods are equal (same bare notehead), so the spring ratio is the clean
+        // measure of duration proportionality.
+        let spring_ratio = layout.elements[0].spring / layout.elements[1].spring;
         assert!(
-            ratio > 2.0,
-            "whole note should get >2x the space of an eighth, got ratio {}",
-            ratio,
+            spring_ratio > 3.0,
+            "whole-note spring should be >3x an eighth's, got ratio {}",
+            spring_ratio,
         );
+        // Rods identical (no accidental, no dots, single notehead each).
+        assert!((layout.elements[0].rod - layout.elements[1].rod).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -848,22 +925,121 @@ mod tests {
     }
 
     #[test]
-    fn duration_spacing_factor_same_duration() {
-        let factor = duration_spacing_factor(3, 3, 1.6);
-        assert!((factor - 1.0).abs() < f64::EPSILON);
+    fn spring_rest_length_shortest_note_is_constant() {
+        // The shortest note (duration == 1.0) has spring == k.
+        let s = spring_rest_length(3, 3, 1000.0, 0.6);
+        assert!((s - 1000.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn duration_spacing_factor_one_step_longer() {
-        let factor = duration_spacing_factor(2, 3, 1.6);
-        assert!((factor - 1.6).abs() < f64::EPSILON);
+    fn spring_rest_length_double_duration_scales_by_two_to_c() {
+        // A note twice as long → duration 2.0 → spring = k · 2^c.
+        let s = spring_rest_length(2, 3, 1000.0, 0.6);
+        let expected = 1000.0 * 2.0_f64.powf(0.6);
+        assert!((s - expected).abs() < 1e-9);
     }
 
     #[test]
-    fn duration_spacing_factor_two_steps_longer() {
-        let factor = duration_spacing_factor(1, 3, 1.6);
-        let expected = 1.6 * 1.6;
-        assert!((factor - expected).abs() < 1e-10);
+    fn spring_rest_length_quadruple_duration() {
+        // Four times as long → duration 4.0 → spring = k · 4^c.
+        let s = spring_rest_length(1, 3, 1000.0, 0.6);
+        let expected = 1000.0 * 4.0_f64.powf(0.6);
+        assert!((s - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn width_equals_rod_plus_spring_for_every_element() {
+        let cfg = test_config();
+        let elements = vec![
+            MeasureElement::Clef(ClefLayout::from_clef(Clef::Treble)),
+            MeasureElement::KeySignature(KeySignature::Sharps(2)),
+            MeasureElement::TimeSignature(TimeSignatureKind::Numeric {
+                numerator: 3,
+                denominator: 4,
+            }),
+            MeasureElement::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 2,
+                dots: 1,
+                accidental: Some(smufl::Glyph::AccidentalSharp),
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            }),
+            MeasureElement::Rest(RestEvent { duration_log2: 3, dots: 0 }),
+            MeasureElement::Barline(BarlineStyle::Single),
+        ];
+        let layout = layout_measure(&elements, &cfg);
+        for el in &layout.elements {
+            assert!(
+                (el.width - (el.rod + el.spring)).abs() < f64::EPSILON,
+                "width {} != rod {} + spring {}",
+                el.width,
+                el.rod,
+                el.spring,
+            );
+        }
+        // total_width == total_rod + total_spring
+        assert!(
+            (layout.total_width - (layout.total_rod + layout.total_spring)).abs() < 1e-6,
+            "total_width {} != total_rod {} + total_spring {}",
+            layout.total_width,
+            layout.total_rod,
+            layout.total_spring,
+        );
+    }
+
+    #[test]
+    fn prefix_and_barline_are_pure_rod() {
+        let cfg = test_config();
+        let elements = vec![
+            MeasureElement::Clef(ClefLayout::from_clef(Clef::Treble)),
+            MeasureElement::KeySignature(KeySignature::Flats(2)),
+            MeasureElement::TimeSignature(TimeSignatureKind::Common),
+            MeasureElement::Barline(BarlineStyle::Single),
+        ];
+        let layout = layout_measure(&elements, &cfg);
+        for el in &layout.elements {
+            assert!(
+                el.spring.abs() < f64::EPSILON,
+                "prefix/barline element should have zero spring, got {}",
+                el.spring,
+            );
+        }
+        assert!(layout.total_spring.abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn accidental_and_dots_widen_only_the_rod() {
+        let cfg = test_config();
+        let plain = layout_measure(
+            &[MeasureElement::Note(NoteEvent {
+                staff_position: 0,
+                duration_log2: 2,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            })],
+            &cfg,
+        );
+        let adorned = layout_measure(
+            &[MeasureElement::Note(NoteEvent {
+                staff_position: 0,
+                duration_log2: 2,
+                dots: 2,
+                accidental: Some(smufl::Glyph::AccidentalFlat),
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            })],
+            &cfg,
+        );
+        // Same duration (and it is the only/shortest note in each) → same spring.
+        assert!((plain.elements[0].spring - adorned.elements[0].spring).abs() < f64::EPSILON);
+        // Accidental + 2 dots widen the rod by exactly accidental_rod + 2·dot_rod.
+        let expected_delta = cfg.accidental_rod + 2.0 * cfg.dot_rod;
+        assert!(
+            ((adorned.elements[0].rod - plain.elements[0].rod) - expected_delta).abs() < f64::EPSILON,
+        );
     }
 
     #[test]
@@ -894,6 +1070,9 @@ mod tests {
         let cfg1 = MeasureLayoutConfig::from_staff_space(100.0);
         let cfg2 = MeasureLayoutConfig::from_staff_space(200.0);
         assert!((cfg2.clef_width - 2.0 * cfg1.clef_width).abs() < f64::EPSILON);
-        assert!((cfg2.min_note_spacing - 2.0 * cfg1.min_note_spacing).abs() < f64::EPSILON);
+        assert!((cfg2.spring_constant - 2.0 * cfg1.spring_constant).abs() < f64::EPSILON);
+        assert!((cfg2.notehead_rod - 2.0 * cfg1.notehead_rod).abs() < f64::EPSILON);
+        // c is dimensionless and does not scale with staff space.
+        assert!((cfg2.spacing_exponent - cfg1.spacing_exponent).abs() < f64::EPSILON);
     }
 }

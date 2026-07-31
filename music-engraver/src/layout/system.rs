@@ -202,15 +202,18 @@ pub fn layout_system(
             // Additional voices share the barline with the primary voice
             elems.push(MeasureElement::Barline(measure.barline));
             let mut voice_layout = layout_measure(&elems, config);
-            // Scale to match primary voice width
+            // Spring-only scale to match the primary voice's width, so temporal
+            // positions align at measure ends without compressing this voice's
+            // rods (Gourlay). (True max-spring-per-tick cross-voice merging is
+            // deferred — see docs/implementation-plan-gourlay-spacing.md §4.)
             let primary_width = layouts[i].total_width;
             if voice_layout.total_width > 0.0 && primary_width > 0.0 {
-                let scale = primary_width / voice_layout.total_width;
-                for elem in &mut voice_layout.elements {
-                    elem.x *= scale;
-                    elem.width *= scale;
-                }
-                voice_layout.total_width = primary_width;
+                let s = spring_scale(
+                    voice_layout.total_rod,
+                    voice_layout.total_spring,
+                    primary_width,
+                );
+                scale_measure_springs(&mut voice_layout, s);
             }
             voice_layouts.push(voice_layout);
         }
@@ -219,25 +222,30 @@ pub fn layout_system(
 
     let natural_width: f64 = layouts.iter().map(|l| l.total_width).sum();
 
-    // If target width is specified, scale to fit
+    // If a target width is specified, fit the system with Gourlay's one-line
+    // analytic solve: find the single spring scale `s` such that
+    // `Σ(rod_i + s·spring_i) == target` across all measures, then apply it.
+    // Rods (noteheads, accidentals, clef/key/time prefix, barlines) stay
+    // fixed; only springs compress or extend. This replaces the previous
+    // uniform scale, which wrongly compressed the incompressible prefix and
+    // noteheads along with the springs.
     if let Some(target) = target_width {
         if natural_width > 0.0 {
-            let scale = target / natural_width;
+            let total_rod: f64 = layouts.iter().map(|l| l.total_rod).sum();
+            let total_spring: f64 = layouts.iter().map(|l| l.total_spring).sum();
+            let s = spring_scale(total_rod, total_spring, target);
             for layout in &mut layouts {
-                for elem in &mut layout.elements {
-                    elem.x *= scale;
-                    elem.width *= scale;
-                }
-                layout.total_width *= scale;
+                scale_measure_springs(layout, s);
             }
-            // Scale additional voice layouts identically
-            for voice_layouts in &mut additional_voice_layouts {
+            // Re-fit each additional voice to its (now scaled) primary measure
+            // width using the same spring-only rule, preserving alignment.
+            for (i, voice_layouts) in additional_voice_layouts.iter_mut().enumerate() {
+                let primary_width = layouts[i].total_width;
                 for vl in voice_layouts.iter_mut() {
-                    for elem in &mut vl.elements {
-                        elem.x *= scale;
-                        elem.width *= scale;
+                    if vl.total_width > 0.0 && primary_width > 0.0 {
+                        let vs = spring_scale(vl.total_rod, vl.total_spring, primary_width);
+                        scale_measure_springs(vl, vs);
                     }
-                    vl.total_width *= scale;
                 }
             }
         }
@@ -265,6 +273,56 @@ pub fn layout_system(
         total_width: total,
         staff_width: staff_w,
     }
+}
+
+/// Spring scale floor. When a system's incompressible rod total already meets
+/// or exceeds the target width, springs cannot shrink further without
+/// producing negative or zero element widths; we clamp the scale here and let
+/// the system overflow the target. (A line-breaker — out of scope — is the
+/// real fix for content that genuinely does not fit; this clamp just keeps
+/// geometry well-formed.)
+const MIN_SPRING_SCALE: f64 = 0.0;
+
+/// Solve the Gourlay one-line compression/extension scale for a system.
+///
+/// Returns the spring scale `s` such that `Σ(rod_i + s·spring_i) == target`.
+/// Rods are incompressible; only springs scale. When there is no spring to
+/// scale (all rod), or the solve would drive springs below the floor, the
+/// result is clamped — the system then keeps its natural rod-bound width and
+/// may overflow `target`.
+fn spring_scale(total_rod: f64, total_spring: f64, target: f64) -> f64 {
+    if total_spring <= 0.0 {
+        return 1.0;
+    }
+    ((target - total_rod) / total_spring).max(MIN_SPRING_SCALE)
+}
+
+/// Apply a spring scale to one measure layout in place: each element's spring
+/// scales by `s`, its rod stays fixed, `width = rod + s·spring`, and x-offsets
+/// are re-flowed by accumulation while preserving the original inter-element
+/// gaps (trailing prefix padding, which is incompressible rod).
+fn scale_measure_springs(layout: &mut MeasureLayout, s: f64) {
+    // Capture the original gaps before mutating any widths/positions. The gap
+    // after element i is everything between its right edge and the next
+    // element's left edge — i.e. trailing padding emitted by `layout_measure`.
+    let gaps: Vec<f64> = layout
+        .elements
+        .windows(2)
+        .map(|w| w[1].x - (w[0].x + w[0].width))
+        .collect();
+
+    let mut x = layout.elements.first().map(|e| e.x).unwrap_or(0.0);
+    for (i, el) in layout.elements.iter_mut().enumerate() {
+        el.spring *= s;
+        el.width = el.rod + el.spring;
+        el.x = x;
+        x += el.width;
+        if let Some(gap) = gaps.get(i) {
+            x += gap;
+        }
+    }
+    layout.total_spring *= s;
+    layout.total_width = layout.total_rod + layout.total_spring;
 }
 
 pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
@@ -488,6 +546,91 @@ mod tests {
             (natural.total_width - target).abs() > 1.0,
             "natural width should differ from target for this test to be meaningful"
         );
+    }
+
+    #[test]
+    fn stretching_fixes_rods_and_grows_only_springs() {
+        // Gourlay: under target-width stretch, incompressible rods (clef, key
+        // sig, time sig, noteheads, barline) keep their natural width; only
+        // springs absorb the extra space. Contrast with the old uniform scale,
+        // which would have grown the clef and noteheads too.
+        let cfg = test_config();
+        let prefix = SystemPrefix::new(
+            &Clef::Treble,
+            KeySignature::Sharps(2),
+            Some(TimeSignatureKind::Numeric { numerator: 4, denominator: 4 }),
+        );
+        let measures = vec![MeasureContent {
+            events: vec![quarter_note(4), quarter_note(6), quarter_note(8), quarter_note(4)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        }];
+
+        let natural = layout_system(&prefix, &measures, &cfg, None);
+        let target = natural.total_width * 1.5; // stretch
+        let scaled = layout_system(&prefix, &measures, &cfg, Some(target));
+
+        assert!((scaled.total_width - target).abs() < 1.0);
+
+        let nat_elems = &natural.measures[0].layout.elements;
+        let scl_elems = &scaled.measures[0].layout.elements;
+        assert_eq!(nat_elems.len(), scl_elems.len());
+
+        for (n, s) in nat_elems.iter().zip(scl_elems.iter()) {
+            // Rod is invariant under stretch for every element.
+            assert!(
+                (n.rod - s.rod).abs() < 1e-6,
+                "rod must not change under stretch: {} -> {}",
+                n.rod,
+                s.rod,
+            );
+            match &n.element {
+                // Prefix + barline are pure rod → width unchanged entirely.
+                MeasureElement::Clef(_)
+                | MeasureElement::KeySignature(_)
+                | MeasureElement::TimeSignature(_)
+                | MeasureElement::Barline(_) => {
+                    assert!(
+                        (n.width - s.width).abs() < 1e-6,
+                        "pure-rod element width must not change under stretch",
+                    );
+                    assert!(s.spring.abs() < 1e-9);
+                }
+                // Notes carry springs → spring grows, width grows by exactly
+                // the spring delta (rod fixed).
+                MeasureElement::Note(_) => {
+                    assert!(s.spring > n.spring, "note spring should grow under stretch");
+                    assert!(
+                        ((s.width - n.width) - (s.spring - n.spring)).abs() < 1e-6,
+                        "note width delta must equal spring delta",
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn compressing_below_rod_total_clamps_without_negative_widths() {
+        // A target smaller than the system's rod total cannot be met by
+        // shrinking springs alone; springs clamp at the floor and the system
+        // overflows rather than producing negative element widths.
+        let cfg = test_config();
+        let measures = vec![MeasureContent {
+            events: vec![quarter_note(4), quarter_note(6), quarter_note(8)],
+            barline: BarlineStyle::Final,
+            volta: None,
+            additional_voices: vec![],
+        }];
+        let scaled = layout_system(&test_prefix(), &measures, &cfg, Some(1.0));
+        for el in &scaled.measures[0].layout.elements {
+            assert!(el.width >= -1e-9, "no negative element widths");
+            assert!(el.spring >= -1e-9, "no negative springs");
+        }
+        // total_width is bounded below by the rod total (springs floored at 0).
+        let total_rod: f64 = scaled.measures[0].layout.total_rod;
+        assert!(scaled.total_width + 1e-6 >= total_rod);
     }
 
     #[test]

@@ -3486,10 +3486,10 @@ fn trill_with_mordent_extension_renders_wiggle_paths() {
     // The compound `OrnamentPrecompTrillWithMordent` glyph is ~470 font-units
     // wider than the bare "tr" (Bravura: 990 vs 521). To verify the wiggle
     // still draws at least one segment for the compound case, we widen
-    // `min_note_spacing` directly so the inter-note gap exceeds the
+    // `spring_constant` directly so the inter-note gap exceeds the
     // compound glyph's advance plus one wiggle segment with room to spare.
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 8.0 * config.staff_space;
+    mcfg.spring_constant = 8.0 * config.staff_space;
     let trill_compound_whole = trill_with_mordent_ext_note(4);
     let plain_whole = MeasureEvent::Note(NoteEvent {
         staff_position: 6,
@@ -3661,10 +3661,10 @@ fn explicit_length_renders_fewer_paths_than_default_when_shorter() {
     // The default test measure spacing leaves only ~1 wiggle of natural
     // span (just enough for the existing `_renders_at_least_one_wiggle_path`
     // smoke test). For an *inequality* test we need the natural span to
-    // accommodate several wiggles, so we widen `min_note_spacing` to ensure
+    // accommodate several wiggles, so we widen `spring_constant` to ensure
     // there's a meaningful contrast between explicit-1.0-ss and natural.
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 12.0 * config.staff_space;
+    mcfg.spring_constant = 12.0 * config.staff_space;
 
     let short = vec![MeasureContent {
         events: vec![trill_ext_length_note(4, 1.0), quarter_note(6)],
@@ -3838,11 +3838,11 @@ fn explicit_length_on_last_note_avoids_cross_system_extension() {
     // between the explicit-length version and an unannotated version.
     // Specifically: the explicit-length version's wiggle must have fewer
     // segments than the system-edge default (which extends to the staff
-    // right edge minus a small gap). Widen `min_note_spacing` to ensure
+    // right edge minus a small gap). Widen `spring_constant` to ensure
     // the natural-to-edge span is meaningfully larger than the explicit
     // 1.5-ss request.
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 12.0 * config.staff_space;
+    mcfg.spring_constant = 12.0 * config.staff_space;
 
     let with_explicit = vec![MeasureContent {
         events: vec![quarter_note(4), trill_ext_length_note(6, 1.5)],
@@ -3882,7 +3882,7 @@ fn explicit_length_with_end_bracket_anchors_at_shortened_terminus() {
     // x-position changes).
     use crate::layout::trill_bracket::TrillBracketSide;
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 12.0 * config.staff_space;
+    mcfg.spring_constant = 12.0 * config.staff_space;
 
     let make_event = |length_ss: Option<f64>| -> MeasureEvent {
         MeasureEvent::Note(NoteEvent {
@@ -4006,11 +4006,11 @@ fn collector_drops_to_note_offset_when_trill_extension_inactive() {
 fn to_note_offset_two_renders_more_paths_than_offset_one() {
     // A trill anchored to the note 2 positions ahead must cover a longer
     // horizontal span than a trill anchored to the immediately following
-    // note — strictly more wiggle paths. The wider min_note_spacing
+    // note — strictly more wiggle paths. The wider spring_constant
     // ensures a meaningful difference in span; otherwise both spans
     // round down to the same per-tile count.
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 12.0 * config.staff_space;
+    mcfg.spring_constant = 12.0 * config.staff_space;
 
     let to_one = vec![MeasureContent {
         events: vec![trill_ext_to_note(4, 1), quarter_note(6), quarter_note(8)],
@@ -4130,7 +4130,7 @@ fn to_note_offset_overshoot_falls_back_to_system_edge() {
     // trilled note all the way to the staff-right-edge minus the system
     // edge gap. Strictly more paths than offset=1 in the same layout.
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 12.0 * config.staff_space;
+    mcfg.spring_constant = 12.0 * config.staff_space;
 
     let overshoot = vec![MeasureContent {
         events: vec![
@@ -4253,7 +4253,7 @@ fn to_note_offset_yields_to_explicit_length_when_both_set() {
     // wins at draw time. Verify by rendering a note with both fields
     // set vs. just the length field — the SVGs must be byte-identical.
     let (font, config, mut mcfg) = setup();
-    mcfg.min_note_spacing = 12.0 * config.staff_space;
+    mcfg.spring_constant = 12.0 * config.staff_space;
 
     let both_set = MeasureEvent::Note(NoteEvent {
         staff_position: 4,

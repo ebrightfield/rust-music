@@ -25,6 +25,8 @@ fn empty_measure_produces_no_elements() {
     let layout = MeasureLayout {
         elements: vec![],
         total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
     };
     let mut svg = make_svg();
     draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
@@ -2674,7 +2676,7 @@ fn additional_voices_empty_produces_no_extra_elements() {
     let (font, config, staff) = setup();
     let mut svg = make_svg();
     // No additional voice layouts → no extra paths
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     draw_additional_voices(&mut svg, &staff, &font, &config, &empty_primary, &[], 0.0).unwrap();
     let output = svg.to_svg();
     assert_eq!(output.matches("<path ").count(), 0);
@@ -2754,7 +2756,7 @@ fn additional_voice_rest_is_displaced_downward() {
 
     // Draw rest via additional voices (should be displaced)
     let mut svg_displaced = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     draw_additional_voices(&mut svg_displaced, &staff, &font, &config, &empty_primary, &[voice1_layout], 0.0).unwrap();
     let displaced_svg = svg_displaced.to_svg();
 
@@ -2788,7 +2790,7 @@ fn additional_voice_skips_barlines() {
     let layout = layout_measure(&elements, &cfg);
 
     let mut svg = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     draw_additional_voices(&mut svg, &staff, &font, &config, &empty_primary, &[layout], 0.0).unwrap();
     let output = svg.to_svg();
 
@@ -2835,7 +2837,7 @@ fn two_additional_voices_both_render() {
     let v2_layout = layout_measure(&v2_elems, &cfg);
 
     let mut svg = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     draw_additional_voices(
         &mut svg,
         &staff,
@@ -3020,7 +3022,7 @@ fn no_collision_at_third_no_offset() {
     let detected_svg = svg_with_detection.to_svg();
 
     // Draw without any collision detection (empty primary)
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     let mut svg_no_detection = make_svg();
     draw_measure(&mut svg_no_detection, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
     draw_additional_voices(&mut svg_no_detection, &staff, &font, &config, &empty_primary, &[voice1_layout], 0.0).unwrap();
@@ -3098,7 +3100,7 @@ fn beam_group_no_collisions_renders_byte_identical_to_no_detection() {
     ).unwrap();
 
     let mut svg_without = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     draw_measure(&mut svg_without, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
     draw_additional_voices(
         &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
@@ -3147,7 +3149,7 @@ fn beam_group_per_note_collision_changes_only_one_notehead_path() {
     let svg_with_str = svg_with.to_svg();
 
     // Render WITHOUT primary (no collision applied).
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     let mut svg_without = make_svg();
     draw_additional_voices(
         &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
@@ -3202,7 +3204,7 @@ fn beam_group_per_note_collision_preserves_stem_line_positions() {
         &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
     ).unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     let mut svg_without = make_svg();
     draw_additional_voices(
         &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
@@ -3272,7 +3274,7 @@ fn beam_group_per_note_collision_shifts_notehead_by_notehead_width() {
         &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
     ).unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     let mut svg_without = make_svg();
     draw_additional_voices(
         &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
@@ -3331,7 +3333,7 @@ fn beam_group_per_note_collision_does_not_shift_non_colliding_noteheads() {
         &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
     ).unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     let mut svg_without = make_svg();
     draw_additional_voices(
         &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
@@ -3426,7 +3428,11 @@ fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
             x: middle_x,
             element: quarter_note(4, StemDirection::Up),
             width: 250.0,
+            rod: 250.0,
+            spring: 0.0,
         }],
+        total_rod: 250.0,
+        total_spring: 0.0,
         total_width: voice_layout.total_width,
     };
 
@@ -3435,7 +3441,7 @@ fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
         &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
     ).unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0 };
+    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
     let mut svg_without = make_svg();
     draw_additional_voices(
         &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
