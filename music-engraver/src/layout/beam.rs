@@ -19,7 +19,8 @@ pub struct BeamGroupLayout {
     /// Stem direction shared by all notes in the group.
     pub direction: StemDirection,
     /// For each note in the group, the y-coordinate of the stem tip
-    /// (beam attachment point).
+    /// (beam attachment point), **relative to the staff's top line**.
+    /// Renderers must add the staff's `y_origin` to place these on the canvas.
     pub stem_tip_ys: Vec<f64>,
     /// Number of beam levels. 1 for eighths, 2 for sixteenths, etc.
     pub max_beam_level: u8,

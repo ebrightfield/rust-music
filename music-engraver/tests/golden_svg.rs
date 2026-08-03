@@ -821,6 +821,46 @@ fn build_bass_clef() -> String {
         .render_svg()
 }
 
+/// Octave-down treble clef (the guitar clef) over a typical guitar-part range.
+///
+/// A transposing clef changes the *sounding* pitch, not staff placement, so
+/// these written pitches must land on exactly the same lines as they do under
+/// plain treble — see `build_treble_for_octave_clef_comparison` and
+/// `transposing_clefs_place_notes_like_treble`. Regression for
+/// docs/slonimsky-cli-bugs.md §7, where `treble8ba` shifted noteheads an octave
+/// up and pushed an ordinary phrase onto ledger lines.
+fn build_treble8ba_clef() -> String {
+    build_octave_clef_case(Clef::Treble8ba)
+}
+
+/// Octave-up treble clef, same content — the mirror of the `8vb` case.
+fn build_treble8va_clef() -> String {
+    build_octave_clef_case(Clef::Treble8va)
+}
+
+/// Plain treble with the same content, as the placement reference.
+fn build_treble_for_octave_clef_comparison() -> String {
+    build_octave_clef_case(Clef::Treble)
+}
+
+/// Shared body for the octave-clef goldens: a Bb-major phrase spanning the
+/// staff, with a beamed pair so beam geometry is frozen alongside the noteheads.
+fn build_octave_clef_case(clef: Clef) -> String {
+    ScoreBuilder::new()
+        .clef(clef)
+        .key_signature(KeySignature::Flats(2))
+        .time_signature(4, 4)
+        .note(p("Bb", 4), Duration::QTR)
+        .beam_group(vec![
+            (p("C", 5), Duration::EIGHTH),
+            (p("D", 5), Duration::EIGHTH),
+        ])
+        .note(p("F", 5), Duration::QTR)
+        .note(p("G", 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
+}
+
 /// Auto line breaking with mixed-density measures.
 fn build_auto_breaks() -> String {
     ScoreBuilder::new()
@@ -2161,6 +2201,65 @@ fn golden_annotations() {
 #[test]
 fn golden_bass_clef() {
     assert_golden("bass_clef", &build_bass_clef());
+}
+
+#[test]
+fn golden_treble8ba_clef() {
+    assert_golden("treble8ba_clef", &build_treble8ba_clef());
+}
+
+#[test]
+fn golden_treble8va_clef() {
+    assert_golden("treble8va_clef", &build_treble8va_clef());
+}
+
+/// Octave-transposing clefs must place every glyph exactly where plain treble
+/// does — only the clef glyph itself differs. Asserted as an invariant rather
+/// than left to the frozen baselines, so a future rebaseline cannot quietly
+/// bless an octave shift the way the pre-§7 goldens did.
+///
+/// This compares the whole SVG, so it covers beam polygons, stems, ledger
+/// lines, and the viewBox — not just noteheads.
+#[test]
+fn transposing_clefs_place_notes_like_treble() {
+    let treble = build_treble_for_octave_clef_comparison();
+
+    for (name, svg) in [
+        ("treble8ba", build_treble8ba_clef()),
+        ("treble8va", build_treble8va_clef()),
+    ] {
+        // The clef glyph is the one legitimate difference: drop the first
+        // <path> (the clef) from each and require the rest to match exactly.
+        let strip_clef = |s: &str| -> Vec<String> {
+            let mut seen_clef = false;
+            s.lines()
+                .filter(|l| {
+                    if !seen_clef && l.trim_start().starts_with("<path ") {
+                        seen_clef = true;
+                        return false;
+                    }
+                    true
+                })
+                .map(str::to_owned)
+                .collect()
+        };
+
+        let base = strip_clef(&treble);
+        let other = strip_clef(&svg);
+
+        assert_eq!(
+            base.len(),
+            other.len(),
+            "{name} produced a different element count than treble"
+        );
+        for (i, (b, o)) in base.iter().zip(other.iter()).enumerate() {
+            assert_eq!(
+                b, o,
+                "{name} differs from treble at line {i} — a transposing clef must not \
+                 move noteheads, stems, beams, or the viewBox:\n  treble: {b}\n  {name}: {o}"
+            );
+        }
+    }
 }
 
 #[test]

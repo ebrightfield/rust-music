@@ -255,6 +255,11 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
         anyhow::bail!("difficulty must be 1–5 (got {})", args.difficulty);
     }
 
+    // Validate every argument before generating anything, so a bad `--clef`
+    // fails whether or not `-o` was passed. Deferring this to the output branch
+    // let `--clef alto` print a normal text sheet and exit 0.
+    let clef = ClefChoice::from_str_opt(args.clef.as_deref())?;
+
     // Notes per measure: assume 4/4 time, difficulty affects density
     let notes_per_measure = match args.difficulty {
         1 => 4,       // all quarter notes
@@ -291,7 +296,6 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
     // If an output file was requested, render staff notation via the engraver
     // and return — the text report is the no-output default.
     if let Some(ref path) = args.output {
-        let clef = ClefChoice::from_str_opt(args.clef.as_deref())?;
         let key_sig = key_signature_for(root, minor_flavored);
         let n = render_melody_to_file(&melody, clef, key_sig, path)?;
         if args.verbose {

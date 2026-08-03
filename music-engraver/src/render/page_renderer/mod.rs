@@ -67,6 +67,70 @@ struct IncomingTieTarget {
     staff_left: f64,
 }
 
+/// Vertical extent of all notated content on the page, as absolute
+/// `(topmost_y, bottommost_y)` in font design units.
+///
+/// Walks every voice of every measure for the extreme staff positions and
+/// converts them through the same `y_of` mapping the renderers use. Used to size
+/// the viewBox so ledger-line passages are not clipped.
+///
+/// Only content that leaves the staff extends the box: notes *inside* the staff
+/// already have their stems and beams covered by the page margins, so counting
+/// them would inflate the canvas for ordinary scores — which shrinks everything
+/// at a fixed output width.
+fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64, f64) {
+    use crate::layout::measure::MeasureElement;
+    use crate::layout::staff::{BOTTOM_LINE, TOP_LINE};
+
+    // Headroom past an out-of-staff notehead for its stem, flag, or beam.
+    const STEM_ALLOWANCE_SS: f64 = 4.0;
+
+    let half_space = config.staff_space / 2.0;
+    let mut top = f64::INFINITY;
+    let mut bottom = f64::NEG_INFINITY;
+
+    for ps in &page.systems {
+        for measure in &ps.system.measures {
+            let voices = std::iter::once(&measure.layout).chain(measure.additional_voice_layouts.iter());
+            for voice in voices {
+                for positioned in &voice.elements {
+                    let positions: Vec<i8> = match &positioned.element {
+                        MeasureElement::Note(n) => vec![n.staff_position],
+                        MeasureElement::Chord(c) => c.staff_positions.clone(),
+                        MeasureElement::BeamGroup(bg) => {
+                            bg.notes.iter().map(|n| n.staff_position).collect()
+                        }
+                        MeasureElement::TupletGroup(tg) => {
+                            tg.beam_group.notes.iter().map(|n| n.staff_position).collect()
+                        }
+                        _ => continue,
+                    };
+                    let allowance = STEM_ALLOWANCE_SS * config.staff_space;
+                    for pos in positions {
+                        // Mirrors StaffLayout::y_of for this system's origin.
+                        let y = ps.y + (TOP_LINE - pos) as f64 * half_space;
+                        if pos > TOP_LINE {
+                            top = top.min(y - allowance);
+                        }
+                        if pos < BOTTOM_LINE {
+                            bottom = bottom.max(y + allowance);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Nothing reaches past the staves — the page box already covers everything.
+    if !top.is_finite() && !bottom.is_finite() {
+        return (0.0, page.page_height);
+    }
+    (
+        if top.is_finite() { top } else { 0.0 },
+        if bottom.is_finite() { bottom } else { page.page_height },
+    )
+}
+
 /// Draw a complete page of music (multiple systems stacked vertically).
 ///
 /// Returns an `SvgWriter` ready to be converted to an SVG string via `to_svg()`.
@@ -84,9 +148,16 @@ pub fn draw_page(
     // from page dimensions with a scaling ratio.
     let vb_margin = config.staff_space; // small margin around the content
     let vb_x = -vb_margin;
-    let vb_y = -vb_margin;
     let vb_w = page.page_width + 2.0 * vb_margin;
-    let vb_h = page.page_height + 2.0 * vb_margin;
+
+    // `page_height` spans the staves only, so notes on ledger lines above the
+    // first staff (or below the last) would be clipped by the viewBox. Extend
+    // it to cover the highest and lowest notated positions — an octave-treble
+    // guitar part, for instance, sits well above the top staff line.
+    let (content_top, content_bottom) = content_vertical_extent(page, config);
+    let vb_y = (content_top - vb_margin).min(-vb_margin);
+    let vb_bottom = (content_bottom + vb_margin).max(page.page_height + vb_margin);
+    let vb_h = vb_bottom - vb_y;
 
     // Scale so that a staff space maps to approximately 7 pixels (standard screen density).
     let px_per_unit = 7.0 / config.staff_space;

@@ -1,0 +1,35 @@
+# REQ-O28: sf2-rotate + sf2-rotate-dry-run tasks
+
+[config]
+default_to_workspace = false
+
+[tasks.sf2-rotate-dry-run]
+description = "Fetch candidate SF2, print URL and SHA-256; do not write source files."
+script_runner = "@shell"
+script = '''
+set -euo pipefail
+CANDIDATE_URL="${SF2_URL:-https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2}"
+TMP=$(mktemp)
+trap 'rm -f "$TMP"' EXIT
+echo "Fetching: $CANDIDATE_URL"
+curl --silent --show-error --fail --location --max-time 300 -o "$TMP" "$CANDIDATE_URL"
+
+MAGIC_RIFF=$(dd if="$TMP" bs=1 count=4 2>/dev/null)
+MAGIC_SFBK=$(dd if="$TMP" bs=1 skip=8 count=4 2>/dev/null)
+if [ "$MAGIC_RIFF" != "RIFF" ] || [ "$MAGIC_SFBK" != "sfbk" ]; then
+    echo "ERROR: candidate bytes do not match SF2 magic (RIFF????sfbk)" >&2
+    exit 1
+fi
+
+SHA=$(sha256sum "$TMP" | awk '{print $1}')
+echo ""
+echo "=== sf2-rotate dry-run result ==="
+echo "SF_URL         = \"$CANDIDATE_URL\""
+echo "SF_SHA256_HEX  = \"$SHA\""
+echo ""
+echo "Next step: update both constants in music-midi/src/soundfont.rs in a SINGLE commit."
+'''
+
+[tasks.sf2-rotate]
+description = "Same as sf2-rotate-dry-run — source-file edit is manual by design."
+alias = "sf2-rotate-dry-run"

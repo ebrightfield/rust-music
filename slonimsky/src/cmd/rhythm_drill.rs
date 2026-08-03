@@ -8,12 +8,11 @@
 
 use anyhow::Result;
 
-use music::melody::sequencer::MelodicEvent;
 use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::note::note::Note;
 use music::note::pitch::Pitch;
 
-use super::notation_out::{render_melody_to_file, ClefChoice};
+use super::notation_out::{render_events_to_file, ClefChoice, NotationEvent};
 use music_engraver::layout::key_signature::KeySignature;
 
 pub struct RhythmDrillArgs {
@@ -238,6 +237,10 @@ pub fn run(args: RhythmDrillArgs) -> Result<()> {
     );
     anyhow::ensure!(args.measures >= 1, "measures must be ≥ 1");
 
+    // Validate every argument before generating anything, so a bad `--clef`
+    // fails whether or not `-o` was passed.
+    let clef = ClefChoice::from_str_opt(args.clef.as_deref())?;
+
     let beats = quarter_beats(num, den);
     let weights = weights_for(args.syncopation, style);
     let mut rng = Rng::new(args.seed.unwrap_or(0));
@@ -249,18 +252,15 @@ pub fn run(args: RhythmDrillArgs) -> Result<()> {
 
     // Output dispatch.
     if let Some(ref path) = args.output {
-        let clef = ClefChoice::from_str_opt(args.clef.as_deref())?;
-        // Render rhythm on a single repeated pitch. Rests are dropped from the
-        // melody event stream (the engraver renders explicit rests via .rest(),
-        // but our shared melody converter takes notes; rests are represented by
-        // omission here is wrong — instead we emit the note stream and skip
-        // rest cells, keeping note onsets correct for clapping practice).
+        // Render rhythm on a single repeated pitch, the convention for
+        // rhythm-only drills. Rests are emitted as rests so the notation
+        // matches the text output for the same seed.
         let drum_pitch = match clef {
             ClefChoice::Bass => Pitch::new(Note::D, 3),
             _ => Pitch::new(Note::B, 4),
         };
-        let melody = rhythm_to_melody(&measures, drum_pitch);
-        let n = render_melody_to_file(&melody, clef, KeySignature::Open, path)?;
+        let events = rhythm_to_events(&measures, drum_pitch);
+        let n = render_events_to_file(&events, clef, KeySignature::Open, (num, den), path)?;
         if args.verbose {
             eprintln!("wrote {path} ({n} bytes)");
         } else {
@@ -273,24 +273,21 @@ pub fn run(args: RhythmDrillArgs) -> Result<()> {
     Ok(())
 }
 
-/// Convert generated rhythm measures into a melody event stream on a single
-/// pitch, skipping rest cells (note onsets only — the natural representation
-/// for a clapping/dictation drill rendered as noteheads).
-fn rhythm_to_melody(measures: &[Measure], pitch: Pitch) -> Vec<MelodicEvent> {
-    let mut melody = Vec::new();
+/// Convert generated rhythm measures into a notation event stream on a single
+/// pitch. Rests are carried through as rests so the engraved rhythm matches the
+/// text output — dropping them would shorten every measure containing one.
+fn rhythm_to_events(measures: &[Measure], pitch: Pitch) -> Vec<NotationEvent> {
+    let mut events = Vec::new();
     for measure in measures {
         for (dur, is_rest) in measure.events() {
-            if is_rest {
-                continue;
-            }
-            melody.push(MelodicEvent {
-                pitch,
-                duration: dur,
-                tied: false,
+            events.push(if is_rest {
+                NotationEvent::rest(dur)
+            } else {
+                NotationEvent::note(pitch, dur)
             });
         }
     }
-    melody
+    events
 }
 
 fn print_text(measures: &[Measure], num: u8, den: u8, style: Style, syncopation: u8) {

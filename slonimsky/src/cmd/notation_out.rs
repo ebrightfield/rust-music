@@ -14,13 +14,86 @@ use std::path::Path;
 
 use music::melody::sequencer::MelodicEvent;
 use music::notation::clef::Clef;
+use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::note::note::Note;
+use music::note::pitch::Pitch;
 
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;
 
-/// Ticks in one 4/4 measure (whole note = 128 ticks in the `music` rhythm model).
-const TICKS_PER_4_4_MEASURE: usize = 128;
+/// Ticks in a whole note in the `music` rhythm model.
+const TICKS_PER_WHOLE: usize = 128;
+
+/// Ticks in one quarter note.
+const TICKS_PER_QUARTER: usize = TICKS_PER_WHOLE / 4;
+
+/// Measures per system for generated exercise sheets. Four is the usual
+/// practice-sheet grid and keeps a 4-bar phrase on one line.
+const MEASURES_PER_SYSTEM: usize = 4;
+
+/// One staff space in Bravura font design units.
+const STAFF_SPACE_FU: f64 = 250.0;
+
+/// System width in staff spaces. Wide enough that four subdivision-heavy
+/// measures fit without the engraver compressing them.
+const SYSTEM_WIDTH_SS: f64 = 140.0;
+
+/// One notated event: a pitched note or a rest.
+///
+/// The melody types in `music` carry only pitched events, so rests would
+/// otherwise have to be dropped — which silently desynchronizes measures from
+/// the rhythm they are supposed to notate. Commands build a stream of these
+/// instead so rests reach the engraver as rests.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NotationEvent {
+    Note {
+        pitch: Pitch,
+        duration: Duration,
+        /// Tied to the following note.
+        tied: bool,
+    },
+    Rest {
+        duration: Duration,
+    },
+}
+
+impl NotationEvent {
+    pub fn note(pitch: Pitch, duration: Duration) -> Self {
+        NotationEvent::Note { pitch, duration, tied: false }
+    }
+
+    pub fn rest(duration: Duration) -> Self {
+        NotationEvent::Rest { duration }
+    }
+
+    pub fn duration(&self) -> Duration {
+        match self {
+            NotationEvent::Note { duration, .. } => *duration,
+            NotationEvent::Rest { duration } => *duration,
+        }
+    }
+
+    fn ticks(&self) -> usize {
+        self.duration().ticks()
+    }
+
+    /// Whether this event is short enough to be beamed (eighth or shorter).
+    fn beamable(&self) -> bool {
+        matches!(self, NotationEvent::Note { .. })
+            && self.duration().ticks() < TICKS_PER_QUARTER
+            && !matches!(self.duration().kind(), DurationKind::Whole | DurationKind::Half)
+    }
+}
+
+impl From<&MelodicEvent> for NotationEvent {
+    fn from(ev: &MelodicEvent) -> Self {
+        NotationEvent::Note {
+            pitch: ev.pitch,
+            duration: ev.duration,
+            tied: ev.tied,
+        }
+    }
+}
 
 /// User-selectable clef for notation output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,37 +236,140 @@ fn fifths_position(major_root: Note) -> Option<i32> {
     })
 }
 
-/// Build a `ScoreBuilder` from a melody, splitting it into 4/4 measures by tick
-/// total. Notes are emitted in order; ties are preserved.
+/// Split an event stream into measures of `ticks_per_measure`.
+///
+/// Events are assumed to align to measure boundaries (the generators build them
+/// beat by beat). Any trailing partial measure is kept as its own measure so
+/// nothing is silently dropped.
+fn split_measures(events: &[NotationEvent], ticks_per_measure: usize) -> Vec<Vec<NotationEvent>> {
+    let mut measures = Vec::new();
+    let mut current: Vec<NotationEvent> = Vec::new();
+    let mut ticks = 0usize;
+
+    for ev in events {
+        current.push(*ev);
+        ticks += ev.ticks();
+        if ticks >= ticks_per_measure {
+            measures.push(std::mem::take(&mut current));
+            ticks = 0;
+        }
+    }
+    if !current.is_empty() {
+        measures.push(current);
+    }
+    measures
+}
+
+/// Partition one measure into beat-aligned runs of beamable notes.
+///
+/// Returns a list of runs; each run is either a single event (rendered on its
+/// own, with a flag if it is short) or two-or-more consecutive beamable notes
+/// that share a beam. Beams never cross a beat boundary, which is the
+/// conventional grouping for simple meters and keeps `♫`-style pairs together.
+fn beam_runs(measure: &[NotationEvent], beat_ticks: usize) -> Vec<Vec<NotationEvent>> {
+    let mut runs: Vec<Vec<NotationEvent>> = Vec::new();
+    let mut run: Vec<NotationEvent> = Vec::new();
+    // Tick offset of the current event from the start of the measure.
+    let mut offset = 0usize;
+
+    for ev in measure {
+        let starts_new_beat = beat_ticks > 0 && offset % beat_ticks == 0;
+        let breaks_run = !ev.beamable()
+            // A beam group must stay inside one beat.
+            || (starts_new_beat && !run.is_empty());
+
+        if breaks_run && !run.is_empty() {
+            runs.push(std::mem::take(&mut run));
+        }
+
+        if ev.beamable() {
+            run.push(*ev);
+        } else {
+            runs.push(vec![*ev]);
+        }
+
+        offset += ev.ticks();
+    }
+    if !run.is_empty() {
+        runs.push(run);
+    }
+    runs
+}
+
+/// Build a `ScoreBuilder` from a notation event stream.
+///
+/// Measures are split by the given time signature, subdivisions are beamed
+/// within each beat, and rests are emitted as rests. Ties are preserved.
 fn build_score(
-    melody: &[MelodicEvent],
+    events: &[NotationEvent],
     clef: ClefChoice,
     key_sig: KeySignature,
+    (num, den): (u8, u8),
 ) -> ScoreBuilder {
+    // Fixed measures per system, and a system wide enough to hold them.
+    //
+    // Gourlay spacing gives a subdivision-heavy measure a natural width close
+    // to the default 40-staff-space system, which would put one measure on each
+    // line and break systems at inconsistent places. Practice sheets want a
+    // predictable grid instead, so ask for a set number of measures per system
+    // and widen the system to fit them.
     let mut sb = ScoreBuilder::new()
         .clef(clef.to_music_clef())
         .key_signature(key_sig)
-        .time_signature(4, 4)
-        .auto_line_breaks();
+        .time_signature(num, den)
+        .measures_per_system(MEASURES_PER_SYSTEM)
+        .system_width_fu(SYSTEM_WIDTH_SS * STAFF_SPACE_FU);
 
-    let mut ticks_in_measure = 0usize;
-    for (i, ev) in melody.iter().enumerate() {
-        sb = sb.note(ev.pitch, ev.duration);
-        if ev.tied {
-            sb = sb.tie();
+    // Measure length and beat length, in ticks, from the time signature.
+    let ticks_per_measure = TICKS_PER_WHOLE * num as usize / den as usize;
+    let beat_ticks = TICKS_PER_WHOLE / den as usize;
+
+    let measures = split_measures(events, ticks_per_measure);
+    let last = measures.len().saturating_sub(1);
+
+    for (m_idx, measure) in measures.iter().enumerate() {
+        for run in beam_runs(measure, beat_ticks) {
+            if run.len() > 1 {
+                // Two or more beamable notes in the same beat → one beam group.
+                let notes: Vec<(Pitch, Duration)> = run
+                    .iter()
+                    .filter_map(|ev| match ev {
+                        NotationEvent::Note { pitch, duration, .. } => Some((*pitch, *duration)),
+                        NotationEvent::Rest { .. } => None,
+                    })
+                    .collect();
+                sb = sb.beam_group(notes);
+                continue;
+            }
+
+            match run[0] {
+                NotationEvent::Note { pitch, duration, tied } => {
+                    sb = sb.note(pitch, duration);
+                    if tied {
+                        sb = sb.tie();
+                    }
+                }
+                NotationEvent::Rest { duration } => {
+                    sb = sb.rest(duration);
+                }
+            }
         }
-        ticks_in_measure += ev.duration.ticks();
-        // Close the measure once it's full (and we're not at the very end —
-        // the final barline is added after the loop).
-        if ticks_in_measure >= TICKS_PER_4_4_MEASURE && i + 1 < melody.len() {
-            sb = sb.barline();
-            ticks_in_measure = 0;
-        }
+
+        // Barline at every measure boundary; the last one is the final double bar.
+        sb = if m_idx == last { sb.end_barline() } else { sb.barline() };
     }
-    sb.end_barline()
+
+    // An empty stream still needs a closed measure to render a valid staff.
+    if measures.is_empty() {
+        sb = sb.end_barline();
+    }
+    sb
 }
 
 /// Render a melody to the given output path as SVG or PNG (by extension).
+///
+/// Assumes 4/4; use [`render_events_to_file`] to supply a time signature or to
+/// include rests.
 ///
 /// Returns the number of bytes written.
 pub fn render_melody_to_file(
@@ -202,9 +378,25 @@ pub fn render_melody_to_file(
     key_sig: KeySignature,
     path: &str,
 ) -> Result<usize> {
+    let events: Vec<NotationEvent> = melody.iter().map(NotationEvent::from).collect();
+    render_events_to_file(&events, clef, key_sig, (4, 4), path)
+}
+
+/// Render a notation event stream (notes and rests) to SVG or PNG by extension.
+///
+/// `time_sig` drives both measure splitting and beam grouping.
+///
+/// Returns the number of bytes written.
+pub fn render_events_to_file(
+    events: &[NotationEvent],
+    clef: ClefChoice,
+    key_sig: KeySignature,
+    time_sig: (u8, u8),
+    path: &str,
+) -> Result<usize> {
     let p = Path::new(path);
     let format = OutputFormat::from_path(p)?;
-    let sb = build_score(melody, clef, key_sig);
+    let sb = build_score(events, clef, key_sig, time_sig);
 
     let bytes: Vec<u8> = match format {
         OutputFormat::Svg => sb
@@ -225,6 +417,148 @@ mod tests {
     use super::*;
     use music::notation::rhythm::duration::Duration;
     use music::note::pitch::Pitch;
+
+    /// A note event on a fixed pitch, for rhythm-shaped tests.
+    fn n(dur: Duration) -> NotationEvent {
+        NotationEvent::note(Pitch::new(Note::B, 4), dur)
+    }
+
+    fn r(dur: Duration) -> NotationEvent {
+        NotationEvent::rest(dur)
+    }
+
+    fn dotted_eighth() -> Duration {
+        Duration::new(DurationKind::Eighth, 1)
+    }
+
+    /// A 4/4 measure's worth of events becomes exactly one measure.
+    #[test]
+    fn splits_on_measure_boundaries() {
+        let four_quarters = vec![n(Duration::QTR); 4];
+        let measures = split_measures(&four_quarters, TICKS_PER_WHOLE);
+        assert_eq!(measures.len(), 1);
+
+        let two_bars = vec![n(Duration::QTR); 8];
+        assert_eq!(split_measures(&two_bars, TICKS_PER_WHOLE).len(), 2);
+    }
+
+    /// Rests count toward the measure just like notes — dropping them used to
+    /// stretch every measure that contained one.
+    #[test]
+    fn rests_fill_measures_like_notes() {
+        // Quarter, eighth, eighth-rest, quarter, quarter = one 4/4 bar.
+        let bar = vec![
+            n(Duration::QTR),
+            n(Duration::EIGHTH),
+            r(Duration::EIGHTH),
+            n(Duration::QTR),
+            n(Duration::QTR),
+        ];
+        let total: usize = bar.iter().map(|e| e.ticks()).sum();
+        assert_eq!(total, TICKS_PER_WHOLE);
+        assert_eq!(split_measures(&bar, TICKS_PER_WHOLE).len(), 1);
+    }
+
+    /// Consecutive eighths inside one beat beam together; quarters never do.
+    #[test]
+    fn beams_group_within_a_beat() {
+        let bar = vec![
+            n(Duration::QTR),      // beat 1: alone
+            n(Duration::EIGHTH),   // beat 2: pair
+            n(Duration::EIGHTH),
+            n(Duration::QTR),      // beat 3: alone
+            n(Duration::EIGHTH),   // beat 4: pair
+            n(Duration::EIGHTH),
+        ];
+        let runs = beam_runs(&bar, TICKS_PER_QUARTER);
+        let sizes: Vec<usize> = runs.iter().map(|r| r.len()).collect();
+        assert_eq!(sizes, vec![1, 2, 1, 2], "expected quarter, beam, quarter, beam");
+    }
+
+    /// A beam never spans a beat boundary: eight straight eighths in 4/4 make
+    /// four beamed pairs, not one eight-note beam.
+    #[test]
+    fn beams_do_not_cross_beats() {
+        let bar = vec![n(Duration::EIGHTH); 8];
+        let runs = beam_runs(&bar, TICKS_PER_QUARTER);
+        assert_eq!(runs.len(), 4);
+        assert!(runs.iter().all(|r| r.len() == 2));
+    }
+
+    /// Rests break a beam group rather than being swept into it.
+    #[test]
+    fn rests_break_beam_groups() {
+        // Eighth-rest then eighth (a syncopated cell): no beam, two runs.
+        let beat = vec![r(Duration::EIGHTH), n(Duration::EIGHTH)];
+        let runs = beam_runs(&beat, TICKS_PER_QUARTER);
+        assert_eq!(runs.len(), 2);
+        assert!(runs.iter().all(|r| r.len() == 1));
+    }
+
+    /// Four sixteenths in a beat beam as one group; a dotted-eighth + sixteenth
+    /// also beams (the engraver draws the fractional stub).
+    #[test]
+    fn sixteenth_figures_beam() {
+        let four = vec![n(Duration::SIXTEENTH); 4];
+        assert_eq!(beam_runs(&four, TICKS_PER_QUARTER)[0].len(), 4);
+
+        let dotted = vec![n(dotted_eighth()), n(Duration::SIXTEENTH)];
+        let runs = beam_runs(&dotted, TICKS_PER_QUARTER);
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].len(), 2);
+    }
+
+    /// Quarters and longer are never beamed.
+    #[test]
+    fn long_notes_are_not_beamable() {
+        assert!(!n(Duration::QTR).beamable());
+        assert!(!n(Duration::HALF).beamable());
+        assert!(!n(Duration::WHOLE).beamable());
+        assert!(n(Duration::EIGHTH).beamable());
+        assert!(n(Duration::SIXTEENTH).beamable());
+        assert!(!r(Duration::EIGHTH).beamable(), "rests are never beamed");
+    }
+
+    /// A rhythm containing rests renders, and every measure gets a barline —
+    /// the engraved bar count must match the requested measure count.
+    #[test]
+    fn renders_rests_and_barlines() {
+        let mut events = Vec::new();
+        for _ in 0..3 {
+            // beat 1: quarter · beat 2: beamed eighth pair
+            // beat 3: eighth + eighth-rest · beat 4: quarter
+            events.push(n(Duration::QTR));
+            events.push(n(Duration::EIGHTH));
+            events.push(n(Duration::EIGHTH));
+            events.push(n(Duration::EIGHTH));
+            events.push(r(Duration::EIGHTH));
+            events.push(n(Duration::QTR));
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("rests.svg");
+        render_events_to_file(
+            &events,
+            ClefChoice::Treble,
+            KeySignature::Open,
+            (4, 4),
+            out.to_str().unwrap(),
+        )
+        .unwrap();
+        let svg = std::fs::read_to_string(&out).unwrap();
+        // Beams render as filled polygons; rests and noteheads as paths.
+        assert!(svg.contains("<polygon"), "expected at least one beam");
+        assert!(svg.contains("<svg") && svg.contains("</svg>"));
+    }
+
+    /// 3/4 splits into three-beat measures rather than four.
+    #[test]
+    fn honors_time_signature_for_measures() {
+        let bar_3_4 = vec![n(Duration::QTR); 3];
+        let ticks_3_4 = TICKS_PER_WHOLE * 3 / 4;
+        assert_eq!(split_measures(&bar_3_4, ticks_3_4).len(), 1);
+        let two_bars = vec![n(Duration::QTR); 6];
+        assert_eq!(split_measures(&two_bars, ticks_3_4).len(), 2);
+    }
 
     fn ev(note: Note, octave: i8, dur: Duration) -> MelodicEvent {
         MelodicEvent {

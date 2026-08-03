@@ -375,3 +375,90 @@ fn subchords_header_shows_input_set() {
         "header should show size; got:\n{stdout}"
     );
 }
+
+// ==================== subchords: root-relative labeling ====================
+// Regression tests for docs/slonimsky-cli-bugs.md §4 — subsets and their names
+// were reported against the zero-anchored prime form, so a G-major query came
+// back labeled in C.
+
+#[test]
+fn subchords_names_use_the_queried_root() {
+    let out = slonimsky()
+        .args(["subchords", "G,A,B,C,D,E,F#", "--size", "3", "--name"])
+        .output()
+        .expect("command should run");
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("GMaj"),
+        "G-major query should yield G-rooted names; got:\n{stdout}"
+    );
+    // The header lists the queried pitch classes, not {0,2,4,6,7,9,11}.
+    assert!(
+        stdout.contains("Subchords of {1,2,4,6,7,9,11}"),
+        "header should show the queried set; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn subchords_bb_major_labels_are_bb_rooted() {
+    let out = slonimsky()
+        .args(["subchords", "Bb,C,D,Eb,F,G,A", "--size", "5", "--name"])
+        .output()
+        .expect("command should run");
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // pc 10 renders as "A#/Bb". The reported bug was that the *first* subset —
+    // which contains the queried root — came back as "Cmin (9, 11)".
+    assert!(
+        stdout.contains("A#/Bbmin"),
+        "Bb-major query should yield Bb-rooted names; got:\n{stdout}"
+    );
+    let first_subset = stdout
+        .lines()
+        .find(|l| l.trim_start().starts_with("1. {"))
+        .expect("should list a first subset");
+    assert!(
+        first_subset.contains("A#/Bbmin"),
+        "the Bb-containing subset must be named from Bb, not C; got: {first_subset}"
+    );
+}
+
+#[test]
+fn subchords_relative_flag_restores_prime_form() {
+    let out = slonimsky()
+        .args(["subchords", "G,A,B,C,D,E,F#", "--size", "3", "--name", "--relative"])
+        .output()
+        .expect("command should run");
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Subchords of {0,2,4,6,7,9,11}")
+            && stdout.contains("prime-form relative"),
+        "--relative should report prime form and say so; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn superchords_header_matches_the_queried_key() {
+    // Absolute roots are reported in the body (G Maj7 for G,B,D), so the header
+    // must not disagree by printing the zeroed shape.
+    let out = slonimsky()
+        .args(["superchords", "G,B,D", "--min-size", "4", "--max-size", "4"])
+        .output()
+        .expect("command should run");
+
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Superchords of {2,7,11}"),
+        "header should show the queried set; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("G Maj7"),
+        "should find G Maj7 above G,B,D; got:\n{stdout}"
+    );
+}

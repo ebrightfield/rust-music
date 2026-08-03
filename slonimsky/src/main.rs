@@ -3,8 +3,23 @@ use clap::{Parser, Subcommand};
 
 mod cmd;
 
+/// Note shown in `--help` so the feature-gated subcommand isn't mistaken for
+/// missing when it is simply absent from a default build.
+#[cfg(not(feature = "midi"))]
+const FEATURE_HELP: &str = "Additional subcommands:\n  \
+    ear-training  Generate MIDI ear-training quizzes — requires the `midi` \
+    feature: cargo build -p slonimsky --features midi";
+
+#[cfg(feature = "midi")]
+const FEATURE_HELP: &str = "Built with the `midi` feature: `ear-training` is available.";
+
 #[derive(Parser)]
-#[command(name = "slonimsky", version, about = "Music-theory CLI")]
+#[command(
+    name = "slonimsky",
+    version,
+    about = "Music-theory CLI",
+    after_help = FEATURE_HELP
+)]
 struct Cli {
     /// Output file path (format inferred from extension)
     #[arg(short, long, global = true)]
@@ -413,6 +428,11 @@ enum Commands {
         /// Try to name each subchord
         #[arg(long)]
         name: bool,
+
+        /// Report sets and names relative to prime form (rooted on pitch-class
+        /// 0) instead of in the key of the queried input
+        #[arg(long)]
+        relative: bool,
     },
 }
 
@@ -746,11 +766,12 @@ fn main() -> Result<()> {
                 verbose: cli.verbose,
             })?;
         }
-        Commands::Subchords { input, size, name } => {
+        Commands::Subchords { input, size, name, relative } => {
             cmd::subchords::run(cmd::subchords::SubchordsArgs {
                 input,
                 size,
                 name,
+                relative,
                 verbose: cli.verbose,
             })?;
         }

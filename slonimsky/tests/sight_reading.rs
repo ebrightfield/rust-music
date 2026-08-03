@@ -317,3 +317,80 @@ fn g_harmonic_minor_difficulty_4() {
     assert!(stdout.contains("m2:"));
     assert!(!stdout.contains("m3:"));
 }
+
+// ==================== clef validation and exit codes ====================
+// Regression tests for docs/slonimsky-cli-bugs.md §7 and §9.
+
+/// An unsupported or unknown `--clef` must fail with a non-zero exit code, and
+/// must do so whether or not `-o` was passed — the clef used to be parsed only
+/// inside the output branch, so `--clef alto` printed a normal text sheet and
+/// exited 0. Callers that shell out check the exit status.
+#[test]
+fn bad_clef_exits_nonzero_without_output_file() {
+    for clef in ["alto", "tenor", "bogus"] {
+        let out = slonimsky()
+            .args(["sight-reading", "--measures", "1", "--clef", clef])
+            .output()
+            .unwrap();
+        assert!(
+            !out.status.success(),
+            "--clef {clef} should exit non-zero; stdout was:\n{}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("clef"),
+            "error should name the clef problem; got:\n{stderr}"
+        );
+    }
+}
+
+#[test]
+fn supported_clefs_succeed() {
+    for clef in ["treble", "treble-8", "treble8", "guitar", "bass"] {
+        let out = slonimsky()
+            .args(["sight-reading", "--measures", "1", "--clef", clef])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "--clef {clef} should succeed");
+    }
+}
+
+/// A transposing clef changes sounding pitch, not staff placement: for the same
+/// written pitches `treble-8` must put noteheads exactly where `treble` does.
+#[test]
+fn treble8_places_noteheads_like_treble() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let render = |clef: &str, name: &str| -> String {
+        let path = dir.path().join(name);
+        let out = slonimsky()
+            .args([
+                "sight-reading", "--key", "C", "--scale", "major",
+                "--measures", "1", "--seed", "5", "--clef", clef,
+                "-o", path.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "rendering with --clef {clef} should succeed");
+        std::fs::read_to_string(&path).unwrap()
+    };
+
+    let treble = render("treble", "t.svg");
+    let treble8 = render("treble-8", "t8.svg");
+
+    // Collect every glyph's y translate; placement must be identical.
+    let ys = |svg: &str| -> Vec<String> {
+        svg.split("translate(")
+            .skip(1)
+            .filter_map(|rest| {
+                let inner = rest.split(')').next()?;
+                inner.split(',').nth(1).map(|y| y.trim().to_string())
+            })
+            .collect()
+    };
+    assert_eq!(
+        ys(&treble),
+        ys(&treble8),
+        "treble-8 must not shift noteheads by an octave"
+    );
+}

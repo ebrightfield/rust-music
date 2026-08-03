@@ -295,3 +295,52 @@ fn spell_verbose_prints_to_stderr() {
         "verbose should print 'spell:' to stderr; got: {stderr}"
     );
 }
+
+// ==================== spell: tertian interval spelling ====================
+// Regression tests for docs/slonimsky-cli-bugs.md §1 — chord tones were chosen
+// by "prefer a natural, else match the root's accidental", which spelled Cm7's
+// third as D# (an augmented second) instead of Eb.
+
+/// Run `spell <symbol>` and return its trimmed stdout.
+fn spell(symbol: &str) -> String {
+    let out = slonimsky()
+        .args(["spell", symbol])
+        .output()
+        .expect("command should run");
+    assert!(out.status.success(), "spell {symbol} should succeed");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn spell_minor_sevenths_are_tertian() {
+    assert_eq!(spell("Cm7"), "C Eb G Bb");
+    assert_eq!(spell("Abm7"), "Ab Cb Eb Gb");
+    assert_eq!(spell("Dbm7"), "Db Fb Ab Cb");
+    // A double flat is the correct third here, and preferable to A.
+    assert_eq!(spell("Gbm7"), "Gb Bbb Db Fb");
+}
+
+#[test]
+fn spell_previously_correct_roots_unchanged() {
+    assert_eq!(spell("Bbmaj7"), "Bb D F A");
+    assert_eq!(spell("Ebmaj7"), "Eb G Bb D");
+    assert_eq!(spell("F7"), "F A C Eb");
+    assert_eq!(spell("Ebm7"), "Eb Gb Bb Db");
+    assert_eq!(spell("Fm7"), "F Ab C Eb");
+}
+
+#[test]
+fn spell_resolves_ambiguous_intervals_from_context() {
+    // Fully-diminished seventh: the top note is a seventh (Bbb), not a sixth.
+    assert_eq!(spell("Cdim7"), "C Eb Gb Bbb");
+    // Half-diminished keeps a natural b7.
+    assert_eq!(spell("Cm7b5"), "C Eb Gb Bb");
+    // With a perfect fifth present the tritone is a #11 (F#), not a b5.
+    assert_eq!(spell("Cmaj7#11"), "C E F# G B");
+}
+
+#[test]
+fn spell_enharmonic_roots_differ() {
+    assert_eq!(spell("C#m7"), "C# E G# B");
+    assert_eq!(spell("Dbm7"), "Db Fb Ab Cb");
+}

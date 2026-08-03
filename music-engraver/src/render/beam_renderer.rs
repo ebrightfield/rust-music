@@ -16,6 +16,13 @@ const FRACTIONAL_BEAM_LENGTH_SS: f64 = 0.75;
 ///
 /// `notes` and `layout` must have the same length. `notehead_advance` is
 /// the advance width of the filled notehead glyph (needed for stem x-placement).
+///
+/// `layout.stem_tip_ys` comes from [`crate::layout::beam::layout_beam_group`],
+/// which works in staff-relative coordinates (origin at the staff's top line).
+/// Noteheads are placed with `staff.y_of`, which includes the staff's
+/// `y_origin`, so the tips are shifted into the same absolute space here —
+/// otherwise every beam on the second and later systems would be drawn at the
+/// first system's height.
 pub fn draw_beam_group(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -32,6 +39,16 @@ pub fn draw_beam_group(
     let stem_thick = config.stem_thickness_fu();
     let beam_thick = config.beam_thickness_fu();
     let beam_gap = config.beam_spacing_fu();
+
+    // Translate staff-relative stem tips into canvas coordinates.
+    let layout = &BeamGroupLayout {
+        stem_tip_ys: layout
+            .stem_tip_ys
+            .iter()
+            .map(|y| y + staff.y_origin)
+            .collect(),
+        ..layout.clone()
+    };
 
     // Draw stems: vertical line from notehead to beam attachment point
     for (i, note) in notes.iter().enumerate() {
@@ -508,5 +525,56 @@ mod tests {
 
         // Up stems should be at right edge (500+295-15=780), down at left (500+15=515)
         assert_ne!(x1_up[0], x1_dn[0], "stem-up and stem-down x should differ");
+    }
+
+    /// Beams must follow the staff's `y_origin`, not stay at the first system's
+    /// height. `layout_beam_group` returns staff-relative stem tips, so a
+    /// renderer that forgets to add `y_origin` draws every beam on the second
+    /// and later systems at the top of the page.
+    #[test]
+    fn beams_follow_the_staff_y_origin() {
+        let font = bravura_font();
+        let config = font.engraving_config();
+        let notes = make_notes(&[(500.0, 0, 3), (1000.0, 2, 3)]);
+        let layout = layout_beam_group(&notes, StemDirection::Up, config.staff_space);
+
+        // Same group drawn on a staff at the top of the page and on one 2500
+        // units down (a second system).
+        let render_at = |y_origin: f64| {
+            let staff = StaffLayout::from_config(0.0, y_origin, 5000.0, &config);
+            let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 5000.0, 5000.0);
+            draw_beam_group(&mut svg, &staff, &config, &notes, &layout, 295.0);
+            svg.to_svg()
+        };
+
+        let first = render_at(0.0);
+        let second = render_at(2500.0);
+        assert_ne!(
+            first, second,
+            "a beam group on a lower system must not render identically to one at the top"
+        );
+
+        // Every y in the second system's output should be shifted by exactly 2500.
+        let ys = |svg: &str| -> Vec<f64> {
+            let mut out = Vec::new();
+            for line in svg.lines() {
+                for key in ["y1=\"", "y2=\""] {
+                    if let Some(i) = line.find(key) {
+                        let start = i + key.len();
+                        let end = line[start..].find('"').unwrap() + start;
+                        out.push(line[start..end].parse::<f64>().unwrap());
+                    }
+                }
+            }
+            out
+        };
+        let (a, b) = (ys(&first), ys(&second));
+        assert_eq!(a.len(), b.len());
+        for (y0, y1) in a.iter().zip(b.iter()) {
+            assert!(
+                (y1 - y0 - 2500.0).abs() < 1e-6,
+                "expected every beam/stem y to shift by the staff origin: {y0} -> {y1}"
+            );
+        }
     }
 }

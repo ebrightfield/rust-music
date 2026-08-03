@@ -28,13 +28,17 @@ fn absolute_diatonic(letter: Letter, octave: i8) -> i16 {
 ///
 /// Treble: G4 sits on staff position 2 (second line from bottom).
 /// Bass: F3 sits on staff position 6 (fourth line from bottom).
-/// Octave transposing clefs share the same staff position as the
-/// base clef but shift the reference pitch by an octave.
+///
+/// Octave-transposing clefs (`treble8va`, `treble8ba`) are *notational*
+/// transpositions: the `8` marks that written pitch sounds an octave away, so
+/// the written note keeps the base clef's staff placement and only the
+/// sounding pitch differs. A written G4 under `treble8ba` therefore sits on the
+/// second line exactly as under plain treble — and sounds G3. Giving these
+/// clefs a shifted reference pitch would apply the transposition twice, pushing
+/// an ordinary guitar part onto ledger lines above the staff.
 fn clef_reference(clef: &Clef) -> (Letter, i8, StaffPosition) {
     match clef {
-        Clef::Treble => (Letter::G, 4, 2),
-        Clef::Treble8va => (Letter::G, 5, 2),
-        Clef::Treble8ba => (Letter::G, 3, 2),
+        Clef::Treble | Clef::Treble8va | Clef::Treble8ba => (Letter::G, 4, 2),
         Clef::Bass => (Letter::F, 3, 6),
     }
 }
@@ -159,30 +163,44 @@ mod tests {
         assert_eq!(pitch_to_staff_position(&p(Note::D, 3), &Clef::Bass), 4);
     }
 
-    // --- Treble 8va ---
+    // --- Octave-transposing clefs ---
+    //
+    // These are notational transpositions: the written note keeps the base
+    // clef's staff placement and only its *sounding* pitch moves. So a written
+    // E4/G4 sits on the bottom/second line under `treble8va` and `treble8ba`
+    // just as it does under plain treble.
 
     #[test]
-    fn treble8va_e5_is_bottom_line() {
-        // Reference is G5 at position 2. E5 is 2 below → pos 0.
-        assert_eq!(pitch_to_staff_position(&p(Note::E, 5), &Clef::Treble8va), 0);
+    fn treble8va_places_written_pitches_like_treble() {
+        assert_eq!(pitch_to_staff_position(&p(Note::E, 4), &Clef::Treble8va), 0);
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 4), &Clef::Treble8va), 2);
     }
 
     #[test]
-    fn treble8va_g5_is_second_line() {
-        assert_eq!(pitch_to_staff_position(&p(Note::G, 5), &Clef::Treble8va), 2);
+    fn treble8ba_places_written_pitches_like_treble() {
+        assert_eq!(pitch_to_staff_position(&p(Note::E, 4), &Clef::Treble8ba), 0);
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 4), &Clef::Treble8ba), 2);
     }
 
-    // --- Treble 8vb ---
-
+    /// Regression for docs/slonimsky-cli-bugs.md §7: `treble-8` placed notes an
+    /// octave high, so a Bb4–G5 guitar phrase floated on ledger lines instead of
+    /// sitting on the staff. Placement must match plain treble exactly.
     #[test]
-    fn treble8ba_e3_is_bottom_line() {
-        // Reference is G3 at position 2. E3 is 2 below → pos 0.
-        assert_eq!(pitch_to_staff_position(&p(Note::E, 3), &Clef::Treble8ba), 0);
-    }
-
-    #[test]
-    fn treble8ba_g3_is_second_line() {
-        assert_eq!(pitch_to_staff_position(&p(Note::G, 3), &Clef::Treble8ba), 2);
+    fn transposing_clefs_match_treble_placement_across_the_range() {
+        let pitches = [
+            p(Note::C, 4), p(Note::Bes, 4), p(Note::D, 5),
+            p(Note::F, 5), p(Note::G, 5), p(Note::C, 6),
+        ];
+        for pitch in pitches {
+            let base = pitch_to_staff_position(&pitch, &Clef::Treble);
+            for clef in [Clef::Treble8va, Clef::Treble8ba] {
+                assert_eq!(
+                    pitch_to_staff_position(&pitch, &clef),
+                    base,
+                    "{pitch:?} under {clef:?} must sit where plain treble puts it"
+                );
+            }
+        }
     }
 
     // --- Edge cases ---
