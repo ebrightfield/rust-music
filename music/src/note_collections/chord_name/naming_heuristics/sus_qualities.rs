@@ -28,7 +28,7 @@ pub fn search_for_sus_quality(pcs: &HashSet<Pc>) -> ChordQuality {
         return ChordQuality::Sus(SusSubtype::MajNSus(ext, alt));
     }
     let alt = generate_alt(pcs, TriadContext::Sus);
-    return ChordQuality::Sus(SusSubtype::Sus4(alt));
+    ChordQuality::Sus(SusSubtype::Sus4(alt))
 }
 
 #[derive(Debug)]

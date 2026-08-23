@@ -663,8 +663,12 @@ mod tests {
         // will suppress the line.
         let staff = test_staff();
         let l = layout_cresc_text_continuation(CrescTextKind::Crescendo, 500.0, 500.0, &staff, SS);
+        // Mirrors the renderer's `x_line_start < x_end` check verbatim
+        // (negated), so the assertion tracks the real suppression rule.
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        let suppressed = !(l.x_line_start < l.x_end);
         assert!(
-            !(l.x_line_start < l.x_end),
+            suppressed,
             "degenerate range: x_line_start ({}) must not be strictly less than x_end ({})",
             l.x_line_start,
             l.x_end

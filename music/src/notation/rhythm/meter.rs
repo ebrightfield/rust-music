@@ -43,7 +43,7 @@ pub fn get_big_beats(
     }
     // Remaining patterns mark strong beats with the denominator
     // of qtr, half, or whole note
-    if vec![8, 16, 32].contains(&base_unit_duration) {
+    if [8, 16, 32].contains(&base_unit_duration) {
         return (0..num_beats).map(|i| i * base_unit_duration).collect();
     }
     // Remaining <=8th note meters patterns, leave empty

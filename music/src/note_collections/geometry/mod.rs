@@ -39,8 +39,8 @@ impl IntervalMatrix {
         for i in 0..n {
             let mut row = Vec::with_capacity(n);
             let pc_i: i32 = (&pcs_vec[i]).into();
-            for j in 0..n {
-                let pc_j: i32 = (&pcs_vec[j]).into();
+            for pc in pcs_vec.iter() {
+                let pc_j: i32 = pc.into();
                 let interval = (pc_j - pc_i).rem_euclid(12);
                 row.push(IntervalClass::from(&interval));
             }
@@ -120,7 +120,7 @@ impl IntervalMatrix {
     /// Finds all pairs of pitch classes that have the given interval.
     /// Returns a vector of (from_pc, to_pc) tuples.
     pub fn find_interval(&self, ic: IntervalClass) -> Vec<(Pc, Pc)> {
-        let pcs_vec: &[Pc] = &*self.pcs;  // Uses Deref
+        let pcs_vec: &[Pc] = &self.pcs;  // Uses Deref
         let n = pcs_vec.len();
         let mut pairs = Vec::new();
 

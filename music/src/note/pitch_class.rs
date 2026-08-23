@@ -11,15 +11,15 @@ pub struct PcIter {
 impl PcIter {
     pub fn starting_on(start: &Pc) -> Self {
         Self {
-            curr: start.clone(),
-            until: start.clone(),
+            curr: *start,
+            until: *start,
             is_first: true,
         }
     }
     pub fn section(start: &Pc, until: &Pc) -> Self {
         Self {
-            curr: start.clone(),
-            until: until.clone(),
+            curr: *start,
+            until: *until,
             is_first: true,
         }
     }
@@ -44,7 +44,7 @@ impl Iterator for PcIter {
         }
         self.is_first = false;
         let next = self.curr.next();
-        let curr = self.curr.clone();
+        let curr = self.curr;
         self.curr = next;
         Some(curr)
     }
@@ -370,16 +370,14 @@ mod tests {
 
     #[test]
     fn pc_iter() {
-        let all_pcs: Vec<Pc> = PcIter::default().into_iter().collect::<Vec<Pc>>();
+        let all_pcs: Vec<Pc> = PcIter::default().collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 12);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc0));
         let all_pcs: Vec<Pc> = PcIter::starting_on(&Pc::Pc4)
-            .into_iter()
             .collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 12);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc4));
         let all_pcs: Vec<Pc> = PcIter::section(&Pc::Pc4, &Pc::Pc3)
-            .into_iter()
             .collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 11);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc4));

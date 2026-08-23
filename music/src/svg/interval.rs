@@ -304,7 +304,7 @@ fn build_interval_matrix_svg(matrix: &IntervalMatrix, config: &IntervalConfig) -
     let pcs = matrix.pcs();
     for row in 0..dim {
         // Row label
-        let pc_val: u8 = pcs.iter().nth(row).copied().map(|pc| pc.into()).unwrap_or(0);
+        let pc_val: u8 = pcs.get(row).copied().map(|pc| pc.into()).unwrap_or(0);
         svg.text(
             (margin + label_offset / 2) as f64,
             (grid_start_y + row as u32 * config.cell_size + config.cell_size / 2) as f64,
@@ -350,7 +350,7 @@ fn build_interval_matrix_svg(matrix: &IntervalMatrix, config: &IntervalConfig) -
 
     // Column labels
     for col in 0..dim {
-        let pc_val: u8 = pcs.iter().nth(col).copied().map(|pc| pc.into()).unwrap_or(0);
+        let pc_val: u8 = pcs.get(col).copied().map(|pc| pc.into()).unwrap_or(0);
         svg.text(
             (grid_start_x + col as u32 * config.cell_size + config.cell_size / 2) as f64,
             (margin + title_height + label_offset / 2) as f64,
@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn test_chromatic_scale_intervals() {
         // Chromatic scale has all intervals
-        let all_pcs: Vec<Pc> = (0u8..12).map(|i| Pc::from(i)).collect();
+        let all_pcs: Vec<Pc> = (0u8..12).map(Pc::from).collect();
         let svg = IntervalBuilder::new()
             .pitches(all_pcs)
             .build_full_vector();

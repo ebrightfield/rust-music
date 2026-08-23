@@ -1157,9 +1157,9 @@ fn build_cross_system_hairpins_baseline() -> String {
 ///
 /// Layout: 3 measures of 4 quarters each at 4 measures/system (default).
 /// Each marking lives entirely within its own measure so the three labels
-/// + dashed continuations sit side-by-side along the staff baseline. No
-/// system break is forced; the cross-system continuation path is covered
-/// by `build_cross_system_cresc_text` instead.
+/// and their dashed continuations sit side-by-side along the staff
+/// baseline. No system break is forced; the cross-system continuation
+/// path is covered by `build_cross_system_cresc_text` instead.
 fn build_cresc_text() -> String {
     ScoreBuilder::new()
         .clef(Clef::Treble)

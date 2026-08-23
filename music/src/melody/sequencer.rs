@@ -122,7 +122,7 @@ impl MelodicSequencer {
     /// Create a new melodic sequencer from configuration.
     pub fn new(config: MelodicSequencerConfig) -> Self {
         let num_levels = config.interval_pattern.num_levels() + 1;
-        let level_notes = vec![config.starting_pitch.clone(); num_levels];
+        let level_notes = vec![config.starting_pitch; num_levels];
 
         Self {
             direction: config.direction,
@@ -139,7 +139,7 @@ impl MelodicSequencer {
         // First note
         let first_rhythm = self.next_rhythm();
         melody.push(MelodicEvent::new(
-            self.config.starting_pitch.clone(),
+            self.config.starting_pitch,
             first_rhythm,
         ));
 
@@ -189,7 +189,7 @@ impl MelodicSequencer {
         } else {
             level
         };
-        let previous_pitch = self.level_notes[level_for_pitch].clone();
+        let previous_pitch = self.level_notes[level_for_pitch];
 
         // Calculate next pitch
         let next_pitch = self.calculate_next_pitch(
@@ -214,7 +214,7 @@ impl MelodicSequencer {
             level
         };
         for i in 0..=level_index {
-            self.level_notes[i] = final_pitch.clone();
+            self.level_notes[i] = final_pitch;
         }
 
         Ok(MelodicEvent::new(final_pitch, duration))
@@ -247,14 +247,14 @@ impl MelodicSequencer {
             TurnaroundMode::Stop => {
                 // Clamp to boundary
                 if next.midi_note < self.config.bounds.lowest.midi_note {
-                    Ok(self.config.bounds.lowest.clone())
+                    Ok(self.config.bounds.lowest)
                 } else {
-                    Ok(self.config.bounds.highest.clone())
+                    Ok(self.config.bounds.highest)
                 }
             }
 
             TurnaroundMode::StartOver => {
-                Ok(self.config.starting_pitch.clone())
+                Ok(self.config.starting_pitch)
             }
 
             TurnaroundMode::Reflect => {
@@ -265,9 +265,9 @@ impl MelodicSequencer {
                 if !self.config.bounds.contains(&result) {
                     // If still out of bounds, just clamp
                     if result.midi_note < self.config.bounds.lowest.midi_note {
-                        Ok(self.config.bounds.lowest.clone())
+                        Ok(self.config.bounds.lowest)
                     } else {
-                        Ok(self.config.bounds.highest.clone())
+                        Ok(self.config.bounds.highest)
                     }
                 } else {
                     Ok(result)
@@ -281,9 +281,9 @@ impl MelodicSequencer {
             TurnaroundMode::Wrap => {
                 // Move to opposite boundary
                 if next.midi_note < self.config.bounds.lowest.midi_note {
-                    Ok(self.config.bounds.highest.clone())
+                    Ok(self.config.bounds.highest)
                 } else {
-                    Ok(self.config.bounds.lowest.clone())
+                    Ok(self.config.bounds.lowest)
                 }
             }
         }
@@ -314,7 +314,7 @@ impl MelodicSequencer {
         let overshoot = total_distance.saturating_sub(to_boundary);
 
         // Create pitch at boundary tone
-        let boundary_pitch = Pitch::try_new(boundary_tone.clone(), boundary.octave)?;
+        let boundary_pitch = Pitch::try_new(*boundary_tone, boundary.octave)?;
 
         // Move from boundary by overshoot amount in new direction
         // Estimate steps based on average interval size (assume ~2 semitones per step)
@@ -325,7 +325,7 @@ impl MelodicSequencer {
             Ok(result)
         } else {
             // If still out of bounds after bounce, clamp to boundary
-            Ok(boundary.clone())
+            Ok(*boundary)
         }
     }
 
@@ -334,7 +334,7 @@ impl MelodicSequencer {
         self.direction = self.config.direction;
         self.rhythm_position = 0;
         let num_levels = self.config.interval_pattern.num_levels() + 1;
-        self.level_notes = vec![self.config.starting_pitch.clone(); num_levels];
+        self.level_notes = vec![self.config.starting_pitch; num_levels];
         self.config.interval_pattern.reset();
         self.config.chord_progression.reset();
     }
@@ -361,7 +361,7 @@ impl<'a> Iterator for MelodicSequenceIter<'a> {
             self.first = false;
             let rhythm = self.sequencer.next_rhythm();
             return Some(Ok(MelodicEvent::new(
-                self.sequencer.config.starting_pitch.clone(),
+                self.sequencer.config.starting_pitch,
                 rhythm,
             )));
         }

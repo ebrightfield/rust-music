@@ -1,0 +1,169 @@
+# Static musl build for this workspace's binaries, for copy-pasting into containers.
+#
+# Produces fully static (no libc, no dynamic loader) x86_64 binaries that run in any
+# container image — including `scratch` and `alpine` — with no runtime dependencies.
+# Bravura.otf and its SMuFL metadata are `include_bytes!`-embedded in `music-engraver`,
+# so the binaries need no font files at runtime either.
+#
+# Build context: the workspace root (rust-music/).
+#
+#   ./scripts/build-musl.sh              # build + extract + verify (preferred)
+#
+# Or by hand:
+#
+#   podman build -f Containerfile.musl -t rust-music-musl:latest .
+#   id=$(podman create rust-music-musl:latest)
+#   podman cp "$id":/out/. target/musl-build/
+#   podman rm "$id"
+#
+# Why containerized rather than a host `cargo build --target ...`: the host build works
+# (this repo has no C dependencies), but it bakes in the host's rustc version and cargo
+# registry state. The container pins the toolchain so the artifact is reproducible and
+# buildable on a machine without the musl target installed.
+
+# A glibc-hosted image that CROSS-compiles to musl — deliberately not `rust:1-alpine`.
+# On an Alpine image the host target is itself musl, and cargo then cannot build
+# proc-macros ("cannot produce proc-macro for `clap_derive` as the target
+# x86_64-unknown-linux-musl does not support these crate types"), because proc-macros
+# must be compiled as shared libraries for the *host*. Cross-compiling from glibc keeps
+# the host target glibc (proc-macros fine) while the artifact is static musl.
+FROM docker.io/library/rust:1-bookworm AS builder
+
+# musl-tools provides musl-gcc, used as the linker for the musl target. The workspace
+# itself is pure Rust (resvg / tiny-skia / fontdb are Rust rasterizers, no C), so there
+# is no need for bundled-C shims like the sqlite one in claude-agents-rs.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends musl-tools binutils \
+    && rm -rf /var/lib/apt/lists/*
+RUN rustup target add x86_64-unknown-linux-musl
+
+ENV CARGO_TERM_COLOR=never
+
+# Fully static. `+crt-static` ALONE IS NOT ENOUGH on this toolchain (rustc 1.97.1): with a
+# proc-macro dependency in the graph — `clap_derive` here — it still emits a binary with an
+# INTERP segment requesting /lib/ld-musl-x86_64.so.1, which segfaults outside an image that
+# has musl installed. `-C link-self-contained=yes` makes rustc link its own bundled musl
+# libc and CRT objects instead, which produces a genuinely static PIE.
+#
+# Mechanisms tried that all silently produced a dynamic binary, for the record:
+#   - CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS=...+crt-static   (ignored)
+#   - .cargo/config.toml `[target.<triple>] rustflags = [...+crt-static]`
+#   - RUSTFLAGS=...+crt-static with CARGO_BUILD_TARGET
+#   - RUSTFLAGS=...+crt-static with an explicit `--target`
+# Each looked fine under `file` on some inputs and failed once proc-macros were involved.
+#
+# Verification note: `file` is NOT a reliable oracle here — it printed "dynamically linked"
+# for binaries that `ldd` called "statically linked". The authoritative test, used by the
+# checks below and in scripts/build-musl.sh, is whether the ELF has a program-interpreter
+# (INTERP) entry. A truly static binary has none.
+ENV RUSTFLAGS="-C target-feature=+crt-static -C link-self-contained=yes"
+ENV CARGO_BUILD_TARGET=x86_64-unknown-linux-musl
+
+WORKDIR /src
+
+# ---------------------------------------------------------------------------
+# 1) Manifests + lockfile only, so the dependency build layer caches.
+#
+# Every workspace member in the root Cargo.toml `members` must be listed here.
+# Cargo resolves the whole workspace from the root manifest, so a missing member
+# manifest breaks this cache layer entirely — keep this list in sync when adding
+# or removing a crate. (scripts/build-musl.sh checks this for you.)
+# ---------------------------------------------------------------------------
+COPY Cargo.toml Cargo.lock ./
+COPY music/Cargo.toml                  music/Cargo.toml
+COPY music-engraver/Cargo.toml         music-engraver/Cargo.toml
+COPY musical-combinatorics/Cargo.toml  musical-combinatorics/Cargo.toml
+COPY lilypond-parser/Cargo.toml        lilypond-parser/Cargo.toml
+COPY music-midi/Cargo.toml             music-midi/Cargo.toml
+COPY music-ron/Cargo.toml              music-ron/Cargo.toml
+COPY slonimsky/Cargo.toml              slonimsky/Cargo.toml
+
+# ---------------------------------------------------------------------------
+# 2) Dummy sources so cargo can resolve the workspace and build dependencies
+#    without the real code. Uses each manifest to decide whether a crate needs
+#    a main.rs, a lib.rs, or both.
+# ---------------------------------------------------------------------------
+# Give every member BOTH a dummy lib.rs and a dummy main.rs. Cargo auto-discovers
+# src/main.rs and src/lib.rs without them being named in the manifest — `slonimsky` has
+# neither a `[[bin]]` section nor an explicit path — so grepping the manifest to decide
+# which stub to write detects nothing and silently produces an unbuildable tree. An extra
+# unused stub is harmless (it is overwritten by the real sources in stage 3), whereas a
+# missing one breaks the build.
+RUN set -eux; \
+    for manifest in */Cargo.toml; do \
+      dir=$(dirname "$manifest"); \
+      mkdir -p "$dir/src"; \
+      : > "$dir/src/lib.rs"; \
+      echo 'fn main() {}' > "$dir/src/main.rs"; \
+    done
+
+# `music-engraver` needs the fonts present at *compile* time (include_bytes!), so the
+# dependency-warmup build below would fail without them. They are small and change
+# rarely, which makes this a good cache layer anyway.
+COPY music-engraver/fonts/ music-engraver/fonts/
+
+# Build dependencies only. Allowed to fail: with dummy sources the final link can
+# error, but the expensive dependency compilation is still cached.
+RUN cargo build --release -p slonimsky 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# 3) Real sources, then the real build.
+#    `touch` forces cargo to rebuild the workspace crates whose dummy versions
+#    it just cached (mtime is how cargo decides).
+# ---------------------------------------------------------------------------
+COPY music/                  music/
+COPY music-engraver/         music-engraver/
+COPY musical-combinatorics/  musical-combinatorics/
+COPY lilypond-parser/        lilypond-parser/
+COPY music-midi/             music-midi/
+COPY music-ron/              music-ron/
+COPY slonimsky/              slonimsky/
+
+# COPY overlays the real sources but does not remove the dummy stubs that the real tree
+# lacks — a leftover src/main.rs in a library crate would make cargo build a phantom
+# binary. Delete any stub that is still the placeholder we wrote, then touch everything:
+# COPY preserves source mtimes, so real files can look *older* than the dummies cargo
+# already compiled, and an mtime filter would skip exactly what needs rebuilding.
+RUN set -eux; \
+    for f in */src/main.rs */src/lib.rs; do \
+      [ -f "$f" ] || continue; \
+      if [ "$(cat "$f")" = 'fn main() {}' ] || [ ! -s "$f" ]; then rm -f "$f"; fi; \
+    done; \
+    find . -name '*.rs' -exec touch {} +
+RUN cargo build --release -p slonimsky
+
+# ---------------------------------------------------------------------------
+# 4) Stage artifacts and assert they are genuinely static.
+#    A dynamically-linked binary here would silently fail inside a scratch image,
+#    so this is a build-time gate rather than a runtime surprise.
+# ---------------------------------------------------------------------------
+# The authoritative static test is the absence of an INTERP segment. `file` is not a
+# reliable oracle: it reported "dynamically linked" for binaries `ldd` simultaneously
+# called "statically linked". Comments are kept outside the RUN body on purpose — a `#`
+# inside a backslash-continued shell command is fragile.
+RUN set -eux; \
+    mkdir -p /out; \
+    cp target/x86_64-unknown-linux-musl/release/slonimsky /out/; \
+    for f in /out/*; do \
+      if readelf -l "$f" | grep -q 'program interpreter'; then \
+        echo "ERROR: $f requests a program interpreter — expected fully static musl" >&2; \
+        readelf -l "$f" | grep 'program interpreter' >&2; \
+        exit 1; \
+      fi; \
+      "$f" --version; \
+    done
+
+# Smoke-test the artifact in a libc-free image: if it needed a dynamic loader or any
+# shared library, this RUN could not execute at all. `scratch` has no shell, so this must
+# be exec-form, and the base needs no shell because the binary is static.
+FROM scratch AS verify
+COPY --from=builder /out/slonimsky /slonimsky
+RUN ["/slonimsky", "--version"]
+
+# Final stage holds just the artifacts, so `podman create` + `cp` is cheap.
+#
+# It copies from `verify`, not from `builder`, on purpose: a stage is only executed when
+# the final target depends on it, so pulling from `builder` here would let the scratch
+# smoke-test be skipped entirely.
+FROM scratch
+COPY --from=verify /slonimsky /out/slonimsky

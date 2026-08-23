@@ -285,6 +285,13 @@ pub fn layout_hairpin_dashed(
 /// the tip selected by [`NientePlacement`] and remains solid even when
 /// `dashed = true` — engraved convention treats the niente as a definite
 /// symbol independent of the wedge's dashed/solid style.
+///
+// Eight parameters is the point of this function: it is the single
+// entry point that folds the four style variants into one call, so the
+// geometry args (5) plus the two style flags necessarily travel
+// together. Bundling them into a config struct would just move the
+// same fields behind another name for one internal call site.
+#[allow(clippy::too_many_arguments)]
 pub fn layout_hairpin_styled(
     kind: HairpinType,
     x_start: f64,

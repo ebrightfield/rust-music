@@ -54,7 +54,7 @@ pub fn parse_chord_name(name: &str) -> Result<(Note, PcShape), MusicSemanticsErr
     // Build PcShape directly from the intervals (which are already relative to root=0)
     let pcs: Vec<Pc> = intervals
         .iter()
-        .map(|interval| Pc::from(interval))
+        .map(Pc::from)
         .collect();
 
     Ok((root, PcShape::new(pcs)))

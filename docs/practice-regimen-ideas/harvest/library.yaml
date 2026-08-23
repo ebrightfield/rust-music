@@ -1,0 +1,149 @@
+# Harvest library — externally-sourced practice ideas.
+# Screened per harvest/README.md. `status` values:
+#   documented   = a cited source describes the player doing this
+#   spirit-of    = our material, inspired by a documented trait (not claimed as theirs)
+#   rejected     = searched, produced no notatable specifics; kept so we don't re-harvest it
+#
+# `notatable_as` is the whole point: it says what the generator turns this into.
+# `interlocks_with` names the systematic elements it can pair with (see exercise-suite.md §4).
+
+harvests:
+
+  - id: mcl-tetrachord-open
+    artist: John McLaughlin
+    kind: mechanical device
+    status: documented
+    summary: >
+      Four-note (tetrachord) groupings sequenced with strict alternate picking; an OPEN STRING
+      used as the connector between groupings. Cited as especially useful at up-tempo and in
+      odd meters. Descending exploits semitone fingerings for repetitive, easy string crossing.
+    notatable_as: 16th-note tetrachords on consecutive strings, open string as an 8th between
+      groups, D/U picking marks above, fingerings 1-2-3-4.
+    interlocks_with: [right-hand technique, position, rhythm, articulation]
+    worked_example: ../examples/harv1.ly
+    source: https://jazzimproviser.com/2025/08/29/mastering-chromatic-guitar-techniques-inspired-by-john-mclaughlin/
+    also: https://jazzimproviser.com/2024/09/25/john-mclaughlins-alternate-picking-techniques-for-guitar/
+
+  - id: mcl-linear-triads
+    artist: John McLaughlin
+    kind: melodic procedure
+    status: documented
+    summary: >
+      "Linear triads" — triad sequences that climb the fretboard rather than staying in position.
+      Also documented: symmetric/diminished scale exercises with his own fingering choices, and
+      harmonic minor + its modes (from the Paco de Lucía period).
+    notatable_as: a triad sequence ascending the neck, one triad per position shift, fully
+      fingered; or a diminished-scale line with fixed fingering repeated up minor 3rds.
+    interlocks_with: [pitch-set (symmetrical scales), position, scale-pattern tuple]
+    source: https://azsamadlessons.com/video-review-john-mclaughlin-this-is-the-way-i-do-it/
+
+  - id: towner-open-string-voicings
+    artist: Ralph Towner
+    kind: voicing concept
+    status: documented
+    summary: >
+      Open strings woven into fretted voicings for colour and resonance. Deliberately avoids
+      conventional close voicings in the low register (they sound blurry on a large-bodied
+      classical), favouring wide, spacious spacings. Characteristic texture: colourful
+      arpeggiation capped by a large arpeggio mixing open and fretted notes.
+    notatable_as: a 4-note voicing where 1-2 notes are open strings, wide interval spacing, low
+      register kept sparse; arpeggiated in the tab with the open strings marked.
+    interlocks_with: [voicing, voice-leading, right-hand technique (fingerstyle), dynamics]
+    note: fits the acoustic/fingerstyle days especially well.
+    source: https://www.guitarworld.com/lessons/ralph-towners-nylon-and-12-string-craftsmanship
+    also: https://www.innerviews.org/inner/towner-2
+
+  - id: lage-pseudo-polyphony
+    artist: Julian Lage
+    kind: stylistic trait
+    status: documented
+    summary: >
+      Sustain one note while continuing to play others around it, creating the illusion of
+      multiple independent voices — explicitly in the lineage of Jim Hall, Chet Atkins, and
+      Towner. Avoids detached, one-note-at-a-time phrasing.
+    notatable_as: two-voice notation on one staff — a held upper voice (whole/half note) against
+      a moving lower line in 8ths; requires \voiceOne / \voiceTwo.
+    interlocks_with: [voicing, articulation, dynamics]
+    source: https://acousticguitar.com/5-minute-lesson-julian-lage-teaches-how-to-add-dimension-to-your-playing/
+
+  - id: lage-top-note-constant
+    artist: Julian Lage
+    kind: compositional technique
+    status: documented
+    summary: >
+      Hold the melody note constant on top and re-harmonise underneath it with different
+      inversions/substitutions. Traced back to Bach; simple triads yield clear harmonic motion.
+    notatable_as: 4-6 chords in a row sharing an identical top voice, inversions changing below;
+      chord symbols above, tab below.
+    interlocks_with: [voicing, voice-leading, pitch-set]
+    source: https://jazzimproviser.com/2021/11/25/julian-lage-guitar-lesson-triads-inversions-jazz-improvisation/
+
+  - id: lage-quiet-practice
+    artist: Julian Lage
+    kind: mental cue
+    status: documented
+    summary: >
+      Practise extremely quietly and touch the guitar very gently — let the instrument turn a
+      small input into a beautiful sound. Uses a "reset chord" to recalibrate, settle the nervous
+      system, and find a bigger tone.
+    notatable_as: a Rule 0c intention line, e.g. "quietly. let the guitar do the work." Plus an
+      optional notated 'reset chord' (one fermata'd voicing) at the head of the warmup.
+    interlocks_with: [dynamics, warmup]
+    source: https://acousticguitar.com/5-minute-lesson-practice-warm-up-tips-by-julian-lage/
+
+  - id: pedro-martins-harmony
+    artist: Pedro Martins
+    kind: (attempted) voicing concept
+    status: rejected
+    summary: >
+      Searched for specific Brazilian voicing/harmony technique. Sources returned biography and
+      album reviews only — "advanced jazz harmonies with Brazilian rhythms", "intricate",
+      "lyrical" — with no notatable specifics. Fails screening test #1.
+    retry_with: transcription sites, published folios, or interview technique-talk; or harvest
+      the *idiom* (choro/samba rhythmic cells, bossa comping patterns) generically rather than
+      attributing it to him.
+    source: https://www.allaboutjazz.com/musicians/pedro-martins/
+
+  - id: sco-faux-pentatonic
+    artist: John Scofield
+    kind: melodic procedure
+    status: documented
+    summary: >
+      Take a three-notes-per-string scale fingering and drop one note per string, turning it into
+      a two-notes-per-string "faux pentatonic" pattern. Changes both the sound and the picking
+      mechanics of a fingering you already own.
+    notatable_as: two lines, a/b — (a) the 3NPS fingering as written, (b) the same fingering with
+      one note per string removed. Play a, then b. This IS the "more notes to less" principle
+      (exercise-suite.md rule 2) as a documented player device.
+    interlocks_with: [pitch-set (subset chain), position, right-hand technique, scale-pattern]
+    worked_example: [../examples/harv2a.ly, ../examples/harv2b.ly]
+    source: https://www.guitarworld.com/lessons/john-scofield-jazz-guitar
+
+  - id: sco-intervallic-doublestops
+    artist: John Scofield
+    kind: stylistic trait
+    status: documented
+    summary: >
+      Wide-interval ("intervallic") improvisation plus heavy use of double-stops, favouring
+      tritones and major 7ths. String-skipping and lines played across the fingerboard rather
+      than within one box. Very legato phrasing.
+    notatable_as: a line built from tritone/M7 double-stops with string skips; slurs for the
+      legato; wide leaps rather than steps.
+    interlocks_with: [melodic pattern, articulation (legato), right-hand technique (string skipping), dynamics]
+    source: https://jazzguitar.richiezellon.com/jazz-improvisation/john-scofields-intervallic-style-licks
+
+  - id: sco-blues-altered-mix
+    artist: John Scofield
+    kind: melodic procedure
+    status: documented
+    summary: >
+      Mixes pentatonic and blues scales with altered notes to get modern lines that stay rooted
+      in blues. Compositional vocabulary also cited: chromaticism, contour, pedal tones,
+      voice-leading over changes.
+    notatable_as: a line over one chord that starts pentatonic/blues and inserts specific altered
+      tones (b5, #9, b13) on marked beats; or a pedal-tone figure with a moving upper voice.
+    interlocks_with: [pitch-set, voice-leading, rhythm]
+    source: https://www.premierguitar.com/lessons/jazz/john-scofield-guitar-lesson
+
+# Not yet harvested — queue: Tim Reynolds, Robin Katz.
+# Screen each per README; expect a mix of `documented` and `rejected`.

@@ -131,7 +131,7 @@ impl<'a> FretboardShape<'a> {
                     FrettedNote::Sounded(
                         SoundedNote { fret, pitch, string, fretboard }
                     ) => FrettedNote::Sounded(SoundedNote {
-                        fret: *fret, pitch: pitch.clone(), string: *string, fretboard,
+                        fret: *fret, pitch: *pitch, string: *string, fretboard,
                     }),
                 })
                 .collect()
@@ -143,9 +143,7 @@ impl<'a> FretboardShape<'a> {
             fretboard: self.fretboard,
             fretted_notes: self.fretted_notes
                 .iter()
-                .map(|value| Ok::<_, MusicSemanticsError>(value.spelled_as_in(notes)?))
-                .into_iter()
-                .flatten()
+                .flat_map(|value| value.spelled_as_in(notes))
                 .collect()
         })
     }
@@ -172,15 +170,13 @@ impl<'a> FretboardShape<'a> {
     pub fn range(&self) -> (Pitch, Pitch) {
         let mut pitches: Vec<Pitch> = self.fretted_notes
             .iter()
-            .map(|p| match &p {
-                FrettedNote::Sounded(SoundedNote { pitch, .. }) => Some(pitch.clone()),
+            .filter_map(|p| match &p {
+                FrettedNote::Sounded(SoundedNote { pitch, .. }) => Some(*pitch),
                 FrettedNote::Muted { .. } => None,
             })
-            .into_iter()
-            .flatten()
             .collect();
         pitches.sort_by(|a, b| a.midi_note.partial_cmp(&b.midi_note).unwrap());
-        (pitches.first().unwrap().clone(), pitches.last().unwrap().clone())
+        (*pitches.first().unwrap(), *pitches.last().unwrap())
     }
 
     /// Minimum and maximum fret numbers, *including* open strings.
@@ -201,12 +197,9 @@ impl<'a> FretboardShape<'a> {
     }
 
     pub fn contains_open_strings(&self) -> bool {
-        self.fretted_notes.iter().any(|value| {
-            match value {
-                FrettedNote::Sounded(SoundedNote {fret: 0, ..}) => true,
-                _ => false,
-            }
-        })
+        self.fretted_notes
+            .iter()
+            .any(|value| matches!(value, FrettedNote::Sounded(SoundedNote { fret: 0, .. })))
     }
 
     /// Since frets are spelling-agnostic, we compare by MIDI note value
@@ -250,14 +243,12 @@ impl<'a> From<&'a FretboardShape<'a>> for StackedIntervals {
         let mut pitches: Vec<Pitch> = value
             .fretted_notes
             .iter()
-            .map(|fretted_note| match &fretted_note {
+            .filter_map(|fretted_note| match &fretted_note {
                 FrettedNote::Sounded(SoundedNote { pitch, .. }) => {
-                    return Some(pitch.clone());
+                    Some(*pitch)
                 },
                 _ => None,
             })
-            .into_iter()
-            .flatten()
             .collect();
         pitches.sort_by(|a, b| a.midi_note.partial_cmp(&b.midi_note).unwrap());
         let sorted_midi: Vec<u8> = pitches.iter().map(|p| p.midi_note).collect();
@@ -273,7 +264,7 @@ impl<'a> From<&'a FretboardShape<'a>> for Voicing {
         Voicing::new(
             value.fretted_notes.iter()
                 .filter(|item| item.is_sounded())
-                .map(|item| item.pitch().unwrap().clone())
+                .map(|item| item.pitch().unwrap())
                 .collect()
         )
     }

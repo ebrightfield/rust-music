@@ -265,8 +265,7 @@ pub fn resolve_extension(
 ) -> (Extension, Vec<AltChoice>) {
     let to_alts = |exts: &[Extension]| {
         exts.iter()
-            .map(|e| e.to_alt_choice())
-            .flatten()
+            .filter_map(|e| e.to_alt_choice())
             .collect::<Vec<AltChoice>>()
     };
     match style {

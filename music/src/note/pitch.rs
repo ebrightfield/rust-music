@@ -107,14 +107,14 @@ impl Pitch {
         for note in notes {
             if Pc::from(note) == pc {
                 return Ok(Self {
-                    note: note.clone(),
+                    note: *note,
                     octave,
                     midi_note: midi_note_value,
                 });
             }
         }
         Err(MusicSemanticsError::NotAMember(
-            pc.notes().first().unwrap().clone(),
+            *pc.notes().first().unwrap(),
             notes.clone())
         )
     }
@@ -138,14 +138,14 @@ impl Pitch {
     /// to the input [Note]. For when you want to "go up to G from B3".
     pub fn up_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_up_to_note(note);
-        self.at_distance_from(d as isize)?.spelled_as_in(&vec![note.clone()])
+        self.at_distance_from(d as isize)?.spelled_as_in(&vec![*note])
     }
 
     /// Returns the next [Pitch] below [self] whose note is equivalent to
     /// to the input [Note]. For when you want to "go down to G from B3".
     pub fn down_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_down_to_note(note);
-        self.at_distance_from((d as isize) * -1)?.spelled_as_in(&vec![note.clone()])
+        self.at_distance_from(-(d as isize))?.spelled_as_in(&vec![*note])
     }
 
     /// Returns the number of letters up/down between self and other,

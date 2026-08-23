@@ -44,7 +44,7 @@ impl<'a> SoundedNote<'a> {
         let open_string = fretboard.get_string(string)?;
         Ok(Self {
             fret: Fretboard::OPEN,
-            pitch: open_string.clone(),
+            pitch: *open_string,
             string,
             fretboard,
         })
@@ -53,7 +53,7 @@ impl<'a> SoundedNote<'a> {
     /// Preferred constructor for a fretted string. Validates using
     /// the methods on the [Fretboard] passed in.
     pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
-        Ok(fretboard.sounded_note(string, fret)?)
+        fretboard.sounded_note(string, fret)
     }
 
     /// Returns a clone of self, but with the pitch spelled according
@@ -80,7 +80,7 @@ impl<'a> SoundedNote<'a> {
         if n < self.fret {
             return Err(MusicSemanticsError::CantMoveDownFrets(n));
         }
-        Ok(self.fretboard.sounded_note(self.string, self.fret - n)?)
+        self.fretboard.sounded_note(self.string, self.fret - n)
     }
 
     /// Moves up the same string to a new fret `n` semitones higher.
@@ -93,7 +93,7 @@ impl<'a> SoundedNote<'a> {
         if self.fret < 12 {
             return Err(MusicSemanticsError::CantMoveDownFrets(12));
         }
-        Ok(self.fretboard.sounded_note(self.string, self.fret - 12)?)
+        self.fretboard.sounded_note(self.string, self.fret - 12)
     }
 
     /// Produces a [SoundedNote] on the next chord/scale degree, on the same string.
@@ -111,7 +111,7 @@ impl<'a> SoundedNote<'a> {
         let pitch = self.pitch.up_to_note(&next_note)?;
         let next_string = self.fretboard.get_string(self.string + 1)?;
         if next_string.midi_note > pitch.midi_note {
-            return Err(MusicSemanticsError::FretBelowZero(pitch, next_string.clone()));
+            return Err(MusicSemanticsError::FretBelowZero(pitch, *next_string));
         }
         self.fretboard.sounded_note(
             self.string + 1, pitch.midi_note - next_string.midi_note
@@ -135,8 +135,8 @@ impl<'a> SoundedNote<'a> {
         // Calculate fret needed on higher string to get same pitch
         if self.pitch.midi_note < higher_string_pitch.midi_note {
             return Err(MusicSemanticsError::FretBelowZero(
-                self.pitch.clone(),
-                higher_string_pitch.clone()
+                self.pitch,
+                *higher_string_pitch
             ));
         }
 
@@ -157,8 +157,8 @@ impl<'a> SoundedNote<'a> {
             // Return a fret-below-zero error with the current pitch and lowest string
             let lowest = self.fretboard.get_string(0)?;
             return Err(MusicSemanticsError::FretBelowZero(
-                self.pitch.clone(),
-                lowest.clone()
+                self.pitch,
+                *lowest
             ));
         }
 
@@ -168,8 +168,8 @@ impl<'a> SoundedNote<'a> {
         // Calculate fret needed on lower string to get same pitch
         if self.pitch.midi_note < lower_string_pitch.midi_note {
             return Err(MusicSemanticsError::FretBelowZero(
-                self.pitch.clone(),
-                lower_string_pitch.clone()
+                self.pitch,
+                *lower_string_pitch
             ));
         }
 
@@ -285,7 +285,7 @@ impl<'a> FrettedNote<'a> {
     pub fn open(string: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         let open_string = fretboard.get_string(string)?;
         Ok(Self::Sounded(SoundedNote {
-            pitch: open_string.clone(),
+            pitch: *open_string,
             string,
             fretboard,
             fret: Fretboard::OPEN,
@@ -329,7 +329,7 @@ impl<'a> FrettedNote<'a> {
     /// Returns the pitch, unless it's a [FrettedNote::Muted] variant.
     pub fn pitch(&self) -> Option<Pitch> {
         match &self {
-            FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(pitch.clone()),
+            FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(*pitch),
             FrettedNote::Muted { .. } => None
         }
     }

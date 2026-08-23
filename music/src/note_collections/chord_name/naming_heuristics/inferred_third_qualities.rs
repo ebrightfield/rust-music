@@ -12,10 +12,10 @@ pub fn assumed_third_common_prefix(pcs: &HashSet<Pc>) -> Option<ChordQuality> {
     let mut clone = pcs.clone();
     if pcs.iter().all(|pc| SUGGESTIVE_OF_MAJOR_THIRD.contains(pc)) {
         clone.insert(Pc4);
-        return maj_and_min_qualities::common_prefix(&clone);
+        maj_and_min_qualities::common_prefix(&clone)
     } else {
         clone.insert(Pc3);
-        return maj_and_min_qualities::common_prefix(&clone);
+        maj_and_min_qualities::common_prefix(&clone)
     }
 }
 

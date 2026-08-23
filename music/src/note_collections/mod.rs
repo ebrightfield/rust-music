@@ -50,7 +50,7 @@ impl NoteSet {
         if notes.is_empty() {
             return Self(vec![]);
         }
-        let starting_note = notes[0].clone();
+        let starting_note = notes[0];
         Self::with_root(notes, &starting_note)
     }
 
@@ -75,18 +75,18 @@ impl NoteSet {
     /// but the [NoteSet] constructor takes care of this.
     pub fn up_n_steps(&self, from: &Note, n: u8) -> Result<Note, MusicSemanticsError> {
         let index: usize = self.0.iter().position(|i| *i == *from)
-            .ok_or(MusicSemanticsError::NotAMember(from.clone(), (**self).clone()))?;
+            .ok_or(MusicSemanticsError::NotAMember(*from, (**self).clone()))?;
         let n = (index + (n as usize)).rem_euclid(self.0.len());
-        Ok(self.0[n].clone())
+        Ok(self.0[n])
     }
 
     /// Same as the `up_n_steps` method, but in the downward direction.
     pub fn down_n_steps(&self, from: &Note, n: u8) -> Result<Note, MusicSemanticsError> {
         let index = self.0.iter().position(|i| *i == *from)
-            .ok_or(MusicSemanticsError::NotAMember(from.clone(), (**self).clone()))?;
+            .ok_or(MusicSemanticsError::NotAMember(*from, (**self).clone()))?;
         let equivalent_up = self.0.len() - (n as usize).rem_euclid(self.0.len());
         let n = (index + equivalent_up).rem_euclid(self.0.len());
-        Ok(self.0[n].clone())
+        Ok(self.0[n])
     }
 
     /// Indexed by [Note] instead of [Pc] as in
@@ -99,7 +99,7 @@ impl NoteSet {
         let mut indexed_by_note = HashMap::new();
         for (i, note) in self.iter().enumerate() {
             indexed_by_note.insert(
-                note.clone(),
+                *note,
                 symmetries.remove(&pcs[i]).unwrap(),
             );
         }
@@ -176,7 +176,7 @@ impl NoteSet {
         let new_note = &self.0[cur.rem_euclid(len) as usize];
         let new_octave = i8::try_from(octave)
             .map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
-        Pitch::try_new(new_note.clone(), new_octave)
+        Pitch::try_new(*new_note, new_octave)
     }
 
     /// Find the note in this set closest (by pitch class distance) to the given pitch.

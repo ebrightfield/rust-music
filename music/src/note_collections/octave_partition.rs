@@ -20,7 +20,7 @@ impl OctavePartition {
     /// Create an [`OctavePartition`], returning an error if the intervals do
     /// not sum to 12 semitones.
     pub fn try_new(intervals: Vec<IntervalClass>) -> Result<Self, MusicSemanticsError> {
-        let sum: i32 = intervals.iter().map(|interval| i32::from(interval)).sum();
+        let sum: i32 = intervals.iter().map(i32::from).sum();
         if sum != 12 {
             return Err(MusicSemanticsError::InvalidOctavePartition(intervals));
         }
@@ -67,14 +67,14 @@ impl From<&PcShape> for OctavePartition {
         if pc_shape.is_empty() {
             return Self(vec![IntervalClass::Ic0]);
         }
-        let vals = pc_shape.iter().map(|pc| i32::from(pc));
-        let next_vals = pc_shape.iter().skip(1).map(|pc| i32::from(pc));
+        let vals = pc_shape.iter().map(i32::from);
+        let next_vals = pc_shape.iter().skip(1).map(i32::from);
 
         let mut diffs: Vec<i32> = vals.zip(next_vals).map(|(cur, next)| next - cur).collect();
         diffs.push(i32::from(pc_shape.first().unwrap()) - i32::from(pc_shape.last().unwrap()));
         let diffs = diffs
             .iter()
-            .map(|i| IntervalClass::from(i))
+            .map(IntervalClass::from)
             .collect();
         OctavePartition::try_new(diffs).unwrap()
     }
@@ -130,9 +130,6 @@ mod tests {
             IntervalClass::Ic6,
         ];
         let result = OctavePartition::try_new(intervals.clone());
-        match result {
-            Ok(_) => panic!("octave partition should have failed"),
-            Err(_) => {}
-        }
+        if result.is_ok() { panic!("octave partition should have failed") }
     }
 }

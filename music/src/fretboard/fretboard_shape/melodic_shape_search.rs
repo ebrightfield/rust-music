@@ -42,10 +42,10 @@ impl<'a> MelodicFretboardShape<'a> {
     pub fn range(&self) -> (Pitch, Pitch) {
         let mut pitches: Vec<Pitch> = self.shape
             .iter()
-            .map(|p| p.pitch.clone())
+            .map(|p| p.pitch)
             .collect();
         pitches.sort_by(|a, b| a.midi_note.partial_cmp(&b.midi_note).unwrap());
-        (pitches.first().unwrap().clone(), pitches.last().unwrap().clone())
+        (*pitches.first().unwrap(), *pitches.last().unwrap())
     }
 
     /// Minimum and maximum fret numbers, *including* open strings.
@@ -68,7 +68,7 @@ impl<'a> MelodicFretboardShape<'a> {
     pub fn mirrored_outer_strings(&self) -> Self {
         if self.fretboard.open_strings.last().unwrap().note
             != self.fretboard.open_strings.first().unwrap().note {
-            return self.clone();
+            self.clone()
         } else {
             let mut new_self_instance = self.clone();
             let last_str = self.fretboard.num_strings() - 1;
@@ -94,7 +94,7 @@ impl<'a> MelodicFretboardShape<'a> {
     /// Whether other is entirely contained in self.
     pub fn subsumes_other(&self, other: &MelodicFretboardShape) -> bool {
         self.fretboard == other.fretboard &&
-            other.shape.iter().all(|item| self.shape.contains(&item))
+            other.shape.iter().all(|item| self.shape.contains(item))
     }
 }
 
@@ -175,7 +175,7 @@ impl<'a> ScaleShapeSearchResult<'a> {
         for (note, shapes) in result.into_iter() {
             // categorize into simple shapes, or other
             for n in N_PER_STRING_TUPLES {
-                match n_note_per_string_shape(n.clone(), chord, &note, fretboard) {
+                match n_note_per_string_shape(*n, chord, &note, fretboard) {
                     Ok(shape) => {
                         if *n == (2,2) {
                             new_self_instance.n_per_string_2_2.insert(note, shape);
@@ -212,7 +212,7 @@ impl<'a> ScaleShapeSearchResult<'a> {
                         }
                     } else {
                         let entry = new_self_instance.other.entry(note)
-                            .or_insert_with(|| vec![]);
+                            .or_insert_with(std::vec::Vec::new);
                         if !entry.iter().any(|item|
                             item.subsumes_other(&shape)
                         ) {
@@ -221,7 +221,7 @@ impl<'a> ScaleShapeSearchResult<'a> {
                     }
                 }
                 new_self_instance.other.entry(note)
-                    .or_insert_with(|| vec![])
+                    .or_insert_with(std::vec::Vec::new)
                     .extend(the_rest);
             }
         }
@@ -240,7 +240,7 @@ pub fn set_aside_best_two_shapes(
     let mut best_two = vec![];
     let mut the_rest = vec![];
     for shape in shapes.into_iter() {
-        if best_two.len() == 0 {
+        if best_two.is_empty() {
             best_two.push(shape);
         } else if best_two.len() == 1 {
             let first = best_two.first().unwrap();
@@ -284,7 +284,7 @@ pub fn find_open_scale_shape<'a>(
     // don't cause us to walk past a valid note. Then re-spell the note in the
     // caller's scale so all downstream Note equality checks succeed.
     let mut first_note = fretboard.sounded_note(0, 0)?;
-    let chord_pcs: Vec<Pc> = chord.iter().map(|n| Pc::from(n)).collect();
+    let chord_pcs: Vec<Pc> = chord.iter().map(Pc::from).collect();
     while !chord_pcs.contains(&Pc::from(&first_note.pitch.note)) {
         first_note = first_note.up_n_frets(1)?;
     }
@@ -310,9 +310,9 @@ pub fn find_open_scale_shape<'a>(
     while !{
         let last_note = notes.shape.last().unwrap();
         let last_string = fretboard.num_strings() - 1;
-        let on_last_string_past_5th = last_note.string == last_string &&
-            last_note.fret >=5;
-        on_last_string_past_5th
+        
+        last_note.string == last_string &&
+            last_note.fret >=5
     } {
         let last_note = notes.shape.last().unwrap().clone();
         let next_note = step(&last_note)?;
@@ -364,11 +364,9 @@ pub fn find_all_scale_shapes<'a>(
     ) -> HashMap<Note, Vec<MelodicFretboardShape<'a>>> {
     chord
         .iter()
-        .map(|note| melodic_shapes_at_starting_note(chord, note, fretboard)
-            .map(|ok| (note.clone(), ok)
+        .flat_map(|note| melodic_shapes_at_starting_note(chord, note, fretboard)
+            .map(|ok| (*note, ok)
         ))
-        .into_iter()
-        .flatten()
         .collect()
 
 }
@@ -653,7 +651,7 @@ pub fn melodic_shapes_at_starting_note<'a>(
         .filter(|shape| shape.is_complete())
         .for_each(|shape| by_score
             .entry(shape.score)
-            .or_insert_with(|| vec![])
+            .or_default()
             .push(shape)
         );
     let mut shapes: Vec<MelodicFretboardShape> = vec![];
@@ -722,7 +720,7 @@ fn tally_new_violations(frets: &Vec<SoundedNote>) -> (usize, usize) {
         let first_xing = third_to_last.fret as isize - second_to_last.fret as isize;
         let second_xing = second_to_last.fret as isize - last.fret as isize;
         let xings = (first_xing, second_xing);
-        let is_bad_xing = !vec![(1,1), (1,2), (2,1), (2,2)].contains(&xings);
+        let is_bad_xing = ![(1,1), (1,2), (2,1), (2,2)].contains(&xings);
         did_xing_twice && is_bad_xing
     } {
         str_xing_violations += 1;
@@ -781,7 +779,7 @@ mod tests {
         let _result = melodic_shapes_at_starting_note(
             &chord,
             &Note::C,
-            &*STD_6STR_GTR,
+            &STD_6STR_GTR,
         ).unwrap();
         // for shape in result {
         //     println!("{}", shape);
@@ -794,17 +792,17 @@ mod tests {
             MelodicFretboardShape {
                 shape: vec![],
                 score: 10,
-                fretboard: &*STD_6STR_GTR,
+                fretboard: &STD_6STR_GTR,
             },
             MelodicFretboardShape {
                 shape: vec![],
                 score: 5,
-                fretboard: &*STD_6STR_GTR,
+                fretboard: &STD_6STR_GTR,
             },
             MelodicFretboardShape {
                 shape: vec![],
                 score: 1,
-                fretboard: &*STD_6STR_GTR,
+                fretboard: &STD_6STR_GTR,
             },
         ];
         let (best_two, the_rest) = set_aside_best_two_shapes(
@@ -816,12 +814,12 @@ mod tests {
                 MelodicFretboardShape {
                     shape: vec![],
                     score: 1,
-                    fretboard: &*STD_6STR_GTR,
+                    fretboard: &STD_6STR_GTR,
                 },
                 MelodicFretboardShape {
                     shape: vec![],
                     score: 5,
-                    fretboard: &*STD_6STR_GTR,
+                    fretboard: &STD_6STR_GTR,
                 }
             ]
         );
@@ -831,7 +829,7 @@ mod tests {
                 MelodicFretboardShape {
                     shape: vec![],
                     score: 10,
-                    fretboard: &*STD_6STR_GTR,
+                    fretboard: &STD_6STR_GTR,
                 },
             ]
         );
@@ -843,7 +841,7 @@ mod tests {
 
         let shape = find_open_scale_shape(
             &chord,
-            &*STD_6STR_GTR,
+            &STD_6STR_GTR,
         ).unwrap();
         let should_be = "1:0(E) 1:1(F) 1:3(G) 2:0(A) 2:2(B) 2:3(C) \
         3:0(D) 3:2(E) 3:3(F) 4:0(G) 4:2(A) 5:0(B) 5:1(C) 5:3(D) 6:0(E) 6:1(F) 6:3(G) 6:5(A)";
@@ -855,7 +853,7 @@ mod tests {
         let chord = vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B];
         let _shapes = ScaleShapeSearchResult::from_raw_search_result(
             &chord,
-            &*STD_6STR_GTR,
+            &STD_6STR_GTR,
         ).unwrap();
         //println!("{:#?}", shapes.simple);
     }

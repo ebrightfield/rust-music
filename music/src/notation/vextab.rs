@@ -34,12 +34,10 @@ impl<'a> ToVexTab for FrettedNote<'a> {
 impl<'a> ToVexTab for FretboardShape<'a> {
     fn to_vextab(&self) -> String {
         self.fretted_notes.iter()
-            .map(|item| match &item {
+            .filter_map(|item| match &item {
                 FrettedNote::Sounded(note) => Some(note),
                 FrettedNote::Muted { .. } => None,
             })
-            .into_iter()
-            .flatten()
             .collect::<Vec<_>>()
             .to_vextab()
     }

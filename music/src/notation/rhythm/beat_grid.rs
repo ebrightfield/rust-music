@@ -105,7 +105,7 @@ impl BeatGrid {
 
         for i in 0..num_positions {
             let tick_pos = i * sub_ticks;
-            let is_on_beat = tick_pos % base_ticks == 0;
+            let is_on_beat = tick_pos.is_multiple_of(base_ticks);
 
             let strength = if is_on_beat {
                 Self::determine_strength(tick_pos, &big_beat_positions, measure_ticks)
@@ -181,12 +181,8 @@ impl BeatGrid {
     /// Returns the grid position that is closest to the input.
     pub fn nearest_position(&self, tick_pos: DurationTicks) -> Option<&GridPosition> {
         self.positions.iter().min_by_key(|p| {
-            let diff = if tick_pos >= p.position {
-                tick_pos - p.position
-            } else {
-                p.position - tick_pos
-            };
-            diff
+            
+            tick_pos.abs_diff(p.position)
         })
     }
 

@@ -7185,3 +7185,355 @@
   (internal `pub(crate)` enum), new builder method, new
   golden. No existing signatures changed, no baselines
   moved.
+
+## 2026-06-19 — Post-v1, Gourlay spring-rod spacing (Phase 1: measure model)
+
+- Did: Replaced the measure-spacing model in
+  `layout/measure.rs` with the port plan's (§6) Gourlay
+  spring-rod decomposition. Previously `duration_spacing_factor`
+  used a pure power-of-ratio (`min_note_spacing · ratio^steps`)
+  in which the *entire* event width was one compressible
+  quantity — dense passages could compress until noteheads
+  collided. Now each rhythmic event splits into an
+  incompressible **rod** (`min_rod_padding + notehead_rod +
+  accidental_rod? + dots·dot_rod`) and a duration-driven
+  **spring** (`spring_constant · duration^spacing_exponent`,
+  where the shortest note in the measure has duration 1.0 and
+  `c = spacing_exponent`, default 0.6). Plan written to
+  `docs/implementation-plan-gourlay-spacing.md` (scope: full
+  model measure+system; compat: replace power-of-ratio, keep
+  goldens). This entry is Phase 1 (measure layer); Phase 2
+  (system-level spring-only compression in `system.rs`) and
+  Phase 4 (calibration sweep) are the next steps.
+  - `PositionedElement` gains `rod` + `spring` fields
+    (invariant `width == rod + spring`); `MeasureLayout`
+    gains `total_rod` + `total_spring` (invariant
+    `total_width == total_rod + total_spring`). The existing
+    `width` / `total_width` fields are preserved as the
+    natural-layout (`s = 1`) values so every downstream
+    renderer keeps working unchanged.
+  - `MeasureLayoutConfig`: removed `spacing_ratio` and
+    `min_note_spacing`; added `spacing_exponent` (c, default
+    0.6, dimensionless), `spring_constant` (k, default 1.0·ss),
+    and the rod estimates `notehead_rod` (1.18·ss, matching
+    `glissando.rs`), `accidental_rod` (1.0·ss), `dot_rod`
+    (0.35·ss), `min_rod_padding` (0.3·ss). Rods are
+    staff-space estimates rather than real font advance widths
+    (documented decision: `layout_measure` has no font handle;
+    a follow-up can swap in real metrics behind `event_rod`).
+  - Deleted `duration_spacing_factor`; added `spring_rest_length`,
+    `event_rod`, and `trailing_padding` (prefix padding counted
+    as incompressible rod at the measure level).
+  - Chords share one notehead rod with one accidental-cluster
+    rod when any note carries an accidental; beam/tuplet groups
+    sum their inner notes' rod+spring; prefix/barline/
+    multi-measure-rest are pure rod (`spring == 0`).
+  - Updated downstream constructors of the changed structs in
+    `voice_collision.rs` and `measure_renderer/tests.rs`, and
+    the `system_renderer/tests.rs` spacing knob (`min_note_spacing`
+    → `spring_constant`).
+
+- Verified:
+  - `cargo build -p music-engraver` → clean; no clippy
+    warnings in the changed files (`cargo clippy -p
+    music-engraver --tests` — only the pre-existing unrelated
+    noise in other modules remains).
+  - `cargo test -p music-engraver --lib` → **2914 passed, 0
+    failed** (+3 net: replaced the three `duration_spacing_factor_*`
+    unit tests with `spring_rest_length_*` tests; added
+    `width_equals_rod_plus_spring_for_every_element`,
+    `prefix_and_barline_are_pure_rod`,
+    `accidental_and_dots_widen_only_the_rod`; reworked
+    `single_quarter_note` and `proportional_spacing_whole_vs_eighth`
+    to assert on rod/spring).
+  - Golden suite: the 66 spacing-sensitive baselines shifted
+    (12 unaffected). Triaged the diffs before regenerating: all
+    are pure `transform="translate(X, …)"` horizontal shifts —
+    identical glyph path data, identical y-coordinates,
+    identical line counts. Notes now space *non-uniformly*
+    (earlier notes pulled left, springs absorbing the slack)
+    exactly as the rod+spring model intends; final barline
+    moves right as the system redistributes within the same
+    width. Regenerated via `GOLDEN_UPDATE=1` → **78 passed, 0
+    failed** on the clean re-run. Rasterized
+    `simple_scale.svg` with `rsvg-convert` and eyeballed:
+    treble clef + 2 sharps + 4/4 + ascending quarter-note
+    scale + barline, clean readable spacing, no collisions.
+
+- Next: Phase 2 — replace the uniform target-width scaling in
+  `layout/system.rs` (currently scales rods *and* springs and
+  the clef/key/time prefix uniformly) with the analytic
+  spring-only solve `s = (target − Σrod) / Σspring`, re-flowing
+  x by accumulation and clamping springs to a floor when
+  content overflows. Then Phase 4 calibration (sweep
+  `spacing_exponent ∈ {0.5,0.6,0.7}`, tune `spring_constant`).
+  True multi-voice max-spring-per-tick merge remains explicitly
+  deferred (documented in the plan).
+
+- Open issues: Breaking change to two `pub` items in the
+  internal `music-engraver` crate — `MeasureLayoutConfig`
+  (fields `spacing_ratio`/`min_note_spacing` removed, replaced)
+  and the deleted `duration_spacing_factor` fn. Grep confirms
+  no consumer outside the engraver crate itself; all in-crate
+  callers updated. New struct fields are additive.
+
+## 2026-06-19 — Post-v1, Gourlay spring-rod spacing (Phase 2: system compression)
+
+- Did: Replaced the system-level target-width fitting in
+  `layout/system.rs` with Gourlay's analytic one-line solve
+  (port plan §6, step 3). Previously, fitting a system to a
+  target width scaled *everything* uniformly
+  (`elem.x *= scale; elem.width *= scale`) — which wrongly
+  compressed the incompressible clef/key/time prefix and
+  noteheads along with the spacing. Now only springs scale;
+  rods stay fixed.
+  - Added `spring_scale(total_rod, total_spring, target)` →
+    the analytic scale `s = (target − Σrod) / Σspring`,
+    clamped at `MIN_SPRING_SCALE` (0.0) so a target below the
+    rod total floors the springs and lets the system overflow
+    rather than producing negative widths (a line-breaker —
+    out of scope — is the real fix for genuinely-too-wide
+    content).
+  - Added `scale_measure_springs(layout, s)` → scales each
+    element's spring by `s`, holds its rod fixed, sets
+    `width = rod + s·spring`, and re-flows x by accumulation
+    while preserving the original inter-element gaps (trailing
+    prefix padding, which is incompressible rod). x is
+    re-flowed, not scaled in place — scaling x directly would
+    be wrong now that rods and springs scale differently.
+  - The main target-width branch now solves one system-wide
+    `s` over `Σtotal_rod` / `Σtotal_spring` across all measures
+    and applies it; the previous per-measure uniform scale is
+    gone.
+  - Additional voices are re-fit to their (scaled) primary
+    measure width via the same spring-only rule (per-voice
+    `spring_scale` against the primary width), preserving
+    measure-end alignment without compressing the voice's
+    rods. True max-spring-per-tick cross-voice merging remains
+    deferred (documented in the plan §4).
+
+- Verified:
+  - `cargo build -p music-engraver` → clean; `cargo clippy
+    -p music-engraver --tests` → no warnings in `system.rs`.
+  - `cargo test -p music-engraver --lib` → **2916 passed, 0
+    failed** (+2: `stretching_fixes_rods_and_grows_only_springs`
+    asserts every element's rod is invariant under a 1.5×
+    stretch while note springs grow and pure-rod prefix/barline
+    widths are unchanged; `compressing_below_rod_total_clamps_
+    without_negative_widths` asserts the floor produces no
+    negative widths/springs). The pre-existing
+    `target_width_scales_system` invariant (`total_width ≈
+    target`) still holds.
+  - Golden suite: the same 66 spacing-sensitive baselines
+    shifted (12 unaffected). Triaged before regenerating —
+    confirmed mechanically that every diff is a pure
+    `translate(X, …)` / barline-`x1` horizontal shift: after
+    blanking x-coordinates, expected and actual lines are
+    byte-identical (glyph path `d=` data and all y-coordinates
+    unchanged, line counts equal, e.g. multi_system 41 = 41).
+    The system now distributes width by growing springs only.
+    Regenerated via `GOLDEN_UPDATE=1` → **78 passed, 0 failed**
+    on the clean re-run. Rasterized `multi_system.svg`
+    (`rsvg-convert`) and eyeballed: two systems, fixed-width
+    clef/4-4 prefix, notes (half/whole/quarter + rests)
+    distributed naturally across each system, clean barlines,
+    no collisions.
+
+- Next: Phase 4 — calibration. Sweep `spacing_exponent ∈
+  {0.5, 0.6, 0.7}` and tune `spring_constant` against a small
+  corpus (scale, Twinkle, dotted rhythms, dense 16ths,
+  mixed whole+eighth) so dense passages don't crowd and the
+  defaults read well; lock the values with a rationale. (The
+  measure + system mechanics are now in place; calibration is
+  pure constant-tuning + re-baselining.) True multi-voice
+  max-spring-per-tick merge and the swap of rod estimates for
+  real font advance widths remain the documented follow-ups.
+
+- Open issues: None new. The Phase 1 breaking change to
+  `MeasureLayoutConfig` stands; Phase 2 is purely internal to
+  `layout/system.rs` (two new private fns, rewritten
+  target-width branch) — no public signatures changed.
+
+## 2026-08-06 — Post-v1, Gourlay spacing (Phase 4: calibration) + clippy cleanup
+
+- Did: Ran the Phase 4 calibration sweep the plan
+  (`docs/implementation-plan-gourlay-spacing.md` §5) called for,
+  and **kept the existing defaults** (`spacing_exponent` c = 0.6,
+  `spring_constant` k = 1.0·ss) — but for different reasons than
+  the plan anticipated. Two of the plan's premises did not
+  survive measurement.
+  - New `examples/spacing_calibration.rs`: sweeps c ∈ {0.5, 0.6,
+    0.7} × k ∈ {0.8, 1.0, 1.2}·ss over a 6-case corpus (8-quarter
+    scale, Twinkle phrase, dotted-quarter+eighth, dense 16ths,
+    mixed whole+eighth, chromatic all-accidentals) and reports
+    natural width vs the legacy model, compression headroom,
+    spring-floor gap, rod share, and realized long:short advance
+    ratio. The legacy power-of-ratio model is reproduced in the
+    example (`legacy_width`) for reference, with constants read
+    off `be1bc93~1` (`min_note_spacing = 1.5·ss`, `ratio = 1.6`)
+    rather than guessed.
+  - **Finding 1 — collision avoidance does not depend on c or k.**
+    The plan's "dense passages no longer collide" exit criterion
+    is already met structurally by the Phase 1 rod. Every
+    rhythmic rod is `min_rod_padding + notehead_rod` = 0.30 +
+    1.18 = 1.48·ss, which exceeds the 1.18·ss notehead width, so
+    adjacent notehead centers stay ≥0.30·ss apart *even at the
+    `s = 0` spring floor* — the worst case `system.rs` can
+    produce. Verified empirically at s = 0 across all six cases
+    (1.48·ss gap, 2.48·ss for the accidental case): no collision
+    at any (c, k). Sweeping compression fraction from 1.0 down
+    to 0.05 never produces one either.
+  - **Finding 2 — matching legacy natural widths is unachievable
+    and undesirable**, so the plan's churn-minimizing target for
+    k was dropped. Solving `k = legacy/n − rod` per case gives
+    k ≈ 0.02·ss for the uniform-rhythm cases (scale, dense
+    16ths) — springs ≈ 0, which would collapse the model to
+    fixed-width spacing and discard duration proportionality
+    entirely — and k = **−0.98·ss** (negative, i.e. impossible)
+    for `chromatic-accidentals`, because legacy's 12.00·ss is
+    *narrower than the rod minimum* of 19.84·ss. Root cause:
+    legacy's `min_note_spacing` was the whole event width and it
+    allowed nothing for accidentals or dots, so the two models
+    are not on a common scale. Legacy was systematically too
+    tight; the width increase is the fix, not churn. (The
+    baseline diffs this would have mitigated were already
+    triaged and re-baselined in Phases 1–2.)
+  - **Basis for keeping c = 0.6.** With collision and
+    width-matching both eliminated as discriminators, the choice
+    rests on realized proportionality. The half:eighth advance
+    ratio is 1.40× (c=0.5), 1.52× (c=0.6), 1.66× (c=0.7) — all
+    inside the engraving-practice band (strict proportionality
+    would be 4×, which reads badly and wastes width). c = 0.6 is
+    the port plan §6 midpoint of the empirical 0.5–0.7 range and
+    sits mid-band; no measurement favors moving off it.
+    Visually confirmed by regenerating `multi_system.svg` (the
+    mixed half/whole/quarter+rest baseline) at each c and
+    rasterizing with `rsvg-convert`: all three are clean and
+    collision-free, differing only in how much extra room the
+    half note takes (measured gap after the half: 2559 / 2663 /
+    2771 EM units at c = 0.5 / 0.6 / 0.7, prefix pinned at
+    1437.5 in all three). Goldens were restored afterward; no
+    baseline was left moved.
+  - Three calibration-lock unit tests in `layout/measure.rs`
+    pin the findings so they cannot silently regress:
+    `calibrated_defaults_are_the_locked_values`,
+    `rod_alone_prevents_notehead_collision_at_the_spring_floor`
+    (asserts rod > notehead width and that the margin is exactly
+    `min_rod_padding`), `longer_notes_get_sublinear_extra_advance`.
+  - Corrected the `spring_constant` doc comment, which claimed
+    it had been "Tuned (Phase 4) so a typical measure's natural
+    width tracks the legacy power-of-ratio model" — that tuning
+    had never been run, and per Finding 2 it is not achievable.
+    It now records the actual basis.
+
+- Did (clippy): Cleared all `music-engraver` clippy warnings and
+  the mechanical `music`-crate ones. Scope was confirmed with
+  the user first, since the log's standing "pre-existing clippy
+  warnings" note understated the real count (167 in `music`, not
+  the two files named).
+  - **`music-engraver` → 0 warnings of its own.** Four
+    `neg_cmp_op_on_partial_ord` sites (`cresc_text.rs`,
+    `trill_bracket.rs`, `trill_extension.rs`, `trill_options.rs`)
+    got `#[allow]` + rationale rather than a rewrite: they mirror
+    the renderers' suppression conditions verbatim, and
+    `!(len > 0.0)` is **true** for NaN where `len <= 0.0` is
+    false. `f64::NAN` is in those tests' input arrays and the
+    validators' NaN rejection depends on exactly this, so
+    "simplifying" would have silently broken the assertions.
+    Six `cloned_ref_to_slice_refs` sites in
+    `measure_renderer/tests.rs` → `std::slice::from_ref`.
+    `too_many_arguments` on `layout_hairpin_styled` → `#[allow]`
+    (8 params is the point of that fn: it folds four style
+    variants into one entry point). Doc-indent fix in
+    `golden_svg.rs` (a line-leading `+` was parsing as a list
+    bullet). In `examples/qa_sample_sheet.rs`, two
+    `if_same_then_else` hits were dead arithmetic — `oct + if
+    *n == Note::C { 0 } else { 0 }` (sample 1) and `if i % 2 == 0
+    { EIGHTH } else { EIGHTH }` (sample 15); simplified so output
+    is byte-identical (verified by diffing
+    `docs/engraver-qa/{01_diatonic_scale_two_octaves,
+    15_multi_system_phrase}.svg` against renders from the
+    pre-change source: identical).
+  - **Investigated the `i % 2` dead branch** (initially flagged
+    here as a possible latent "alternating durations" bug — that
+    was wrong; the current code is correct). Three independent
+    checks: (1) **the meter forbids alternation** — 7 melody
+    eighths + 1 trailing eighth = 8 eighths = exactly 4/4 as
+    declared; had `i % 2 == 0` yielded `QTR` the measure would be
+    4·2 + 3 + 1 = 12 eighths = 6/4, overfull. (2) **It was born
+    this way** — `git log -S "i % 2 == 0"` returns exactly one
+    commit (`45203f3`) and the line is identical in it; no
+    earlier version had differing branches, so nothing
+    regressed. (3) **The same residue appears twice** — sample
+    1's zeroed `oct + if *n == Note::C {0} else {0}` is the
+    identical habit (a conditional hook sketched for a
+    descending octave-boundary correction, found unnecessary
+    because the outer `for oct in (4..=5).rev()` already handles
+    it, then zeroed rather than deleted). Conclusion: both are
+    authoring residue from an initial quarter-note sketch that
+    was converted wholesale to eighths to fit 4/4 — not
+    half-finished logic. The real defect nearby was a **stale
+    comment**, "one quarter to round out to ~4/4 visually",
+    sitting above a statement that writes `Duration::EIGHTH`;
+    it now states the actual 8-eighths arithmetic.
+  - **`music` 167 → 34 warnings**, via `cargo clippy --fix`
+    restricted to mechanical lints (clone-on-`Copy` for
+    `Pitch`/`Note`/`Pc`, redundant closures,
+    `map().flatten()` → `flat_map`, needless `return`, useless
+    `vec!`, `or_insert_with(HashSet::new)` → `or_default`), plus
+    hand fixes for `match`→`matches!`
+    (`fretboard_shape/mod.rs`), a needless `try_into().unwrap()`
+    (`rhythm/duration.rs`), and an index-only loop variable
+    (`geometry/mod.rs`). The autofix also rewrote 9 `Into` impls
+    to `From`, which is in the API-changing bucket the user
+    excluded — reverted by hand in `transpositional.rs`,
+    `interval_class.rs`, `pc_set.rs`. The remaining 34 are
+    exactly that excluded bucket (9 `From`-preferred, 6
+    `&Vec`→`&[_]`, `ToString`, `next`-confusable,
+    non-canonical `partial_cmp`, `to_*`-by-value) plus cosmetic
+    doc-indent noise.
+
+- Verified:
+  - `cargo build --workspace` → clean.
+  - `cargo test -p music-engraver` → **2919 lib / 81 golden / 3
+    glyph / 13 doc, 0 failed** (lib +3 = the calibration locks;
+    golden was already 81, not the 78 quoted in older entries).
+  - `cargo test -p music` → all green (275 lib + integration
+    suites), confirming the autofix and the hand fixes are
+    behavior-preserving.
+  - **No golden baseline moved.** Defaults are unchanged, so
+    Phase 4 required no re-baselining — the c-sweep renders were
+    generated into the scratchpad and the goldens restored via
+    `git checkout`, verified by a clean
+    `golden_multi_system` re-run.
+  - `cargo clippy -p music-engraver --tests --examples` → zero
+    warnings with a `music-engraver/` source location.
+  - `cargo run --example spacing_calibration` → reproduces every
+    number quoted above.
+
+- Next: The two documented Gourlay follow-ups remain: **true
+  multi-voice max-spring-per-tick merge** (additional voices are
+  still re-fit to the primary measure width per plan §4) and
+  **swapping the rod estimates for real font advance widths**
+  (`layout_measure` has no font handle; rods are ss-multiple
+  estimates behind `event_rod`). Note the second interacts with
+  Finding 1 — the 0.30·ss collision margin is currently
+  guaranteed by the *estimated* rod, so real metrics must
+  preserve `rod > notehead width` or the guarantee weakens.
+  Then the larger items: grand-staff / multi-staff brackets
+  (`StaveConnector`), line-breaking quality (Gourlay extension
+  or Bellini & Nesi — the `MIN_SPRING_SCALE` floor currently
+  punts genuinely-too-wide content to a line-breaker that does
+  not exist yet), golden-SVG PHASH visual regression, PNG
+  golden-image regression, and configurable tab-stem styling
+  (`STEM_LENGTH_SS` is still a hardcoded const).
+
+- Open issues: The `music` crate's 34 remaining clippy warnings
+  are deferred by explicit scope decision, not oversight — they
+  need public-API changes (`&Vec`→`&[_]` in 6 signatures,
+  `Into`→`From` for 9 impls, `ToString`→`Display`, renaming a
+  `next` method) with downstream fixes in `music-engraver` and
+  `musical-combinatorics`. The `qa_sample_sheet.rs` `i % 2`
+  question raised in an earlier draft of this entry is resolved
+  (see above): the code was already correct, the comment was
+  not.

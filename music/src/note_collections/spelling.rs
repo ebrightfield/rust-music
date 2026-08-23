@@ -47,9 +47,7 @@ impl HasSpelling for Voicing {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         Ok(Self::new(self
             .iter()
-            .map(|p| Ok::<_, MusicSemanticsError>(p.spelled_as_in(notes)?))
-            .into_iter()
-            .flatten()
+            .flat_map(|p| p.spelled_as_in(notes))
             .collect()
         ))
     }
@@ -59,7 +57,7 @@ impl HasSpelling for Voicing {
 /// Keeps a single source of truth for the spelling algorithm.
 fn spell_slice(root: &Note, pcs: &[Pc]) -> Result<Vec<Note>, MusicSemanticsError> {
     if Spelling::from(root).acc.is_double() {
-        return Err(MusicSemanticsError::NoDoubleAccidentalRoot(root.clone()));
+        return Err(MusicSemanticsError::NoDoubleAccidentalRoot(*root));
     }
     Ok(pcs.iter()
         .map(|pc| {
@@ -978,7 +976,7 @@ pub fn default_spelling(root: &Note, pc: &Pc) -> Option<Note> {
 mod tests {
 
     use super::*;
-    use crate::note_collections::pc_set::{PcShape, PcContent};
+    use crate::note_collections::pc_set::PcShape;
 
     #[test]
     fn test_basic_spelling() {

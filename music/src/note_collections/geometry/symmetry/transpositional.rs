@@ -59,9 +59,7 @@ impl TryTranspose for Voicing {
     fn try_transpose(&self, semitones: i8) -> Result<Self, MusicSemanticsError> {
         Ok(Voicing::new(self
             .iter()
-            .map(|p| Ok::<_, MusicSemanticsError>(p.try_transpose(semitones)?))
-            .into_iter()
-            .flatten()
+            .flat_map(|p| p.try_transpose(semitones))
             .collect()
         ))
     }
@@ -125,8 +123,8 @@ pub fn find_transpositional_symmetries(pcs: &Vec<Pc>) -> TranspositionalSymmetry
             .for_each(|(pc, sub_list)|{
                 // Get the main HashMap at Pc(n).
                 let entry: &mut HashSet<TranspositionalSymmetry> = symmetries
-                    .entry(pc.clone())
-                    .or_insert_with(|| HashSet::new());
+                    .entry(*pc)
+                    .or_default();
                 for symmetry in sub_list {
                     if !entry.contains(symmetry) {
                         entry.insert(symmetry.clone());
@@ -268,7 +266,7 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
                 .map(|i| Pc::from(&i))
                 .collect();
             for pc in related_points_of_symmetry {
-                let entry = symmetries.entry(pc.clone())
+                let entry = symmetries.entry(pc)
                     .or_insert_with(|| {
                         HashSet::new()
                     });

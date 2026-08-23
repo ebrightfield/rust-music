@@ -66,7 +66,7 @@ impl Note {
     pub fn enharmonic(&self) -> Self {
         let spelling: Spelling = self.into();
         match spelling.acc {
-            Accidental::Natural => self.clone(),
+            Accidental::Natural => *self,
             Accidental::DoubleFlat => {
                 Spelling {
                     letter: spelling.letter.prev(),
@@ -131,10 +131,10 @@ impl Note {
         let pc = Pc::from(self);
         for note in notes {
             if Pc::from(note) == pc {
-                return Ok(note.clone());
+                return Ok(*note);
             }
         }
-        Err(MusicSemanticsError::NotAMember(self.clone(), notes.clone()))
+        Err(MusicSemanticsError::NotAMember(*self, notes.clone()))
     }
 
     /// Whether self and other are enharmonic equivalents of each other (e.g. C# and Db).
@@ -170,8 +170,8 @@ impl FromStr for Note {
     type Err = MusicSemanticsError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let spelling = Spelling::from_str(&s)?;
-        Ok(Self::try_from(spelling)?)
+        let spelling = Spelling::from_str(s)?;
+        Self::try_from(spelling)
     }
 }
 

@@ -76,8 +76,7 @@ pub trait NamingHeuristic: std::fmt::Debug {
         let mut matched = vec![];
         for subset in self.required().iter() {
             let intersection: Vec<Pc> = subset
-                .intersection(&pcs)
-                .map(|pc| pc.clone())
+                .intersection(&pcs).copied()
                 .collect();
             if intersection.len() == 1 {
                 matched.extend(intersection);
@@ -88,8 +87,7 @@ pub trait NamingHeuristic: std::fmt::Debug {
         }
         for subset in self.optional().iter() {
             let intersection: Vec<Pc> = subset
-                .intersection(&pcs)
-                .map(|pc| pc.clone())
+                .intersection(&pcs).copied()
                 .collect();
             if intersection.len() == 1 {
                 matched.extend(intersection);
@@ -372,7 +370,7 @@ pub fn infer_chord_quality_detailed(
     }
     let mut pcs_norm = pcs.clone();
     pcs_norm.insert(Pc0);
-    let intervals: Vec<u8> = pcs_norm.iter().map(|pc| u8::from(pc)).collect();
+    let intervals: Vec<u8> = pcs_norm.iter().map(u8::from).collect();
     let mut ambiguities =
         crate::note_collections::chord_name::quality::chord::QualityAmbiguity::find_duplicate_degrees(&intervals);
     // SixthVsThirteenth — Pc9 present, Pc10/Pc11 may or may not be.

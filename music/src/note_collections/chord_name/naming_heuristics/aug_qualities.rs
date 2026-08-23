@@ -16,7 +16,7 @@ pub fn search_for_aug_quality(pcs: &HashSet<Pc>) -> ChordQuality {
         return ChordQuality::Aug(AugSubtype::AugMajN(ext, alt));
     }
     let alt = generate_alt(pcs, TriadContext::Aug);
-    return ChordQuality::Aug(AugSubtype::Aug(alt));
+    ChordQuality::Aug(AugSubtype::Aug(alt))
 }
 
 #[derive(Debug)]

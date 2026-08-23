@@ -158,8 +158,7 @@ impl ChordName {
     }
 
     pub fn to_string(&self, cfg: Option<&ChordNameDisplayConfig>) -> String {
-        let cfg = cfg
-            .map(|cfg| cfg.clone())
+        let cfg = cfg.cloned()
             .unwrap_or_default();
         self.quality.to_string(&cfg)
     }

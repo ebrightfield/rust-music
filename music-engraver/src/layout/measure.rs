@@ -439,8 +439,15 @@ impl MeasureLayoutConfig {
             time_sig_padding: 0.75 * ss,
             barline_width: 0.5 * ss,
             spacing_exponent: 0.6,
-            // Tuned (Phase 4) so a typical measure's natural width tracks the
-            // legacy power-of-ratio model: shortest-note spring ≈ 1.0·ss.
+            // Phase 4 calibration (see `examples/spacing_calibration.rs` and the
+            // 2026-08-06 progress entry): k = 1.0·ss. Matching the legacy
+            // power-of-ratio model's natural widths — the plan's original
+            // churn-minimizing target — was found to be both unachievable and
+            // undesirable: it needs k ≈ 0.02·ss for uniform rhythms (springs
+            // ~0, collapsing the model to fixed-width spacing) and a *negative*
+            // k for accidental-heavy measures, because the legacy model gave
+            // accidentals no room at all. k = 1.0·ss instead keeps the realized
+            // long:short advance ratio inside the engraving-practice band.
             spring_constant: 1.0 * ss,
             // Notehead advance estimate matches the value used elsewhere
             // (e.g. `layout/glissando.rs`): ~1.18 staff spaces.
@@ -1074,5 +1081,68 @@ mod tests {
         assert!((cfg2.notehead_rod - 2.0 * cfg1.notehead_rod).abs() < f64::EPSILON);
         // c is dimensionless and does not scale with staff space.
         assert!((cfg2.spacing_exponent - cfg1.spacing_exponent).abs() < f64::EPSILON);
+    }
+
+    // ---- Phase 4 calibration locks ----
+    //
+    // These pin the two properties the calibration sweep
+    // (`examples/spacing_calibration.rs`) established. See the
+    // 2026-08-06 entry in docs/ENGRAVER-PROGRESS.md for the rationale.
+
+    #[test]
+    fn calibrated_defaults_are_the_locked_values() {
+        // c = 0.6 is the port plan's §6 midpoint of the 0.5-0.7 empirical
+        // range; k = 1.0·ss. Changing either shifts every spacing-sensitive
+        // golden, so the values are asserted rather than left implicit.
+        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
+        assert!((cfg.spacing_exponent - 0.6).abs() < f64::EPSILON);
+        assert!((cfg.spring_constant - 250.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn rod_alone_prevents_notehead_collision_at_the_spring_floor() {
+        // The calibration sweep's key structural finding: because every
+        // rhythmic rod includes `min_rod_padding + notehead_rod`, adjacent
+        // notehead centers stay at least `min_rod_padding` further apart than
+        // one notehead is wide — even at the `s = 0` spring floor, the worst
+        // case the system layer can produce. Collision avoidance therefore
+        // does not depend on the tuning of c or k.
+        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
+        let per_event_rod = event_rod(false, 0, &cfg);
+        assert!(
+            per_event_rod > cfg.notehead_rod,
+            "rod ({per_event_rod}) must exceed notehead width ({}) so fully \
+             collapsed springs still cannot collide",
+            cfg.notehead_rod
+        );
+        assert!(
+            (per_event_rod - cfg.notehead_rod - cfg.min_rod_padding).abs() < f64::EPSILON,
+            "the collision margin is exactly min_rod_padding"
+        );
+    }
+
+    #[test]
+    fn longer_notes_get_sublinear_extra_advance() {
+        // Proportionality sanity: a half note in a measure whose shortest note
+        // is an eighth (4x the duration) must take more room than the eighth,
+        // but far less than 4x — strict proportionality reads badly and wastes
+        // width. At the locked defaults the realized ratio is ~1.5x.
+        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
+        let note = |duration_log2| {
+            MeasureElement::Note(NoteEvent {
+                staff_position: 0,
+                duration_log2,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            })
+        };
+        let layout = layout_measure(&[note(1), note(3)], &cfg);
+        let ratio = layout.elements[0].width / layout.elements[1].width;
+        assert!(
+            ratio > 1.0 && ratio < 2.5,
+            "half:eighth advance ratio {ratio} outside the engraving-practice band"
+        );
     }
 }

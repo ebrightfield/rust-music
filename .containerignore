@@ -1,0 +1,32 @@
+# Keep the build context small and the dependency cache layer stable.
+# Podman reads .containerignore; Docker reads .dockerignore (symlinked to this).
+#
+# target/ is the big one — without it the context is gigabytes and every build
+# ships the host's build artifacts into the image for no reason.
+target/
+.git/
+.github/
+
+# Docs, notes and generated artifacts play no part in a musl binary build.
+docs/
+examples/
+configs/
+music-skills/
+*.md
+
+# Test/golden data and scratch output.
+**/tests/golden/
+**/*.svg
+**/*.pdf
+**/*.png
+**/*.mid
+**/*.wav
+perf.data
+perf.data.old
+claude_runs.log
+
+# Local tooling / editor state.
+.claude/
+.cargo/
+.vscode/
+.idea/

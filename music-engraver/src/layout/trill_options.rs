@@ -2321,6 +2321,10 @@ mod tests {
             let validator_is_none = TrillExtensionFullOptions::new()
                 .with_extension_length_ss_validated(len)
                 .is_none();
+            // Mirrors the renderer's condition verbatim, NaN behavior
+            // included: `!(len > 0.0)` is true for NaN, whereas
+            // `len <= 0.0` would be false. The NaN case is under test.
+            #[allow(clippy::neg_cmp_op_on_partial_ord)]
             let renderer_would_suppress = !(len > 0.0);
             assert_eq!(
                 validator_is_none, renderer_would_suppress,

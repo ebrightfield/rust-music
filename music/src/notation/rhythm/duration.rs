@@ -168,7 +168,7 @@ impl Duration {
         let base_dur: u32 = self.dur.into();
         (0u32..self.dot as u32)
             .fold(base_dur, |acc, n| {
-                acc + base_dur / 2u32.pow((n + 1).try_into().unwrap())
+                acc + base_dur / 2u32.pow(n + 1)
             }) as usize
     }
 

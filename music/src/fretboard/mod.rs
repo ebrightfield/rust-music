@@ -156,9 +156,8 @@ impl Fretboard {
     /// It is important to remember that colloquially, the thickest string on a guitar
     /// is "the 6th string", but it is indexed here as `self.open_strings[0]`.
     pub fn get_string(&self, string: u8) -> Result<&Pitch, MusicSemanticsError> {
-        Ok(self.open_strings.get(string as usize)
-            .ok_or(MusicSemanticsError::StringTooHighForFretboard(string, self.clone()))?
-        )
+        self.open_strings.get(string as usize)
+            .ok_or(MusicSemanticsError::StringTooHighForFretboard(string, self.clone()))
     }
 
     /// This is the preferred way to create a [SoundedNote] instance, because it
@@ -172,7 +171,7 @@ impl Fretboard {
             return Ok(SoundedNote {
                 string,
                 fret: Self::OPEN,
-                pitch: open_string.clone(),
+                pitch: *open_string,
                 fretboard: self,
             });
         }

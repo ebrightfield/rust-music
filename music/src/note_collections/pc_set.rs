@@ -9,7 +9,7 @@ use crate::note_collections::NoteSet;
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();
     pcs.iter().for_each(|pc| {
-        pc_set.insert(pc.clone());
+        pc_set.insert(*pc);
     });
     Vec::from_iter(pc_set)
 }
@@ -303,7 +303,7 @@ impl<'a> IntoIterator for &'a PcContent {
 // REQ-O10: PcContent from NoteSet (un-zeroed). NO From<&NoteSet> for PcShape per O10.
 impl From<&NoteSet> for PcContent {
     fn from(value: &NoteSet) -> Self {
-        PcContent::new(value.iter().map(|n| Pc::from(n)).collect())
+        PcContent::new(value.iter().map(Pc::from).collect())
     }
 }
 impl From<NoteSet> for PcContent {

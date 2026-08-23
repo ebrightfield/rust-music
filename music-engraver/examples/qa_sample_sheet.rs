@@ -85,7 +85,7 @@ fn samples() -> Vec<Sample> {
         // descending C6..C4
         for oct in (4..=5).rev() {
             for n in scale.iter().rev() {
-                s = s.note(p(*n, oct + if *n == Note::C { 0 } else { 0 }), Duration::EIGHTH);
+                s = s.note(p(*n, oct), Duration::EIGHTH);
             }
         }
         s = s.note(p(Note::C, 4), Duration::QTR);
@@ -345,12 +345,12 @@ fn samples() -> Vec<Sample> {
             .show_measure_numbers();
         let melody = [Note::G, Note::A, Note::B, Note::C, Note::D, Note::E, Note::Fis];
         for m in 0..8 {
-            for (i, n) in melody.iter().enumerate() {
+            for n in melody.iter() {
                 let oct = if *n == Note::C || *n == Note::D || *n == Note::E || *n == Note::Fis { 5 } else { 4 };
-                let dur = if i % 2 == 0 { Duration::EIGHTH } else { Duration::EIGHTH };
-                s = s.note(p(*n, oct), dur);
+                s = s.note(p(*n, oct), Duration::EIGHTH);
             }
-            // one quarter to round out to ~4/4 visually
+            // 8th note 8 completes the measure: 7 melody eighths + this one
+            // = 8 eighths = exactly 4/4.
             s = s.note(p(Note::G, 4), Duration::EIGHTH);
             s = if m == 7 { s.end_barline() } else { s.barline() };
         }
@@ -487,7 +487,7 @@ fn main() {
 
     for s in samples() {
         let render = s.render;
-        let result = catch_unwind(AssertUnwindSafe(|| render()));
+        let result = catch_unwind(AssertUnwindSafe(render));
         match result {
             Ok(svg) => {
                 let path = dir.join(format!("{}.svg", s.name));

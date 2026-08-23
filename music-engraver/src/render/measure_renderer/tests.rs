@@ -3096,7 +3096,13 @@ fn beam_group_no_collisions_renders_byte_identical_to_no_detection() {
     let mut svg_with = make_svg();
     draw_measure(&mut svg_with, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
     draw_additional_voices(
-        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        std::slice::from_ref(&voice_layout),
+        0.0,
     ).unwrap();
 
     let mut svg_without = make_svg();
@@ -3144,7 +3150,13 @@ fn beam_group_per_note_collision_changes_only_one_notehead_path() {
     // Render WITH primary (collision active for note 0 only).
     let mut svg_with = make_svg();
     draw_additional_voices(
-        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        std::slice::from_ref(&voice_layout),
+        0.0,
     ).unwrap();
     let svg_with_str = svg_with.to_svg();
 
@@ -3201,7 +3213,13 @@ fn beam_group_per_note_collision_preserves_stem_line_positions() {
 
     let mut svg_with = make_svg();
     draw_additional_voices(
-        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        std::slice::from_ref(&voice_layout),
+        0.0,
     ).unwrap();
 
     let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
@@ -3271,7 +3289,13 @@ fn beam_group_per_note_collision_shifts_notehead_by_notehead_width() {
 
     let mut svg_with = make_svg();
     draw_additional_voices(
-        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        std::slice::from_ref(&voice_layout),
+        0.0,
     ).unwrap();
 
     let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
@@ -3330,7 +3354,13 @@ fn beam_group_per_note_collision_does_not_shift_non_colliding_noteheads() {
 
     let mut svg_with = make_svg();
     draw_additional_voices(
-        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        std::slice::from_ref(&voice_layout),
+        0.0,
     ).unwrap();
 
     let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
@@ -3438,7 +3468,13 @@ fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
 
     let mut svg_with = make_svg();
     draw_additional_voices(
-        &mut svg_with, &staff, &font, &config, &primary_layout, &[voice_layout.clone()], 0.0,
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        std::slice::from_ref(&voice_layout),
+        0.0,
     ).unwrap();
 
     let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };

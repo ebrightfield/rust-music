@@ -20,7 +20,7 @@ pub fn search_for_dim_quality(pcs: &HashSet<Pc>) -> ChordQuality {
         return ChordQuality::Dim(DimSubtype::DimMajN(ext, alt));
     }
     let alt = generate_alt(pcs, TriadContext::Dim);
-    return ChordQuality::Dim(DimSubtype::Dim(alt));
+    ChordQuality::Dim(DimSubtype::Dim(alt))
 }
 
 #[derive(Debug)]

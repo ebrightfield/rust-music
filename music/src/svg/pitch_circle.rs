@@ -9,12 +9,14 @@ use crate::svg::util::{pc_to_coords, SvgBuilder};
 
 /// How to label the 12 pitch classes on the circle.
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub enum NoteLabels {
     /// C, C#, D, D#, E, F, F#, G, G#, A, A#, B
     Sharps,
     /// C, Db, D, Eb, E, F, Gb, G, Ab, A, Bb, B
     Flats,
     /// C, C#, D, Eb, E, F, F#, G, Ab, A, Bb, B (common convention)
+    #[default]
     Mixed,
     /// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
     PitchClass,
@@ -22,11 +24,6 @@ pub enum NoteLabels {
     Custom([&'static str; 12]),
 }
 
-impl Default for NoteLabels {
-    fn default() -> Self {
-        Self::Mixed
-    }
-}
 
 impl NoteLabels {
     /// Get the label for a pitch class.
@@ -220,7 +217,7 @@ pub fn pitch_circle_svg(
     // Draw pitch class dots
     for pc in PcIter::default() {
         let (x, y) = pc_to_coords(u8::from(&pc), cx, cy, config.radius as f64);
-        let is_root = root.map_or(false, |r| r == pc);
+        let is_root = root == Some(pc);
         let is_highlighted = pitch_set.contains(&pc);
 
         let fill = if is_root && is_highlighted {

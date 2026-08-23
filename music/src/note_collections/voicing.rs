@@ -41,9 +41,7 @@ impl Voicing {
     /// Spelling remains the same.
     pub fn move_by_octaves(&self, n: isize) -> Result<Self, MusicSemanticsError> {
         Ok(Self(self.iter()
-            .map(|p| Ok::<_, MusicSemanticsError>(p.raise_octaves(n)?))
-            .into_iter()
-            .flatten()
+            .flat_map(|p| p.raise_octaves(n))
             .collect()))
     }
 
@@ -84,7 +82,7 @@ impl Voicing {
             .unwrap();
         let max = self.0.iter().max_by(|a,b| a.partial_cmp(b).unwrap())
             .unwrap();
-        Some((min.clone(), max.clone()))
+        Some((*min, *max))
     }
 
     /// Given a [Pitch], we can infer the others using a [StackedIntervals] instance.

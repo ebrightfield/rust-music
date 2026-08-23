@@ -30,6 +30,12 @@ pub struct ChordShapeSearchResult<'a> {
     pub unplayable: HashMap<Voicing, Vec<FretboardShape<'a>>>,
 }
 
+impl<'a> Default for ChordShapeSearchResult<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> ChordShapeSearchResult<'a> {
     pub fn new() -> Self {
         Self {
@@ -74,14 +80,13 @@ pub fn find_chord_shapes<'a>(
                     }
                     Ok::<_, MusicSemanticsError>(vec![fret])
                 })
-                .into_iter()
                 .flatten()
                 .collect();
             // Flip through each possible combination of octave choices on each string
             for fret_shape in frets.iter().multi_cartesian_product() {
                 // Making a [FretboardShape]
                 let strings = (0u8..num_strings)
-                    .map(|i| {
+                    .flat_map(|i| {
                         let index = grouping.iter().position(|item| *item == i);
                         if let Some(index) = index {
                             return Ok::<_, MusicSemanticsError>(FrettedNote::Sounded(
@@ -93,8 +98,6 @@ pub fn find_chord_shapes<'a>(
                             fretboard,
                         })
                     })
-                    .into_iter()
-                    .flatten()
                     .collect();
                 let shape = FretboardShape {
                     fretted_notes: strings,
@@ -109,31 +112,31 @@ pub fn find_chord_shapes<'a>(
                         if key.has_wide_intervals() {
                             valid_shapes.wide_intervals
                                 .entry(key)
-                                .or_insert_with(|| vec![])
+                                .or_default()
                                 .push(shape);
                         } else {
                             valid_shapes.playable
                                 .entry(key)
-                                .or_insert_with(|| vec![])
+                                .or_default()
                                 .push(shape);
                         }
                     },
                     ChordShapeClassification::AllAbove12thFret => {
                         valid_shapes.all_above_12th_fret
                             .entry(key)
-                            .or_insert_with(|| vec![])
+                            .or_default()
                             .push(shape);
                     },
                     ChordShapeClassification::NonTransposable => {
                         valid_shapes.nontransposable
                             .entry(key)
-                            .or_insert_with(|| vec![])
+                            .or_default()
                             .push(shape);
                     },
                     ChordShapeClassification::Unplayable => {
                         valid_shapes.unplayable
                             .entry(key)
-                            .or_insert_with(|| vec![])
+                            .or_default()
                             .push(shape);
                     },
                 }

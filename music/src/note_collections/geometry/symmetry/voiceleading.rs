@@ -56,7 +56,7 @@ impl Voiceleading {
     ) -> Result<Vec<(usize, Voiceleading)>, MusicSemanticsError> {
         let mut voiceleadings = vec![];
         for ordering in (0..from.len()).permutations(from.len()) {
-            for contour_combo in vec![Movement::Ascending, Movement::Descending]
+            for contour_combo in [Movement::Ascending, Movement::Descending]
                 .iter().combinations_with_replacement(from.len()) {
                 let mut paths = vec![];
                 for (i, j) in ordering.iter().enumerate() {
@@ -64,7 +64,7 @@ impl Voiceleading {
                     let destination = departure.up_to_note(&to[*j])?;
                     let mut path = i8::try_from(destination.midi_note - departure.midi_note).unwrap();
                     if *contour_combo[i] == Movement::Descending && path != 0 {
-                        path = path - 12;
+                        path -= 12;
                     }
                     paths.push(path);
                 }
