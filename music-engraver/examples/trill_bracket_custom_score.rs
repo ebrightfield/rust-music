@@ -38,32 +38,20 @@ fn main() {
         // visually emphatic. The standard length is 0.75 ss; this is at the
         // upper end of Behind Bars' practical range.
         .note(p(Note::G, 4), Duration::new(DurationKind::Half, 1))
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Both,
-            HookDirection::Down,
-            1.2,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Both, HookDirection::Down, 1.2)
         .note(p(Note::A, 4), Duration::QTR)
         .barline()
         // M2: short Start bracket — 0.5 ss is at the lower end of the
         // practical range; subtle but readable.
         .note(p(Note::E, 5), Duration::HALF)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Start,
-            HookDirection::Down,
-            0.5,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Start, HookDirection::Down, 0.5)
         .note(p(Note::D, 5), Duration::HALF)
         .barline()
         // M3: Up-direction End bracket — the hook points upward away from the
         // baseline. Combined with the wiggle's "tr" glyph above the staff,
         // this gives the bracket an open visual gesture.
         .note(p(Note::C, 5), Duration::HALF)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::End,
-            HookDirection::Up,
-            0.9,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::End, HookDirection::Up, 0.9)
         .note(p(Note::B, 4), Duration::HALF)
         .barline()
         // M4: chord trill with Both, Up direction, default length — exercises
@@ -72,11 +60,7 @@ fn main() {
             vec![p(Note::C, 4), p(Note::E, 4), p(Note::G, 4)],
             Duration::HALF,
         )
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Both,
-            HookDirection::Up,
-            0.75,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Both, HookDirection::Up, 0.75)
         .note(p(Note::F, 4), Duration::HALF)
         .end_barline()
         // M5 (system 3): cross-system Both bracket with Up direction and a
@@ -85,11 +69,7 @@ fn main() {
         // and length so the bracket reads as a coherent pair across the line
         // break.
         .note(p(Note::A, 4), Duration::WHOLE)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Both,
-            HookDirection::Up,
-            1.0,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Both, HookDirection::Up, 1.0)
         .end_barline()
         // M6: the principal note that the cross-system trill resolves into.
         .note(p(Note::G, 4), Duration::WHOLE)

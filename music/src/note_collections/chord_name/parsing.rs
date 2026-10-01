@@ -4,11 +4,11 @@
 //! given a chord symbol string like "CMaj7" or "F#m7b5", it produces the root
 //! note and corresponding pitch class shape (interval template rooted at Pc0).
 
-use std::str::FromStr;
 use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note::pitch_class::Pc;
 use crate::note_collections::pc_set::PcShape;
+use std::str::FromStr;
 
 /// Parse a chord name into a root note and interval-template shape.
 ///
@@ -52,10 +52,7 @@ pub fn parse_chord_name(name: &str) -> Result<(Note, PcShape), MusicSemanticsErr
     let intervals = parse_quality(quality_str)?;
 
     // Build PcShape directly from the intervals (which are already relative to root=0)
-    let pcs: Vec<Pc> = intervals
-        .iter()
-        .map(Pc::from)
-        .collect();
+    let pcs: Vec<Pc> = intervals.iter().map(Pc::from).collect();
 
     Ok((root, PcShape::new(pcs)))
 }
@@ -280,7 +277,9 @@ fn parse_quality(quality: &str) -> Result<Vec<u8>, MusicSemanticsError> {
     }
 
     // If we can't parse it, return an error
-    Err(MusicSemanticsError::InvalidChordQuality(quality.to_string()))
+    Err(MusicSemanticsError::InvalidChordQuality(
+        quality.to_string(),
+    ))
 }
 
 /// Parse extensions that follow a base quality (e.g., "(#11)" after "Maj7")
@@ -304,7 +303,12 @@ fn parse_alterations(alt_str: &str, pcs: &mut Vec<u8>) {
     if s.contains("#9") || s.contains("♯9") {
         pcs.push(3); // sharp 9 = 3 semitones
     }
-    if s.contains("9") && !s.contains("b9") && !s.contains("#9") && !s.contains("♭9") && !s.contains("♯9") {
+    if s.contains("9")
+        && !s.contains("b9")
+        && !s.contains("#9")
+        && !s.contains("♭9")
+        && !s.contains("♯9")
+    {
         pcs.push(2); // natural 9
     }
     if s.contains("b11") || s.contains("♭11") {
@@ -313,7 +317,12 @@ fn parse_alterations(alt_str: &str, pcs: &mut Vec<u8>) {
     if s.contains("#11") || s.contains("♯11") {
         pcs.push(6); // sharp 11 = 6 semitones
     }
-    if s.contains("11") && !s.contains("b11") && !s.contains("#11") && !s.contains("♭11") && !s.contains("♯11") {
+    if s.contains("11")
+        && !s.contains("b11")
+        && !s.contains("#11")
+        && !s.contains("♭11")
+        && !s.contains("♯11")
+    {
         pcs.push(5); // natural 11
     }
     if s.contains("b13") || s.contains("♭13") {
@@ -322,7 +331,12 @@ fn parse_alterations(alt_str: &str, pcs: &mut Vec<u8>) {
     if s.contains("#13") || s.contains("♯13") {
         pcs.push(10); // sharp 13 = 10 semitones (same as b7, but contextually different)
     }
-    if s.contains("13") && !s.contains("b13") && !s.contains("#13") && !s.contains("♭13") && !s.contains("♯13") {
+    if s.contains("13")
+        && !s.contains("b13")
+        && !s.contains("#13")
+        && !s.contains("♭13")
+        && !s.contains("♯13")
+    {
         pcs.push(9); // natural 13
     }
     if s.contains("b5") || s.contains("♭5") {
@@ -366,9 +380,9 @@ mod tests {
         // Am: interval template [0, 3, 7]
         let (root, shape) = parse_chord_name("Am").unwrap();
         assert_eq!(root, Note::A);
-        assert!(shape.contains(&Pc::Pc0));  // root (interval 0)
-        assert!(shape.contains(&Pc::Pc3));  // minor 3rd
-        assert!(shape.contains(&Pc::Pc7));  // perfect 5th
+        assert!(shape.contains(&Pc::Pc0)); // root (interval 0)
+        assert!(shape.contains(&Pc::Pc3)); // minor 3rd
+        assert!(shape.contains(&Pc::Pc7)); // perfect 5th
 
         let (root, _) = parse_chord_name("Dm").unwrap();
         assert_eq!(root, Note::D);
@@ -434,7 +448,11 @@ mod tests {
         let (root, shape) = parse_chord_name("Cm7b5").unwrap();
         assert_eq!(root, Note::C);
         assert_eq!(shape.len(), 4, "shape = {:?}", shape);
-        assert!(shape.contains(&Pc::Pc0), "Missing root, shape = {:?}", shape);
+        assert!(
+            shape.contains(&Pc::Pc0),
+            "Missing root, shape = {:?}",
+            shape
+        );
         assert!(shape.contains(&Pc::Pc3), "Missing m3, shape = {:?}", shape);
         assert!(shape.contains(&Pc::Pc6), "Missing b5, shape = {:?}", shape);
         assert!(shape.contains(&Pc::Pc10), "Missing m7, shape = {:?}", shape);
@@ -445,14 +463,22 @@ mod tests {
         // Sus4 interval template: [0, 5, 7]
         let (root, shape) = parse_chord_name("Csus4").unwrap();
         assert_eq!(root, Note::C);
-        assert!(shape.contains(&Pc::Pc0), "Missing root, shape = {:?}", shape);
+        assert!(
+            shape.contains(&Pc::Pc0),
+            "Missing root, shape = {:?}",
+            shape
+        );
         assert!(shape.contains(&Pc::Pc5), "Missing 4th, shape = {:?}", shape);
         assert!(shape.contains(&Pc::Pc7), "Missing 5th, shape = {:?}", shape);
 
         // Sus2 interval template: [0, 2, 7]
         let (root, shape) = parse_chord_name("Csus2").unwrap();
         assert_eq!(root, Note::C);
-        assert!(shape.contains(&Pc::Pc0), "Missing root, shape = {:?}", shape);
+        assert!(
+            shape.contains(&Pc::Pc0),
+            "Missing root, shape = {:?}",
+            shape
+        );
         assert!(shape.contains(&Pc::Pc2), "Missing 2nd, shape = {:?}", shape);
         assert!(shape.contains(&Pc::Pc7), "Missing 5th, shape = {:?}", shape);
     }

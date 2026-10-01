@@ -47,7 +47,14 @@ fn main() {
         let pos = pitch_to_staff_position(pitch, &clef);
         let dir = auto_stem_direction(pos);
         let advance = draw_stemmed_note(
-            &mut svg, &staff, &font, &config, x, pos, NoteheadKind::Filled, Some(dir),
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            x,
+            pos,
+            NoteheadKind::Filled,
+            Some(dir),
         )
         .unwrap();
 
@@ -75,7 +82,11 @@ fn main() {
     assert_eq!(line_count, 5 + 5, "5 staff lines + 5 stems = 10 lines");
 
     std::fs::create_dir_all("music-engraver/examples/output").unwrap();
-    std::fs::write("music-engraver/examples/output/rehearsal_marks.svg", &output).unwrap();
+    std::fs::write(
+        "music-engraver/examples/output/rehearsal_marks.svg",
+        &output,
+    )
+    .unwrap();
 
     println!(
         "Wrote rehearsal_marks.svg ({} bytes, {} paths, {} lines, {} texts, {} rects)",

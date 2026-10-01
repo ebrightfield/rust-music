@@ -191,7 +191,10 @@ fn format_signed(v: i32) -> String {
 
 pub fn run(args: AnnotateArgs) -> Result<()> {
     if args.chords.len() < 2 {
-        bail!("annotate requires at least 2 chords (got {})", args.chords.len());
+        bail!(
+            "annotate requires at least 2 chords (got {})",
+            args.chords.len()
+        );
     }
 
     let voicings: Vec<Vec<Pitch>> = args
@@ -364,11 +367,7 @@ fn format_text(
     out
 }
 
-fn format_json_str(
-    voicings: &[Vec<Pitch>],
-    voice_count: usize,
-    _flag_crossings: bool,
-) -> String {
+fn format_json_str(voicings: &[Vec<Pitch>], voice_count: usize, _flag_crossings: bool) -> String {
     let steps = voicings.len() - 1;
     let mut json = String::new();
     writeln!(json, "{{").unwrap();
@@ -388,8 +387,14 @@ fn format_json_str(
         total_l1 += step_l1;
         total_crossings += crossings;
 
-        let from_str: Vec<String> = from.iter().map(|p| format!("\"{}\"", format_pitch(p))).collect();
-        let to_str: Vec<String> = to.iter().map(|p| format!("\"{}\"", format_pitch(p))).collect();
+        let from_str: Vec<String> = from
+            .iter()
+            .map(|p| format!("\"{}\"", format_pitch(p)))
+            .collect();
+        let to_str: Vec<String> = to
+            .iter()
+            .map(|p| format!("\"{}\"", format_pitch(p)))
+            .collect();
         let paths_str: Vec<String> = paths.iter().map(|p| p.to_string()).collect();
 
         let comma = if step < steps - 1 { "," } else { "" };

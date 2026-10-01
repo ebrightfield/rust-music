@@ -93,17 +93,37 @@ fn run_intervals(args: EarTrainingArgs) -> Result<()> {
         let target = Pitch::from_midi(target_midi)?;
 
         // Play root for 1 quarter note
-        events.push(NoteEvent { tick, key: root_midi, velocity: 80, is_on: true });
+        events.push(NoteEvent {
+            tick,
+            key: root_midi,
+            velocity: 80,
+            is_on: true,
+        });
         tick += quarter;
-        events.push(NoteEvent { tick, key: root_midi, velocity: 64, is_on: false });
+        events.push(NoteEvent {
+            tick,
+            key: root_midi,
+            velocity: 64,
+            is_on: false,
+        });
 
         // Brief pause (half quarter)
         tick += quarter / 2;
 
         // Play target for 1 quarter note
-        events.push(NoteEvent { tick, key: target_midi, velocity: 80, is_on: true });
+        events.push(NoteEvent {
+            tick,
+            key: target_midi,
+            velocity: 80,
+            is_on: true,
+        });
         tick += quarter;
-        events.push(NoteEvent { tick, key: target_midi, velocity: 64, is_on: false });
+        events.push(NoteEvent {
+            tick,
+            key: target_midi,
+            velocity: 64,
+            is_on: false,
+        });
 
         // 2 beats rest between items
         tick += quarter * 2;
@@ -177,8 +197,8 @@ fn build_json_answers(answers: &[(usize, u8, String, String, String)]) -> String
 /// Build an SMF directly from pre-computed NoteEvents using midly.
 fn build_smf(ppq: u16, bpm: f64, events: &[NoteEvent]) -> Result<midly::Smf<'static>> {
     use midly::{
+        num::{u15, u24, u28, u4, u7},
         Format, Header, MetaMessage, MidiMessage as MM, Smf, Timing, TrackEvent, TrackEventKind,
-        num::{u4, u7, u15, u24, u28},
     };
 
     let header = Header {

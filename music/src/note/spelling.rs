@@ -1,9 +1,9 @@
+use crate::error::MusicSemanticsError;
+use crate::error::MusicSemanticsError::InvalidNoteLetter;
 use crate::note::note::Note;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 use std::str::FromStr;
-use crate::error::MusicSemanticsError;
-use crate::error::MusicSemanticsError::InvalidNoteLetter;
 
 /// Nothing more extreme than a double-accidental is represented here.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -110,9 +110,7 @@ impl Letter {
     }
 
     pub fn diatonic_distance_up(&self, other: &Letter) -> u8 {
-        u8::try_from(
-            (i32::from(other) - i32::from(self)).rem_euclid(7)
-        ).unwrap()
+        u8::try_from((i32::from(other) - i32::from(self)).rem_euclid(7)).unwrap()
     }
 }
 
@@ -250,19 +248,42 @@ mod note_spelling_tests {
     #[test]
     fn spelling_roundtrip_all_notes() {
         let notes = [
-            Note::C, Note::Cis, Note::Cisis, Note::Ces,
-            Note::D, Note::Dis, Note::Disis, Note::Des, Note::Deses,
-            Note::E, Note::Eis, Note::Ees, Note::Eeses, Note::Fes,
-            Note::F, Note::Fis, Note::Fisis, Note::Ges, Note::Geses,
-            Note::G, Note::Gis, Note::Gisis, Note::Aes, Note::Aeses,
-            Note::A, Note::Ais, Note::Aisis, Note::Bes, Note::Beses,
-            Note::B, Note::Bis,
+            Note::C,
+            Note::Cis,
+            Note::Cisis,
+            Note::Ces,
+            Note::D,
+            Note::Dis,
+            Note::Disis,
+            Note::Des,
+            Note::Deses,
+            Note::E,
+            Note::Eis,
+            Note::Ees,
+            Note::Eeses,
+            Note::Fes,
+            Note::F,
+            Note::Fis,
+            Note::Fisis,
+            Note::Ges,
+            Note::Geses,
+            Note::G,
+            Note::Gis,
+            Note::Gisis,
+            Note::Aes,
+            Note::Aeses,
+            Note::A,
+            Note::Ais,
+            Note::Aisis,
+            Note::Bes,
+            Note::Beses,
+            Note::B,
+            Note::Bis,
         ];
         for n in notes {
             let spelling = Spelling::from(&n);
-            let roundtripped = Note::try_from(spelling).unwrap_or_else(|e| {
-                panic!("spelling roundtrip failed for {:?}: {:?}", n, e)
-            });
+            let roundtripped = Note::try_from(spelling)
+                .unwrap_or_else(|e| panic!("spelling roundtrip failed for {:?}: {:?}", n, e));
             assert_eq!(
                 roundtripped, n,
                 "Spelling roundtrip: {:?} -> {:?} -> {:?}",

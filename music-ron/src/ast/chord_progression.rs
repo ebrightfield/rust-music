@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use super::common::{OwnedChordEntry, OwnedKey, OwnedMeta, OwnedMeter};
 use crate::visitor::bounded_vec::deserialize_bounded_vec;
+use serde::{Deserialize, Serialize};
 
 /// Ordered chord symbols with optional meter and key (REQ-O30).
 #[derive(Debug, Clone, Serialize, Deserialize)]

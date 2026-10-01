@@ -4,10 +4,7 @@ use crate::notation::rhythm::duration::{Duration, DurationTicks};
 /// which ticks are metrically prominent, or made prominent by choice.
 /// e.g. This would convert 6/8 time signature to [vec![0, 12]],
 /// as the first and fourth 8th notes in that signature are the strong beats.
-pub fn get_big_beats(
-    num_beats: usize,
-    base_unit_duration: DurationTicks,
-) -> Vec<DurationTicks> {
+pub fn get_big_beats(num_beats: usize, base_unit_duration: DurationTicks) -> Vec<DurationTicks> {
     // Compound meters and 4/4
     for divisor in [7, 5, 3, 2] {
         if num_beats.rem_euclid(divisor) == 0 && num_beats != divisor {

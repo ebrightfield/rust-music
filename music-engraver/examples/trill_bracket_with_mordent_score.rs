@@ -17,9 +17,7 @@ use music::note::note::Note;
 use music::note::pitch::Pitch;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::ornament::Ornament;
-use music_engraver::layout::trill_bracket::{
-    HookDirection, TrillBracketOptions, TrillBracketSide,
-};
+use music_engraver::layout::trill_bracket::{HookDirection, TrillBracketOptions, TrillBracketSide};
 use music_engraver::score::ScoreBuilder;
 
 fn p(note: Note, octave: i8) -> Pitch {

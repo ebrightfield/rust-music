@@ -72,10 +72,7 @@ mod tests {
         let mut svg = make_svg();
         draw_tab_palm_mute(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(
-            output.contains("P.M."),
-            "text content should be 'P.M.'"
-        );
+        assert!(output.contains("P.M."), "text content should be 'P.M.'");
     }
 
     #[test]

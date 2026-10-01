@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-use crate::note_collections::chord_name::quality::chord::{Alt, AltChoice, Extension};
 use crate::note::pitch_class::Pc;
+use crate::note_collections::chord_name::quality::chord::{Alt, AltChoice, Extension};
+use std::collections::HashSet;
 
 /// This controls how we search for potential chord alterations,
 /// as the presence of some notes in certain contexts is an alteration,
@@ -29,29 +29,29 @@ pub fn generate_alt(pcs: &HashSet<Pc>, triad_context: TriadContext) -> Alt {
         //   4 → FlatEleven (Pc4) is the M3 itself; `CMaj7♭11` is not a real chord.
         //  10 → SharpThirteenth (Pc10) is the ♭7 — emitted as the chord's own
         //       7th via [Extension::Seventh] instead of as an alt.
-        TriadContext::Major => vec![1,2,3,5,6,8,9],
+        TriadContext::Major => vec![1, 2, 3, 5, 6, 8, 9],
         // Minor triad: Pc3 (m3) and Pc7 (P5) are structural.
         //   3 → SharpNine (Pc3) is the m3 itself; already asserted by the
         //       "min" in the chord name.
         //  10 → SharpThirteenth (Pc10) is the ♭7 — emitted via Extension.
-        TriadContext::Minor => vec![1,2,4,5,6,8,9],
+        TriadContext::Minor => vec![1, 2, 4, 5, 6, 8, 9],
         // Augmented triad: Pc4 (M3) and Pc8 (#5) are structural.
         //   4 → FlatEleven (Pc4) is the M3.
         //   8 → FlatThirteenth (Pc8) is the #5 — already in the "+" label.
         //  10 → SharpThirteenth (Pc10) is the ♭7 — emitted via Extension.
-        TriadContext::Aug => vec![1,2,3,5,6,9],
+        TriadContext::Aug => vec![1, 2, 3, 5, 6, 9],
         // Diminished triad: Pc3 (m3) and Pc6 (♭5) are structural.
         //   3 → SharpNine (Pc3) is the m3.
         //   6 → SharpEleven (Pc6) is the ♭5 — already in the "dim" label.
         //   9 → Thirteenth (Pc9) is the dim7 — emitted via Extension.
         //  10 → SharpThirteenth (Pc10) is the ♭7 — emitted via Extension.
-        TriadContext::Dim => vec![1,2,4,5,8],
+        TriadContext::Dim => vec![1, 2, 4, 5, 8],
         // Sus chord: Pc2 or Pc5 is the suspension; Pc7 is structural.
         //   2 → Nine (Pc2) and 5 → Eleven (Pc5) are the sus member.
         //   3 → SharpNine (Pc3) clashes with the suspension; treat in own path.
         //   4 → FlatEleven (Pc4) would sound the 3rd we're suspending.
         //  10 → SharpThirteenth (Pc10) is the ♭7 — emitted via Extension.
-        TriadContext::Sus => vec![1,6,8,9]
+        TriadContext::Sus => vec![1, 6, 8, 9],
     };
     for alt_num in possible_alts {
         // We can use unwraps in this block because we only use hardcoded numbers that we
@@ -109,7 +109,10 @@ pub fn generate_alt(pcs: &HashSet<Pc>, triad_context: TriadContext) -> Alt {
 /// Generate an [Alt] to describe what alterations should be added to a chord name.
 /// Also generate a `Vec<Extension>`.
 /// Used for "xxxN" qualities, i.e. Maj7, dom7, min7, min7b5, etc.
-pub fn generate_alt_and_extensions(pcs: &HashSet<Pc>, triad_context: TriadContext) -> (Alt, Vec<Extension>) {
+pub fn generate_alt_and_extensions(
+    pcs: &HashSet<Pc>,
+    triad_context: TriadContext,
+) -> (Alt, Vec<Extension>) {
     let mut extensions = vec![Extension::Seventh];
     let mut alts = generate_alt(pcs, triad_context.clone());
     // Generate extensions
@@ -169,14 +172,10 @@ mod tests {
                 // suppresses Thirteenth in the absence of a 7th. Provide Pc10
                 // (the ♭7) so the base-table emission survives.
                 let mut triggers = vec![Pc0, *pc];
-                if *pc == Pc6
-                    && matches!(ctx, TriadContext::Major | TriadContext::Minor)
-                {
+                if *pc == Pc6 && matches!(ctx, TriadContext::Major | TriadContext::Minor) {
                     triggers.push(Pc7);
                 }
-                if *pc == Pc9
-                    && matches!(ctx, TriadContext::Major | TriadContext::Minor)
-                {
+                if *pc == Pc9 && matches!(ctx, TriadContext::Major | TriadContext::Minor) {
                     triggers.push(Pc10);
                 }
                 let pcs: HashSet<Pc> = triggers.iter().copied().collect();
@@ -185,22 +184,27 @@ mod tests {
                     assert!(
                         alt.contains(expected),
                         "{:?} table lists {} but did not emit {:?} (alt = {:?})",
-                        ctx, trigger_num, expected, alt,
+                        ctx,
+                        trigger_num,
+                        expected,
+                        alt,
                     );
                 } else {
                     assert!(
                         !alt.contains(expected),
                         "{:?} table omits {} but still emitted {:?}",
-                        ctx, trigger_num, expected,
+                        ctx,
+                        trigger_num,
+                        expected,
                     );
                 }
             }
         };
 
-        check(TriadContext::Major, &[1,2,3,5,6,8,9]);
-        check(TriadContext::Minor, &[1,2,4,5,6,8,9]);
-        check(TriadContext::Aug,   &[1,2,3,5,6,9]);
-        check(TriadContext::Dim,   &[1,2,4,5,8]);
-        check(TriadContext::Sus,   &[1,6,8,9]);
+        check(TriadContext::Major, &[1, 2, 3, 5, 6, 8, 9]);
+        check(TriadContext::Minor, &[1, 2, 4, 5, 6, 8, 9]);
+        check(TriadContext::Aug, &[1, 2, 3, 5, 6, 9]);
+        check(TriadContext::Dim, &[1, 2, 4, 5, 8]);
+        check(TriadContext::Sus, &[1, 6, 8, 9]);
     }
 }

@@ -1,10 +1,10 @@
 use anyhow::Result;
-use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::PcContent;
 use music::geometry::symmetry::intervallic::IntervallicSymmetry;
 use music::geometry::symmetry::transpositional::{
     find_transpositional_symmetries, TranspositionalSymmetry,
 };
+use music::note::pitch_class::Pc;
+use music::note_collections::pc_set::PcContent;
 use std::collections::HashSet;
 
 use super::input::parse_input_to_pcs;
@@ -57,10 +57,9 @@ pub fn run(args: OrbitsArgs) -> Result<()> {
     println!("PcSet: {}", format_pc_set(&pc_set));
     println!();
 
-    let show_t = args.sym_type == SymmetryType::Transpositional
-        || args.sym_type == SymmetryType::Both;
-    let show_i = args.sym_type == SymmetryType::Inversional
-        || args.sym_type == SymmetryType::Both;
+    let show_t =
+        args.sym_type == SymmetryType::Transpositional || args.sym_type == SymmetryType::Both;
+    let show_i = args.sym_type == SymmetryType::Inversional || args.sym_type == SymmetryType::Both;
 
     if show_t {
         let sym_map = find_transpositional_symmetries(&pc_set.to_vec());
@@ -91,8 +90,7 @@ pub fn run(args: OrbitsArgs) -> Result<()> {
                 pc_entries.sort_by_key(|(n, _)| *n);
 
                 for (pc_val, syms) in &pc_entries {
-                    let mut labels: Vec<&str> =
-                        syms.iter().map(|s| sym_label(s)).collect();
+                    let mut labels: Vec<&str> = syms.iter().map(|s| sym_label(s)).collect();
                     labels.sort();
                     println!("  Pc{}: {{{}}}", pc_val, labels.join(", "));
                 }
@@ -192,12 +190,30 @@ mod tests {
 
     #[test]
     fn symmetry_type_parsing() {
-        assert_eq!(SymmetryType::from_str_opt(None).unwrap(), SymmetryType::Both);
-        assert_eq!(SymmetryType::from_str_opt(Some("both")).unwrap(), SymmetryType::Both);
-        assert_eq!(SymmetryType::from_str_opt(Some("transpositional")).unwrap(), SymmetryType::Transpositional);
-        assert_eq!(SymmetryType::from_str_opt(Some("t")).unwrap(), SymmetryType::Transpositional);
-        assert_eq!(SymmetryType::from_str_opt(Some("inversional")).unwrap(), SymmetryType::Inversional);
-        assert_eq!(SymmetryType::from_str_opt(Some("i")).unwrap(), SymmetryType::Inversional);
+        assert_eq!(
+            SymmetryType::from_str_opt(None).unwrap(),
+            SymmetryType::Both
+        );
+        assert_eq!(
+            SymmetryType::from_str_opt(Some("both")).unwrap(),
+            SymmetryType::Both
+        );
+        assert_eq!(
+            SymmetryType::from_str_opt(Some("transpositional")).unwrap(),
+            SymmetryType::Transpositional
+        );
+        assert_eq!(
+            SymmetryType::from_str_opt(Some("t")).unwrap(),
+            SymmetryType::Transpositional
+        );
+        assert_eq!(
+            SymmetryType::from_str_opt(Some("inversional")).unwrap(),
+            SymmetryType::Inversional
+        );
+        assert_eq!(
+            SymmetryType::from_str_opt(Some("i")).unwrap(),
+            SymmetryType::Inversional
+        );
         assert!(SymmetryType::from_str_opt(Some("garbage")).is_err());
     }
 

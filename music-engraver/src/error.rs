@@ -18,6 +18,10 @@ pub enum EngraverError {
     #[error(transparent)]
     Font(#[from] FontError),
 
+    /// A shared guitar timeline or physical realization was invalid.
+    #[error(transparent)]
+    Guitar(#[from] crate::score::guitar::GuitarScoreError),
+
     /// PNG rasterization failed (requires the `png` feature).
     #[cfg(feature = "png")]
     #[error(transparent)]

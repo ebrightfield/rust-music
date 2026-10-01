@@ -1,21 +1,21 @@
-use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 use crate::error::MusicSemanticsError;
 use crate::notation::clef::Clef;
-use crate::note::Note;
-use crate::note::pitch_class::Pc;
-use crate::note_collections::pc_set::PcContent;
-use crate::note_collections::spelling::{HasSpelling, spell_content};
 use crate::note::pitch::Pitch;
+use crate::note::pitch_class::Pc;
+use crate::note::Note;
 use crate::note_collections::geometry::symmetry::transpositional::TryTranspose;
+use crate::note_collections::pc_set::PcContent;
+use crate::note_collections::spelling::{spell_content, HasSpelling};
 use crate::NoteSet;
-
+use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 /// Returns a vector of increasing midi note values, based on a series of
 /// vertically stacked intervals and a starting pitch.
 fn stack_midi_from_intervals(pitch: &Pitch, intervals: &StackedIntervals) -> Vec<u8> {
     let mut midi_notes = vec![pitch.midi_note];
-    intervals.iter()
+    intervals
+        .iter()
         .for_each(|i| midi_notes.push(midi_notes.last().unwrap() + i));
     midi_notes
 }
@@ -33,16 +33,14 @@ pub struct Voicing(Vec<Pitch>);
 impl Voicing {
     /// Sorts the pitches, but does not perform any deduplication of unisons/enharmonics.
     pub fn new(mut pitches: Vec<Pitch>) -> Self {
-        pitches.sort_by(|a,b| a.partial_cmp(b).unwrap());
+        pitches.sort_by(|a, b| a.partial_cmp(b).unwrap());
         Self(pitches)
     }
 
     /// Shifts the voicing up or down by some number of octaves.
     /// Spelling remains the same.
     pub fn move_by_octaves(&self, n: isize) -> Result<Self, MusicSemanticsError> {
-        Ok(Self(self.iter()
-            .flat_map(|p| p.raise_octaves(n))
-            .collect()))
+        Ok(Self(self.iter().flat_map(|p| p.raise_octaves(n)).collect()))
     }
 
     /// Applies a set of voiceleading paths to `self`. Produces
@@ -50,10 +48,15 @@ impl Voicing {
     /// pitch ordering carries information about voice crossings.
     ///
     /// We perform a length check, so that `paths.len()` must be equal to `self.len()`.
-    pub fn apply_paths(&self, paths: &Vec<i8>, notes: Option<&Vec<Note>>) -> Result<Vec<Pitch>, MusicSemanticsError> {
+    pub fn apply_paths(
+        &self,
+        paths: &Vec<i8>,
+        notes: Option<&Vec<Note>>,
+    ) -> Result<Vec<Pitch>, MusicSemanticsError> {
         if paths.len() != self.0.len() {
             return Err(MusicSemanticsError::MismatchedCollectionSize(
-                self.0.len(), paths.len()
+                self.0.len(),
+                paths.len(),
             ));
         }
         Ok(self
@@ -69,8 +72,7 @@ impl Voicing {
             .collect::<Vec<_>>()
             .into_iter()
             .flatten()
-            .collect()
-        )
+            .collect())
     }
 
     /// Return the min and max pitches.
@@ -78,22 +80,32 @@ impl Voicing {
         if self.is_empty() {
             return None;
         }
-        let min = self.0.iter().min_by(|a,b| a.partial_cmp(b).unwrap())
+        let min = self
+            .0
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
-        let max = self.0.iter().max_by(|a,b| a.partial_cmp(b).unwrap())
+        let max = self
+            .0
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
         Some((*min, *max))
     }
 
     /// Given a [Pitch], we can infer the others using a [StackedIntervals] instance.
-    pub fn from_intervals(root: &Pitch, intervals: &StackedIntervals) -> Result<Self, MusicSemanticsError> {
+    pub fn from_intervals(
+        root: &Pitch,
+        intervals: &StackedIntervals,
+    ) -> Result<Self, MusicSemanticsError> {
         let midi_notes = stack_midi_from_intervals(root, intervals);
         let pc_content = PcContent::new(midi_notes.iter().map(|m| Pc::from(&(m % 12))).collect());
         let spelling = spell_content(&root.note, &pc_content)?;
-        let mut pitches = midi_notes.iter()
+        let mut pitches = midi_notes
+            .iter()
             .map(|m| Pitch::from_midi_spelled_as(*m, &spelling).unwrap())
             .collect::<Vec<_>>();
-        pitches.sort_by(|a,b| a.partial_cmp(b).unwrap());
+        pitches.sort_by(|a, b| a.partial_cmp(b).unwrap());
         Ok(Self(pitches))
     }
 
@@ -117,15 +129,13 @@ impl Voicing {
         let (mut min, mut max) = cloned.span().unwrap();
         let mut bottom_distance = min.diatonic_distance(&clef_bottom);
         let mut top_distance = clef_top.diatonic_distance(&max);
-        while (bottom_distance > 0 || top_distance > 0) &&
-            top_distance < bottom_distance - 7 {
+        while (bottom_distance > 0 || top_distance > 0) && top_distance < bottom_distance - 7 {
             cloned = cloned.move_by_octaves(1)?;
             (min, max) = cloned.span().unwrap();
             bottom_distance = min.diatonic_distance(&clef_bottom);
             top_distance = clef_top.diatonic_distance(&max);
         }
-        while (bottom_distance > 0 || top_distance > 0) &&
-            bottom_distance <= top_distance - 7 {
+        while (bottom_distance > 0 || top_distance > 0) && bottom_distance <= top_distance - 7 {
             cloned = cloned.move_by_octaves(-1)?;
             (min, max) = cloned.span().unwrap();
             bottom_distance = min.diatonic_distance(&clef_bottom);
@@ -158,12 +168,12 @@ impl From<Voicing> for StackedIntervals {
 impl From<&Voicing> for StackedIntervals {
     fn from(voicing: &Voicing) -> Self {
         StackedIntervals(
-            voicing.0.iter()
+            voicing
+                .0
+                .iter()
                 .zip(&voicing.0[1..])
-                .map(|(a,b)| {
-                    b.midi_note - a.midi_note
-                })
-                .collect()
+                .map(|(a, b)| b.midi_note - a.midi_note)
+                .collect(),
         )
     }
 }
@@ -285,7 +295,6 @@ macro_rules! voicing {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,48 +309,29 @@ mod tests {
                 Pitch::new(Note::E, 4),
                 Pitch::new(Note::G, 4),
             ]),
-            voicing!(
-                pitch!(c, 4),
-                pitch!(e, 4),
-                pitch!(g, 4)
-            )
+            voicing!(pitch!(c, 4), pitch!(e, 4), pitch!(g, 4))
         );
     }
 
     #[test]
     fn normalizing_to_treble() {
-        let v0 = Voicing::new(vec![
-            Pitch::new(Note::C, 3),
-            Pitch::new(Note::Fis, 3),
-        ]);
-        let v1 = Voicing::new(vec![
-            Pitch::new(Note::C, 4),
-            Pitch::new(Note::Fis, 4),
-        ]);
+        let v0 = Voicing::new(vec![Pitch::new(Note::C, 3), Pitch::new(Note::Fis, 3)]);
+        let v1 = Voicing::new(vec![Pitch::new(Note::C, 4), Pitch::new(Note::Fis, 4)]);
         assert_eq!(
             v0.normalize_register_to_clef(Clef::Treble).unwrap(),
             v1.normalize_register_to_clef(Clef::Treble).unwrap()
         );
-        let v2 = Voicing::new(vec![
-            Pitch::new(Note::C, 5),
-            Pitch::new(Note::Fis, 5),
-        ]);
+        let v2 = Voicing::new(vec![Pitch::new(Note::C, 5), Pitch::new(Note::Fis, 5)]);
         assert_eq!(
             v1.normalize_register_to_clef(Clef::Treble).unwrap(),
             v2.normalize_register_to_clef(Clef::Treble).unwrap()
         );
-        let v3 = Voicing::new(vec![
-            Pitch::new(Note::C, 6),
-            Pitch::new(Note::Fis, 6),
-        ]);
+        let v3 = Voicing::new(vec![Pitch::new(Note::C, 6), Pitch::new(Note::Fis, 6)]);
         assert_eq!(
             v2.normalize_register_to_clef(Clef::Treble).unwrap(),
             v3.normalize_register_to_clef(Clef::Treble).unwrap()
         );
-        let v4 = Voicing::new(vec![
-            Pitch::new(Note::C, 7),
-            Pitch::new(Note::Fis, 7),
-        ]);
+        let v4 = Voicing::new(vec![Pitch::new(Note::C, 7), Pitch::new(Note::Fis, 7)]);
         assert_eq!(
             v3.normalize_register_to_clef(Clef::Treble).unwrap(),
             v4.normalize_register_to_clef(Clef::Treble).unwrap()
@@ -361,21 +351,26 @@ mod tests {
         // The lowest note should be raised to be closer to the staff
         let (min, _max) = normalized.span().unwrap();
         // Should be at least C4 (not C2)
-        assert!(min.midi_note >= 48, "Expected low note to be C4 or higher, got {:?}", min);
+        assert!(
+            min.midi_note >= 48,
+            "Expected low note to be C4 or higher, got {:?}",
+            min
+        );
     }
 
     #[test]
     fn normalize_to_bass_clef() {
         // Bass clef bounds: G2 (bottom) to A3 (top)
         // A high voicing should be moved down
-        let high = Voicing::new(vec![
-            Pitch::new(Note::C, 5),
-            Pitch::new(Note::E, 5),
-        ]);
+        let high = Voicing::new(vec![Pitch::new(Note::C, 5), Pitch::new(Note::E, 5)]);
         let normalized = high.normalize_register_to_clef(Clef::Bass).unwrap();
         let (min, _max) = normalized.span().unwrap();
         // Should be moved much lower for bass clef
-        assert!(min.midi_note < 60, "Expected note below C4 for bass clef, got {:?}", min);
+        assert!(
+            min.midi_note < 60,
+            "Expected note below C4 for bass clef, got {:?}",
+            min
+        );
     }
 
     #[test]

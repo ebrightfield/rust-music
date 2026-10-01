@@ -76,16 +76,15 @@ fn analyze_shows_voice_leading_cost() {
         stdout.contains("Voice-leading cost"),
         "should include L1 cost section"
     );
-    assert!(
-        stdout.contains("total:"),
-        "should show total cost"
-    );
+    assert!(stdout.contains("total:"), "should show total cost");
 }
 
 #[test]
 fn analyze_explicit_key() {
     let out = slonimsky()
-        .args(["analyze", "--key", "G", "--scale", "major", "G,B,D", "C,E,G"])
+        .args([
+            "analyze", "--key", "G", "--scale", "major", "G,B,D", "C,E,G",
+        ])
         .output()
         .expect("command should run");
 
@@ -104,9 +103,12 @@ fn analyze_explicit_key_minor() {
     let out = slonimsky()
         .args([
             "analyze",
-            "--key", "A",
-            "--scale", "natural-minor",
-            "A,C,E", "D,F,A",
+            "--key",
+            "A",
+            "--scale",
+            "natural-minor",
+            "A,C,E",
+            "D,F,A",
         ])
         .output()
         .expect("command should run");
@@ -135,26 +137,47 @@ fn analyze_json_is_valid() {
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("output must be valid JSON");
 
-    assert!(parsed["key"]["root"].is_string(), "key.root must be a string");
-    assert!(parsed["key"]["scale"].is_string(), "key.scale must be a string");
-    assert!(parsed["key"]["confidence"].is_number(), "key.confidence must be a number");
+    assert!(
+        parsed["key"]["root"].is_string(),
+        "key.root must be a string"
+    );
+    assert!(
+        parsed["key"]["scale"].is_string(),
+        "key.scale must be a string"
+    );
+    assert!(
+        parsed["key"]["confidence"].is_number(),
+        "key.confidence must be a number"
+    );
     assert!(parsed["chords"].is_array(), "chords must be an array");
-    assert_eq!(parsed["chords"].as_array().unwrap().len(), 2, "should have 2 chords");
-    assert!(parsed["transitions"].is_array(), "transitions must be an array");
-    assert_eq!(parsed["transitions"].as_array().unwrap().len(), 1, "should have 1 transition");
+    assert_eq!(
+        parsed["chords"].as_array().unwrap().len(),
+        2,
+        "should have 2 chords"
+    );
+    assert!(
+        parsed["transitions"].is_array(),
+        "transitions must be an array"
+    );
+    assert_eq!(
+        parsed["transitions"].as_array().unwrap().len(),
+        1,
+        "should have 1 transition"
+    );
 }
 
 #[test]
 fn analyze_json_chord_fields() {
     let out = slonimsky()
-        .args(["analyze", "--format", "json", "--key", "C", "C,E,G", "F,A,C"])
+        .args([
+            "analyze", "--format", "json", "--key", "C", "C,E,G", "F,A,C",
+        ])
         .output()
         .expect("command should run");
 
     assert!(out.status.success());
     let parsed: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&out.stdout))
-            .expect("valid JSON");
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).expect("valid JSON");
 
     let chord0 = &parsed["chords"][0];
     assert!(chord0["input"].is_string());
@@ -162,7 +185,10 @@ fn analyze_json_chord_fields() {
     assert!(chord0["root"].is_string());
     assert!(chord0["quality"].is_string());
     // degree should be a number for a diatonic chord
-    assert!(chord0["degree"].is_number(), "diatonic chord should have numeric degree");
+    assert!(
+        chord0["degree"].is_number(),
+        "diatonic chord should have numeric degree"
+    );
     assert!(chord0["roman"].is_string());
     assert!(chord0["diatonic"].is_boolean());
 }
@@ -175,8 +201,7 @@ fn analyze_json_transition_has_l1_cost() {
         .expect("command should run");
 
     let parsed: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&out.stdout))
-            .expect("valid JSON");
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).expect("valid JSON");
 
     let t0 = &parsed["transitions"][0];
     assert_eq!(t0["from"], 0);
@@ -203,7 +228,9 @@ fn analyze_rejects_single_chord() {
 #[test]
 fn analyze_rejects_unknown_scale() {
     slonimsky()
-        .args(["analyze", "--key", "C", "--scale", "phrygian", "C,E,G", "F,A,C"])
+        .args([
+            "analyze", "--key", "C", "--scale", "phrygian", "C,E,G", "F,A,C",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("unknown scale"));

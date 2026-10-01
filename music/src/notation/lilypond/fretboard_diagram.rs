@@ -1,7 +1,7 @@
-use tera::Context;
-use serde::Serialize;
-use crate::{FretboardShape, FrettedNote};
 use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
+use crate::{FretboardShape, FrettedNote};
+use serde::Serialize;
+use tera::Context;
 
 #[derive(Debug, Serialize)]
 pub struct DiagramFret {
@@ -20,19 +20,23 @@ impl From<(u8, u8)> for DiagramFret {
 
 impl<'a> Into<Vec<DiagramFret>> for &'a FretboardShape<'a> {
     fn into(self) -> Vec<DiagramFret> {
-        self.iter().map(|note| {
-            DiagramFret::from(match note {
-                FrettedNote::Sounded(s) => (s.string, s.fret),
-                FrettedNote::Muted {string, ..} => (*string, 255),
+        self.iter()
+            .map(|note| {
+                DiagramFret::from(match note {
+                    FrettedNote::Sounded(s) => (s.string, s.fret),
+                    FrettedNote::Muted { string, .. } => (*string, 255),
+                })
             })
-        }).collect()
+            .collect()
     }
 }
 
 pub fn fretboard_diagram(frets: Vec<DiagramFret>) -> String {
     let mut ctx = Context::new();
     ctx.insert("frets", &frets);
-    (*TEMPLATE_ENGINE).render("fretboard_diagram", &ctx).unwrap()
+    (*TEMPLATE_ENGINE)
+        .render("fretboard_diagram", &ctx)
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -52,7 +56,13 @@ mod tests {
 
         let result = fretboard_diagram(frets);
         // Verify the result is non-empty and contains expected Lilypond fret-diagram syntax
-        assert!(!result.is_empty(), "Fretboard diagram should produce output");
-        assert!(result.contains("fret-diagram"), "Should contain fret-diagram markup");
+        assert!(
+            !result.is_empty(),
+            "Fretboard diagram should produce output"
+        );
+        assert!(
+            result.contains("fret-diagram"),
+            "Should contain fret-diagram markup"
+        );
     }
 }

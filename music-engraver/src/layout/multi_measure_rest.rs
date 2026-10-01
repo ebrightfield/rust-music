@@ -260,7 +260,11 @@ pub fn layout_church_rest(
         let x = cluster_left + i_f * (nominal_glyph_w_ss + spacing_ss) * ss;
         let pos = church_rest_glyph_anchor_position(*glyph);
         let y = staff.y_of(pos);
-        glyphs.push(ChurchRestGlyph { glyph: *glyph, x, y });
+        glyphs.push(ChurchRestGlyph {
+            glyph: *glyph,
+            x,
+            y,
+        });
     }
 
     // Count number sits above the staff (clearly above any rest glyph).
@@ -549,16 +553,14 @@ mod tests {
         let layout = layout_church_rest(1000.0, 4000.0, 4, &staff);
         // Cluster center should equal span center
         let span_center = (1000.0 + 4000.0) / 2.0;
-        let cluster_center = (layout.glyphs[0].x + layout.glyphs[1].x) / 2.0
-            + 0.7 * staff.staff_space; // half a glyph width offset (rough)
-        // Looser tolerance since the "center" depends on the nominal glyph
-        // width assumption — assert the count_x is precisely centered instead.
+        let cluster_center =
+            (layout.glyphs[0].x + layout.glyphs[1].x) / 2.0 + 0.7 * staff.staff_space; // half a glyph width offset (rough)
+                                                                                       // Looser tolerance since the "center" depends on the nominal glyph
+                                                                                       // width assumption — assert the count_x is precisely centered instead.
         assert!((layout.count_x - span_center).abs() < 0.01);
         // And the cluster as a whole should be near the center, not the edge.
         assert!(layout.glyphs[0].x > 1000.0 + 100.0);
-        assert!(
-            cluster_center > span_center - 500.0 && cluster_center < span_center + 500.0
-        );
+        assert!(cluster_center > span_center - 500.0 && cluster_center < span_center + 500.0);
     }
 
     #[test]

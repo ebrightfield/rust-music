@@ -1,10 +1,10 @@
+use crate::error::MusicSemanticsError;
+use crate::note::note::Note;
 use crate::note::pitch_class::Pc;
+use crate::note_collections::NoteSet;
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::Deref;
-use crate::error::MusicSemanticsError;
-use crate::note::note::Note;
-use crate::note_collections::NoteSet;
 
 pub fn deduplicate_pcs(pcs: &[Pc]) -> Vec<Pc> {
     let mut pc_set = HashSet::new();
@@ -132,10 +132,17 @@ impl PcShape {
     /// ```
     // REQ-O9, REQ-O39
     pub fn at_root(&self, root: Pc) -> PcContent {
-        if self.0.is_empty() { return PcContent(vec![]); }
+        if self.0.is_empty() {
+            return PcContent(vec![]);
+        }
         let shift = i32::from(&root);
-        let shifted: Vec<Pc> = self.0.iter()
-            .map(|pc| { let v: i32 = pc.into(); v + shift })
+        let shifted: Vec<Pc> = self
+            .0
+            .iter()
+            .map(|pc| {
+                let v: i32 = pc.into();
+                v + shift
+            })
             .map(|i| Pc::from(&i))
             .collect();
         PcContent::new(shifted)
@@ -145,7 +152,9 @@ impl PcShape {
     /// to the previous mode of a scale, or inversion of a chord.
     // REQ-O13
     pub fn rotate_back(&self) -> Self {
-        if self.0.is_empty() { return Self(vec![]); }
+        if self.0.is_empty() {
+            return Self(vec![]);
+        }
         let mut copy = self.0.clone();
         copy.rotate_right(1);
         Self(zeroed_pcs(&copy))
@@ -155,7 +164,9 @@ impl PcShape {
     /// to the next mode of a scale, or inversion of a chord.
     // REQ-O13
     pub fn rotate_fwd(&self) -> Self {
-        if self.0.is_empty() { return Self(vec![]); }
+        if self.0.is_empty() {
+            return Self(vec![]);
+        }
         let mut copy = self.0.clone();
         copy.rotate_left(1);
         Self(zeroed_pcs(&copy))
@@ -165,7 +176,9 @@ impl PcShape {
     /// so that some non-zero [Pc] is treated as [Pc::Pc0].
     // REQ-O13
     pub fn rotate(&self, times: isize) -> Self {
-        if self.0.is_empty() { return Self(vec![]); }
+        if self.0.is_empty() {
+            return Self(vec![]);
+        }
         let mut copy = self.0.clone();
         let n = isize::try_from(self.0.len()).unwrap();
         let times = times.rem_euclid(n);
@@ -176,17 +189,26 @@ impl PcShape {
     /// Returns a `HashMap` of all the transpositional symmetries
     /// that self might have.
     // REQ-O13
-    pub fn transpositional_symmetry(&self) -> crate::note_collections::geometry::symmetry::transpositional::TranspositionalSymmetryMap {
+    pub fn transpositional_symmetry(
+        &self,
+    ) -> crate::note_collections::geometry::symmetry::transpositional::TranspositionalSymmetryMap
+    {
         crate::note_collections::geometry::symmetry::transpositional::find_transpositional_symmetries(&self.0)
     }
 
     /// Whether self can be transposed into other.
     // REQ-O13
     pub fn is_transposed_version_of(&self, other: &Vec<Pc>) -> bool {
-        if self.is_empty() || other.is_empty() { return false; }
+        if self.is_empty() || other.is_empty() {
+            return false;
+        }
         let len = self.len();
-        if len != other.len() { return false; }
-        if len == 1 { return true; }
+        if len != other.len() {
+            return false;
+        }
+        if len == 1 {
+            return true;
+        }
         let other = PcShape::new(other.clone());
         (0..len).any(|i| other.rotate(isize::try_from(i).unwrap()) == *self)
     }
@@ -224,20 +246,28 @@ impl PcContent {
 }
 
 impl AsPcSlice for PcShape {
-    fn as_pc_slice(&self) -> &[Pc] { &self.0 }
+    fn as_pc_slice(&self) -> &[Pc] {
+        &self.0
+    }
 }
 impl AsPcSlice for PcContent {
-    fn as_pc_slice(&self) -> &[Pc] { &self.0 }
+    fn as_pc_slice(&self) -> &[Pc] {
+        &self.0
+    }
 }
 
 // REQ-O36
 impl Deref for PcShape {
     type Target = Vec<Pc>;
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 impl Deref for PcContent {
     type Target = Vec<Pc>;
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 fn write_pc_braces(pcs: &[Pc], f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -282,22 +312,30 @@ impl FromIterator<Pc> for PcContent {
 impl IntoIterator for PcShape {
     type Item = Pc;
     type IntoIter = std::vec::IntoIter<Pc>;
-    fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 impl<'a> IntoIterator for &'a PcShape {
     type Item = &'a Pc;
     type IntoIter = std::slice::Iter<'a, Pc>;
-    fn into_iter(self) -> Self::IntoIter { self.0.iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
 }
 impl IntoIterator for PcContent {
     type Item = Pc;
     type IntoIter = std::vec::IntoIter<Pc>;
-    fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 impl<'a> IntoIterator for &'a PcContent {
     type Item = &'a Pc;
     type IntoIter = std::slice::Iter<'a, Pc>;
-    fn into_iter(self) -> Self::IntoIter { self.0.iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
 }
 
 // REQ-O10: PcContent from NoteSet (un-zeroed). NO From<&NoteSet> for PcShape per O10.
@@ -307,31 +345,45 @@ impl From<&NoteSet> for PcContent {
     }
 }
 impl From<NoteSet> for PcContent {
-    fn from(value: NoteSet) -> Self { PcContent::from(&value) }
+    fn from(value: NoteSet) -> Self {
+        PcContent::from(&value)
+    }
 }
 
 // REQ-O11: PcShape from PcContent (via to_shape / zeroing)
 impl From<&PcContent> for PcShape {
-    fn from(value: &PcContent) -> Self { value.to_shape() }
+    fn from(value: &PcContent) -> Self {
+        value.to_shape()
+    }
 }
 impl From<PcContent> for PcShape {
-    fn from(value: PcContent) -> Self { value.to_shape() }
+    fn from(value: PcContent) -> Self {
+        value.to_shape()
+    }
 }
 
 // REQ-O12: explicitly NOT implemented:
 // impl From<PcShape> for PcContent { ... }  // absent by design — shape→content requires a root
 
 impl Into<HashSet<Pc>> for PcContent {
-    fn into(self) -> HashSet<Pc> { self.0.into_iter().collect() }
+    fn into(self) -> HashSet<Pc> {
+        self.0.into_iter().collect()
+    }
 }
 impl Into<HashSet<Pc>> for &PcContent {
-    fn into(self) -> HashSet<Pc> { self.0.iter().copied().collect() }
+    fn into(self) -> HashSet<Pc> {
+        self.0.iter().copied().collect()
+    }
 }
 impl Into<HashSet<Pc>> for PcShape {
-    fn into(self) -> HashSet<Pc> { self.0.into_iter().collect() }
+    fn into(self) -> HashSet<Pc> {
+        self.0.into_iter().collect()
+    }
 }
 impl Into<HashSet<Pc>> for &PcShape {
-    fn into(self) -> HashSet<Pc> { self.0.iter().copied().collect() }
+    fn into(self) -> HashSet<Pc> {
+        self.0.iter().copied().collect()
+    }
 }
 
 /// Macro for shape literals: normalizes via `PcShape::new`.

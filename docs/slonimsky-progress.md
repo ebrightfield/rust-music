@@ -5246,3 +5246,278 @@ failures, 0 ignored.
   subcommand if music-ron becomes available.
 - Open issues: music-ron absent (render deferred). music-engraver absent
   (engrave deferred).
+
+## 2026-09-17 — [BUILD] Add exhaustive melodic fretboard-shape command
+
+- Did: Added `slonimsky melodic-shapes`, backed by the Rust melodic shape
+  search. The command exposes open, simple/CAGED-like, 2-NPS, alternating
+  2/3- and 3/2-NPS, 3-NPS, and exhaustive ranked categories. Content can be
+  restricted by starting note, score, span, result count, sort order, tuning,
+  and cross-category deduplication.
+- Rendering: Added text and JSON data output plus combined SVG, PNG, and PDF
+  grids. Rendering controls cover theme, root markers, orientation, column and
+  tile layout, fret windows and padding, labels, titles, and PNG DPI. PDF
+  conversion uses `rsvg-convert`.
+- Verified: Added unit and CLI integration coverage for BMaj7 exhaustive
+  generation, content filters, SVG controls, PNG/PDF signatures, and invalid
+  selection errors. `cargo test -p slonimsky` passes 634 tests. A 24-shape
+  filtered BMaj7 PDF was generated and visually inspected.
+- Open issue: Rust currently finds 44 exhaustive BMaj7 paths while the cited
+  Python implementation finds 43; the additional Rust path starts on A# and
+  has score 4. The CLI reports the Rust search result without silently
+  discarding it.
+
+## 2026-09-17 — [BUILD] Add melodic `sequence` command
+
+- Did: Added `slonimsky sequence` over `music::melody::MelodicSequencer`.
+  The command exposes multi-level signed interval patterns, master steps,
+  static or timed harmonic progressions, cycling notated rhythms, starting
+  pitch and inclusive bounds, initial direction, all five turnaround modes,
+  and event count.
+- Interface: Harmonic contexts are positional comma-separated note groups.
+  Pattern levels use `/`; durations use conventional notation with dots.
+  Output is deterministic tab-separated text or structured JSON, with JSON
+  inferred from an `.json` output path. Validation covers octave-qualified
+  pitches, nonempty patterns and rhythms, duration cardinality, bounds,
+  formats, directions, and turnaround names.
+- Verified: Added six CLI integration tests covering nested patterns, rhythm
+  cycling, JSON structure and file inference, timed harmonic progression,
+  boundary wrapping, and invalid input. `cargo test -p slonimsky` passes all
+  640 tests across 24 suites. Manual invocation generated the expected
+  eight-event C-major sequence with alternating eighth and quarter durations.
+- Artifacts: none.
+
+## 2026-09-18 — [BUILD] Add shared arbitrary `TuningSpec`
+
+- Did: Added one shared parser for the seven exact named presets, arbitrary
+  comma-separated spelled pitches with octaves, arbitrary comma-separated
+  MIDI note values, and `@path` files containing comma/whitespace-separated
+  pitch tokens. Migrated `fretboard`, `chord-dictionary`,
+  `arpeggio-dictionary`, and `melodic-shapes`; removed their four duplicate
+  registries and noncanonical compatibility aliases.
+- Interface: Fretboard ordering remains lowest/thickest string first. Spelled
+  inputs preserve note spelling; MIDI inputs use the library's default sharp
+  spelling. CLI help and the design document now describe every accepted
+  form.
+- Verified: Added parser unit tests and one arbitrary-tuning CLI integration
+  test per consumer, covering inline spelling, MIDI, and file input.
+  `cargo test -p slonimsky` passes all 645 tests across 24 suites. A manual
+  four-string inline-tuning invocation rendered valid SVG and reported the
+  expected four-string fretboard.
+- Artifacts: none.
+
+## 2026-09-18 — [BUILD] Add three CLI small wins
+
+- ASCII fretboard: Added `--format positions|fret-spec`, `--notes`, and
+  `--high-to-low` to `fretboard`, backed by `AsciiFretboardBuilder`. `.txt`
+  output infers the position-list form while SVG remains the default.
+- Interval tools: Added `interval-linear` for `IntervalBuilder::build_linear`
+  SVG output. Added `interval-pairs` to enumerate every unordered pair or
+  answer repeatable directed `--pair FROM,TO` queries, reporting ascending
+  semitones and reduced interval class in text or JSON.
+- Scale rotation: Added `scale-rotate` for signed scale-degree rotations of
+  arbitrary pitch-class scales. Output includes the new tonic, cyclic note
+  order, and interval shape rebased to zero; text and JSON are supported.
+- Verified: Seven focused integration tests cover both ASCII styles, note
+  labels, reversed string order, linear SVG structure, complete and directed
+  pair queries, JSON, forward Dorian rotation, and wrapped negative rotation.
+  Manual smoke invocations exercised all four surfaces and generated a valid
+  1,339-byte linear SVG. `cargo test -p slonimsky` passes all 655 tests across
+  25 suites.
+- Artifacts: none.
+
+## 2026-09-18 — [BUILD] Add declarative RON renderer
+
+- Did: Added `slonimsky render INPUT` over `music-ron`. It accepts paths or
+  stdin, parses and semantically validates all seven document kinds, and emits
+  text, normalized JSON, SVG, PNG, or PDF. Explicit `--format` wins over output
+  extension inference; text is the no-output default; `--dpi` controls PNG.
+- Rendering: Pitch-circle and interval documents use their native SVG builders.
+  Other validated document kinds produce a stable document rendering. PNG uses
+  the in-process engraver rasterizer; PDF uses `rsvg-convert`. Binary formats
+  require an output path.
+- Verified: Four integration tests cover all document kinds, JSON validation,
+  SVG inference, stdin-to-PNG, and binary-output constraints. Manual smoke
+  produced recognized JSON, SVG, PNG, and PDF artifacts. `cargo test -p
+  slonimsky` passes all 659 tests across 26 suites.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Add MIDI, WAV, and realtime sequence output
+
+- Did: Extended `sequence` with Standard MIDI (`mid`/`midi`), SoundFont-backed
+  WAV, and realtime MIDI (`play`) output through one shared `music-midi`
+  adapter. MIDI and WAV formats infer from output extensions. Added controls
+  for tempo, PPQ, SF2 path/offline cache policy, WAV sample rate, and decay
+  tail. Builds without the `midi` feature retain discoverable help and produce
+  an actionable feature error.
+- Rendering: One generated SMF feeds file serialization, `AudioRenderer`, or
+  `MidiPlayer`, so all three surfaces preserve identical sequence timing and
+  notes. WAV defaults to the verified GeneralUser GS cache/download path.
+- Verified: The sequence integration suite passes both without MIDI (7 tests)
+  and with MIDI (7 tests), including a parsed two-track SMF assertion. Manual
+  smoke produced a recognized format-1 MIDI file and 16-bit stereo WAV, and
+  completed realtime playback through the default MIDI output. The full suite
+  passes 660 tests by default and 679 tests with `--features midi`.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Expose full chord-shape search
+
+- Did: Expanded `chord-dictionary` from a flattened playable/open-dependent
+  list to all five `ChordShapeSearchResult` classifications: playable, wide,
+  nontransposable, high-fret, and unplayable. Added classification, exact
+  voicing, octave-independent family, bass, open-string, fret-range, span, and
+  result-limit filters with deterministic sorting and deduplication.
+- Output: Added explicit/inferred text, JSON, and SVG formats. Machine-readable
+  records include classification, per-string frets, fret bounds and span,
+  open-string use, bass, family, and exact pitches.
+- Verified: 21 focused chord-dictionary integration tests pass, including
+  composed classification/open-string filters, JSON metadata, exact voicing,
+  inversion family/bass, fret bounds, and invalid classifications. A manual
+  JSON smoke selected three wide, closed shapes between frets 5 and 12.
+  `cargo test -p slonimsky` passes 659 tests across 26 suites.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Complete scale catalog and mode surface
+
+- Did: Added `scale-catalog` over all 22 `SevenNoteScaleQuality` families.
+  The command lists parent pitch-class shapes, expands selected or all families
+  into seven rotations, identifies tonic-first seven-note input by family and
+  mode, and emits text or JSON with output-extension inference.
+- Integration: Centralized family slugs, display names, and the established
+  major, melodic-minor, harmonic-minor, and harmonic-major mode names.
+  `scale-book` now resolves every catalog family and assigns stable
+  family-and-number labels where no conventional mode name is available.
+- Coverage: Five focused integration contracts verify the 22-family inventory,
+  seven-mode expansion, named altered mode data, Dorian identification,
+  non-catalog rejection, and the expanded `scale-book` selector.
+- Verified: A JSON smoke produced 22 families and 154 mode records.
+  `cargo test -p slonimsky` passes 664 tests across 27 suites.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Add melodic contour analysis
+
+- Did: Added `contour` for octave-qualified or MIDI pitch sequences. It
+  exposes direction names, numeric contour form, signed melodic intervals,
+  interval-size changes, retrograde, inversion, and retrograde-inversion.
+- Comparison: `--compare` reports direct similarity, maximum similarity over
+  all transformations, and transformation equivalence. `--transform` selects
+  a primary transformed result.
+- Output: Text and structured JSON are supported with output-extension
+  inference.
+- Coverage: Four integration contracts cover extraction, every reported
+  analysis dimension, selected transformation, MIDI input, transformed
+  comparison, JSON shape, and invalid input.
+- Verified: A JSON smoke exercised comparison and retrograde-inversion.
+  `cargo test -p slonimsky` passes 668 tests across 28 suites.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Expose chord naming policies
+
+- Did: Expanded `name` with `NamingConfig` presets and explicit controls for
+  add notation, omissions, sixth-versus-thirteenth interpretation, and
+  ambiguity reporting.
+- Display: Added extension-style, major-symbol, accidental, extended-sus4, and
+  root-spacing controls. The previously inert `explicit_sus4` display field
+  now controls `7sus` versus `7sus4`-style output without changing established
+  defaults.
+- Output: Added structured JSON, output-extension inference, resolved policy
+  metadata, and machine-readable ambiguity records.
+- Coverage: Five CLI integration tests cover presets, overrides, display
+  policies, ambiguity JSON, output inference, and invalid policy rejection.
+  The music configuration matrix now covers the suspension policy.
+- Verified: `cargo test -p music --test chord_naming_config_matrix` passes 24
+  tests. `cargo test -p slonimsky` passes 670 tests across 29 suites.
+- Limitation: Slash-chord inference remains a library stub, so the CLI does
+  not expose a misleading slash-threshold option.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Add bass-aware chord and inversion inference
+
+- Library: Added `ChordName::infer` with explicit-bass validation, spelled-note
+  preservation, configurable distinct-pitch-class threshold semantics,
+  deterministic root-candidate scoring, and `RootPosition` versus
+  `SlashChord` results.
+- CLI: Added `name --bass`, `--slash-threshold`, explicit-root override, and
+  spacing controls around the slash. Inputs without `--bass` retain the
+  existing first-input or `--root` anchoring contract.
+- Output: Text renders inferred inversions such as `CMaj7/E`. JSON exposes the
+  resolved root, bass, pitch classes, inversion state, threshold, and display
+  policies.
+- Coverage: Five focused music tests cover root position, inversion,
+  threshold behavior, interpretation ranking, and invalid basses. Three CLI
+  integration tests cover automatic inference, explicit roots, slash spacing,
+  structured output, and threshold-driven failure.
+- Verified: `cargo test -p music` passes 360 tests with 5 ignored.
+  `cargo test -p slonimsky` passes 673 tests across 29 suites. Direct JSON
+  execution resolved `E,G,B,C` with E bass as `CMaj7/E`.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Replace unnamed subchord placeholders
+
+- Did: Replaced `?` emitted by `subchords --name` when chord-quality
+  inference fails with a compact set-analysis description.
+- Output: Fallback labels include the Forte number when available, prime form,
+  and reduced interval vector, for example
+  `set 3-1 pf=[0,1,2] iv=<2,1,0,0,0,0>`.
+- Reuse: The implementation calls the existing `prime_form`, Forte lookup,
+  and `IntervalMatrix::reduced_interval_vector` APIs rather than duplicating
+  set-theory calculations.
+- Coverage: A unit contract pins the compact representation; an integration
+  contract verifies formerly unnamed subsets contain analysis and no `?`.
+- Verified: Focused subchord tests pass 13 tests. Direct execution over
+  `{0,1,2,3}` showed set-analysis fallbacks for both unnamed subsets.
+  `cargo test -p slonimsky` passes 675 tests across 29 suites.
+- Artifacts: none retained.
+
+## 2026-09-18 — [BUILD] Add weighted voice-leading metrics
+
+- Did: Added `weighted` L1 scoring to `voice-leading` and `progression`.
+  `--weights` accepts one non-negative integer per voice, ordered from the
+  lowest source voice to the highest, and rejects missing, extra, invalid, or
+  all-zero weights. Supplying weights with another metric is also rejected.
+- Output: Both commands identify the weighted metric and resolved weights.
+  Verbose output reports L1, L∞, weighted cost, and signed voice paths together.
+  Progression uses the same weights at every greedy transition.
+- Coverage: Four integration contracts verify weighted ranking and progression
+  cost plus voice-count and metric/weights validation.
+- Verified: The focused voice-leading and progression suites pass 30 tests.
+  `cargo test -p slonimsky` passes 679 tests across 29 suites.
+- Artifacts: none retained.
+
+## 2026-09-19 — [BUILD] Add voicing range and spacing controls
+
+- Did: Added `voicings --range LOW..HIGH`, `--min-spacing N`, and
+  `--max-spacing N`. Inclusive pitch bounds expand every canonical inversion
+  through all whole-octave placements that fit entirely inside the range.
+  Spacing filters constrain every adjacent voice in semitones and compose with
+  register expansion.
+- Validation: Rejects malformed or descending ranges and minimum spacing above
+  maximum spacing. Unconstrained invocation preserves the prior six triad and
+  twenty-four seventh-chord canonical outputs.
+- Coverage: Four integration contracts verify bounded register placement,
+  adjacent-spacing filtering, composed filters, and invalid constraints.
+- Verified: The focused voicings suite passes 17 tests. A direct combined-filter
+  run produced six wide C-major placements within C3..C6.
+  `cargo test -p slonimsky` passes 683 tests across 29 suites.
+- Artifacts: none retained.
+
+## 2026-09-19 — [BUILD] Complete instrument voicing controls
+
+- Did: Added `voicings --strings`, `--tuning`, and
+  `--doubling allow|forbid|require`. Instrument mode enumerates one pitch per
+  sounded string across frets 0–35, requires every input chord tone, and
+  deduplicates equivalent pitch voicings reachable through different shapes.
+- Tuning: Reuses the shared tuning resolver for seven named tunings, inline
+  open-string pitches or MIDI values, and `@path` files. Standard guitar is the
+  instrument-mode default. The string count means sounded strings; remaining
+  tuning strings are muted.
+- Doubling: `forbid` preserves one occurrence per chord tone, `allow` permits
+  repetitions on extra strings, and `require` demands at least one repetition.
+  Range and adjacent-spacing constraints apply directly to generated pitches.
+- Coverage: Four integration contracts verify standard-guitar string search,
+  bass tuning with required doubling, allowed doubling, and incompatible
+  string-count/policy validation.
+- Verified: The focused voicings suite passes 21 tests. Direct execution found
+  71 four-string doubled C-major bass voicings within E1..G4.
+  `cargo test -p slonimsky` passes 687 tests across 29 suites.
+- Artifacts: none retained.

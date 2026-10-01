@@ -95,8 +95,14 @@ mod tests {
         draw_clef(&mut svg, &staff, &clef, &font).unwrap();
         let output = svg.to_svg();
 
-        assert!(output.contains("<path "), "should contain a <path> element for the clef");
-        assert!(output.contains("fill=\"black\""), "clef path should be filled black");
+        assert!(
+            output.contains("<path "),
+            "should contain a <path> element for the clef"
+        );
+        assert!(
+            output.contains("fill=\"black\""),
+            "clef path should be filled black"
+        );
     }
 
     #[test]

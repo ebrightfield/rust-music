@@ -3,7 +3,9 @@ use crate::font::bravura_font;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{layout_measure, BeamGroupEvent, MeasureLayoutConfig, NoteAnnotations, RestEvent};
+use crate::layout::measure::{
+    layout_measure, BeamGroupEvent, MeasureLayoutConfig, NoteAnnotations, RestEvent,
+};
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::render::staff_renderer::draw_staff_lines;
 use smufl::Glyph;
@@ -29,7 +31,16 @@ fn empty_measure_produces_no_elements() {
         total_spring: 0.0,
     };
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     // Only the SVG wrapper, no path or line elements
     assert_eq!(output.matches("<path ").count(), 0);
@@ -46,11 +57,20 @@ fn measure_with_single_quarter_note() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // Should have 1 notehead path + 1 stem line
@@ -68,15 +88,28 @@ fn measure_with_whole_note_has_no_stem() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 1, "one notehead");
-    assert_eq!(output.matches("<line ").count(), 0, "no stem for whole note");
+    assert_eq!(
+        output.matches("<line ").count(),
+        0,
+        "no stem for whole note"
+    );
 }
 
 #[test]
@@ -89,11 +122,20 @@ fn measure_with_eighth_note_has_flag() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 notehead + 1 flag = 2 paths, 1 stem line
@@ -111,11 +153,20 @@ fn measure_with_dotted_quarter() {
         dots: 1,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 notehead + 1 dot = 2 paths, 1 stem
@@ -133,11 +184,20 @@ fn measure_with_accidental_note() {
         dots: 0,
         accidental: Some(Glyph::AccidentalSharp),
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 accidental + 1 notehead = 2 paths, 1 stem
@@ -155,7 +215,16 @@ fn measure_with_rest() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 1, "one rest glyph");
@@ -172,7 +241,16 @@ fn measure_with_multi_measure_rest_draws_hbar_and_count() {
     }];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // H-bar = 2 vertical serifs + 1 crossbar = 3 filled rects
@@ -187,8 +265,16 @@ fn measure_with_multi_measure_rest_draws_hbar_and_count() {
         "count number 8 should appear in a <text> element",
     );
     // No glyph paths or staff/stem lines for the H-bar itself
-    assert_eq!(output.matches("<path ").count(), 0, "H-bar uses rects, not paths");
-    assert_eq!(output.matches("<line ").count(), 0, "H-bar has no <line> elements");
+    assert_eq!(
+        output.matches("<path ").count(),
+        0,
+        "H-bar uses rects, not paths"
+    );
+    assert_eq!(
+        output.matches("<line ").count(),
+        0,
+        "H-bar has no <line> elements"
+    );
 }
 
 #[test]
@@ -202,11 +288,29 @@ fn measure_with_multi_measure_rest_x_offset_shifts_hbar() {
     let layout = layout_measure(&elements, &cfg);
 
     let mut svg_a = make_svg();
-    draw_measure(&mut svg_a, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_a,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let out_a = svg_a.to_svg();
 
     let mut svg_b = make_svg();
-    draw_measure(&mut svg_b, &staff, &font, &config, &layout, 1500.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_b,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        1500.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let out_b = svg_b.to_svg();
 
     assert_ne!(
@@ -231,13 +335,22 @@ fn measure_with_barline() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Barline(BarlineStyle::Single),
     ];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 notehead path, 1 stem + 1 barline = 2 lines
@@ -258,16 +371,29 @@ fn measure_with_clef_and_key_signature() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
     ];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 clef + 2 key sig accidentals + 1 notehead = 4 paths
-    assert_eq!(output.matches("<path ").count(), 4, "clef + 2 sharps + notehead");
+    assert_eq!(
+        output.matches("<path ").count(),
+        4,
+        "clef + 2 sharps + notehead"
+    );
     // 1 stem line
     assert!(output.matches("<line ").count() >= 1, "at least 1 stem");
 }
@@ -287,12 +413,21 @@ fn measure_with_time_signature() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
     ];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 digit paths (4, 4) + 1 notehead = 3 paths
@@ -309,12 +444,21 @@ fn x_offset_shifts_elements() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
 
     let mut svg_0 = make_svg();
-    draw_measure(&mut svg_0, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_0,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     let mut svg_offset = make_svg();
     draw_measure(
@@ -375,7 +519,7 @@ fn full_measure_with_all_element_types() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Note(NoteEvent {
             staff_position: 6,
@@ -383,7 +527,7 @@ fn full_measure_with_all_element_types() {
             dots: 0,
             accidental: Some(Glyph::AccidentalNatural),
             stem_direction: Some(StemDirection::Down),
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Rest(RestEvent {
             duration_log2: 2,
@@ -394,15 +538,32 @@ fn full_measure_with_all_element_types() {
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
     draw_staff_lines(&mut svg, &staff, &config);
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // Count expected paths:
     // clef(1) + flat(1) + time(2 digits) + notehead(1) + notehead(1) + accidental(1) + flag(1) + rest(1) = 9
-    assert_eq!(output.matches("<path ").count(), 9, "expected 9 paths total");
+    assert_eq!(
+        output.matches("<path ").count(),
+        9,
+        "expected 9 paths total"
+    );
 
     // Lines: 5 staff lines + 2 stems + 1 barline = 8
-    assert_eq!(output.matches("<line ").count(), 8, "expected 8 lines total");
+    assert_eq!(
+        output.matches("<line ").count(),
+        8,
+        "expected 8 lines total"
+    );
 }
 
 #[test]
@@ -415,11 +576,20 @@ fn note_with_ledger_lines_below_staff() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 notehead, 1 stem + 1 ledger line = 2 lines
@@ -443,7 +613,16 @@ fn chord_two_notes_third_apart() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads, 1 stem
@@ -466,7 +645,16 @@ fn chord_with_second_has_two_noteheads() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads (at different x-offsets due to second), 1 stem
@@ -474,7 +662,11 @@ fn chord_with_second_has_two_noteheads() {
     assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
     // Verify both noteheads have different translate positions
     let translates: Vec<&str> = output.matches("translate(").collect();
-    assert_eq!(translates.len(), 2, "two translate transforms for two noteheads");
+    assert_eq!(
+        translates.len(),
+        2,
+        "two translate transforms for two noteheads"
+    );
 }
 
 #[test]
@@ -491,11 +683,24 @@ fn chord_with_accidentals() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 accidental + 2 noteheads = 3 paths, 1 stem
-    assert_eq!(output.matches("<path ").count(), 3, "accidental + 2 noteheads");
+    assert_eq!(
+        output.matches("<path ").count(),
+        3,
+        "accidental + 2 noteheads"
+    );
     assert_eq!(output.matches("<line ").count(), 1, "one shared stem");
 }
 
@@ -513,12 +718,25 @@ fn chord_whole_note_no_stem() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 3 noteheads, no stem
     assert_eq!(output.matches("<path ").count(), 3, "three noteheads");
-    assert_eq!(output.matches("<line ").count(), 0, "no stem for whole note chord");
+    assert_eq!(
+        output.matches("<line ").count(),
+        0,
+        "no stem for whole note chord"
+    );
 }
 
 #[test]
@@ -535,7 +753,16 @@ fn chord_eighth_note_has_flag() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads + 1 flag = 3 paths, 1 stem
@@ -558,7 +785,16 @@ fn chord_with_ledger_lines() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads, 1 stem + 1 ledger line = 2 lines
@@ -580,11 +816,28 @@ fn chord_empty_produces_nothing() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
-    assert_eq!(output.matches("<path ").count(), 0, "empty chord = no paths");
-    assert_eq!(output.matches("<line ").count(), 0, "empty chord = no lines");
+    assert_eq!(
+        output.matches("<path ").count(),
+        0,
+        "empty chord = no paths"
+    );
+    assert_eq!(
+        output.matches("<line ").count(),
+        0,
+        "empty chord = no lines"
+    );
 }
 
 #[test]
@@ -601,7 +854,16 @@ fn chord_dotted_quarter() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads + 2 dots = 4 paths, 1 stem
@@ -620,7 +882,7 @@ fn chord_differs_from_single_note() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let chord = vec![MeasureElement::Chord(ChordEvent {
         staff_positions: vec![0, 4],
@@ -635,9 +897,27 @@ fn chord_differs_from_single_note() {
     let layout_c = layout_measure(&chord, &cfg);
 
     let mut svg_s = make_svg();
-    draw_measure(&mut svg_s, &staff, &font, &config, &layout_s, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_s,
+        &staff,
+        &font,
+        &config,
+        &layout_s,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let mut svg_c = make_svg();
-    draw_measure(&mut svg_c, &staff, &font, &config, &layout_c, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_c,
+        &staff,
+        &font,
+        &config,
+        &layout_c,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     // Chord should have more paths (2 noteheads vs 1)
     assert!(
@@ -658,7 +938,7 @@ fn stem_direction_override_is_respected() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Up),
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
     let elements_down = vec![MeasureElement::Note(NoteEvent {
         staff_position: 0,
@@ -666,14 +946,23 @@ fn stem_direction_override_is_respected() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Down),
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })];
 
     let layout_up = layout_measure(&elements_up, &cfg);
     let layout_down = layout_measure(&elements_down, &cfg);
 
     let mut svg_up = make_svg();
-    draw_measure(&mut svg_up, &staff, &font, &config, &layout_up, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_up,
+        &staff,
+        &font,
+        &config,
+        &layout_up,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     let mut svg_down = make_svg();
     draw_measure(
@@ -709,7 +998,7 @@ fn beam_group_two_eighths() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             },
             NoteEvent {
                 staff_position: 2,
@@ -717,14 +1006,23 @@ fn beam_group_two_eighths() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             },
         ],
         stem_direction: None,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads as paths
@@ -741,22 +1039,63 @@ fn beam_group_four_sixteenths() {
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
     let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: 0, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent {
+                staff_position: 0,
+                duration_log2: 4,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: 2,
+                duration_log2: 4,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: 4,
+                duration_log2: 4,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: 6,
+                duration_log2: 4,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
         ],
         stem_direction: None,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 4, "four noteheads");
     assert_eq!(output.matches("<line ").count(), 4, "four stems");
     // Primary + secondary beam = 2 polygons
-    assert_eq!(output.matches("<polygon ").count(), 2, "two beam polygons (primary + secondary)");
+    assert_eq!(
+        output.matches("<polygon ").count(),
+        2,
+        "two beam polygons (primary + secondary)"
+    );
 }
 
 #[test]
@@ -771,7 +1110,7 @@ fn beam_group_with_accidental() {
                 dots: 0,
                 accidental: Some(Glyph::AccidentalSharp),
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             },
             NoteEvent {
                 staff_position: 4,
@@ -779,18 +1118,31 @@ fn beam_group_with_accidental() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             },
         ],
         stem_direction: None,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 accidental + 2 noteheads = 3 paths
-    assert_eq!(output.matches("<path ").count(), 3, "accidental + 2 noteheads");
+    assert_eq!(
+        output.matches("<path ").count(),
+        3,
+        "accidental + 2 noteheads"
+    );
     assert_eq!(output.matches("<line ").count(), 2, "two stems");
     assert_eq!(output.matches("<polygon ").count(), 1, "one beam");
 }
@@ -802,14 +1154,37 @@ fn beam_group_with_ledger_lines() {
     // Notes below the staff requiring ledger lines
     let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: -2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: -4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent {
+                staff_position: -2,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: -4,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
         ],
         stem_direction: None,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 2, "two noteheads");
@@ -828,7 +1203,16 @@ fn beam_group_empty() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 0);
@@ -849,7 +1233,7 @@ fn beam_group_differs_from_flagged_notes() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
         MeasureElement::Note(NoteEvent {
             staff_position: 2,
@@ -857,14 +1241,28 @@ fn beam_group_differs_from_flagged_notes() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         }),
     ];
     // Same notes but beamed
     let beamed = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent {
+                staff_position: 0,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: 2,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
         ],
         stem_direction: None,
     })];
@@ -873,20 +1271,54 @@ fn beam_group_differs_from_flagged_notes() {
     let layout_b = layout_measure(&beamed, &cfg);
 
     let mut svg_f = make_svg();
-    draw_measure(&mut svg_f, &staff, &font, &config, &layout_f, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_f,
+        &staff,
+        &font,
+        &config,
+        &layout_f,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let mut svg_b = make_svg();
-    draw_measure(&mut svg_b, &staff, &font, &config, &layout_b, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_b,
+        &staff,
+        &font,
+        &config,
+        &layout_b,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     let out_f = svg_f.to_svg();
     let out_b = svg_b.to_svg();
 
     // Flagged: 2 noteheads + 2 flags = 4 paths, 0 polygons
-    assert_eq!(out_f.matches("<path ").count(), 4, "flagged: 2 noteheads + 2 flags");
-    assert_eq!(out_f.matches("<polygon ").count(), 0, "flagged: no polygons");
+    assert_eq!(
+        out_f.matches("<path ").count(),
+        4,
+        "flagged: 2 noteheads + 2 flags"
+    );
+    assert_eq!(
+        out_f.matches("<polygon ").count(),
+        0,
+        "flagged: no polygons"
+    );
 
     // Beamed: 2 noteheads = 2 paths, 1 polygon
-    assert_eq!(out_b.matches("<path ").count(), 2, "beamed: 2 noteheads only");
-    assert_eq!(out_b.matches("<polygon ").count(), 1, "beamed: 1 beam polygon");
+    assert_eq!(
+        out_b.matches("<path ").count(),
+        2,
+        "beamed: 2 noteheads only"
+    );
+    assert_eq!(
+        out_b.matches("<polygon ").count(),
+        1,
+        "beamed: 1 beam polygon"
+    );
 }
 
 #[test]
@@ -896,15 +1328,45 @@ fn beam_group_mixed_durations() {
     // Eighth + two sixteenths
     let elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-            NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+            NoteEvent {
+                staff_position: 2,
+                duration_log2: 3,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: 4,
+                duration_log2: 4,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
+            NoteEvent {
+                staff_position: 6,
+                duration_log2: 4,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            },
         ],
         stem_direction: None,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 3, "three noteheads");
@@ -930,10 +1392,23 @@ fn note_with_dynamic_adds_extra_path() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { dynamic: Some(Dynamic::Forte), ..Default::default() },})];
+        annotations: NoteAnnotations {
+            dynamic: Some(Dynamic::Forte),
+            ..Default::default()
+        },
+    })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 notehead + 1 dynamic glyph = 2 paths, 1 stem
@@ -955,7 +1430,16 @@ fn note_without_dynamic_no_extra_path() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 1 notehead, no dynamic
@@ -972,10 +1456,23 @@ fn chord_with_dynamic_adds_extra_path() {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        annotations: NoteAnnotations { dynamic: Some(Dynamic::Pp), ..Default::default() },})];
+        annotations: NoteAnnotations {
+            dynamic: Some(Dynamic::Pp),
+            ..Default::default()
+        },
+    })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 2 noteheads + 1 dynamic = 3 paths, 1 stem
@@ -993,10 +1490,23 @@ fn dynamic_glyph_positioned_below_staff() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { dynamic: Some(Dynamic::Mf), ..Default::default() },})];
+        annotations: NoteAnnotations {
+            dynamic: Some(Dynamic::Mf),
+            ..Default::default()
+        },
+    })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // Dynamic should be rendered with a translate below the staff.
@@ -1023,21 +1533,79 @@ fn different_dynamics_on_notes_produce_different_svgs() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-            annotations: NoteAnnotations { dynamic: Some(dyn_mark), ..Default::default() },})];
+            annotations: NoteAnnotations {
+                dynamic: Some(dyn_mark),
+                ..Default::default()
+            },
+        })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
     let svg_p = make(Dynamic::Piano);
     let svg_f = make(Dynamic::Forte);
-    assert_ne!(svg_p, svg_f, "different dynamics should produce different SVGs");
+    assert_ne!(
+        svg_p, svg_f,
+        "different dynamics should produce different SVGs"
+    );
 }
 
 // --- tuplet group rendering ---
 
 use crate::layout::measure::TupletGroupEvent;
+
+#[test]
+fn tuplet_bracket_clears_beam_geometry() {
+    let ss = 250.0;
+    let notes = vec![
+        BeamedNote {
+            x: 0.0,
+            staff_position: 0,
+            duration_log2: 3,
+        },
+        BeamedNote {
+            x: 500.0,
+            staff_position: 2,
+            duration_log2: 3,
+        },
+        BeamedNote {
+            x: 1000.0,
+            staff_position: 4,
+            duration_log2: 3,
+        },
+    ];
+    let beam = layout_beam_group(&notes, StemDirection::Up, ss);
+    let mut bracket = layout_tuplet_bracket(
+        0.0,
+        1000.0,
+        &[0, 2, 4],
+        TupletPlacement::Above,
+        3,
+        ss,
+        0.1,
+        200.0,
+    );
+
+    clear_tuplet_bracket_from_beam(&mut bracket, &beam, ss);
+
+    let beam_top = beam.stem_tip_ys.iter().copied().reduce(f64::min).unwrap();
+    assert!(
+        bracket.bracket_y <= beam_top - ss,
+        "tuplet bracket must clear the beam by at least one staff space"
+    );
+    assert_eq!(bracket.number_y, bracket.bracket_y);
+}
 
 #[test]
 fn tuplet_triplet_renders_beams_plus_bracket() {
@@ -1046,23 +1614,62 @@ fn tuplet_triplet_renders_beams_plus_bracket() {
     let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
         beam_group: BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-                NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-                NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent {
+                    staff_position: 0,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
+                NoteEvent {
+                    staff_position: 2,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
+                NoteEvent {
+                    staff_position: 4,
+                    duration_log2: 3,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
             ],
             stem_direction: None,
         },
         tuplet_number: 3,
+        in_time_of: 3,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 3 noteheads + 1 tuplet number glyph = 4 paths
-    assert_eq!(output.matches("<path ").count(), 4, "3 noteheads + tuplet number");
+    assert_eq!(
+        output.matches("<path ").count(),
+        4,
+        "3 noteheads + tuplet number"
+    );
     // 3 stems + 2 hooks + 2 bracket segments = 7 lines
-    assert_eq!(output.matches("<line ").count(), 7, "3 stems + 4 bracket/hook lines");
+    assert_eq!(
+        output.matches("<line ").count(),
+        7,
+        "3 stems + 4 bracket/hook lines"
+    );
     // 1 primary beam polygon
     assert_eq!(output.matches("<polygon ").count(), 1, "one beam polygon");
 }
@@ -1072,9 +1679,30 @@ fn tuplet_differs_from_plain_beam_group() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
     let notes = vec![
-        NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-        NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-        NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+        NoteEvent {
+            staff_position: 0,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        },
+        NoteEvent {
+            staff_position: 2,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        },
+        NoteEvent {
+            staff_position: 4,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        },
     ];
 
     let plain = vec![MeasureElement::BeamGroup(BeamGroupEvent {
@@ -1087,15 +1715,34 @@ fn tuplet_differs_from_plain_beam_group() {
             stem_direction: None,
         },
         tuplet_number: 3,
+        in_time_of: 3,
     })];
 
     let layout_p = layout_measure(&plain, &cfg);
     let layout_t = layout_measure(&tuplet, &cfg);
 
     let mut svg_p = make_svg();
-    draw_measure(&mut svg_p, &staff, &font, &config, &layout_p, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_p,
+        &staff,
+        &font,
+        &config,
+        &layout_p,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let mut svg_t = make_svg();
-    draw_measure(&mut svg_t, &staff, &font, &config, &layout_t, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_t,
+        &staff,
+        &font,
+        &config,
+        &layout_t,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     let out_p = svg_p.to_svg();
     let out_t = svg_t.to_svg();
@@ -1103,7 +1750,11 @@ fn tuplet_differs_from_plain_beam_group() {
     // Tuplet has extra bracket lines and number glyph
     let paths_p = out_p.matches("<path ").count();
     let paths_t = out_t.matches("<path ").count();
-    assert_eq!(paths_t, paths_p + 1, "tuplet adds 1 extra path (number glyph)");
+    assert_eq!(
+        paths_t,
+        paths_p + 1,
+        "tuplet adds 1 extra path (number glyph)"
+    );
 
     let lines_p = out_p.matches("<line ").count();
     let lines_t = out_t.matches("<line ").count();
@@ -1117,23 +1768,72 @@ fn tuplet_quintuplet_renders() {
     let elements = vec![MeasureElement::TupletGroup(TupletGroupEvent {
         beam_group: BeamGroupEvent {
             notes: vec![
-                NoteEvent { staff_position: 2, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-                NoteEvent { staff_position: 3, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-                NoteEvent { staff_position: 4, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-                NoteEvent { staff_position: 5, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-                NoteEvent { staff_position: 6, duration_log2: 4, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+                NoteEvent {
+                    staff_position: 2,
+                    duration_log2: 4,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
+                NoteEvent {
+                    staff_position: 3,
+                    duration_log2: 4,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
+                NoteEvent {
+                    staff_position: 4,
+                    duration_log2: 4,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
+                NoteEvent {
+                    staff_position: 5,
+                    duration_log2: 4,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
+                NoteEvent {
+                    staff_position: 6,
+                    duration_log2: 4,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                },
             ],
             stem_direction: None,
         },
         tuplet_number: 5,
+        in_time_of: 5,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // 5 noteheads + 1 tuplet "5" glyph = 6 paths
-    assert_eq!(output.matches("<path ").count(), 6, "5 noteheads + tuplet number");
+    assert_eq!(
+        output.matches("<path ").count(),
+        6,
+        "5 noteheads + tuplet number"
+    );
 }
 
 #[test]
@@ -1146,10 +1846,20 @@ fn tuplet_empty_produces_nothing() {
             stem_direction: None,
         },
         tuplet_number: 3,
+        in_time_of: 3,
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert_eq!(output.matches("<path ").count(), 0);
@@ -1161,9 +1871,30 @@ fn tuplet_different_numbers_produce_different_glyphs() {
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
     let notes = vec![
-        NoteEvent { staff_position: 0, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-        NoteEvent { staff_position: 2, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
-        NoteEvent { staff_position: 4, duration_log2: 3, dots: 0, accidental: None, stem_direction: None, annotations: NoteAnnotations::default() },
+        NoteEvent {
+            staff_position: 0,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        },
+        NoteEvent {
+            staff_position: 2,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        },
+        NoteEvent {
+            staff_position: 4,
+            duration_log2: 3,
+            dots: 0,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        },
     ];
 
     let make = |number: u32| {
@@ -1173,10 +1904,20 @@ fn tuplet_different_numbers_produce_different_glyphs() {
                 stem_direction: None,
             },
             tuplet_number: number,
+            in_time_of: number,
         })];
         let layout = layout_measure(&elems, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
@@ -1197,14 +1938,35 @@ fn note_with_rehearsal_mark_produces_text_and_rect() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { rehearsal_mark: Some(("A".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)), ..Default::default() },
+        annotations: NoteAnnotations {
+            rehearsal_mark: Some((
+                "A".to_string(),
+                crate::layout::rehearsal::RehearsalStyle::Boxed,
+            )),
+            ..Default::default()
+        },
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert!(output.contains("<text "), "rehearsal mark should produce a text element");
-    assert!(output.contains("<rect "), "boxed rehearsal mark should produce a rect element");
+    assert!(
+        output.contains("<text "),
+        "rehearsal mark should produce a text element"
+    );
+    assert!(
+        output.contains("<rect "),
+        "boxed rehearsal mark should produce a rect element"
+    );
     assert!(output.contains(">A<"), "text content 'A' should appear");
 }
 
@@ -1222,10 +1984,25 @@ fn note_without_rehearsal_mark_has_no_text() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert!(!output.contains("<text "), "no rehearsal mark, no text element");
-    assert!(!output.contains("<rect "), "no rehearsal mark, no rect element");
+    assert!(
+        !output.contains("<text "),
+        "no rehearsal mark, no text element"
+    );
+    assert!(
+        !output.contains("<rect "),
+        "no rehearsal mark, no rect element"
+    );
 }
 
 #[test]
@@ -1238,13 +2015,31 @@ fn chord_with_rehearsal_mark_produces_text() {
         dots: 0,
         accidentals: vec![None, None, None],
         stem_direction: None,
-        annotations: NoteAnnotations { rehearsal_mark: Some(("B".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)), ..Default::default() },
+        annotations: NoteAnnotations {
+            rehearsal_mark: Some((
+                "B".to_string(),
+                crate::layout::rehearsal::RehearsalStyle::Boxed,
+            )),
+            ..Default::default()
+        },
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert!(output.contains(">B<"), "chord rehearsal mark text should appear");
+    assert!(
+        output.contains(">B<"),
+        "chord rehearsal mark text should appear"
+    );
 }
 
 #[test]
@@ -1257,14 +2052,35 @@ fn plain_rehearsal_mark_has_no_rect() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { rehearsal_mark: Some(("C".to_string(), crate::layout::rehearsal::RehearsalStyle::Plain)), ..Default::default() },
+        annotations: NoteAnnotations {
+            rehearsal_mark: Some((
+                "C".to_string(),
+                crate::layout::rehearsal::RehearsalStyle::Plain,
+            )),
+            ..Default::default()
+        },
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert!(output.contains(">C<"), "plain rehearsal mark text should appear");
-    assert!(!output.contains("<rect "), "plain style should not produce a rect");
+    assert!(
+        output.contains(">C<"),
+        "plain rehearsal mark text should appear"
+    );
+    assert!(
+        !output.contains("<rect "),
+        "plain style should not produce a rect"
+    );
 }
 
 #[test]
@@ -1278,15 +2094,34 @@ fn rehearsal_mark_differs_from_no_mark() {
             dots: 0,
             accidental: None,
             stem_direction: None,
-            annotations: NoteAnnotations { rehearsal_mark: mark, ..Default::default() },})];
+            annotations: NoteAnnotations {
+                rehearsal_mark: mark,
+                ..Default::default()
+            },
+        })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
-    let with_mark = make(Some(("A".to_string(), crate::layout::rehearsal::RehearsalStyle::Boxed)));
+    let with_mark = make(Some((
+        "A".to_string(),
+        crate::layout::rehearsal::RehearsalStyle::Boxed,
+    )));
     let without_mark = make(None);
-    assert_ne!(with_mark, without_mark, "rehearsal mark should change SVG output");
+    assert_ne!(
+        with_mark, without_mark,
+        "rehearsal mark should change SVG output"
+    );
 }
 
 // --- Tempo mark integration tests ---
@@ -1307,7 +2142,16 @@ fn note_with_tempo_mark_produces_text() {
 
     // Without tempo mark
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let out_without = svg_without.to_svg();
 
     // With tempo mark
@@ -1317,13 +2161,29 @@ fn note_with_tempo_mark_produces_text() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Allegro".into())), ..Default::default() },})];
+        annotations: NoteAnnotations {
+            tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Allegro".into())),
+            ..Default::default()
+        },
+    })];
     let layout_with = layout_measure(&elements_with, &cfg);
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let out_with = svg_with.to_svg();
 
-    assert!(out_with.contains(">Allegro<"), "tempo mark text should appear");
+    assert!(
+        out_with.contains(">Allegro<"),
+        "tempo mark text should appear"
+    );
     assert!(!out_without.contains(">Allegro<"), "no tempo mark, no text");
     assert_ne!(out_with, out_without, "tempo mark should change SVG output");
 }
@@ -1338,19 +2198,35 @@ fn note_with_metronome_tempo_produces_path_and_text() {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { tempo_mark: Some(crate::layout::tempo::TempoMark::Metronome {
-            note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
-            dotted: false,
-            bpm: 120,
-        }), ..Default::default() },})];
+        annotations: NoteAnnotations {
+            tempo_mark: Some(crate::layout::tempo::TempoMark::Metronome {
+                note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
+                dotted: false,
+                bpm: 120,
+            }),
+            ..Default::default()
+        },
+    })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     assert!(output.contains("= 120"), "metronome BPM should appear");
     // Should have a path for the metronome note glyph (in addition to the notehead)
-    assert!(output.matches("<path").count() >= 2, "should have notehead + metronome glyph paths");
+    assert!(
+        output.matches("<path").count() >= 2,
+        "should have notehead + metronome glyph paths"
+    );
 }
 
 #[test]
@@ -1363,12 +2239,28 @@ fn chord_with_tempo_mark_produces_text() {
         dots: 0,
         accidentals: vec![None, None, None],
         stem_direction: None,
-        annotations: NoteAnnotations { tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Presto".into())), ..Default::default() },})];
+        annotations: NoteAnnotations {
+            tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Presto".into())),
+            ..Default::default()
+        },
+    })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert!(output.contains(">Presto<"), "chord tempo mark text should appear");
+    assert!(
+        output.contains(">Presto<"),
+        "chord tempo mark text should appear"
+    );
 }
 
 #[test]
@@ -1389,7 +2281,16 @@ fn note_with_grace_note_adds_extra_path() {
     })];
     let layout_without = layout_measure(&elements_without, &cfg);
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output_without = svg_without.to_svg();
     let paths_without = output_without.matches("<path").count();
 
@@ -1407,7 +2308,16 @@ fn note_with_grace_note_adds_extra_path() {
     })];
     let layout_with = layout_measure(&elements_with, &cfg);
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output_with = svg_with.to_svg();
     let paths_with = output_with.matches("<path").count();
 
@@ -1434,7 +2344,16 @@ fn note_without_grace_note_no_scale_transform() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     // Normal notes should not have scale(0.6) transform
     assert!(
@@ -1460,7 +2379,16 @@ fn chord_with_grace_note_adds_extra_path() {
     })];
     let layout_without = layout_measure(&elements_without, &cfg);
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let paths_without = svg_without.to_svg().matches("<path").count();
 
     let elements_with = vec![MeasureElement::Chord(ChordEvent {
@@ -1476,7 +2404,16 @@ fn chord_with_grace_note_adds_extra_path() {
     })];
     let layout_with = layout_measure(&elements_with, &cfg);
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let paths_with = svg_with.to_svg().matches("<path").count();
 
     assert!(
@@ -1507,7 +2444,16 @@ fn grace_note_has_scale_transform() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     assert!(
         output.contains("scale(0.6"),
@@ -1540,12 +2486,30 @@ fn grace_note_slur_adds_filled_crescent_path() {
 
     let layout_without = layout_measure(&[make_event(false)], &cfg);
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output_without = svg_without.to_svg();
 
     let layout_with = layout_measure(&[make_event(true)], &cfg);
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output_with = svg_with.to_svg();
 
     // Slurs are emitted as <path d="..." fill="black" stroke="none"/>.
@@ -1589,7 +2553,16 @@ fn grace_note_slur_no_slur_flag_no_extra_path() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // No slur means no stroke="none" filled paths. (Note: filled tuplet
@@ -1621,7 +2594,16 @@ fn grace_note_slur_no_grace_means_no_slur() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     assert_eq!(
         output.matches(r#"stroke="none""#).count(),
@@ -1656,12 +2638,30 @@ fn chord_with_grace_note_slur_emits_slur_path() {
 
     let layout_without = layout_measure(&[make_event(false)], &cfg);
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let paths_without = svg_without.to_svg().matches(r#"stroke="none""#).count();
 
     let layout_with = layout_measure(&[make_event(true)], &cfg);
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let paths_with = svg_with.to_svg().matches(r#"stroke="none""#).count();
 
     assert_eq!(
@@ -1689,7 +2689,16 @@ fn note_with_lyric_adds_text_element() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     assert!(
         output.contains(">sun<"),
@@ -1715,7 +2724,16 @@ fn note_without_lyric_has_no_lyric_text() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     assert_eq!(
         output.matches("<text").count(),
@@ -1742,7 +2760,16 @@ fn chord_with_lyric_adds_text_element() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     // The lyric text is rendered alone — the hyphen between syllables is
     // drawn by the system-level pass once the next syllable's x is known.
@@ -1776,7 +2803,16 @@ fn lyric_differs_from_no_lyric() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let without = make(None);
@@ -1801,9 +2837,21 @@ fn note_with_chord_symbol_adds_text() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert!(output.contains(">Cmaj7<"), "should contain chord symbol text");
+    assert!(
+        output.contains(">Cmaj7<"),
+        "should contain chord symbol text"
+    );
     assert!(output.contains("bold"), "chord symbol should be bold");
 }
 
@@ -1821,9 +2869,22 @@ fn note_without_chord_symbol_has_no_extra_text() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
-    assert_eq!(output.matches("<text").count(), 0, "no text elements without chord symbol");
+    assert_eq!(
+        output.matches("<text").count(),
+        0,
+        "no text elements without chord symbol"
+    );
 }
 
 #[test]
@@ -1843,7 +2904,16 @@ fn chord_event_with_chord_symbol_adds_text() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     assert!(output.contains(">C<"), "should contain chord symbol 'C'");
 }
@@ -1866,7 +2936,16 @@ fn chord_symbol_changes_output() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let without = make(None);
@@ -1895,7 +2974,16 @@ fn note_with_ornament_trill_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let without = make(None);
@@ -1928,10 +3016,22 @@ fn note_with_ornament_turn_adds_path() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let out = svg.to_svg();
     assert!(out.contains("<path"), "ornament turn should produce a path");
-    assert!(out.contains("translate("), "ornament should have a translate transform");
+    assert!(
+        out.contains("translate("),
+        "ornament should have a translate transform"
+    );
 }
 
 #[test]
@@ -1953,7 +3053,16 @@ fn chord_with_ornament_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let without = make(None);
@@ -1980,7 +3089,16 @@ fn different_ornaments_on_note_produce_different_output() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let trill_svg = make(Ornament::Trill);
@@ -2006,7 +3124,16 @@ fn note_with_navigation_sign_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let with_segno = {
@@ -2023,7 +3150,16 @@ fn note_with_navigation_sign_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
@@ -2053,7 +3189,16 @@ fn chord_with_navigation_sign_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let with_coda = {
@@ -2070,7 +3215,16 @@ fn chord_with_navigation_sign_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
@@ -2103,12 +3257,24 @@ fn different_navigation_signs_produce_different_output() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let segno_svg = make(crate::layout::navigation::NavigationSign::Segno);
     let coda_svg = make(crate::layout::navigation::NavigationSign::Coda);
-    assert_ne!(segno_svg, coda_svg, "segno and coda should produce different output");
+    assert_ne!(
+        segno_svg, coda_svg,
+        "segno and coda should produce different output"
+    );
 }
 
 // Pedal marking tests
@@ -2130,7 +3296,16 @@ fn note_with_pedal_down_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let with_pedal = {
@@ -2147,7 +3322,16 @@ fn note_with_pedal_down_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let paths_without = without.matches("<path ").count();
@@ -2178,7 +3362,16 @@ fn note_without_pedal_has_fewer_paths() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg().matches("<path ").count()
     };
     assert!(make(None) < make(Some(PedalMark::Down)));
@@ -2187,8 +3380,8 @@ fn note_without_pedal_has_fewer_paths() {
 
 #[test]
 fn chord_with_pedal_down_adds_path() {
-    use crate::layout::pedal::PedalMark;
     use crate::layout::measure::ChordEvent;
+    use crate::layout::pedal::PedalMark;
     let (font, config, staff) = setup();
     let cfg = MeasureLayoutConfig::from_staff_space(config.staff_space);
 
@@ -2206,10 +3399,22 @@ fn chord_with_pedal_down_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg().matches("<path ").count()
     };
-    assert!(make(Some(PedalMark::Down)) > make(None), "chord with pedal should have more paths");
+    assert!(
+        make(Some(PedalMark::Down)) > make(None),
+        "chord with pedal should have more paths"
+    );
 }
 
 #[test]
@@ -2232,7 +3437,16 @@ fn pedal_down_and_up_produce_different_output() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
     let down_svg = make(PedalMark::Down);
@@ -2274,13 +3488,36 @@ fn note_with_tremolo_adds_extra_path() {
     let layout_without = layout_measure(&elements_without, &cfg);
 
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     let with_paths = svg_with.to_svg().matches("<path ").count();
     let without_paths = svg_without.to_svg().matches("<path ").count();
-    assert!(with_paths > without_paths, "tremolo should add an extra path: with={}, without={}", with_paths, without_paths);
+    assert!(
+        with_paths > without_paths,
+        "tremolo should add an extra path: with={}, without={}",
+        with_paths,
+        without_paths
+    );
 }
 
 #[test]
@@ -2315,13 +3552,34 @@ fn chord_with_tremolo_adds_extra_path() {
     let layout_without = layout_measure(&elements_without, &cfg);
 
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     let with_paths = svg_with.to_svg().matches("<path ").count();
     let without_paths = svg_without.to_svg().matches("<path ").count();
-    assert!(with_paths > without_paths, "chord tremolo should add extra path");
+    assert!(
+        with_paths > without_paths,
+        "chord tremolo should add extra path"
+    );
 }
 
 #[test]
@@ -2344,7 +3602,16 @@ fn different_tremolo_counts_produce_different_svgs() {
         let elements = vec![MeasureElement::Note(note)];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
@@ -2389,14 +3656,35 @@ fn whole_note_tremolo_not_drawn_without_stem() {
     let layout_without = layout_measure(&elements_without, &cfg);
 
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &layout_with, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &layout_with,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let mut svg_without = make_svg();
-    draw_measure(&mut svg_without, &staff, &font, &config, &layout_without, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &layout_without,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
 
     // Whole notes have no stem, so tremolo can't be drawn on a stem
     let with_paths = svg_with.to_svg().matches("<path ").count();
     let without_paths = svg_without.to_svg().matches("<path ").count();
-    assert_eq!(with_paths, without_paths, "whole note tremolo should not add path (no stem)");
+    assert_eq!(
+        with_paths, without_paths,
+        "whole note tremolo should not add path (no stem)"
+    );
 }
 
 // --- arpeggio ---
@@ -2421,13 +3709,25 @@ fn chord_with_arpeggio_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg().matches("<path ").count()
     };
 
     let with = make(Some(ArpeggioDirection::Up));
     let without = make(None);
-    assert!(with > without, "chord with arpeggio should have more paths: {with} vs {without}");
+    assert!(
+        with > without,
+        "chord with arpeggio should have more paths: {with} vs {without}"
+    );
 }
 
 #[test]
@@ -2444,10 +3744,22 @@ fn chord_without_arpeggio_has_no_extra_path() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
     // Without arpeggio, no arpeggio transform should appear
-    assert!(!output.contains("scale(1,"), "no vertical scaling without arpeggio");
+    assert!(
+        !output.contains("scale(1,"),
+        "no vertical scaling without arpeggio"
+    );
 }
 
 #[test]
@@ -2470,13 +3782,25 @@ fn note_with_arpeggio_adds_path() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg().matches("<path ").count()
     };
 
     let with = make(Some(ArpeggioDirection::Up));
     let without = make(None);
-    assert!(with > without, "note with arpeggio should have more paths: {with} vs {without}");
+    assert!(
+        with > without,
+        "note with arpeggio should have more paths: {with} vs {without}"
+    );
 }
 
 #[test]
@@ -2499,7 +3823,16 @@ fn arpeggio_up_and_down_differ_on_chord() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
@@ -2529,7 +3862,16 @@ fn note_with_breath_mark_produces_extra_path() {
     })];
     let layout_no = layout_measure(&elements_no, &cfg);
     let mut svg_no = make_svg();
-    draw_measure(&mut svg_no, &staff, &font, &config, &layout_no, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_no,
+        &staff,
+        &font,
+        &config,
+        &layout_no,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let without = svg_no.to_svg();
 
     // With breath mark
@@ -2546,7 +3888,16 @@ fn note_with_breath_mark_produces_extra_path() {
     })];
     let layout_yes = layout_measure(&elements_yes, &cfg);
     let mut svg_yes = make_svg();
-    draw_measure(&mut svg_yes, &staff, &font, &config, &layout_yes, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_yes,
+        &staff,
+        &font,
+        &config,
+        &layout_yes,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let with = svg_yes.to_svg();
 
     let paths_without = without.matches("<path").count();
@@ -2576,7 +3927,16 @@ fn chord_with_breath_mark_adds_path() {
     })];
     let layout_no = layout_measure(&elements_no, &cfg);
     let mut svg_no = make_svg();
-    draw_measure(&mut svg_no, &staff, &font, &config, &layout_no, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_no,
+        &staff,
+        &font,
+        &config,
+        &layout_no,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let without = svg_no.to_svg();
 
     // With breath mark
@@ -2593,7 +3953,16 @@ fn chord_with_breath_mark_adds_path() {
     })];
     let layout_yes = layout_measure(&elements_yes, &cfg);
     let mut svg_yes = make_svg();
-    draw_measure(&mut svg_yes, &staff, &font, &config, &layout_yes, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_yes,
+        &staff,
+        &font,
+        &config,
+        &layout_yes,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let with = svg_yes.to_svg();
 
     let paths_without = without.matches("<path").count();
@@ -2625,7 +3994,16 @@ fn different_breath_marks_produce_different_svg() {
         })];
         let layout = layout_measure(&elements, &cfg);
         let mut svg = make_svg();
-        draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+        draw_measure(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            &layout,
+            0.0,
+            &Clef::Treble,
+        )
+        .unwrap();
         svg.to_svg()
     };
 
@@ -2657,7 +4035,16 @@ fn breath_mark_translate_is_right_of_note() {
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // The breath mark translate x should appear in the SVG
@@ -2676,7 +4063,12 @@ fn additional_voices_empty_produces_no_extra_elements() {
     let (font, config, staff) = setup();
     let mut svg = make_svg();
     // No additional voice layouts → no extra paths
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     draw_additional_voices(&mut svg, &staff, &font, &config, &empty_primary, &[], 0.0).unwrap();
     let output = svg.to_svg();
     assert_eq!(output.matches("<path ").count(), 0);
@@ -2721,13 +4113,40 @@ fn additional_voice_with_note_draws_extra_notehead() {
 
     // Draw primary only
     let mut svg_primary = make_svg();
-    draw_measure(&mut svg_primary, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_primary,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     let primary_paths = svg_primary.to_svg().matches("<path ").count();
 
     // Draw primary + additional voice
     let mut svg_both = make_svg();
-    draw_measure(&mut svg_both, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg_both, &staff, &font, &config, &primary_layout, &[voice1_layout], 0.0).unwrap();
+    draw_measure(
+        &mut svg_both,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
+    draw_additional_voices(
+        &mut svg_both,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        &[voice1_layout],
+        0.0,
+    )
+    .unwrap();
     let both_paths = svg_both.to_svg().matches("<path ").count();
 
     // Additional voice adds at least one more path (the notehead)
@@ -2756,8 +4175,22 @@ fn additional_voice_rest_is_displaced_downward() {
 
     // Draw rest via additional voices (should be displaced)
     let mut svg_displaced = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
-    draw_additional_voices(&mut svg_displaced, &staff, &font, &config, &empty_primary, &[voice1_layout], 0.0).unwrap();
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
+    draw_additional_voices(
+        &mut svg_displaced,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice1_layout],
+        0.0,
+    )
+    .unwrap();
     let displaced_svg = svg_displaced.to_svg();
 
     // Both should produce a path, but the translate y should differ
@@ -2790,8 +4223,22 @@ fn additional_voice_skips_barlines() {
     let layout = layout_measure(&elements, &cfg);
 
     let mut svg = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
-    draw_additional_voices(&mut svg, &staff, &font, &config, &empty_primary, &[layout], 0.0).unwrap();
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
+    draw_additional_voices(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[layout],
+        0.0,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // The barline should not appear (no vertical line from barline renderer)
@@ -2837,7 +4284,12 @@ fn two_additional_voices_both_render() {
     let v2_layout = layout_measure(&v2_elems, &cfg);
 
     let mut svg = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     draw_additional_voices(
         &mut svg,
         &staff,
@@ -2901,8 +4353,26 @@ fn collision_at_unison_offsets_additional_voice_notehead() {
 
     // Draw with collision: additional voice's note should be offset
     let mut svg_collision = make_svg();
-    draw_measure(&mut svg_collision, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg_collision, &staff, &font, &config, &primary_layout, &[voice1_layout.clone()], 0.0).unwrap();
+    draw_measure(
+        &mut svg_collision,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
+    draw_additional_voices(
+        &mut svg_collision,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        &[voice1_layout.clone()],
+        0.0,
+    )
+    .unwrap();
     let collision_svg = svg_collision.to_svg();
 
     // Draw without collision: note at position 0 (far from primary pos 4)
@@ -2923,8 +4393,26 @@ fn collision_at_unison_offsets_additional_voice_notehead() {
     far_layout.total_width = primary_layout.total_width;
 
     let mut svg_no_collision = make_svg();
-    draw_measure(&mut svg_no_collision, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg_no_collision, &staff, &font, &config, &primary_layout, &[far_layout], 0.0).unwrap();
+    draw_measure(
+        &mut svg_no_collision,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
+    draw_additional_voices(
+        &mut svg_no_collision,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        &[far_layout],
+        0.0,
+    )
+    .unwrap();
     let no_collision_svg = svg_no_collision.to_svg();
 
     // The collision version should differ from the no-collision version
@@ -2970,8 +4458,26 @@ fn collision_at_second_offsets_additional_voice_notehead() {
 
     // Draw with collision
     let mut svg = make_svg();
-    draw_measure(&mut svg, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg, &staff, &font, &config, &primary_layout, &[voice1_layout], 0.0).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
+    draw_additional_voices(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        &[voice1_layout],
+        0.0,
+    )
+    .unwrap();
     let output = svg.to_svg();
 
     // Should have 2 notehead paths (primary + additional)
@@ -3017,15 +4523,56 @@ fn no_collision_at_third_no_offset() {
 
     // Draw with collision detection (but no actual collision)
     let mut svg_with_detection = make_svg();
-    draw_measure(&mut svg_with_detection, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg_with_detection, &staff, &font, &config, &primary_layout, &[voice1_layout.clone()], 0.0).unwrap();
+    draw_measure(
+        &mut svg_with_detection,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
+    draw_additional_voices(
+        &mut svg_with_detection,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        &[voice1_layout.clone()],
+        0.0,
+    )
+    .unwrap();
     let detected_svg = svg_with_detection.to_svg();
 
     // Draw without any collision detection (empty primary)
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     let mut svg_no_detection = make_svg();
-    draw_measure(&mut svg_no_detection, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
-    draw_additional_voices(&mut svg_no_detection, &staff, &font, &config, &empty_primary, &[voice1_layout], 0.0).unwrap();
+    draw_measure(
+        &mut svg_no_detection,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
+    draw_additional_voices(
+        &mut svg_no_detection,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice1_layout],
+        0.0,
+    )
+    .unwrap();
     let undetected_svg = svg_no_detection.to_svg();
 
     // For a third (no collision), both should produce identical output
@@ -3094,7 +4641,16 @@ fn beam_group_no_collisions_renders_byte_identical_to_no_detection() {
     rescale_to_match(primary_layout.total_width, &mut voice_layout);
 
     let mut svg_with = make_svg();
-    draw_measure(&mut svg_with, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg_with,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     draw_additional_voices(
         &mut svg_with,
         &staff,
@@ -3103,14 +4659,36 @@ fn beam_group_no_collisions_renders_byte_identical_to_no_detection() {
         &primary_layout,
         std::slice::from_ref(&voice_layout),
         0.0,
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut svg_without = make_svg();
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
-    draw_measure(&mut svg_without, &staff, &font, &config, &primary_layout, 0.0, &Clef::Treble).unwrap();
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
+    draw_measure(
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &primary_layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     draw_additional_voices(
-        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
-    ).unwrap();
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice_layout],
+        0.0,
+    )
+    .unwrap();
 
     assert_eq!(
         svg_with.to_svg(),
@@ -3137,7 +4715,7 @@ fn beam_group_per_note_collision_changes_only_one_notehead_path() {
     // different x's so no further collisions occur.
     let bg_elements_collide = vec![MeasureElement::BeamGroup(BeamGroupEvent {
         notes: vec![
-            beamed_eighth_note(4),  // <— collides with primary at beat 0
+            beamed_eighth_note(4), // <— collides with primary at beat 0
             beamed_eighth_note(6),
             beamed_eighth_note(8),
             beamed_eighth_note(10),
@@ -3157,15 +4735,28 @@ fn beam_group_per_note_collision_changes_only_one_notehead_path() {
         &primary_layout,
         std::slice::from_ref(&voice_layout),
         0.0,
-    ).unwrap();
+    )
+    .unwrap();
     let svg_with_str = svg_with.to_svg();
 
     // Render WITHOUT primary (no collision applied).
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     let mut svg_without = make_svg();
     draw_additional_voices(
-        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
-    ).unwrap();
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice_layout],
+        0.0,
+    )
+    .unwrap();
     let svg_without_str = svg_without.to_svg();
 
     // The two renderings must differ — note index 0's notehead has shifted.
@@ -3202,10 +4793,7 @@ fn beam_group_per_note_collision_preserves_stem_line_positions() {
     let primary_layout = layout_measure(&primary_elements, &cfg);
 
     let bg_elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
-        notes: vec![
-            beamed_eighth_note(4),
-            beamed_eighth_note(6),
-        ],
+        notes: vec![beamed_eighth_note(4), beamed_eighth_note(6)],
         stem_direction: Some(StemDirection::Down),
     })];
     let mut voice_layout = layout_measure(&bg_elements, &cfg);
@@ -3220,13 +4808,26 @@ fn beam_group_per_note_collision_preserves_stem_line_positions() {
         &primary_layout,
         std::slice::from_ref(&voice_layout),
         0.0,
-    ).unwrap();
+    )
+    .unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     let mut svg_without = make_svg();
     draw_additional_voices(
-        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
-    ).unwrap();
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice_layout],
+        0.0,
+    )
+    .unwrap();
 
     // Per-note collision shifts noteheads (path elements) but stems (lines)
     // remain at their original positions.
@@ -3278,10 +4879,7 @@ fn beam_group_per_note_collision_shifts_notehead_by_notehead_width() {
     let primary_layout = layout_measure(&primary_elements, &cfg);
 
     let bg_elements = vec![MeasureElement::BeamGroup(BeamGroupEvent {
-        notes: vec![
-            beamed_eighth_note(4),
-            beamed_eighth_note(6),
-        ],
+        notes: vec![beamed_eighth_note(4), beamed_eighth_note(6)],
         stem_direction: Some(StemDirection::Down),
     })];
     let mut voice_layout = layout_measure(&bg_elements, &cfg);
@@ -3296,13 +4894,26 @@ fn beam_group_per_note_collision_shifts_notehead_by_notehead_width() {
         &primary_layout,
         std::slice::from_ref(&voice_layout),
         0.0,
-    ).unwrap();
+    )
+    .unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     let mut svg_without = make_svg();
     draw_additional_voices(
-        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
-    ).unwrap();
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice_layout],
+        0.0,
+    )
+    .unwrap();
 
     let extract_first_translate_x = |svg: &str| -> Option<f64> {
         // Find the first `translate(` and parse the x coordinate.
@@ -3361,13 +4972,26 @@ fn beam_group_per_note_collision_does_not_shift_non_colliding_noteheads() {
         &primary_layout,
         std::slice::from_ref(&voice_layout),
         0.0,
-    ).unwrap();
+    )
+    .unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     let mut svg_without = make_svg();
     draw_additional_voices(
-        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
-    ).unwrap();
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice_layout],
+        0.0,
+    )
+    .unwrap();
 
     // Collect all translate( x values from each SVG. The non-colliding
     // notes' x values must appear in both.
@@ -3409,13 +5033,15 @@ fn beam_group_per_note_collision_does_not_shift_non_colliding_noteheads() {
     assert!(
         (xs_with[0] - xs_without[0] - notehead_width).abs() < 1e-6,
         "note 0 shifts by one notehead width: with={}, without={}",
-        xs_with[0], xs_without[0],
+        xs_with[0],
+        xs_without[0],
     );
     for i in 1..xs_with.len() {
         assert!(
             (xs_with[i] - xs_without[i]).abs() < 1e-6,
             "translate index {i} must not shift (got with={}, without={})",
-            xs_with[i], xs_without[i]
+            xs_with[i],
+            xs_without[i]
         );
     }
 }
@@ -3441,6 +5067,7 @@ fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
             stem_direction: Some(StemDirection::Down),
         },
         tuplet_number: 3,
+        in_time_of: 3,
     });
     let voice_layout = layout_measure(&[triplet], &cfg);
 
@@ -3475,13 +5102,26 @@ fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
         &primary_layout,
         std::slice::from_ref(&voice_layout),
         0.0,
-    ).unwrap();
+    )
+    .unwrap();
 
-    let empty_primary = MeasureLayout { elements: vec![], total_width: 0.0, total_rod: 0.0, total_spring: 0.0 };
+    let empty_primary = MeasureLayout {
+        elements: vec![],
+        total_width: 0.0,
+        total_rod: 0.0,
+        total_spring: 0.0,
+    };
     let mut svg_without = make_svg();
     draw_additional_voices(
-        &mut svg_without, &staff, &font, &config, &empty_primary, &[voice_layout], 0.0,
-    ).unwrap();
+        &mut svg_without,
+        &staff,
+        &font,
+        &config,
+        &empty_primary,
+        &[voice_layout],
+        0.0,
+    )
+    .unwrap();
 
     // The two renders must differ (middle notehead shifted).
     assert_ne!(svg_with.to_svg(), svg_without.to_svg());
@@ -3522,7 +5162,8 @@ fn tuplet_group_per_note_collision_shifts_only_colliding_notehead() {
     assert!(
         (xs_with[1] - xs_without[1] - notehead_width).abs() < 1e-6,
         "tuplet middle note must shift by one notehead width: with={}, without={}",
-        xs_with[1], xs_without[1]
+        xs_with[1],
+        xs_without[1]
     );
     // Note 2 unchanged.
     assert!(

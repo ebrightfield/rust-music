@@ -90,7 +90,10 @@ pub fn compute_beam_counts(notes: &[BeamedNote]) -> (Vec<u8>, Vec<u8>) {
     }
 
     // beam_level: how many beams this note "wants" (eighth=1, 16th=2, etc.)
-    let levels: Vec<u8> = notes.iter().map(|n| n.duration_log2.saturating_sub(2)).collect();
+    let levels: Vec<u8> = notes
+        .iter()
+        .map(|n| n.duration_log2.saturating_sub(2))
+        .collect();
 
     let mut beams_left = vec![0u8; n];
     let mut beams_right = vec![0u8; n];
@@ -460,8 +463,14 @@ mod tests {
         // Both tips should be above their respective noteheads
         let y0 = staff_position_to_y(0, HS); // 1000
         let y1 = staff_position_to_y(2, HS); // 750
-        assert!(layout.stem_tip_ys[0] < y0, "first tip should be above notehead");
-        assert!(layout.stem_tip_ys[1] < y1, "second tip should be above notehead");
+        assert!(
+            layout.stem_tip_ys[0] < y0,
+            "first tip should be above notehead"
+        );
+        assert!(
+            layout.stem_tip_ys[1] < y1,
+            "second tip should be above notehead"
+        );
     }
 
     #[test]
@@ -471,8 +480,14 @@ mod tests {
 
         let y0 = staff_position_to_y(8, HS); // 0
         let y1 = staff_position_to_y(6, HS); // 250
-        assert!(layout.stem_tip_ys[0] > y0, "first tip should be below notehead");
-        assert!(layout.stem_tip_ys[1] > y1, "second tip should be below notehead");
+        assert!(
+            layout.stem_tip_ys[0] > y0,
+            "first tip should be below notehead"
+        );
+        assert!(
+            layout.stem_tip_ys[1] > y1,
+            "second tip should be below notehead"
+        );
     }
 
     #[test]
@@ -554,12 +569,7 @@ mod tests {
     #[test]
     fn beam_group_with_mixed_durations() {
         // Eighth, sixteenth, sixteenth, eighth
-        let notes = make_notes(&[
-            (0.0, 2, 3),
-            (200.0, 4, 4),
-            (400.0, 4, 4),
-            (600.0, 2, 3),
-        ]);
+        let notes = make_notes(&[(0.0, 2, 3), (200.0, 4, 4), (400.0, 4, 4), (600.0, 2, 3)]);
         let layout = layout_beam_group(&notes, StemDirection::Up, SS);
         assert_eq!(layout.max_beam_level, 2);
         assert_eq!(layout.stem_tip_ys.len(), 4);

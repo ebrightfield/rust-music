@@ -60,9 +60,9 @@ pub struct MidirSink(pub(crate) midir::MidiOutputConnection);
 
 impl RealtimeSink for MidirSink {
     fn send(&mut self, bytes: &[u8]) -> Result<(), MidiConversionError> {
-        self.0.send(bytes).map_err(|e| {
-            MidiConversionError::Io(std::io::Error::other(e.to_string()))
-        })
+        self.0
+            .send(bytes)
+            .map_err(|e| MidiConversionError::Io(std::io::Error::other(e.to_string())))
     }
 }
 
@@ -80,25 +80,25 @@ pub struct MidiPlayer {
 impl MidiPlayer {
     /// Construct a player from a custom sink and clock. Use this to integrate a
     /// non-midir backend (OSC, network, testing, null-sink).
-    pub fn from_sink(
-        sink: Box<dyn RealtimeSink + Send>,
-        clock: Box<dyn Clock + Send>,
-    ) -> Self {
-        Self { sink, clock, tempo: None }
+    pub fn from_sink(sink: Box<dyn RealtimeSink + Send>, clock: Box<dyn Clock + Send>) -> Self {
+        Self {
+            sink,
+            clock,
+            tempo: None,
+        }
     }
 
     /// Open the first available system MIDI output port and bind a player to it.
     ///
     /// Returns [`MidiConversionError::NoPlaybackPort`] if no ports are present.
     pub fn connect_default() -> Result<Self, MidiConversionError> {
-        let out = midir::MidiOutput::new("music-midi").map_err(|e| {
-            MidiConversionError::Io(std::io::Error::other(e.to_string()))
-        })?;
+        let out = midir::MidiOutput::new("music-midi")
+            .map_err(|e| MidiConversionError::Io(std::io::Error::other(e.to_string())))?;
         let ports = out.ports();
         let port = ports.first().ok_or(MidiConversionError::NoPlaybackPort)?;
-        let conn = out.connect(port, "music-midi").map_err(|e| {
-            MidiConversionError::Io(std::io::Error::other(e.to_string()))
-        })?;
+        let conn = out
+            .connect(port, "music-midi")
+            .map_err(|e| MidiConversionError::Io(std::io::Error::other(e.to_string())))?;
         Ok(Self::from_sink(
             Box::new(MidirSink(conn)),
             Box::new(SystemClock),
@@ -114,10 +114,7 @@ impl MidiPlayer {
     ///
     /// # Precedence
     /// User-supplied `TempoSource` always wins over SMF-baked tempo meta events.
-    pub fn with_tempo(
-        mut self,
-        tempo: impl crate::TempoSource + 'static,
-    ) -> Self {
+    pub fn with_tempo(mut self, tempo: impl crate::TempoSource + 'static) -> Self {
         // REQ-O9, O12
         self.tempo = Some(Box::new(tempo));
         self
@@ -199,7 +196,9 @@ impl MidiPlayer {
         let start = self.clock.now();
         for (tick, bytes) in events {
             if let Some(rx) = stop_rx {
-                if rx.try_recv().is_ok() { return Ok(()); }
+                if rx.try_recv().is_ok() {
+                    return Ok(());
+                }
             }
             // REQ-O10: user tempo wins; REQ-O11: fallback to SMF conductor map.
             let secs = match &self.tempo {
@@ -210,9 +209,13 @@ impl MidiPlayer {
 
             loop {
                 let now = self.clock.now();
-                if now >= deadline { break; }
+                if now >= deadline {
+                    break;
+                }
                 if let Some(rx) = stop_rx {
-                    if rx.try_recv().is_ok() { return Ok(()); }
+                    if rx.try_recv().is_ok() {
+                        return Ok(());
+                    }
                 }
                 let remaining = deadline - now;
                 let slice = remaining.min(StdDuration::from_millis(10));
@@ -251,12 +254,16 @@ fn ticks_to_seconds_dynamic(src: &dyn crate::TempoSource, tick: u64, ppq: u16) -
 /// Build a StaticTempoMap from the SMF's conductor track (track 0).
 /// Used by the fallback arm when no user TempoSource is installed (REQ-O11).
 fn static_map_from_conductor(smf: &midly::Smf<'_>, ppq: u16) -> StaticTempoMap {
-    let mut map = StaticTempoMap { entries: vec![(0, 120.0)], ppq };
+    let mut map = StaticTempoMap {
+        entries: vec![(0, 120.0)],
+        ppq,
+    };
     if let Some(conductor) = smf.tracks.first() {
         let mut tick: u64 = 0;
         for event in conductor.iter() {
             tick += u64::from(event.delta.as_int());
-            if let midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(us_per_beat)) = event.kind {
+            if let midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(us_per_beat)) = event.kind
+            {
                 // Malformed SMFs may declare 0 µs/beat; clamp to 1 to avoid +inf BPM
                 // which propagates to Duration::from_secs_f64(+inf) and panics downstream.
                 let us = us_per_beat.as_int().max(1);

@@ -2,10 +2,12 @@ use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::cresc_text::{layout_cresc_text, CrescTextKind};
 use crate::layout::glissando::{layout_glissando, GlissandoStyle};
 use crate::layout::hairpin::{layout_hairpin_styled, HairpinType, NientePlacement};
+use crate::layout::lyric::{
+    LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS,
+};
+use crate::layout::measure::{MeasureElement, NoteAnnotations, NoteheadStyle, PositionedElement};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
-use crate::layout::lyric::{LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
-use crate::layout::measure::{MeasureElement, PositionedElement};
 use crate::layout::slur::{layout_slur, slur_direction_from_stem};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, StemDirection};
@@ -21,15 +23,15 @@ use crate::layout::trill_extension::{
 };
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::cresc_text_renderer::draw_cresc_text;
-use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
-use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
+use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
+use crate::render::note_renderer::notehead_advance;
+use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::tie_renderer::draw_tie;
-use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::trill_bracket_renderer::draw_trill_bracket_hooks;
 use crate::render::trill_extension_renderer::{
     draw_trill_extension, draw_trill_extension_multi_speed,
@@ -44,33 +46,89 @@ use crate::render::SvgWriter;
 /// Additional voices share the same x-coordinate space as the primary
 /// voice (they were scaled to match width in `layout_system()`), so spans
 /// (ties, slurs, hairpins, etc.) resolve correctly across all voices.
-fn all_measure_elements(measure: &crate::layout::system::SystemMeasure) -> impl Iterator<Item = (f64, &PositionedElement)> {
+fn all_measure_elements(
+    measure: &crate::layout::system::SystemMeasure,
+) -> impl Iterator<Item = (f64, &PositionedElement)> {
     let base_x = measure.x_offset;
-    let primary = measure.layout.elements.iter().map(move |e| (base_x + e.x, e));
-    let additional = measure.additional_voice_layouts.iter().flat_map(move |voice_layout| {
-        voice_layout.elements.iter().map(move |e| (base_x + e.x, e))
-    });
+    let primary = measure
+        .layout
+        .elements
+        .iter()
+        .map(move |e| (base_x + e.x, e));
+    let additional = measure
+        .additional_voice_layouts
+        .iter()
+        .flat_map(move |voice_layout| voice_layout.elements.iter().map(move |e| (base_x + e.x, e)));
     primary.chain(additional)
 }
 
+fn annotation_notehead_style(annotations: &NoteAnnotations, index: usize) -> NoteheadStyle {
+    annotations
+        .notehead_styles
+        .get(index)
+        .copied()
+        .unwrap_or_default()
+}
+
+fn chord_notehead_style(
+    chord: &crate::layout::measure::ChordEvent,
+    staff_position: i8,
+) -> NoteheadStyle {
+    chord
+        .staff_positions
+        .iter()
+        .position(|&position| position == staff_position)
+        .map(|index| annotation_notehead_style(&chord.annotations, index))
+        .unwrap_or_default()
+}
+
+pub(crate) fn widest_notehead_advance(
+    font: &MusicFont,
+    duration_log2: u8,
+    styles: &[NoteheadStyle],
+    notehead_count: usize,
+) -> Result<f64, FontError> {
+    (0..notehead_count.max(1)).try_fold(0.0_f64, |widest, index| {
+        notehead_advance(
+            font,
+            duration_log2,
+            styles.get(index).copied().unwrap_or_default(),
+        )
+        .map(|advance| widest.max(advance))
+    })
+}
+
 /// Collect notes from the system's positioned elements in order, yielding
-/// (x_in_system, staff_position, duration_log2, tie_forward, stem_direction_override)
-/// for each note event. Chord notes are expanded into individual entries so
-/// each chord note can be tied independently. Skips clefs, rests, barlines, etc.
-///
-/// Scans both the primary voice and any additional voices so that ties
-/// within secondary voices are resolved.
-pub(crate) fn collect_note_positions(system: &SystemLayout) -> Vec<(f64, i8, u8, bool, Option<StemDirection>)> {
+/// `(x, staff position, duration, style, tie, stem direction)` for each note.
+/// Chord notes are expanded into individual entries so each chord tone retains
+/// its own custom notehead and can be tied independently.
+pub(crate) fn collect_note_positions(
+    system: &SystemLayout,
+) -> Vec<(f64, i8, u8, NoteheadStyle, bool, Option<StemDirection>)> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
             match &elem.element {
                 MeasureElement::Note(n) => {
-                    notes.push((elem_x, n.staff_position, n.duration_log2, n.annotations.tie_forward, n.stem_direction));
+                    notes.push((
+                        elem_x,
+                        n.staff_position,
+                        n.duration_log2,
+                        annotation_notehead_style(&n.annotations, 0),
+                        n.annotations.tie_forward,
+                        n.stem_direction,
+                    ));
                 }
                 MeasureElement::Chord(c) => {
                     for &pos in &c.staff_positions {
-                        notes.push((elem_x, pos, c.duration_log2, c.annotations.tie_forward, c.stem_direction));
+                        notes.push((
+                            elem_x,
+                            pos,
+                            c.duration_log2,
+                            chord_notehead_style(c, pos),
+                            c.annotations.tie_forward,
+                            c.stem_direction,
+                        ));
                     }
                 }
                 _ => {}
@@ -187,7 +245,8 @@ fn draw_system_ties(
 ) -> Result<(), FontError> {
     let note_positions = collect_note_positions(system);
 
-    for (i, &(nx, pos, dur_log2, tie_forward, stem_dir)) in note_positions.iter().enumerate() {
+    for (i, &(nx, pos, dur_log2, style, tie_forward, stem_dir)) in note_positions.iter().enumerate()
+    {
         if !tie_forward {
             continue;
         }
@@ -195,20 +254,13 @@ fn draw_system_ties(
         // Find the next note at the same staff position
         let target = note_positions[i + 1..]
             .iter()
-            .find(|&&(_, target_pos, _, _, _)| target_pos == pos);
+            .find(|&&(_, target_pos, _, _, _, _)| target_pos == pos);
 
-        let Some(&(target_x, _, _, _, _)) = target else {
+        let Some(&(target_x, _, _, _, _, _)) = target else {
             continue;
         };
 
-        // Compute notehead advance width for tie endpoint positioning
-        let notehead_kind = match dur_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = notehead_advance(font, dur_log2, style)?;
 
         // Tie starts at right edge of first notehead, ends at left edge of second
         let tie_x_start = system_x + nx + advance;
@@ -233,6 +285,7 @@ pub(crate) struct SlurNoteInfo {
     pub(crate) x: f64,
     pub(crate) staff_position: i8,
     pub(crate) duration_log2: u8,
+    pub(crate) notehead_style: NoteheadStyle,
     pub(crate) stem_direction: Option<StemDirection>,
     pub(crate) slur_start: bool,
     pub(crate) slur_end: bool,
@@ -249,6 +302,7 @@ pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo>
                         x: elem_x,
                         staff_position: n.staff_position,
                         duration_log2: n.duration_log2,
+                        notehead_style: annotation_notehead_style(&n.annotations, 0),
                         stem_direction: n.stem_direction,
                         slur_start: n.annotations.slur_start,
                         slur_end: n.annotations.slur_end,
@@ -257,7 +311,9 @@ pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo>
                 MeasureElement::Chord(c) => {
                     let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
                     let bot_pos = c.staff_positions.iter().copied().min().unwrap_or(0);
-                    let dir = c.stem_direction.unwrap_or_else(|| auto_stem_direction(top_pos));
+                    let dir = c
+                        .stem_direction
+                        .unwrap_or_else(|| auto_stem_direction(top_pos));
                     let attach_pos = match dir {
                         StemDirection::Up => bot_pos,
                         StemDirection::Down => top_pos,
@@ -266,6 +322,7 @@ pub(crate) fn collect_slur_note_info(system: &SystemLayout) -> Vec<SlurNoteInfo>
                         x: elem_x,
                         staff_position: attach_pos,
                         duration_log2: c.duration_log2,
+                        notehead_style: chord_notehead_style(c, attach_pos),
                         stem_direction: c.stem_direction,
                         slur_start: c.annotations.slur_start,
                         slur_end: c.annotations.slur_end,
@@ -299,29 +356,21 @@ fn draw_system_slurs(
         }
 
         // Find the next note with slur_end = true
-        let target = note_info[i + 1..]
-            .iter()
-            .find(|n| n.slur_end);
+        let target = note_info[i + 1..].iter().find(|n| n.slur_end);
 
         let Some(target) = target else {
             continue;
         };
 
-        // Compute notehead advance width for slur endpoint positioning
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = notehead_advance(font, info.duration_log2, info.notehead_style)?;
 
         // Slur starts at right edge of first notehead, ends at left edge of last
         let slur_x_start = system_x + info.x + advance;
         let slur_x_end = system_x + target.x;
 
         // Determine slur direction from start note's stem
-        let stem_dir = info.stem_direction
+        let stem_dir = info
+            .stem_direction
             .unwrap_or_else(|| auto_stem_direction(info.staff_position));
         let direction = slur_direction_from_stem(stem_dir);
 
@@ -329,14 +378,7 @@ fn draw_system_slurs(
         let start_y = staff.y_of(info.staff_position);
         let end_y = staff.y_of(target.staff_position);
 
-        let slur_layout = layout_slur(
-            slur_x_start,
-            slur_x_end,
-            start_y,
-            end_y,
-            direction,
-            config,
-        );
+        let slur_layout = layout_slur(slur_x_start, slur_x_end, start_y, end_y, direction, config);
         draw_slur(svg, &slur_layout);
     }
 
@@ -344,9 +386,11 @@ fn draw_system_slurs(
 }
 
 /// Positional info for a note relevant to hairpin drawing.
-pub(crate) struct HairpinNoteInfo {
+pub(crate) struct HairpinNoteInfo<'a> {
     pub(crate) x: f64,
     pub(crate) duration_log2: u8,
+    pub(crate) notehead_styles: &'a [NoteheadStyle],
+    pub(crate) notehead_count: usize,
     pub(crate) hairpin_start: Option<HairpinType>,
     pub(crate) hairpin_end: bool,
     /// Mirror of `NoteAnnotations::hairpin_dashed`. Set on the start side of
@@ -362,7 +406,7 @@ pub(crate) struct HairpinNoteInfo {
     pub(crate) hairpin_niente: Option<NientePlacement>,
 }
 
-pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo> {
+pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNoteInfo<'_>> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
@@ -371,6 +415,8 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                     notes.push(HairpinNoteInfo {
                         x: elem_x,
                         duration_log2: n.duration_log2,
+                        notehead_styles: &n.annotations.notehead_styles,
+                        notehead_count: 1,
                         hairpin_start: n.annotations.hairpin_start,
                         hairpin_end: n.annotations.hairpin_end,
                         hairpin_dashed: n.annotations.hairpin_dashed,
@@ -381,6 +427,8 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                     notes.push(HairpinNoteInfo {
                         x: elem_x,
                         duration_log2: c.duration_log2,
+                        notehead_styles: &c.annotations.notehead_styles,
+                        notehead_count: c.staff_positions.len(),
                         hairpin_start: c.annotations.hairpin_start,
                         hairpin_end: c.annotations.hairpin_end,
                         hairpin_dashed: c.annotations.hairpin_dashed,
@@ -410,22 +458,18 @@ fn draw_system_hairpins(
         };
 
         // Find the next note with hairpin_end = true
-        let target = note_info[i + 1..]
-            .iter()
-            .find(|n| n.hairpin_end);
+        let target = note_info[i + 1..].iter().find(|n| n.hairpin_end);
 
         let Some(target) = target else {
             continue;
         };
 
-        // Compute notehead advance width for hairpin start positioning
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = widest_notehead_advance(
+            font,
+            info.duration_log2,
+            info.notehead_styles,
+            info.notehead_count,
+        )?;
 
         // Hairpin starts right of the first notehead, ends at left of the target
         let hp_x_start = system_x + info.x + advance + 0.3 * config.staff_space;
@@ -456,14 +500,16 @@ fn draw_system_hairpins(
 /// Conceptually parallel to [`HairpinNoteInfo`] — the dashed-text
 /// marking is the wedgeless alternative to a hairpin, so the two
 /// paths share the same collection/draw structure.
-pub(crate) struct CrescTextNoteInfo {
+pub(crate) struct CrescTextNoteInfo<'a> {
     pub(crate) x: f64,
     pub(crate) duration_log2: u8,
+    pub(crate) notehead_styles: &'a [NoteheadStyle],
+    pub(crate) notehead_count: usize,
     pub(crate) cresc_text_start: Option<CrescTextKind>,
     pub(crate) cresc_text_end: bool,
 }
 
-pub(crate) fn collect_cresc_text_note_info(system: &SystemLayout) -> Vec<CrescTextNoteInfo> {
+pub(crate) fn collect_cresc_text_note_info(system: &SystemLayout) -> Vec<CrescTextNoteInfo<'_>> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
@@ -472,6 +518,8 @@ pub(crate) fn collect_cresc_text_note_info(system: &SystemLayout) -> Vec<CrescTe
                     notes.push(CrescTextNoteInfo {
                         x: elem_x,
                         duration_log2: n.duration_log2,
+                        notehead_styles: &n.annotations.notehead_styles,
+                        notehead_count: 1,
                         cresc_text_start: n.annotations.cresc_text_start,
                         cresc_text_end: n.annotations.cresc_text_end,
                     });
@@ -480,6 +528,8 @@ pub(crate) fn collect_cresc_text_note_info(system: &SystemLayout) -> Vec<CrescTe
                     notes.push(CrescTextNoteInfo {
                         x: elem_x,
                         duration_log2: c.duration_log2,
+                        notehead_styles: &c.annotations.notehead_styles,
+                        notehead_count: c.staff_positions.len(),
                         cresc_text_start: c.annotations.cresc_text_start,
                         cresc_text_end: c.annotations.cresc_text_end,
                     });
@@ -515,9 +565,7 @@ fn draw_system_cresc_texts(
         };
 
         // Find the next note flagged as cresc_text_end.
-        let target = note_info[i + 1..]
-            .iter()
-            .find(|n| n.cresc_text_end);
+        let target = note_info[i + 1..].iter().find(|n| n.cresc_text_end);
 
         let Some(target) = target else {
             continue;
@@ -527,13 +575,12 @@ fn draw_system_cresc_texts(
         // the dashed line end just left of the target notehead — same
         // padding convention as hairpins so the two markings share a
         // visual rhythm when interleaved.
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = widest_notehead_advance(
+            font,
+            info.duration_log2,
+            info.notehead_styles,
+            info.notehead_count,
+        )?;
 
         let ct_x_start = system_x + info.x + advance + 0.3 * config.staff_space;
         let ct_x_end = system_x + target.x - 0.3 * config.staff_space;
@@ -685,26 +732,23 @@ fn draw_system_volta_brackets(
         let x_left = system_x + sys_measure.x_offset;
         let x_right = x_left + sys_measure.layout.total_width;
 
-        let bracket_layout = layout_volta_bracket(
-            annotation,
-            x_left,
-            x_right,
-            staff,
-            config.staff_space,
-        );
+        let bracket_layout =
+            layout_volta_bracket(annotation, x_left, x_right, staff, config.staff_space);
         draw_volta_bracket(svg, &bracket_layout);
     }
 }
 
 /// Positional info for a note relevant to ottava bracket drawing.
-pub(crate) struct OttavaNoteInfo {
+pub(crate) struct OttavaNoteInfo<'a> {
     pub(crate) x: f64,
     pub(crate) duration_log2: u8,
+    pub(crate) notehead_styles: &'a [NoteheadStyle],
+    pub(crate) notehead_count: usize,
     pub(crate) ottava_start: Option<OttavaKind>,
     pub(crate) ottava_end: bool,
 }
 
-pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteInfo> {
+pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteInfo<'_>> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
@@ -713,6 +757,8 @@ pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteI
                     notes.push(OttavaNoteInfo {
                         x: elem_x,
                         duration_log2: n.duration_log2,
+                        notehead_styles: &n.annotations.notehead_styles,
+                        notehead_count: 1,
                         ottava_start: n.annotations.ottava_start,
                         ottava_end: n.annotations.ottava_end,
                     });
@@ -721,6 +767,8 @@ pub(crate) fn collect_ottava_note_info(system: &SystemLayout) -> Vec<OttavaNoteI
                     notes.push(OttavaNoteInfo {
                         x: elem_x,
                         duration_log2: c.duration_log2,
+                        notehead_styles: &c.annotations.notehead_styles,
+                        notehead_count: c.staff_positions.len(),
                         ottava_start: c.annotations.ottava_start,
                         ottava_end: c.annotations.ottava_end,
                     });
@@ -757,25 +805,21 @@ fn draw_system_ottava_brackets(
         };
 
         // Find the next note with ottava_end = true
-        let target = note_info[i + 1..]
-            .iter()
-            .find(|n| n.ottava_end);
+        let target = note_info[i + 1..].iter().find(|n| n.ottava_end);
 
         let Some(target) = target else {
             continue;
         };
 
-        // Compute notehead advance width for endpoint positioning
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let target_advance = widest_notehead_advance(
+            font,
+            target.duration_log2,
+            target.notehead_styles,
+            target.notehead_count,
+        )?;
 
         let ott_x_start = system_x + info.x;
-        let ott_x_end = system_x + target.x + advance;
+        let ott_x_end = system_x + target.x + target_advance;
 
         let bracket_layout = layout_ottava_bracket(
             kind,
@@ -816,7 +860,9 @@ pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<Glissand
                 MeasureElement::Chord(c) => {
                     let top_pos = c.staff_positions.iter().copied().max().unwrap_or(0);
                     let bot_pos = c.staff_positions.iter().copied().min().unwrap_or(0);
-                    let dir = c.stem_direction.unwrap_or_else(|| auto_stem_direction(top_pos));
+                    let dir = c
+                        .stem_direction
+                        .unwrap_or_else(|| auto_stem_direction(top_pos));
                     let attach_pos = match dir {
                         StemDirection::Up => bot_pos,
                         StemDirection::Down => top_pos,
@@ -958,8 +1004,16 @@ pub(crate) fn collect_trill_extension_note_info(
                             .ornament
                             .map(|o| o.supports_trill_extension())
                             .unwrap_or(false);
-                    let ornament = if has_ext { n.annotations.ornament } else { None };
-                    let bracket = if has_ext { n.annotations.trill_bracket } else { None };
+                    let ornament = if has_ext {
+                        n.annotations.ornament
+                    } else {
+                        None
+                    };
+                    let bracket = if has_ext {
+                        n.annotations.trill_bracket
+                    } else {
+                        None
+                    };
                     let bracket_direction = if bracket.is_some() {
                         n.annotations.trill_bracket_direction
                     } else {
@@ -1014,8 +1068,16 @@ pub(crate) fn collect_trill_extension_note_info(
                             .ornament
                             .map(|o| o.supports_trill_extension())
                             .unwrap_or(false);
-                    let ornament = if has_ext { c.annotations.ornament } else { None };
-                    let bracket = if has_ext { c.annotations.trill_bracket } else { None };
+                    let ornament = if has_ext {
+                        c.annotations.ornament
+                    } else {
+                        None
+                    };
+                    let bracket = if has_ext {
+                        c.annotations.trill_bracket
+                    } else {
+                        None
+                    };
                     let bracket_direction = if bracket.is_some() {
                         c.annotations.trill_bracket_direction
                     } else {
@@ -1175,8 +1237,7 @@ fn draw_system_trill_extensions(
                     // Cross-system propagation is reserved for the
                     // *natural* last-note case (no explicit offset). An
                     // explicit offset is treated as a definite anchor.
-                    let cross = note.to_note_offset.is_none()
-                        && notes.get(i + 1).is_none();
+                    let cross = note.to_note_offset.is_none() && notes.get(i + 1).is_none();
                     (edge, cross)
                 }
             }
@@ -1209,15 +1270,15 @@ fn draw_system_trill_extensions(
             // end_x — happens when an explicit non-positive length
             // collapsed end_x to start_x). The fall-through to no wiggle
             // matches the single-speed renderer's fail-safe.
-            let regions = match spec.ramp.synthesize_regions(
-                start_x,
-                end_x,
-                spec.region_count,
-                |speed| font.glyph_advance(speed.to_glyph()).unwrap_or(0) as f64,
-            ) {
-                Some(r) => r,
-                None => continue,
-            };
+            let regions =
+                match spec
+                    .ramp
+                    .synthesize_regions(start_x, end_x, spec.region_count, |speed| {
+                        font.glyph_advance(speed.to_glyph()).unwrap_or(0) as f64
+                    }) {
+                    Some(r) => r,
+                    None => continue,
+                };
             if let Some(layout) =
                 layout_trill_extension_multi_speed(end_x, ornament_layout.y, &regions)
             {

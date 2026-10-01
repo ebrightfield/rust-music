@@ -1,9 +1,9 @@
-use music::note_collections::octave_partition::OctavePartition;
-use music::note_collections::pc_set::{PcShape, AsPcSlice};
+use crate::canonical_voicings::CanonicalVoicings;
+use anyhow::anyhow;
 use music::note::pitch_class::Pc;
 use music::note::pitch_class::Pc::*;
-use anyhow::anyhow;
-use crate::canonical_voicings::CanonicalVoicings;
+use music::note_collections::octave_partition::OctavePartition;
+use music::note_collections::pc_set::{AsPcSlice, PcShape};
 
 // A note_collections quality for every possible four-note [PcShape].
 #[derive(Debug, Clone, PartialEq)]
@@ -73,7 +73,7 @@ impl FourNoteChordQuality {
         for i in 0usize..3 {
             copied = copied.rotate_fwd();
             if let Ok(quality) = FourNoteChordQuality::try_from(&copied) {
-                return Ok((i+1, quality));
+                return Ok((i + 1, quality));
             }
         }
         // this chord quality is combinatorically exhaustive, it should always
@@ -241,13 +241,13 @@ impl TryFrom<&PcShape> for FourNoteChordQuality {
 
 impl CanonicalVoicings for FourNoteChordQuality {
     const N: usize = 4;
-    const FAMILIES: &'static [&'static[usize]] = &[
-        &[0,1,2,3],
-        &[0,2,3,1],
-        &[0,3,1,2],
-        &[0,2,1,3],
-        &[0,1,3,2],
-        &[0,3,2,1],
+    const FAMILIES: &'static [&'static [usize]] = &[
+        &[0, 1, 2, 3],
+        &[0, 2, 3, 1],
+        &[0, 3, 1, 2],
+        &[0, 2, 1, 3],
+        &[0, 1, 3, 2],
+        &[0, 3, 2, 1],
     ];
 }
 

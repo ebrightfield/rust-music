@@ -58,10 +58,7 @@ fn main() {
         )
         .arpeggio(ArpeggioDirection::Up)
         .chord(
-            vec![
-                Pitch::new(Note::B, 4),
-                Pitch::new(Note::D, 5),
-            ],
+            vec![Pitch::new(Note::B, 4), Pitch::new(Note::D, 5)],
             Duration::HALF,
         )
         .arpeggio(ArpeggioDirection::Down)
@@ -98,8 +95,14 @@ fn main() {
     assert!(svg.starts_with("<svg"), "should be valid SVG");
     assert!(svg.contains("</svg>"), "should be closed SVG");
     // 5 chords with arpeggios = 5 arpeggio paths, plus noteheads + clef
-    assert!(paths >= 10, "should have ≥10 paths (arpeggios + noteheads + clef): {paths}");
+    assert!(
+        paths >= 10,
+        "should have ≥10 paths (arpeggios + noteheads + clef): {paths}"
+    );
     // Arpeggio transforms contain "scale(" for vertical scaling
     let scale_count = svg.matches("scale(1,").count();
-    assert!(scale_count >= 5, "should have ≥5 scaled arpeggio glyphs: {scale_count}");
+    assert!(
+        scale_count >= 5,
+        "should have ≥5 scaled arpeggio glyphs: {scale_count}"
+    );
 }

@@ -10,15 +10,20 @@ use crate::render::{SvgWriter, TextStyle};
 /// Draw an ottava bracket onto the SVG.
 pub fn draw_ottava_bracket(svg: &mut SvgWriter, layout: &OttavaBracketLayout) {
     // Text label (italic, as per engraving convention)
-    svg.add_text(layout.label_x, layout.label_y, &layout.label, &TextStyle {
-        font_family: "serif",
-        font_size: layout.font_size,
-        fill: "black",
-        anchor: "start",
-        font_weight: "bold",
-        font_style: "italic",
-        dominant_baseline: "auto",
-    });
+    svg.add_text(
+        layout.label_x,
+        layout.label_y,
+        &layout.label,
+        &TextStyle {
+            font_family: "serif",
+            font_size: layout.font_size,
+            fill: "black",
+            anchor: "start",
+            font_weight: "bold",
+            font_style: "italic",
+            dominant_baseline: "auto",
+        },
+    );
 
     // Dashed horizontal line from after the label to the end
     if layout.x_line_start < layout.x_end {
@@ -83,7 +88,10 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_ottava_bracket(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains("font-style=\"italic\""), "label should be italic");
+        assert!(
+            output.contains("font-style=\"italic\""),
+            "label should be italic"
+        );
     }
 
     #[test]
@@ -92,7 +100,10 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_ottava_bracket(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains("font-weight=\"bold\""), "label should be bold");
+        assert!(
+            output.contains("font-weight=\"bold\""),
+            "label should be bold"
+        );
     }
 
     #[test]
@@ -101,7 +112,10 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_ottava_bracket(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains("stroke-dasharray"), "should have a dashed line");
+        assert!(
+            output.contains("stroke-dasharray"),
+            "should have a dashed line"
+        );
     }
 
     #[test]
@@ -112,7 +126,10 @@ mod tests {
         let output = svg.to_svg();
         // Count lines that DON'T have dasharray — these are the hook
         let total_lines = output.matches("<line ").count();
-        assert!(total_lines >= 1, "should have at least 1 line element for hook");
+        assert!(
+            total_lines >= 1,
+            "should have at least 1 line element for hook"
+        );
     }
 
     #[test]
@@ -125,8 +142,11 @@ mod tests {
         draw_ottava_bracket(&mut svg2, &no_hook);
         let lines_with = svg1.to_svg().matches("<line ").count();
         let lines_without = svg2.to_svg().matches("<line ").count();
-        assert_eq!(lines_with, lines_without + 1,
-            "hook adds exactly 1 extra line element");
+        assert_eq!(
+            lines_with,
+            lines_without + 1,
+            "hook adds exactly 1 extra line element"
+        );
     }
 
     #[test]
@@ -146,7 +166,10 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_ottava_bracket(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains(">15ma</text>"), "should contain '15ma' text");
+        assert!(
+            output.contains(">15ma</text>"),
+            "should contain '15ma' text"
+        );
     }
 
     #[test]
@@ -155,6 +178,9 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_ottava_bracket(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains(">15mb</text>"), "should contain '15mb' text");
+        assert!(
+            output.contains(">15mb</text>"),
+            "should contain '15mb' text"
+        );
     }
 }

@@ -1,6 +1,8 @@
 use crate::font::{FontError, MusicFont};
 use crate::layout::staff::StaffLayout;
-use crate::layout::time_signature::{TimeSignatureKind, TimeSignatureLayout, time_signature_layout};
+use crate::layout::time_signature::{
+    time_signature_layout, TimeSignatureKind, TimeSignatureLayout,
+};
 use crate::render::SvgWriter;
 
 /// Draw a time signature at position `x` on the staff.
@@ -54,9 +56,8 @@ mod tests {
     fn common_time_produces_one_path() {
         let (font, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        let width =
-            draw_time_signature(&mut svg, &staff, &font, 500.0, &TimeSignatureKind::Common)
-                .unwrap();
+        let width = draw_time_signature(&mut svg, &staff, &font, 500.0, &TimeSignatureKind::Common)
+            .unwrap();
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 1);
         assert!(width > 0.0);
@@ -66,9 +67,14 @@ mod tests {
     fn cut_common_produces_one_path() {
         let (font, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        let width =
-            draw_time_signature(&mut svg, &staff, &font, 500.0, &TimeSignatureKind::CutCommon)
-                .unwrap();
+        let width = draw_time_signature(
+            &mut svg,
+            &staff,
+            &font,
+            500.0,
+            &TimeSignatureKind::CutCommon,
+        )
+        .unwrap();
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 1);
         assert!(width > 0.0);

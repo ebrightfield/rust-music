@@ -18,30 +18,34 @@
 // Acceptance criterion: the output file is a valid SMF whose first 4 bytes are
 // the ASCII string "MThd".
 
-use music_midi::{smf::SmfBuilder, StaticTempoMap};
 use music::melody::sequencer::MelodicEvent;
-use music::note::pitch::Pitch;
 use music::notation::rhythm::duration::{Duration, DurationKind};
+use music::note::pitch::Pitch;
+use music_midi::{smf::SmfBuilder, StaticTempoMap};
 use std::{env, fs};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let output_path = args.get(1).map(|s| s.as_str()).unwrap_or("/tmp/music-midi-out.mid");
+    let output_path = args
+        .get(1)
+        .map(|s| s.as_str())
+        .unwrap_or("/tmp/music-midi-out.mid");
 
-    let smf_bytes = mary_had_a_little_lamb_smf()
-        .unwrap_or_else(|e| {
-            eprintln!("Error building SMF: {e}");
-            std::process::exit(1);
-        });
+    let smf_bytes = mary_had_a_little_lamb_smf().unwrap_or_else(|e| {
+        eprintln!("Error building SMF: {e}");
+        std::process::exit(1);
+    });
 
-    fs::write(output_path, &smf_bytes)
-        .unwrap_or_else(|e| {
-            eprintln!("Error writing {output_path}: {e}");
-            std::process::exit(1);
-        });
+    fs::write(output_path, &smf_bytes).unwrap_or_else(|e| {
+        eprintln!("Error writing {output_path}: {e}");
+        std::process::exit(1);
+    });
 
     println!("Wrote {} bytes to {output_path}", smf_bytes.len());
-    println!("First 4 bytes (should be MThd): {:?}", &smf_bytes[..4.min(smf_bytes.len())]);
+    println!(
+        "First 4 bytes (should be MThd): {:?}",
+        &smf_bytes[..4.min(smf_bytes.len())]
+    );
 }
 
 /// Build an SMF of "Mary Had a Little Lamb" (first phrase) at 120 BPM.

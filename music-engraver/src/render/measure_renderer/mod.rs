@@ -1,47 +1,53 @@
 use music::notation::clef::Clef;
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::beam::{layout_beam_group, BeamedNote};
+use crate::layout::articulation::layout_articulation_stack;
+use crate::layout::beam::{layout_beam_group, BeamGroupLayout, BeamedNote};
 use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::dot::dot_staff_position;
+use crate::layout::expression::layout_expression;
+use crate::layout::grace::layout_grace_note;
+use crate::layout::lyric::layout_lyric;
 use crate::layout::measure::{
-    BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, NoteEvent, TupletGroupEvent,
+    BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, NoteAnnotations, NoteEvent,
+    NoteheadStyle, TupletGroupEvent,
 };
+use crate::layout::multi_measure_rest::{
+    church_rest_supported, layout_church_rest, layout_multi_measure_rest, MultiMeasureRestStyle,
+};
+use crate::layout::rehearsal::layout_rehearsal_mark;
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{
     auto_stem_direction, auto_stem_direction_chord, stem_length_staff_spaces, StemDirection,
 };
-use crate::layout::tuplet::{layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem};
-use crate::render::beam_renderer::draw_beam_group;
+use crate::layout::tempo::layout_tempo_mark;
+use crate::layout::tuplet::{
+    layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
+    TupletPlacement,
+};
+use crate::render::articulation_renderer::draw_articulation;
 use crate::render::barline_renderer::draw_barline;
-use crate::render::tuplet_renderer::draw_tuplet_bracket;
+use crate::render::beam_renderer::draw_beam_group_with_advances;
+use crate::render::church_rest_renderer::draw_church_rest;
 use crate::render::dot_renderer::draw_dots;
 use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::expression_renderer::draw_expression;
 use crate::render::flag_renderer::draw_flag;
-use crate::render::lyric_renderer::draw_lyric;
-use crate::render::church_rest_renderer::draw_church_rest;
-use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
-use crate::layout::multi_measure_rest::{
-    church_rest_supported, layout_church_rest, layout_multi_measure_rest, MultiMeasureRestStyle,
-};
-use crate::layout::lyric::layout_lyric;
-use crate::render::rehearsal_renderer::draw_rehearsal_mark;
-use crate::layout::expression::layout_expression;
-use crate::layout::rehearsal::layout_rehearsal_mark;
-use crate::layout::articulation::layout_articulation_stack;
-use crate::layout::tempo::layout_tempo_mark;
-use crate::layout::grace::layout_grace_note;
-use crate::render::articulation_renderer::draw_articulation;
 use crate::render::grace_renderer::draw_grace_note;
 use crate::render::key_sig_renderer::draw_key_signature;
-use crate::render::tempo_renderer::draw_tempo_mark;
-use crate::render::note_renderer::{draw_ledger_lines, draw_notehead, NoteheadKind};
+use crate::render::lyric_renderer::draw_lyric;
+use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
+use crate::render::note_renderer::{
+    draw_ledger_lines, draw_styled_notehead, notehead_advance, NoteheadKind,
+};
+use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::render::rest_renderer::{draw_rest, draw_rest_displaced};
 use crate::render::staff_renderer::draw_clef;
 use crate::render::stem_renderer::{draw_stem, stem_endpoints, stem_x};
+use crate::render::tempo_renderer::draw_tempo_mark;
 use crate::render::time_sig_renderer::draw_time_signature;
 use crate::render::tremolo_renderer::draw_tremolo;
+use crate::render::tuplet_renderer::draw_tuplet_bracket;
 use crate::render::SvgWriter;
 
 #[cfg(test)]
@@ -81,26 +87,10 @@ pub fn draw_measure(
                 draw_chord_event(svg, staff, font, config, elem_x, chord)?;
             }
             MeasureElement::BeamGroup(bg) => {
-                draw_beam_group_event(
-                    svg,
-                    staff,
-                    font,
-                    config,
-                    elem_x,
-                    positioned.width,
-                    bg,
-                )?;
+                draw_beam_group_event(svg, staff, font, config, elem_x, positioned.width, bg)?;
             }
             MeasureElement::TupletGroup(tg) => {
-                draw_tuplet_group_event(
-                    svg,
-                    staff,
-                    font,
-                    config,
-                    elem_x,
-                    positioned.width,
-                    tg,
-                )?;
+                draw_tuplet_group_event(svg, staff, font, config, elem_x, positioned.width, tg)?;
             }
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
@@ -115,12 +105,8 @@ pub fn draw_measure(
                 // a wide measure.
                 match style {
                     MultiMeasureRestStyle::Church if church_rest_supported(*count) => {
-                        let layout = layout_church_rest(
-                            elem_x,
-                            elem_x + positioned.width,
-                            *count,
-                            staff,
-                        );
+                        let layout =
+                            layout_church_rest(elem_x, elem_x + positioned.width, *count, staff);
                         draw_church_rest(svg, font, &layout)?;
                     }
                     _ => {
@@ -180,8 +166,10 @@ pub fn draw_additional_voices(
         };
 
         // Compute collision offsets between primary and this additional voice
-        let collision_offsets =
-            crate::layout::voice_collision::compute_voice_collision_offsets(primary_layout, voice_layout);
+        let collision_offsets = crate::layout::voice_collision::compute_voice_collision_offsets(
+            primary_layout,
+            voice_layout,
+        );
 
         for (elem_idx, positioned) in voice_layout.elements.iter().enumerate() {
             // Element-level offset (inner_note_index = None): applies to
@@ -308,6 +296,22 @@ fn notehead_kind_from_log2(duration_log2: u8) -> NoteheadKind {
     }
 }
 
+fn notehead_style(annotations: &NoteAnnotations, index: usize) -> NoteheadStyle {
+    annotations
+        .notehead_styles
+        .get(index)
+        .copied()
+        .unwrap_or_default()
+}
+
+fn parenthesized_notehead(annotations: &NoteAnnotations, index: usize) -> bool {
+    annotations
+        .parenthesized_noteheads
+        .get(index)
+        .copied()
+        .unwrap_or(false)
+}
+
 /// Number of flags from log2 duration: 0–2 have no flags, 3=one flag, 4=two, etc.
 fn flag_count_from_log2(duration_log2: u8) -> u8 {
     duration_log2.saturating_sub(2)
@@ -323,6 +327,8 @@ fn draw_note_event(
     note: &NoteEvent,
 ) -> Result<(), FontError> {
     let kind = notehead_kind_from_log2(note.duration_log2);
+    let style = notehead_style(&note.annotations, 0);
+    let parenthesized = parenthesized_notehead(&note.annotations, 0);
     let position = note.staff_position;
 
     // Draw grace note before principal (if present)
@@ -360,7 +366,7 @@ fn draw_note_event(
     }
 
     // Draw notehead
-    let advance = draw_notehead(svg, staff, font, x, position, kind)?;
+    let advance = draw_styled_notehead(svg, staff, font, x, position, kind, style, parenthesized)?;
 
     // Draw ledger lines
     draw_ledger_lines(svg, staff, config, x, advance, position);
@@ -377,7 +383,10 @@ fn draw_note_event(
     // Determine stem direction
     let needs_stem = note.duration_log2 >= 1; // whole notes have no stem
     let direction = if needs_stem {
-        Some(note.stem_direction.unwrap_or_else(|| auto_stem_direction(position)))
+        Some(
+            note.stem_direction
+                .unwrap_or_else(|| auto_stem_direction(position)),
+        )
     } else {
         None
     };
@@ -409,8 +418,14 @@ fn draw_note_event(
                 StemDirection::Up => y_top,
                 StemDirection::Down => y_bottom,
             };
-            let trem_layout =
-                crate::layout::tremolo::layout_tremolo(tremolo_count, sx, notehead_y, tip_y, staff, dir);
+            let trem_layout = crate::layout::tremolo::layout_tremolo(
+                tremolo_count,
+                sx,
+                notehead_y,
+                tip_y,
+                staff,
+                dir,
+            );
             draw_tremolo(svg, font, &trem_layout)?;
         }
     }
@@ -509,8 +524,7 @@ fn draw_note_event(
     // Draw breath mark above the staff, to the right of the note
     if let Some(breath) = note.annotations.breath_mark {
         let note_right_x = x + advance;
-        let breath_layout =
-            crate::layout::breath::layout_breath_mark(breath, note_right_x, staff);
+        let breath_layout = crate::layout::breath::layout_breath_mark(breath, note_right_x, staff);
         crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
     }
 
@@ -535,9 +549,9 @@ fn draw_chord_event(
     }
 
     let kind = notehead_kind_from_log2(chord.duration_log2);
-    let direction = chord.stem_direction.unwrap_or_else(|| {
-        auto_stem_direction_chord(&chord.staff_positions)
-    });
+    let direction = chord
+        .stem_direction
+        .unwrap_or_else(|| auto_stem_direction_chord(&chord.staff_positions));
 
     // Draw grace note before chord (if present)
     if let Some((grace_pos, grace_kind)) = chord.annotations.grace_note {
@@ -566,23 +580,25 @@ fn draw_chord_event(
         }
     }
 
-    // Build ChordNote list for layout
     let chord_notes: Vec<ChordNote> = chord
         .staff_positions
         .iter()
-        .zip(chord.accidentals.iter().chain(std::iter::repeat(&None)))
-        .map(|(&pos, acc)| ChordNote {
+        .enumerate()
+        .map(|(index, &pos)| ChordNote {
             staff_position: pos,
-            accidental: *acc,
+            accidental: chord.accidentals.get(index).copied().flatten(),
+            notehead_style: notehead_style(&chord.annotations, index),
+            parenthesized: parenthesized_notehead(&chord.annotations, index),
         })
         .collect();
 
     let layouts = layout_chord_noteheads(&chord_notes, direction);
 
-    // We need the notehead advance width for positioning
-    let notehead_glyph = kind.glyph();
-    let outline = font.glyph_outline(notehead_glyph)?;
-    let advance = outline.advance_width as f64;
+    // Use the widest selected head for collision columns, stem attachment, and dots.
+    let advance = layouts.iter().try_fold(0.0_f64, |widest, note| {
+        notehead_advance(font, chord.duration_log2, note.notehead_style)
+            .map(|width| widest.max(width))
+    })?;
 
     // Draw each notehead (with offset for seconds)
     for note_layout in &layouts {
@@ -600,11 +616,26 @@ fn draw_chord_event(
             svg.add_path(&acc_outline.path_data, "black", Some(&transform));
         }
 
-        // Draw notehead
-        draw_notehead(svg, staff, font, note_x, note_layout.staff_position, kind)?;
+        let note_advance = draw_styled_notehead(
+            svg,
+            staff,
+            font,
+            note_x,
+            note_layout.staff_position,
+            kind,
+            note_layout.notehead_style,
+            note_layout.parenthesized,
+        )?;
 
         // Draw ledger lines for this note
-        draw_ledger_lines(svg, staff, config, note_x, advance, note_layout.staff_position);
+        draw_ledger_lines(
+            svg,
+            staff,
+            config,
+            note_x,
+            note_advance,
+            note_layout.staff_position,
+        );
     }
 
     // Draw arpeggio wavy line to the left of the chord if present
@@ -648,8 +679,15 @@ fn draw_chord_event(
             }
         };
 
+        let attach_note = layouts
+            .iter()
+            .find(|note| note.staff_position == attach_pos)
+            .expect("the selected chord attachment position must exist");
+        let attach_advance =
+            notehead_advance(font, chord.duration_log2, attach_note.notehead_style)?;
+        let attach_x = x + notehead_x_offset(attach_note.offset, direction) * advance;
         let thickness = config.stem_thickness_fu();
-        let sx = stem_x(x, advance, direction, thickness);
+        let sx = stem_x(attach_x, attach_advance, direction, thickness);
         svg.add_line(sx, y_top, sx, y_bottom, "black", thickness);
 
         // Draw flag
@@ -674,8 +712,14 @@ fn draw_chord_event(
                 StemDirection::Down => layouts.iter().map(|n| n.staff_position).min().unwrap(),
             };
             let notehead_y = staff.y_of(far_pos);
-            let trem_layout =
-                crate::layout::tremolo::layout_tremolo(tremolo_count, sx, notehead_y, tip_y, staff, direction);
+            let trem_layout = crate::layout::tremolo::layout_tremolo(
+                tremolo_count,
+                sx,
+                notehead_y,
+                tip_y,
+                staff,
+                direction,
+            );
             draw_tremolo(svg, font, &trem_layout)?;
         }
     }
@@ -789,8 +833,7 @@ fn draw_chord_event(
     // Draw breath mark above the staff, to the right of the chord
     if let Some(breath) = chord.annotations.breath_mark {
         let chord_right_x = x + advance;
-        let breath_layout =
-            crate::layout::breath::layout_breath_mark(breath, chord_right_x, staff);
+        let breath_layout = crate::layout::breath::layout_breath_mark(breath, chord_right_x, staff);
         crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
     }
 
@@ -799,9 +842,25 @@ fn draw_chord_event(
 
 /// Draw a beam group event: noteheads + ledger lines + accidentals + dots,
 /// then beams and stems via `draw_beam_group`.
-///
-/// Sub-notes are distributed across `total_width` using proportional spacing,
-/// then beam geometry is computed from the resulting x-coordinates.
+fn grouped_member_positions(note: &NoteEvent) -> &[i8] {
+    note.annotations.grouped_chord.as_ref().map_or_else(
+        || std::slice::from_ref(&note.staff_position),
+        |chord| chord.staff_positions.as_slice(),
+    )
+}
+
+fn grouped_member_accidentals(note: &NoteEvent) -> &[Option<smufl::Glyph>] {
+    note.annotations.grouped_chord.as_ref().map_or_else(
+        || std::slice::from_ref(&note.accidental),
+        |chord| chord.accidentals.as_slice(),
+    )
+}
+
+struct RenderedBeamGroup {
+    layout: BeamGroupLayout,
+    positions: Vec<i8>,
+}
+
 fn draw_beam_group_event(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -811,20 +870,13 @@ fn draw_beam_group_event(
     total_width: f64,
     bg: &BeamGroupEvent,
 ) -> Result<(), FontError> {
-    draw_beam_group_event_with_offsets(svg, staff, font, config, group_x, total_width, bg, &[])
+    draw_beam_group_event_with_offsets(svg, staff, font, config, group_x, total_width, bg, &[])?;
+    Ok(())
 }
 
-/// Beam-group renderer with per-note horizontal offsets for cross-voice
-/// collision avoidance. `per_note_x_shift` is a slice of length `notes.len()`
-/// (or empty for "no shifts"); `per_note_x_shift[i]` is the absolute x-shift
-/// in font units applied to note i's notehead, accidental, ledger lines, and
-/// augmentation dots.
-///
-/// Stems and the beam line itself stay at the unshifted note positions —
-/// only the notehead and its directly-attached glyphs move. This matches the
-/// engraving convention for second/unison collisions inside a beamed voice:
-/// the colliding notehead displaces to the opposite side of its stem while
-/// the stem-and-beam skeleton remains undisturbed.
+/// Beam-group renderer with per-member horizontal offsets for cross-voice
+/// collision avoidance. Collision shifts move a member's noteheads and their
+/// attached glyphs, while chord stems and the beam skeleton remain beat-anchored.
 #[allow(clippy::too_many_arguments)]
 fn draw_beam_group_event_with_offsets(
     svg: &mut SvgWriter,
@@ -835,91 +887,168 @@ fn draw_beam_group_event_with_offsets(
     total_width: f64,
     bg: &BeamGroupEvent,
     per_note_x_shift: &[f64],
-) -> Result<(), FontError> {
+) -> Result<Option<RenderedBeamGroup>, FontError> {
     let n = bg.notes.len();
     if n == 0 {
-        return Ok(());
+        return Ok(None);
     }
-
-    // Proportional spacing: longer notes consume more width. Shared with the
-    // cross-voice collision detector so both compute identical per-note xs.
-    let durations: Vec<u8> = bg.notes.iter().map(|note| note.duration_log2).collect();
-    let local_offsets = crate::layout::beam::beam_group_note_x_offsets(&durations, total_width);
-    let note_xs: Vec<f64> = local_offsets.iter().map(|dx| group_x + dx).collect();
-
-    // Per-note shift lookup: empty slice → 0.0 for every note; non-empty
-    // requires matching length so a caller can't silently misalign.
-    let shift_for = |i: usize| -> f64 {
-        if per_note_x_shift.is_empty() {
-            0.0
-        } else {
-            per_note_x_shift[i]
-        }
-    };
     assert!(
         per_note_x_shift.is_empty() || per_note_x_shift.len() == n,
-        "per_note_x_shift length must match beam group note count"
+        "per_note_x_shift length must match beam group member count"
     );
 
-    // Get notehead advance width
-    let notehead_glyph = NoteheadKind::Filled.glyph();
-    let outline = font.glyph_outline(notehead_glyph)?;
-    let advance = outline.advance_width as f64;
-
-    // Draw noteheads, accidentals, ledger lines, and dots for each note.
-    // Each note's `nx` includes the per-note collision shift; the unshifted
-    // `note_xs[i]` is fed into the beam/stem layout below so the beam line
-    // stays straight and the stem retains its original beat-anchored x.
-    for (i, note) in bg.notes.iter().enumerate() {
-        let nx = note_xs[i] + shift_for(i);
-
-        // Accidental
-        if let Some(acc_glyph) = note.accidental {
-            let acc_outline = font.glyph_outline(acc_glyph)?;
-            let acc_advance = acc_outline.advance_width as f64;
-            let padding = 0.12 * staff.staff_space;
-            let acc_x = nx - acc_advance - padding;
-            let acc_y = staff.y_of(note.staff_position);
-            let transform = format!("translate({acc_x}, {acc_y})");
-            svg.add_path(&acc_outline.path_data, "black", Some(&transform));
-        }
-
-        // Notehead (beamed notes are always filled)
-        draw_notehead(svg, staff, font, nx, note.staff_position, NoteheadKind::Filled)?;
-
-        // Ledger lines
-        draw_ledger_lines(svg, staff, config, nx, advance, note.staff_position);
-
-        // Augmentation dots
-        if note.dots > 0 {
-            let dot_pos = dot_staff_position(note.staff_position);
-            draw_dots(svg, staff, font, nx, advance, dot_pos, note.dots)?;
-        }
-    }
-
-    // Build BeamedNote list for beam layout computation
-    let beamed_notes: Vec<BeamedNote> = bg
+    let durations: Vec<u8> = bg.notes.iter().map(|note| note.duration_log2).collect();
+    let local_offsets = crate::layout::beam::beam_group_note_x_offsets(&durations, total_width);
+    let positions: Vec<i8> = bg
         .notes
         .iter()
-        .enumerate()
-        .map(|(i, note)| BeamedNote {
-            x: note_xs[i],
-            staff_position: note.staff_position,
-            duration_log2: note.duration_log2,
-        })
+        .flat_map(grouped_member_positions)
+        .copied()
         .collect();
-
-    // Determine stem direction
-    let positions: Vec<i8> = bg.notes.iter().map(|n| n.staff_position).collect();
     let direction = bg
         .stem_direction
         .unwrap_or_else(|| auto_stem_direction_chord(&positions));
+    let shift_for = |index: usize| per_note_x_shift.get(index).copied().unwrap_or_default();
 
-    // Compute beam layout and render
+    let mut notehead_advances = Vec::with_capacity(n);
+    let mut beamed_notes = Vec::with_capacity(n);
+    for (index, note) in bg.notes.iter().enumerate() {
+        let member_positions = grouped_member_positions(note);
+        let member_accidentals = grouped_member_accidentals(note);
+        debug_assert_eq!(member_positions.len(), member_accidentals.len());
+        let base_x = group_x + local_offsets[index];
+        let drawn_x = base_x + shift_for(index);
+        let chord_notes: Vec<ChordNote> = member_positions
+            .iter()
+            .enumerate()
+            .map(|(tone, &staff_position)| ChordNote {
+                staff_position,
+                accidental: member_accidentals[tone],
+                notehead_style: notehead_style(&note.annotations, tone),
+                parenthesized: parenthesized_notehead(&note.annotations, tone),
+            })
+            .collect();
+        let layouts = layout_chord_noteheads(&chord_notes, direction);
+        let widest_advance = layouts.iter().try_fold(0.0_f64, |widest, layout| {
+            notehead_advance(font, note.duration_log2, layout.notehead_style)
+                .map(|advance| widest.max(advance))
+        })?;
+
+        for layout in &layouts {
+            let column_offset = notehead_x_offset(layout.offset, direction) * widest_advance;
+            let note_x = drawn_x + column_offset;
+            if let Some(accidental) = layout.accidental {
+                let outline = font.glyph_outline(accidental)?;
+                let accidental_x = note_x - outline.advance_width as f64 - 0.12 * staff.staff_space;
+                let transform = format!(
+                    "translate({accidental_x}, {})",
+                    staff.y_of(layout.staff_position)
+                );
+                svg.add_path(&outline.path_data, "black", Some(&transform));
+            }
+            let advance = draw_styled_notehead(
+                svg,
+                staff,
+                font,
+                note_x,
+                layout.staff_position,
+                notehead_kind_from_log2(note.duration_log2),
+                layout.notehead_style,
+                layout.parenthesized,
+            )?;
+            draw_ledger_lines(svg, staff, config, note_x, advance, layout.staff_position);
+        }
+
+        if note.dots > 0 {
+            let dot_x = if layouts.iter().any(|layout| layout.offset) {
+                drawn_x + widest_advance
+            } else {
+                drawn_x
+            };
+            for layout in &layouts {
+                draw_dots(
+                    svg,
+                    staff,
+                    font,
+                    dot_x,
+                    widest_advance,
+                    dot_staff_position(layout.staff_position),
+                    note.dots,
+                )?;
+            }
+        }
+
+        if let Some(symbol) = &note.annotations.chord_symbol {
+            let layout = crate::layout::chord_symbol::layout_chord_symbol_composite(
+                symbol,
+                base_x + widest_advance / 2.0,
+                staff,
+                config.staff_space,
+                font.units_per_em(),
+                |glyph| font.glyph_advance(glyph).unwrap_or(0),
+            );
+            crate::render::chord_symbol_renderer::draw_chord_symbol_composite(svg, font, &layout)?;
+        }
+
+        let min_position = layouts
+            .iter()
+            .map(|layout| layout.staff_position)
+            .min()
+            .expect("a grouped member always contains at least one notehead");
+        let max_position = layouts
+            .iter()
+            .map(|layout| layout.staff_position)
+            .max()
+            .expect("a grouped member always contains at least one notehead");
+        let (attachment_position, beam_side_position) = match direction {
+            StemDirection::Up => (min_position, max_position),
+            StemDirection::Down => (max_position, min_position),
+        };
+        let attachment = layouts
+            .iter()
+            .find(|layout| layout.staff_position == attachment_position)
+            .expect("the grouped chord attachment position must exist");
+        let attachment_advance =
+            notehead_advance(font, note.duration_log2, attachment.notehead_style)?;
+        let attachment_x =
+            base_x + notehead_x_offset(attachment.offset, direction) * widest_advance;
+        if attachment_position != beam_side_position {
+            let stem_x = stem_x(
+                attachment_x,
+                attachment_advance,
+                direction,
+                config.stem_thickness_fu(),
+            );
+            svg.add_line(
+                stem_x,
+                staff.y_of(attachment_position),
+                stem_x,
+                staff.y_of(beam_side_position),
+                "black",
+                config.stem_thickness_fu(),
+            );
+        }
+        notehead_advances.push(attachment_advance);
+        beamed_notes.push(BeamedNote {
+            x: attachment_x,
+            staff_position: beam_side_position,
+            duration_log2: note.duration_log2,
+        });
+    }
+
     let beam_layout = layout_beam_group(&beamed_notes, direction, staff.staff_space);
-    draw_beam_group(svg, staff, config, &beamed_notes, &beam_layout, advance);
-
-    Ok(())
+    draw_beam_group_with_advances(
+        svg,
+        staff,
+        config,
+        &beamed_notes,
+        &beam_layout,
+        &notehead_advances,
+    );
+    Ok(Some(RenderedBeamGroup {
+        layout: beam_layout,
+        positions,
+    }))
 }
 
 /// Draw a tuplet group: the underlying beam group plus a tuplet bracket with number.
@@ -936,9 +1065,7 @@ fn draw_tuplet_group_event(
     total_width: f64,
     tg: &TupletGroupEvent,
 ) -> Result<(), FontError> {
-    draw_tuplet_group_event_with_offsets(
-        svg, staff, font, config, group_x, total_width, tg, &[],
-    )
+    draw_tuplet_group_event_with_offsets(svg, staff, font, config, group_x, total_width, tg, &[])
 }
 
 /// Tuplet-group renderer with per-note horizontal offsets for cross-voice
@@ -957,8 +1084,9 @@ fn draw_tuplet_group_event_with_offsets(
     tg: &TupletGroupEvent,
     per_note_x_shift: &[f64],
 ) -> Result<(), FontError> {
-    // Draw the underlying beam group (noteheads, stems, beams)
-    draw_beam_group_event_with_offsets(
+    // Draw the underlying beam group and retain its exact chord-aware geometry
+    // for bracket placement and beam clearance.
+    let Some(rendered) = draw_beam_group_event_with_offsets(
         svg,
         staff,
         font,
@@ -967,22 +1095,15 @@ fn draw_tuplet_group_event_with_offsets(
         total_width,
         &tg.beam_group,
         per_note_x_shift,
-    )?;
-
-    if tg.beam_group.notes.is_empty() {
+    )?
+    else {
         return Ok(());
-    }
+    };
 
-    // Determine stem direction (same logic as beam group)
-    let positions: Vec<i8> = tg.beam_group.notes.iter().map(|n| n.staff_position).collect();
-    let direction = tg
-        .beam_group
-        .stem_direction
-        .unwrap_or_else(|| auto_stem_direction_chord(&positions));
-
+    let direction = rendered.layout.direction;
     let placement = tuplet_placement_from_stem(direction);
 
-    // Compute advance width of tuplet number glyph(s) for centering
+    // Compute advance width of tuplet number glyph(s) for centering.
     let number_glyphs = tuplet_number_glyphs(tg.tuplet_number);
     let number_width: f64 = number_glyphs
         .iter()
@@ -991,18 +1112,43 @@ fn draw_tuplet_group_event_with_offsets(
 
     let bracket_thickness_ss = config.tuplet_bracket_thickness;
 
-    let bracket_layout = layout_tuplet_bracket(
+    let mut bracket_layout = layout_tuplet_bracket(
         group_x,
         group_x + total_width,
-        &positions,
+        &rendered.positions,
         placement,
         tg.tuplet_number,
         staff.staff_space,
         bracket_thickness_ss,
         number_width,
     );
+    clear_tuplet_bracket_from_beam(&mut bracket_layout, &rendered.layout, staff.staff_space);
 
     draw_tuplet_bracket(svg, &bracket_layout, font, 0.0, 0.0);
-
     Ok(())
+}
+
+fn clear_tuplet_bracket_from_beam(
+    bracket: &mut TupletBracketLayout,
+    beam: &BeamGroupLayout,
+    staff_space: f64,
+) {
+    let Some((&first_tip, rest)) = beam.stem_tip_ys.split_first() else {
+        return;
+    };
+    let clearance = staff_space;
+    let collision_free_y = match bracket.placement {
+        TupletPlacement::Above => {
+            rest.iter().fold(first_tip, |outer, &tip| outer.min(tip)) - clearance
+        }
+        TupletPlacement::Below => {
+            rest.iter().fold(first_tip, |outer, &tip| outer.max(tip)) + clearance
+        }
+    };
+    let adjusted_y = match bracket.placement {
+        TupletPlacement::Above => bracket.bracket_y.min(collision_free_y),
+        TupletPlacement::Below => bracket.bracket_y.max(collision_free_y),
+    };
+    bracket.bracket_y = adjusted_y;
+    bracket.number_y = adjusted_y;
 }

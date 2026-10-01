@@ -59,7 +59,11 @@ pub enum NotationEvent {
 
 impl NotationEvent {
     pub fn note(pitch: Pitch, duration: Duration) -> Self {
-        NotationEvent::Note { pitch, duration, tied: false }
+        NotationEvent::Note {
+            pitch,
+            duration,
+            tied: false,
+        }
     }
 
     pub fn rest(duration: Duration) -> Self {
@@ -81,7 +85,10 @@ impl NotationEvent {
     fn beamable(&self) -> bool {
         matches!(self, NotationEvent::Note { .. })
             && self.duration().ticks() < TICKS_PER_QUARTER
-            && !matches!(self.duration().kind(), DurationKind::Whole | DurationKind::Half)
+            && !matches!(
+                self.duration().kind(),
+                DurationKind::Whole | DurationKind::Half
+            )
     }
 }
 
@@ -109,7 +116,12 @@ impl ClefChoice {
     /// and `bass`. Returns an error for unsupported clefs (e.g. alto/tenor,
     /// which `music::Clef` does not model).
     pub fn from_str_opt(s: Option<&str>) -> Result<Self> {
-        match s.unwrap_or("treble").to_lowercase().replace('_', "-").as_str() {
+        match s
+            .unwrap_or("treble")
+            .to_lowercase()
+            .replace('_', "-")
+            .as_str()
+        {
             "treble" | "g" => Ok(ClefChoice::Treble),
             "treble-8" | "treble8" | "guitar" => Ok(ClefChoice::Treble8),
             "bass" | "f" => Ok(ClefChoice::Bass),
@@ -117,9 +129,7 @@ impl ClefChoice {
                 "clef '{}' is not supported (music::Clef models only treble, treble-8, bass)",
                 s.unwrap_or("")
             ),
-            other => anyhow::bail!(
-                "unknown clef: '{other}' (options: treble, treble-8, bass)"
-            ),
+            other => anyhow::bail!("unknown clef: '{other}' (options: treble, treble-8, bass)"),
         }
     }
 
@@ -154,7 +164,10 @@ impl OutputFormat {
                  for native engraver output (LilyPond document generation lives behind \
                  the workspace `lilypond` feature)"
             ),
-            "" => anyhow::bail!("output path '{}' has no extension; use .svg or .png", path.display()),
+            "" => anyhow::bail!(
+                "output path '{}' has no extension; use .svg or .png",
+                path.display()
+            ),
             other => anyhow::bail!("unsupported output format '.{other}' (use .svg or .png)"),
         }
     }
@@ -334,7 +347,9 @@ fn build_score(
                 let notes: Vec<(Pitch, Duration)> = run
                     .iter()
                     .filter_map(|ev| match ev {
-                        NotationEvent::Note { pitch, duration, .. } => Some((*pitch, *duration)),
+                        NotationEvent::Note {
+                            pitch, duration, ..
+                        } => Some((*pitch, *duration)),
                         NotationEvent::Rest { .. } => None,
                     })
                     .collect();
@@ -343,7 +358,11 @@ fn build_score(
             }
 
             match run[0] {
-                NotationEvent::Note { pitch, duration, tied } => {
+                NotationEvent::Note {
+                    pitch,
+                    duration,
+                    tied,
+                } => {
                     sb = sb.note(pitch, duration);
                     if tied {
                         sb = sb.tie();
@@ -356,7 +375,11 @@ fn build_score(
         }
 
         // Barline at every measure boundary; the last one is the final double bar.
-        sb = if m_idx == last { sb.end_barline() } else { sb.barline() };
+        sb = if m_idx == last {
+            sb.end_barline()
+        } else {
+            sb.barline()
+        };
     }
 
     // An empty stream still needs a closed measure to render a valid staff.
@@ -463,16 +486,20 @@ mod tests {
     #[test]
     fn beams_group_within_a_beat() {
         let bar = vec![
-            n(Duration::QTR),      // beat 1: alone
-            n(Duration::EIGHTH),   // beat 2: pair
+            n(Duration::QTR),    // beat 1: alone
+            n(Duration::EIGHTH), // beat 2: pair
             n(Duration::EIGHTH),
-            n(Duration::QTR),      // beat 3: alone
-            n(Duration::EIGHTH),   // beat 4: pair
+            n(Duration::QTR),    // beat 3: alone
+            n(Duration::EIGHTH), // beat 4: pair
             n(Duration::EIGHTH),
         ];
         let runs = beam_runs(&bar, TICKS_PER_QUARTER);
         let sizes: Vec<usize> = runs.iter().map(|r| r.len()).collect();
-        assert_eq!(sizes, vec![1, 2, 1, 2], "expected quarter, beam, quarter, beam");
+        assert_eq!(
+            sizes,
+            vec![1, 2, 1, 2],
+            "expected quarter, beam, quarter, beam"
+        );
     }
 
     /// A beam never spans a beat boundary: eight straight eighths in 4/4 make
@@ -571,11 +598,26 @@ mod tests {
     #[test]
     fn clef_parsing() {
         assert_eq!(ClefChoice::from_str_opt(None).unwrap(), ClefChoice::Treble);
-        assert_eq!(ClefChoice::from_str_opt(Some("treble")).unwrap(), ClefChoice::Treble);
-        assert_eq!(ClefChoice::from_str_opt(Some("treble-8")).unwrap(), ClefChoice::Treble8);
-        assert_eq!(ClefChoice::from_str_opt(Some("treble8")).unwrap(), ClefChoice::Treble8);
-        assert_eq!(ClefChoice::from_str_opt(Some("guitar")).unwrap(), ClefChoice::Treble8);
-        assert_eq!(ClefChoice::from_str_opt(Some("bass")).unwrap(), ClefChoice::Bass);
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("treble")).unwrap(),
+            ClefChoice::Treble
+        );
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("treble-8")).unwrap(),
+            ClefChoice::Treble8
+        );
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("treble8")).unwrap(),
+            ClefChoice::Treble8
+        );
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("guitar")).unwrap(),
+            ClefChoice::Treble8
+        );
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("bass")).unwrap(),
+            ClefChoice::Bass
+        );
         assert!(ClefChoice::from_str_opt(Some("alto")).is_err());
         assert!(ClefChoice::from_str_opt(Some("nonsense")).is_err());
     }
@@ -654,6 +696,9 @@ mod tests {
         assert!(n > 0);
         let bytes = std::fs::read(&out).unwrap();
         // PNG magic number.
-        assert_eq!(&bytes[..8], &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        assert_eq!(
+            &bytes[..8],
+            &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        );
     }
 }

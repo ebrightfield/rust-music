@@ -1,6 +1,6 @@
+use super::common::{OwnedMeta, OwnedStringConvention, OwnedTuning};
 use music::note::note::Note;
 use serde::{Deserialize, Serialize};
-use super::common::{OwnedMeta, OwnedStringConvention, OwnedTuning};
 
 /// Fretboard orientation for scale diagrams (REQ-O29).
 #[derive(Debug, Clone, Serialize, Deserialize)]

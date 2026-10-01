@@ -1,5 +1,5 @@
 use crate::font::{FontError, MusicFont};
-use crate::layout::barline::{BarlineLayout, BarlineStyle, barline_layout};
+use crate::layout::barline::{barline_layout, BarlineLayout, BarlineStyle};
 use crate::layout::staff::StaffLayout;
 use crate::render::SvgWriter;
 use smufl::Glyph;
@@ -109,7 +109,10 @@ mod tests {
             })
             .collect();
         assert_eq!(widths.len(), 2);
-        assert!(widths[1] > widths[0], "thick stroke should be wider than thin");
+        assert!(
+            widths[1] > widths[0],
+            "thick stroke should be wider than thin"
+        );
     }
 
     #[test]
@@ -167,11 +170,14 @@ mod tests {
         draw_barline(&mut svg, &staff, &font, 500.0, BarlineStyle::EndRepeat).unwrap();
         let output = svg.to_svg();
         // Both dot paths should have the same path data (same glyph)
-        let paths: Vec<&str> = output.match_indices(" d=\"").map(|(i, _)| {
-            let start = i + 4;
-            let end = output[start..].find('"').unwrap() + start;
-            &output[start..end]
-        }).collect();
+        let paths: Vec<&str> = output
+            .match_indices(" d=\"")
+            .map(|(i, _)| {
+                let start = i + 4;
+                let end = output[start..].find('"').unwrap() + start;
+                &output[start..end]
+            })
+            .collect();
         assert_eq!(paths.len(), 2);
         assert_eq!(paths[0], paths[1], "both repeat dots use the same glyph");
     }

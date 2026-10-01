@@ -1,7 +1,7 @@
 use music::fretboard::StringConvention;
 
-use crate::ast::fretboard_shape::{OwnedFretValue, OwnedFretboardShape};
 use crate::ast::common::OwnedBarre;
+use crate::ast::fretboard_shape::{OwnedFretValue, OwnedFretboardShape};
 use crate::error::MusicRonError;
 
 /// Validated per-string fret assignment.
@@ -198,9 +198,7 @@ mod tests {
 
     #[test]
     fn invalid_muted_string_rejected() {
-        let owned = base_shape(vec![
-            OwnedFretValue::Muted("mute".into()),
-        ]);
+        let owned = base_shape(vec![OwnedFretValue::Muted("mute".into())]);
         let err = convert_fretboard_shape(&owned).unwrap_err();
         match err {
             MusicRonError::InvalidPitch { path, .. } => {

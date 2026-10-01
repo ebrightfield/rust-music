@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use super::common::{OwnedBarre, OwnedMeta, OwnedStringConvention, OwnedTuning};
 use crate::visitor::bounded_vec::deserialize_bounded_vec;
+use serde::{Deserialize, Serialize};
 
 /// Per-string fret value: `"x"` (muted), `0` (open), or fingered `1..=N` (REQ-O26).
 #[derive(Debug, Clone, Serialize, Deserialize)]

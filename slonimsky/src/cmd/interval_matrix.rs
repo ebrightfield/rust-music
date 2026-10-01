@@ -36,9 +36,7 @@ pub fn run(args: IntervalMatrixArgs) -> Result<()> {
         "svg" => write_svg(&pc_set, &args),
         "txt" => write_text(&pc_set, &args),
         _ if args.output.is_none() => write_text(&pc_set, &args),
-        ext => anyhow::bail!(
-            "interval-matrix supports .svg and .txt output (got .{ext})"
-        ),
+        ext => anyhow::bail!("interval-matrix supports .svg and .txt output (got .{ext})"),
     }
 }
 
@@ -56,8 +54,7 @@ fn write_svg(pc_set: &PcContent, args: &IntervalMatrixArgs) -> Result<()> {
 
     match args.output {
         Some(ref path) => {
-            fs::write(path, &svg)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(path, &svg).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", svg.len());
             }
@@ -95,7 +92,10 @@ fn write_text(pc_set: &PcContent, args: &IntervalMatrixArgs) -> Result<()> {
         let mut cells = Vec::new();
         for col in 0..dim {
             if let Some(ic) = matrix.get(row, col) {
-                cells.push(format!("{:>3}", { let val: u8 = ic.into(); val }));
+                cells.push(format!("{:>3}", {
+                    let val: u8 = ic.into();
+                    val
+                }));
             }
         }
         lines.push(format!("{} |{}", label, cells.join(" ")));
@@ -117,8 +117,7 @@ fn write_text(pc_set: &PcContent, args: &IntervalMatrixArgs) -> Result<()> {
 
     match args.output {
         Some(ref path) => {
-            fs::write(path, &text)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(path, &text).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", text.len());
             }
@@ -161,9 +160,21 @@ mod tests {
             "expected reduced interval vector in output, got:\n{content}"
         );
         // Should contain 6 comma-separated values
-        let iv_line = content.lines().find(|l| l.contains("Interval vector:")).unwrap();
-        let inner = iv_line.split('<').nth(1).unwrap().split('>').next().unwrap();
-        let vals: Vec<usize> = inner.split(',').map(|s| s.trim().parse().unwrap()).collect();
+        let iv_line = content
+            .lines()
+            .find(|l| l.contains("Interval vector:"))
+            .unwrap();
+        let inner = iv_line
+            .split('<')
+            .nth(1)
+            .unwrap()
+            .split('>')
+            .next()
+            .unwrap();
+        let vals: Vec<usize> = inner
+            .split(',')
+            .map(|s| s.trim().parse().unwrap())
+            .collect();
         assert_eq!(vals.len(), 6, "reduced IV should have 6 elements");
     }
 

@@ -49,7 +49,10 @@ mod tests {
         draw_articulation(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
         assert!(svg.contains("<path"), "should contain a path element");
-        assert!(svg.contains("translate("), "should have a translate transform");
+        assert!(
+            svg.contains("translate("),
+            "should have a translate transform"
+        );
     }
 
     #[test]
@@ -71,8 +74,7 @@ mod tests {
 
         let staccato =
             layout_articulation(Articulation::Staccato, 100.0, 4, StemDirection::Up, &staff);
-        let accent =
-            layout_articulation(Articulation::Accent, 100.0, 4, StemDirection::Up, &staff);
+        let accent = layout_articulation(Articulation::Accent, 100.0, 4, StemDirection::Up, &staff);
 
         let mut w1 = test_writer();
         draw_articulation(&mut w1, &font, &staccato).unwrap();
@@ -123,13 +125,7 @@ mod tests {
             Articulation::FermataHenzeShort,
         ];
 
-        let plain = layout_articulation(
-            Articulation::Fermata,
-            100.0,
-            4,
-            StemDirection::Up,
-            &staff,
-        );
+        let plain = layout_articulation(Articulation::Fermata, 100.0, 4, StemDirection::Up, &staff);
         let mut plain_writer = test_writer();
         draw_articulation(&mut plain_writer, &font, &plain).unwrap();
         let plain_svg = plain_writer.to_svg();
@@ -143,10 +139,7 @@ mod tests {
             let svg = writer.to_svg();
             assert!(svg.contains("<path"), "{v:?} should produce a path");
             let d = path_d_data(&svg);
-            assert!(
-                !d.is_empty(),
-                "{v:?} path d-data should be non-empty",
-            );
+            assert!(!d.is_empty(), "{v:?} path d-data should be non-empty",);
             assert_ne!(
                 d, plain_d,
                 "{v:?} path d-data should differ from plain Fermata",
@@ -160,10 +153,7 @@ mod tests {
         for (i, a) in all_paths.iter().enumerate() {
             for (j, b) in all_paths.iter().enumerate() {
                 if i != j {
-                    assert_ne!(
-                        a, b,
-                        "fermata variants {i} and {j} share path d-data",
-                    );
+                    assert_ne!(a, b, "fermata variants {i} and {j} share path d-data",);
                 }
             }
         }
@@ -189,8 +179,13 @@ mod tests {
         let font = test_font();
         let staff = test_staff();
 
-        let above =
-            layout_articulation(Articulation::Staccato, 100.0, 4, StemDirection::Down, &staff);
+        let above = layout_articulation(
+            Articulation::Staccato,
+            100.0,
+            4,
+            StemDirection::Down,
+            &staff,
+        );
         let below =
             layout_articulation(Articulation::Staccato, 100.0, 4, StemDirection::Up, &staff);
 
@@ -229,20 +224,10 @@ mod tests {
         // otherwise the up/down distinction collapses to one symbol.
         let font = test_font();
         let staff = test_staff();
-        let up_layout = layout_articulation(
-            Articulation::UpBow,
-            100.0,
-            4,
-            StemDirection::Up,
-            &staff,
-        );
-        let down_layout = layout_articulation(
-            Articulation::DownBow,
-            100.0,
-            4,
-            StemDirection::Up,
-            &staff,
-        );
+        let up_layout =
+            layout_articulation(Articulation::UpBow, 100.0, 4, StemDirection::Up, &staff);
+        let down_layout =
+            layout_articulation(Articulation::DownBow, 100.0, 4, StemDirection::Up, &staff);
 
         let mut w_up = test_writer();
         draw_articulation(&mut w_up, &font, &up_layout).unwrap();
@@ -276,8 +261,7 @@ mod tests {
         ];
         let mut combined_paths: Vec<(Articulation, String)> = Vec::new();
         for c in combined {
-            let layout =
-                layout_articulation(c, 100.0, 4, StemDirection::Up, &staff);
+            let layout = layout_articulation(c, 100.0, 4, StemDirection::Up, &staff);
             let mut writer = test_writer();
             draw_articulation(&mut writer, &font, &layout).unwrap();
             let d = path_d_data(&writer.to_svg());
@@ -306,8 +290,7 @@ mod tests {
             Articulation::Marcato,
             Articulation::Staccatissimo,
         ] {
-            let layout =
-                layout_articulation(simple, 100.0, 4, StemDirection::Up, &staff);
+            let layout = layout_articulation(simple, 100.0, 4, StemDirection::Up, &staff);
             let mut writer = test_writer();
             draw_articulation(&mut writer, &font, &layout).unwrap();
             let simple_d = path_d_data(&writer.to_svg());
@@ -334,10 +317,8 @@ mod tests {
             Articulation::TenutoAccent,
         ] {
             // Stem-up → Below glyph; stem-down → Above glyph.
-            let below =
-                layout_articulation(c, 100.0, 4, StemDirection::Up, &staff);
-            let above =
-                layout_articulation(c, 100.0, 4, StemDirection::Down, &staff);
+            let below = layout_articulation(c, 100.0, 4, StemDirection::Up, &staff);
+            let above = layout_articulation(c, 100.0, 4, StemDirection::Down, &staff);
             assert_eq!(below.placement, ArticulationPlacement::Below);
             assert_eq!(above.placement, ArticulationPlacement::Above);
 
@@ -370,13 +351,8 @@ mod tests {
         ];
 
         // Capture plain-Accent path for cross-comparison.
-        let plain_layout = layout_articulation(
-            Articulation::Accent,
-            100.0,
-            4,
-            StemDirection::Up,
-            &staff,
-        );
+        let plain_layout =
+            layout_articulation(Articulation::Accent, 100.0, 4, StemDirection::Up, &staff);
         let mut plain_writer = test_writer();
         draw_articulation(&mut plain_writer, &font, &plain_layout).unwrap();
         let plain_d = path_d_data(&plain_writer.to_svg());
@@ -385,8 +361,7 @@ mod tests {
         // Capture each extension's path on the Below side (stem-up default).
         let mut ext_paths: Vec<(Articulation, String)> = Vec::new();
         for &a in &extensions {
-            let layout =
-                layout_articulation(a, 100.0, 4, StemDirection::Up, &staff);
+            let layout = layout_articulation(a, 100.0, 4, StemDirection::Up, &staff);
             assert_eq!(
                 layout.placement,
                 ArticulationPlacement::Below,
@@ -517,8 +492,7 @@ mod tests {
         ];
         for &o in others {
             // Below (stem-up) comparison.
-            let below_other =
-                layout_articulation(o, 100.0, 4, StemDirection::Up, &staff);
+            let below_other = layout_articulation(o, 100.0, 4, StemDirection::Up, &staff);
             let mut wo_b = test_writer();
             draw_articulation(&mut wo_b, &font, &below_other).unwrap();
             let other_below_d = path_d_data(&wo_b.to_svg());
@@ -531,8 +505,7 @@ mod tests {
             // through their single SMuFL glyph, so the comparison remains
             // meaningful (and the bow-glyph d-data must still differ from
             // l.v.-above).
-            let above_other =
-                layout_articulation(o, 100.0, 4, StemDirection::Down, &staff);
+            let above_other = layout_articulation(o, 100.0, 4, StemDirection::Down, &staff);
             let mut wo_a = test_writer();
             draw_articulation(&mut wo_a, &font, &above_other).unwrap();
             let other_above_d = path_d_data(&wo_a.to_svg());
@@ -549,13 +522,8 @@ mod tests {
         // path — a Glyph wiring regression would otherwise be invisible.
         let font = test_font();
         let staff = test_staff();
-        let bow_layout = layout_articulation(
-            Articulation::UpBow,
-            100.0,
-            4,
-            StemDirection::Up,
-            &staff,
-        );
+        let bow_layout =
+            layout_articulation(Articulation::UpBow, 100.0, 4, StemDirection::Up, &staff);
         let mut bow_writer = test_writer();
         draw_articulation(&mut bow_writer, &font, &bow_layout).unwrap();
         let bow_d = path_d_data(&bow_writer.to_svg());
@@ -569,8 +537,7 @@ mod tests {
             Articulation::Staccatissimo,
             Articulation::Fermata,
         ] {
-            let layout =
-                layout_articulation(artic, 100.0, 4, StemDirection::Up, &staff);
+            let layout = layout_articulation(artic, 100.0, 4, StemDirection::Up, &staff);
             let mut writer = test_writer();
             draw_articulation(&mut writer, &font, &layout).unwrap();
             let d = path_d_data(&writer.to_svg());

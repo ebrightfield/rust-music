@@ -7,13 +7,37 @@ use proptest::prelude::*;
 /// ExcessiveAccidental in the music crate.
 fn arb_pitch_str() -> impl Strategy<Value = String> {
     let valid_combos: Vec<(&str, &str)> = vec![
-        ("c", ""), ("c", "s"), ("c", "ss"), ("c", "es"),
-        ("d", ""), ("d", "s"), ("d", "ss"), ("d", "es"), ("d", "eses"),
-        ("e", ""), ("e", "s"), ("e", "es"), ("e", "eses"),
-        ("f", ""), ("f", "s"), ("f", "ss"), ("f", "es"),
-        ("g", ""), ("g", "s"), ("g", "ss"), ("g", "es"), ("g", "eses"),
-        ("a", ""), ("a", "s"), ("a", "ss"), ("a", "es"), ("a", "eses"),
-        ("b", ""), ("b", "s"), ("b", "es"), ("b", "eses"),
+        ("c", ""),
+        ("c", "s"),
+        ("c", "ss"),
+        ("c", "es"),
+        ("d", ""),
+        ("d", "s"),
+        ("d", "ss"),
+        ("d", "es"),
+        ("d", "eses"),
+        ("e", ""),
+        ("e", "s"),
+        ("e", "es"),
+        ("e", "eses"),
+        ("f", ""),
+        ("f", "s"),
+        ("f", "ss"),
+        ("f", "es"),
+        ("g", ""),
+        ("g", "s"),
+        ("g", "ss"),
+        ("g", "es"),
+        ("g", "eses"),
+        ("a", ""),
+        ("a", "s"),
+        ("a", "ss"),
+        ("a", "es"),
+        ("a", "eses"),
+        ("b", ""),
+        ("b", "s"),
+        ("b", "es"),
+        ("b", "eses"),
     ];
     let combo = prop::sample::select(valid_combos);
     let octave = 0u8..=8u8;
@@ -23,8 +47,7 @@ fn arb_pitch_str() -> impl Strategy<Value = String> {
 fn arb_duration_str() -> impl Strategy<Value = String> {
     let bases: Vec<&str> = vec!["1", "2", "4", "8", "16", "32", "64", "128"];
     let dots: Vec<&str> = vec!["", ".", ".."];
-    (prop::sample::select(bases), prop::sample::select(dots))
-        .prop_map(|(b, d)| format!("{b}{d}"))
+    (prop::sample::select(bases), prop::sample::select(dots)).prop_map(|(b, d)| format!("{b}{d}"))
 }
 
 /// Generate a single event RON fragment (Note, Chord, Rest, or Tie).
@@ -39,7 +62,11 @@ fn arb_event_ron() -> impl Strategy<Value = String> {
             arb_duration_str()
         )
             .prop_map(|(ps, d)| {
-                let joined = ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
+                let joined = ps
+                    .iter()
+                    .map(|p| format!("\"{p}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("Chord(pitches: [{joined}], duration: \"{d}\")")
             }),
         // Rest

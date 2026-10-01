@@ -48,7 +48,10 @@ mod tests {
         let mut svg = test_svg();
         draw_expression(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains("italic"), "expression text should be italic");
+        assert!(
+            output.contains("italic"),
+            "expression text should be italic"
+        );
     }
 
     #[test]

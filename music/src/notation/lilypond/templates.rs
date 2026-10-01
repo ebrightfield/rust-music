@@ -9,9 +9,11 @@ pub static TEMPLATE_ENGINE: Lazy<Tera> = Lazy::new(|| {
     tera.add_raw_template("header", HEADER).unwrap();
     tera.add_raw_template("voice", VOICE).unwrap();
     tera.add_raw_template("voicing_tab", VOICING_TAB).unwrap();
-    tera.add_raw_template("fretboard_diagram", FRET_DIAGRAM).unwrap();
+    tera.add_raw_template("fretboard_diagram", FRET_DIAGRAM)
+        .unwrap();
     tera.add_raw_template("layout", LAYOUT).unwrap();
-    tera.add_raw_template("layout_context", LAYOUT_CONTEXT).unwrap();
+    tera.add_raw_template("layout_context", LAYOUT_CONTEXT)
+        .unwrap();
     tera
 });
 
@@ -94,7 +96,6 @@ const TAB_STAFF: &str = r#"
           >>
         }
 "#;
-
 
 /// A voicing for tablature, specifying string numbers in addition to pitch / duration.
 const VOICING_TAB: &str = r#"

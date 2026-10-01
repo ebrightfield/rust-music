@@ -52,8 +52,8 @@ static ALLOCATOR: CountingAllocator = CountingAllocator::new();
 
 #[test]
 fn owned_smf_does_not_leak_across_builds() {
-    use music_midi::{StaticTempoMap, smf::SmfBuilder};
     use music::note::pitch::Pitch;
+    use music_midi::{smf::SmfBuilder, StaticTempoMap};
 
     // Warm up: run 100 builds to stabilize any one-time arena initializations.
     let c4 = Pitch::from_midi(60).unwrap();
@@ -61,8 +61,10 @@ fn owned_smf_does_not_leak_across_builds() {
         let _ = SmfBuilder::new()
             .ppq(480)
             .tempo(StaticTempoMap::constant(120.0))
-            .add_track("warmup", 0, &c4).unwrap()
-            .build().unwrap();
+            .add_track("warmup", 0, &c4)
+            .unwrap()
+            .build()
+            .unwrap();
     }
 
     // REQ-O3: measure retained-bytes growth across 1000 iterations.
@@ -71,8 +73,10 @@ fn owned_smf_does_not_leak_across_builds() {
         let owned = SmfBuilder::new()
             .ppq(480)
             .tempo(StaticTempoMap::constant(120.0))
-            .add_track("piano", 0, &c4).unwrap()
-            .build().unwrap();
+            .add_track("piano", 0, &c4)
+            .unwrap()
+            .build()
+            .unwrap();
         // Force the serialization path to exercise the whole owned-data
         // plumbing, then drop the OwnedSmf.
         let _ = owned.to_bytes().unwrap();
@@ -100,10 +104,14 @@ fn owned_smf_does_not_leak_across_builds() {
     let owned_3 = SmfBuilder::new()
         .ppq(480)
         .tempo(StaticTempoMap::constant(120.0))
-        .add_track("t1", 0, &c4).unwrap()
-        .add_track("t2", 1, &c4).unwrap()
-        .add_track("t3", 2, &c4).unwrap()
-        .build().unwrap();
+        .add_track("t1", 0, &c4)
+        .unwrap()
+        .add_track("t2", 1, &c4)
+        .unwrap()
+        .add_track("t3", 2, &c4)
+        .unwrap()
+        .build()
+        .unwrap();
     assert!(owned_3.track_name_count() <= 3 + 1);
     assert_eq!(owned_3.track_name_count(), 3);
 }

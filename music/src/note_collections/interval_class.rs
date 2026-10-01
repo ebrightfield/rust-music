@@ -1,5 +1,5 @@
-use std::fmt::{Display, Formatter};
 use crate::note::pitch_class::Pc;
+use std::fmt::{Display, Formatter};
 
 // TODO Need to be able to derive these from two Pc instances
 

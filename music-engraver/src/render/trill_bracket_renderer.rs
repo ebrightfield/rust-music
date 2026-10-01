@@ -107,8 +107,13 @@ mod tests {
     #[test]
     fn draw_hooks_emits_one_line_per_hook() {
         let ext = layout_trill_extension(100.0, 100.0 + 3.0 * 80.0, 50.0, 80.0).unwrap();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         assert_eq!(hooks.len(), 2);
         let mut w = test_writer();
         draw_trill_bracket_hooks(&mut w, &hooks);
@@ -119,8 +124,13 @@ mod tests {
     #[test]
     fn draw_hooks_both_sides_embeds_distinct_x_values() {
         let ext = layout_trill_extension(100.0, 100.0 + 3.0 * 80.0, 50.0, 80.0).unwrap();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         let mut w = test_writer();
         draw_trill_bracket_hooks(&mut w, &hooks);
         let svg = w.to_svg();

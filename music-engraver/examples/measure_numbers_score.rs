@@ -79,7 +79,10 @@ fn main() {
     );
 
     // 3 systems with 2 measures each → 3 measure number texts ("1", "3", "5")
-    assert!(text_count >= 3, "expected at least 3 text elements for measure numbers, got {text_count}");
+    assert!(
+        text_count >= 3,
+        "expected at least 3 text elements for measure numbers, got {text_count}"
+    );
     assert!(svg.contains(">1<"), "measure number '1' should appear");
     assert!(svg.contains(">3<"), "measure number '3' should appear");
     assert!(svg.contains(">5<"), "measure number '5' should appear");
@@ -87,7 +90,8 @@ fn main() {
     // Measure numbers should NOT show "2", "4", "6" (those are mid-system)
     // (Note: "2" could appear in path data, so we check for the specific text element pattern)
     // Just verify the 3 expected numbers are present
-    let number_texts: Vec<&str> = svg.split("<text")
+    let number_texts: Vec<&str> = svg
+        .split("<text")
         .filter_map(|chunk| {
             if let Some(start) = chunk.find('>') {
                 if let Some(end) = chunk[start..].find("</text>") {

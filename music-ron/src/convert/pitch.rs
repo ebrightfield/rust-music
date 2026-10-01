@@ -9,12 +9,12 @@ use crate::visitor::pitch::parse_pitch_shorthand;
 /// `music::note::pitch::Pitch`, surfacing octave-range or parse errors.
 pub(crate) fn resolve(owned: &OwnedPitch, path: &str) -> Result<Pitch, MusicRonError> {
     let (note, octave_i32) = match owned {
-        OwnedPitch::Shorthand(s) => parse_pitch_shorthand(s).map_err(|(input, _)| {
-            MusicRonError::InvalidPitch {
+        OwnedPitch::Shorthand(s) => {
+            parse_pitch_shorthand(s).map_err(|(input, _)| MusicRonError::InvalidPitch {
                 input,
                 path: path.into(),
-            }
-        })?,
+            })?
+        }
         OwnedPitch::Long { note, octave } => (*note, *octave),
     };
     let octave = i8::try_from(octave_i32).map_err(|_| MusicRonError::OctaveOutOfRange {

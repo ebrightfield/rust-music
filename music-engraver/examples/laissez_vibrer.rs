@@ -118,11 +118,7 @@ fn main() {
         .render_svg();
 
     std::fs::create_dir_all("music-engraver/examples/output").ok();
-    std::fs::write(
-        "music-engraver/examples/output/laissez_vibrer.svg",
-        &svg,
-    )
-    .expect("write SVG");
+    std::fs::write("music-engraver/examples/output/laissez_vibrer.svg", &svg).expect("write SVG");
 
     // Structural sanity: the writer always emits a well-formed root
     // element. If `render_svg()` ever returns a non-SVG string (e.g. a

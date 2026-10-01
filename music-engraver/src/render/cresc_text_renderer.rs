@@ -315,18 +315,13 @@ mod tests {
     #[test]
     fn emits_zero_lines_when_no_room_for_continuation() {
         let out = render(CrescTextKind::Crescendo, 500.0, 500.0);
-        assert_eq!(
-            out.matches("<line ").count(),
-            0,
-            "no continuation, no line"
-        );
+        assert_eq!(out.matches("<line ").count(), 0, "no continuation, no line");
     }
 
     // ---- cross-system continuation segments -----------------------------
 
     fn render_continuation(kind: CrescTextKind, x_start: f64, x_end: f64) -> String {
-        let layout =
-            layout_cresc_text_continuation(kind, x_start, x_end, &test_staff(), SS);
+        let layout = layout_cresc_text_continuation(kind, x_start, x_end, &test_staff(), SS);
         let mut svg = test_svg();
         draw_cresc_text(&mut svg, &layout);
         svg.to_svg()

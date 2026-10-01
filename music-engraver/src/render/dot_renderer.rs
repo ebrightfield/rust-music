@@ -28,12 +28,7 @@ pub fn draw_dots(
     let outline = font.glyph_outline(DOT_GLYPH)?;
     let dot_advance = outline.advance_width as f64;
 
-    let xs = dot_xs(
-        notehead_x,
-        notehead_advance,
-        staff.staff_space,
-        dot_count,
-    );
+    let xs = dot_xs(notehead_x, notehead_advance, staff.staff_space, dot_count);
 
     let dot_y_pos = dot_staff_position(position);
     let y = staff.y_of(dot_y_pos);
@@ -68,7 +63,11 @@ mod tests {
         let result = draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 4, 0).unwrap();
         assert!(result.is_none());
         let output = svg.to_svg();
-        assert_eq!(output.matches("<path ").count(), 0, "no dots should be drawn");
+        assert_eq!(
+            output.matches("<path ").count(),
+            0,
+            "no dots should be drawn"
+        );
     }
 
     #[test]
@@ -156,16 +155,7 @@ mod tests {
         let notehead_x = 500.0;
         let notehead_advance = 295.0;
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2000.0);
-        draw_dots(
-            &mut svg,
-            &staff,
-            &font,
-            notehead_x,
-            notehead_advance,
-            5,
-            1,
-        )
-        .unwrap();
+        draw_dots(&mut svg, &staff, &font, notehead_x, notehead_advance, 5, 1).unwrap();
         let output = svg.to_svg();
 
         let ss = staff.staff_space;

@@ -3,8 +3,12 @@
 //! Produces `examples/output/grand_staff.svg`.
 
 use music_engraver::font::bravura_font;
-use music_engraver::layout::multi_staff::{layout_multi_staff, staff_layouts_from_multi, StaffGroup};
-use music_engraver::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
+use music_engraver::layout::multi_staff::{
+    layout_multi_staff, staff_layouts_from_multi, StaffGroup,
+};
+use music_engraver::render::multi_staff_renderer::{
+    draw_joined_barline, draw_multi_staff_connectors,
+};
 use music_engraver::render::staff_renderer::draw_staff_lines;
 use music_engraver::render::SvgWriter;
 

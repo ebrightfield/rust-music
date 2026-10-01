@@ -2,9 +2,9 @@
 // Uses structural assertions (not render substring) because renderer entry-points
 // vary and may not exist for all variants.
 
-use music::note::pitch_class::Pc;
 use music::notation::clef::Clef;
 use music::notation::rhythm::duration::DurationKind;
+use music::note::pitch_class::Pc;
 use music_ron::ast::common::OwnedTuning;
 use music_ron::{ast::Document, convert, parse};
 
@@ -34,9 +34,7 @@ fn roundtrip_tab() {
         panic!("expected Tab")
     };
     let fretboard = match &t.tuning {
-        OwnedTuning::Named(name) => {
-            music_ron::tuning_registry::resolve(name, "tuning").unwrap()
-        }
+        OwnedTuning::Named(name) => music_ron::tuning_registry::resolve(name, "tuning").unwrap(),
         OwnedTuning::Inline { .. } => panic!("fixture uses named tuning"),
     };
     let events = convert::convert_tab(t, fretboard).unwrap();

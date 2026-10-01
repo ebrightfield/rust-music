@@ -1,89 +1,47 @@
-/// Tab vibrato example: renders fret numbers with vibrato wavy lines.
-///
-/// Demonstrates normal and wide vibrato on single notes and chords,
-/// combined with bends.
-use music_engraver::layout::tab_bend::BendAmount;
-use music_engraver::score::tab::TabScoreBuilder;
+//! Vibrato and a semantic held bend on coordinated standard and TAB staves.
 
-fn main() {
-    let svg = TabScoreBuilder::guitar()
-        // Measure 1: normal vibrato on single notes
-        .quarter()
-        .fret(1, 5)
-        .vibrato()
-        .next()
-        .fret(1, 7)
-        .vibrato()
-        .next()
-        .fret(2, 5)
-        .vibrato()
-        .next()
-        .fret(1, 5)
-        .barline()
-        // Measure 2: wide vibrato on single notes + chord
-        .fret(1, 12)
-        .wide_vibrato()
-        .next()
-        .fret(3, 9)
-        .wide_vibrato()
-        .next()
-        .fret(1, 7)
-        .fret(2, 7)
-        .vibrato()
-        .next()
-        .fret(1, 5)
-        .barline()
-        // Measure 3: vibrato combined with bend
-        .fret(1, 7)
-        .vibrato()
-        .bend(BendAmount::Full)
-        .next()
-        .fret(2, 9)
-        .wide_vibrato()
-        .bend(BendAmount::Half)
-        .next()
-        .fret(1, 5)
-        .next()
-        .fret(1, 3)
-        .vibrato()
-        .barline()
-        // Measure 4: no vibrato for contrast + final wide vibrato
-        .fret(1, 0)
-        .next()
-        .fret(2, 0)
-        .next()
-        .fret(3, 0)
-        .next()
-        .fret(1, 12)
-        .wide_vibrato()
-        .end_barline()
+use music::notation::rhythm::duration::Duration;
+use music::note::note::Note;
+use music::note::pitch::Pitch;
+use music_engraver::layout::tab_vibrato::VibratoKind;
+use music_engraver::score::guitar::{
+    BendGesture, BendPitch, GuitarAnnotation, GuitarMoment, GuitarScore,
+};
+use music_engraver::score::multi_staff::MultiStaffScore;
+
+fn p(note: Note, octave: i8) -> Pitch {
+    Pitch::new(note, octave)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut score = GuitarScore::standard();
+    score.set_time_signature(1, 4);
+    let source = score.note(p(Note::G, 4), Duration::QTR, 1, 3)?;
+    score.annotate(source, GuitarAnnotation::Vibrato(VibratoKind::Normal))?;
+    score.barline()?;
+    let reattack = score.note(p(Note::G, 4), Duration::QTR, 1, 3)?;
+    score.annotate(reattack, GuitarAnnotation::Vibrato(VibratoKind::Wide))?;
+    score.end_barline()?;
+    score.bend(
+        BendGesture::new(
+            source,
+            1,
+            BendPitch::exact(p(Note::A, 4)),
+            GuitarMoment::onset(reattack),
+        )
+        .reattacked_at(reattack),
+    )?;
+
+    let svg = MultiStaffScore::guitar(score)
+        .measures_per_system(1)
         .render_svg();
+    let output =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/output/tab_vibrato.svg");
+    std::fs::create_dir_all(output.parent().expect("output directory"))?;
+    std::fs::write(&output, &svg)?;
 
-    // Write SVG output
-    let out_dir = std::path::Path::new("music-engraver/examples/output");
-    std::fs::create_dir_all(out_dir).expect("create output dir");
-    let path = out_dir.join("tab_vibrato.svg");
-    std::fs::write(&path, &svg).expect("write SVG");
-    println!("Wrote {} ({} bytes)", path.display(), svg.len());
-
-    // Structural assertions
-    assert!(svg.starts_with("<svg "), "should be valid SVG");
-    assert!(svg.contains(" Q"), "should contain vibrato wavy paths (Q commands)");
-    assert!(
-        svg.contains("fill=\"none\""),
-        "vibrato waves should have no fill"
-    );
-    // Count vibrato wave paths (unfilled stroke paths with Q commands)
-    let wave_count = svg
-        .matches("fill=\"none\" stroke=\"black\"")
-        .count();
-    assert!(
-        wave_count >= 8,
-        "should have at least 8 vibrato waves (got {})",
-        wave_count
-    );
-    println!(
-        "Assertions passed: {} vibrato waves rendered",
-        wave_count
-    );
+    assert!(svg.contains("stroke-linecap=\"round\""));
+    assert!(svg.contains("data-bend-phase=\"reattack\""));
+    println!("{}: {} bytes", output.display(), svg.len());
+    Ok(())
 }

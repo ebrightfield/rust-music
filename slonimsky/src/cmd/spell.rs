@@ -2,7 +2,9 @@ use anyhow::{Context, Result};
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
 use music::note::spelling::{Accidental, Letter, Spelling};
-use music::note_collections::chord_name::{ChordName, ChordNameDisplayConfig, MajNotation, TonalSpecification};
+use music::note_collections::chord_name::{
+    ChordName, ChordNameDisplayConfig, MajNotation, TonalSpecification,
+};
 
 pub struct SpellArgs {
     pub symbol: String,
@@ -149,8 +151,7 @@ fn spell_interval(root: Note, interval: u8, others: &[u8]) -> Option<Note> {
 
     // Absolute semitone target, and what the bare letter gives us. Both are
     // reduced mod 12 so the comparison is octave-agnostic.
-    let root_semis = letter_semitones(root_spelling.letter)
-        + accidental_offset(root_spelling.acc);
+    let root_semis = letter_semitones(root_spelling.letter) + accidental_offset(root_spelling.acc);
     let target = (root_semis + i32::from(interval)).rem_euclid(12);
     let natural = letter_semitones(letter).rem_euclid(12);
 
@@ -197,7 +198,11 @@ fn pick_spelling(root: Note, pc: Pc, interval: u8, others: &[u8]) -> Note {
         .copied()
         .filter(|n| !Spelling::from(n).acc.is_double())
         .collect();
-    let pool = if simple.is_empty() { &candidates } else { &simple };
+    let pool = if simple.is_empty() {
+        &candidates
+    } else {
+        &simple
+    };
 
     pool.iter()
         .find(|n| {
@@ -208,7 +213,10 @@ fn pick_spelling(root: Note, pc: Pc, interval: u8, others: &[u8]) -> Note {
                 acc == Accidental::Sharp
             }
         })
-        .or_else(|| pool.iter().find(|n| Spelling::from(*n).acc == Accidental::Natural))
+        .or_else(|| {
+            pool.iter()
+                .find(|n| Spelling::from(*n).acc == Accidental::Natural)
+        })
         .copied()
         .unwrap_or(pool[0])
 }
@@ -284,7 +292,10 @@ pub fn run(args: SpellArgs) -> Result<()> {
             println!("{}", pc_strs.join(" "));
         }
         SpellFormat::Intervals => {
-            let int_strs: Vec<String> = intervals.iter().map(|i| interval_name(*i).to_string()).collect();
+            let int_strs: Vec<String> = intervals
+                .iter()
+                .map(|i| interval_name(*i).to_string())
+                .collect();
             println!("{}", int_strs.join(" "));
         }
         SpellFormat::All => {
@@ -294,7 +305,10 @@ pub fn run(args: SpellArgs) -> Result<()> {
             let pc_strs: Vec<String> = intervals.iter().map(|i| i.to_string()).collect();
             println!("PCs:       {}", pc_strs.join(" "));
 
-            let int_strs: Vec<String> = intervals.iter().map(|i| interval_name(*i).to_string()).collect();
+            let int_strs: Vec<String> = intervals
+                .iter()
+                .map(|i| interval_name(*i).to_string())
+                .collect();
             println!("Intervals: {}", int_strs.join(" "));
         }
     }
@@ -401,11 +415,17 @@ mod tests {
     /// seventh — never a repeated or skipped letter name.
     #[test]
     fn seventh_chords_use_four_distinct_letters() {
-        for root in ["C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B"] {
+        for root in [
+            "C", "C#", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B",
+        ] {
             for quality in ["m7", "maj7", "7", "m7b5"] {
                 let symbol = format!("{root}{quality}");
-                let Ok(chord) = ChordName::from_symbol(&symbol) else { continue };
-                let TonalSpecification::RootPosition(r) = &chord.tonality else { continue };
+                let Ok(chord) = ChordName::from_symbol(&symbol) else {
+                    continue;
+                };
+                let TonalSpecification::RootPosition(r) = &chord.tonality else {
+                    continue;
+                };
                 let pcs: Vec<Pc> = chord.pc_shape.iter().copied().collect();
                 let notes = spell_from_root(*r, &pcs);
                 let letters: std::collections::HashSet<Letter> =
@@ -460,10 +480,22 @@ mod tests {
 
     #[test]
     fn spell_format_parse() {
-        assert!(matches!(SpellFormat::from_str_opt(None).unwrap(), SpellFormat::Notes));
-        assert!(matches!(SpellFormat::from_str_opt(Some("pcs")).unwrap(), SpellFormat::Pcs));
-        assert!(matches!(SpellFormat::from_str_opt(Some("intervals")).unwrap(), SpellFormat::Intervals));
-        assert!(matches!(SpellFormat::from_str_opt(Some("all")).unwrap(), SpellFormat::All));
+        assert!(matches!(
+            SpellFormat::from_str_opt(None).unwrap(),
+            SpellFormat::Notes
+        ));
+        assert!(matches!(
+            SpellFormat::from_str_opt(Some("pcs")).unwrap(),
+            SpellFormat::Pcs
+        ));
+        assert!(matches!(
+            SpellFormat::from_str_opt(Some("intervals")).unwrap(),
+            SpellFormat::Intervals
+        ));
+        assert!(matches!(
+            SpellFormat::from_str_opt(Some("all")).unwrap(),
+            SpellFormat::All
+        ));
         assert!(SpellFormat::from_str_opt(Some("bad")).is_err());
     }
 

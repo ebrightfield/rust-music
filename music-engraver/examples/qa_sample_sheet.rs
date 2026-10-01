@@ -28,8 +28,8 @@ use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::hairpin::HairpinType;
 use music_engraver::layout::key_signature::KeySignature;
+use music_engraver::score::guitar::GuitarScore;
 use music_engraver::score::multi_staff::MultiStaffScore;
-use music_engraver::score::tab::TabScoreBuilder;
 use music_engraver::score::ScoreBuilder;
 
 fn p(note: Note, oct: i8) -> Pitch {
@@ -74,7 +74,15 @@ fn samples() -> Vec<Sample> {
             .clef(Clef::Treble)
             .key_signature(KeySignature::Open)
             .time_signature(4, 4);
-        let scale = [Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B];
+        let scale = [
+            Note::C,
+            Note::D,
+            Note::E,
+            Note::F,
+            Note::G,
+            Note::A,
+            Note::B,
+        ];
         // ascending C4..C6
         for oct in 4..=5 {
             for n in scale {
@@ -97,13 +105,13 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(p(Note::C, 3), Duration::QTR)   // well below staff
+            .note(p(Note::C, 3), Duration::QTR) // well below staff
             .note(p(Note::A, 3), Duration::QTR)
-            .note(p(Note::C, 6), Duration::QTR)   // well above staff
+            .note(p(Note::C, 6), Duration::QTR) // well above staff
             .note(p(Note::E, 6), Duration::QTR)
             .barline()
-            .note(p(Note::G, 6), Duration::HALF)  // very high
-            .note(p(Note::F, 3), Duration::HALF)  // low
+            .note(p(Note::G, 6), Duration::HALF) // very high
+            .note(p(Note::F, 3), Duration::HALF) // low
             .barline()
             .note(p(Note::C, 7), Duration::WHOLE) // extreme high
             .barline()
@@ -114,12 +122,20 @@ fn samples() -> Vec<Sample> {
 
     // 3. Chromatic run (dense single accidentals).
     sample!("03_chromatic_run", "accidentals", {
-        let mut s = ScoreBuilder::new()
-            .clef(Clef::Treble)
-            .time_signature(4, 4);
+        let mut s = ScoreBuilder::new().clef(Clef::Treble).time_signature(4, 4);
         let chromatic = [
-            Note::C, Note::Cis, Note::D, Note::Dis, Note::E, Note::F,
-            Note::Fis, Note::G, Note::Gis, Note::A, Note::Ais, Note::B,
+            Note::C,
+            Note::Cis,
+            Note::D,
+            Note::Dis,
+            Note::E,
+            Note::F,
+            Note::Fis,
+            Note::G,
+            Note::Gis,
+            Note::A,
+            Note::Ais,
+            Note::B,
         ];
         for (i, n) in chromatic.iter().enumerate() {
             s = s.note(p(*n, 4), Duration::EIGHTH);
@@ -135,12 +151,12 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(p(Note::Cisis, 4), Duration::QTR)  // C double-sharp
+            .note(p(Note::Cisis, 4), Duration::QTR) // C double-sharp
             .note(p(Note::Disis, 4), Duration::QTR)
             .note(p(Note::Fisis, 4), Duration::QTR)
             .note(p(Note::Gisis, 4), Duration::QTR)
             .barline()
-            .note(p(Note::Deses, 5), Duration::QTR)  // D double-flat
+            .note(p(Note::Deses, 5), Duration::QTR) // D double-flat
             .note(p(Note::Eeses, 5), Duration::QTR)
             .note(p(Note::Geses, 5), Duration::QTR)
             .note(p(Note::Aeses, 5), Duration::QTR)
@@ -153,10 +169,22 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .chord(vec![p(Note::C, 4), p(Note::E, 4), p(Note::G, 4)], Duration::QTR)
-            .chord(vec![p(Note::E, 4), p(Note::G, 4), p(Note::C, 5)], Duration::QTR)
-            .chord(vec![p(Note::G, 4), p(Note::C, 5), p(Note::E, 5)], Duration::QTR)
-            .chord(vec![p(Note::C, 5), p(Note::E, 5), p(Note::G, 5)], Duration::QTR)
+            .chord(
+                vec![p(Note::C, 4), p(Note::E, 4), p(Note::G, 4)],
+                Duration::QTR,
+            )
+            .chord(
+                vec![p(Note::E, 4), p(Note::G, 4), p(Note::C, 5)],
+                Duration::QTR,
+            )
+            .chord(
+                vec![p(Note::G, 4), p(Note::C, 5), p(Note::E, 5)],
+                Duration::QTR,
+            )
+            .chord(
+                vec![p(Note::C, 5), p(Note::E, 5), p(Note::G, 5)],
+                Duration::QTR,
+            )
             .end_barline()
             .render_svg()
     });
@@ -167,11 +195,20 @@ fn samples() -> Vec<Sample> {
             .clef(Clef::Treble)
             .time_signature(4, 4)
             // close Cmaj7
-            .chord(vec![p(Note::C, 4), p(Note::E, 4), p(Note::G, 4), p(Note::B, 4)], Duration::QTR)
+            .chord(
+                vec![p(Note::C, 4), p(Note::E, 4), p(Note::G, 4), p(Note::B, 4)],
+                Duration::QTR,
+            )
             // G7
-            .chord(vec![p(Note::G, 3), p(Note::B, 3), p(Note::D, 4), p(Note::F, 4)], Duration::QTR)
+            .chord(
+                vec![p(Note::G, 3), p(Note::B, 3), p(Note::D, 4), p(Note::F, 4)],
+                Duration::QTR,
+            )
             // spread voicing (wide)
-            .chord(vec![p(Note::C, 3), p(Note::G, 4), p(Note::E, 5), p(Note::B, 5)], Duration::HALF)
+            .chord(
+                vec![p(Note::C, 3), p(Note::G, 4), p(Note::E, 5), p(Note::B, 5)],
+                Duration::HALF,
+            )
             .end_barline()
             .render_svg()
     });
@@ -181,9 +218,24 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .chord(vec![p(Note::C, 4), p(Note::D, 4), p(Note::E, 4)], Duration::QTR)
-            .chord(vec![p(Note::C, 4), p(Note::D, 4), p(Note::E, 4), p(Note::F, 4), p(Note::G, 4)], Duration::QTR)
-            .chord(vec![p(Note::B, 4), p(Note::C, 5), p(Note::D, 5)], Duration::HALF)
+            .chord(
+                vec![p(Note::C, 4), p(Note::D, 4), p(Note::E, 4)],
+                Duration::QTR,
+            )
+            .chord(
+                vec![
+                    p(Note::C, 4),
+                    p(Note::D, 4),
+                    p(Note::E, 4),
+                    p(Note::F, 4),
+                    p(Note::G, 4),
+                ],
+                Duration::QTR,
+            )
+            .chord(
+                vec![p(Note::B, 4), p(Note::C, 5), p(Note::D, 5)],
+                Duration::HALF,
+            )
             .end_barline()
             .render_svg()
     });
@@ -224,24 +276,33 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .tuplet(3, vec![
-                (p(Note::C, 4), Duration::EIGHTH),
-                (p(Note::D, 4), Duration::EIGHTH),
-                (p(Note::E, 4), Duration::EIGHTH),
-            ])
-            .tuplet(3, vec![
-                (p(Note::E, 4), Duration::EIGHTH),
-                (p(Note::F, 4), Duration::EIGHTH),
-                (p(Note::G, 4), Duration::EIGHTH),
-            ])
+            .tuplet(
+                3,
+                vec![
+                    (p(Note::C, 4), Duration::EIGHTH),
+                    (p(Note::D, 4), Duration::EIGHTH),
+                    (p(Note::E, 4), Duration::EIGHTH),
+                ],
+            )
+            .tuplet(
+                3,
+                vec![
+                    (p(Note::E, 4), Duration::EIGHTH),
+                    (p(Note::F, 4), Duration::EIGHTH),
+                    (p(Note::G, 4), Duration::EIGHTH),
+                ],
+            )
             .barline()
-            .tuplet(5, vec![
-                (p(Note::C, 5), Duration::SIXTEENTH),
-                (p(Note::B, 4), Duration::SIXTEENTH),
-                (p(Note::A, 4), Duration::SIXTEENTH),
-                (p(Note::G, 4), Duration::SIXTEENTH),
-                (p(Note::F, 4), Duration::SIXTEENTH),
-            ])
+            .tuplet(
+                5,
+                vec![
+                    (p(Note::C, 5), Duration::SIXTEENTH),
+                    (p(Note::B, 4), Duration::SIXTEENTH),
+                    (p(Note::A, 4), Duration::SIXTEENTH),
+                    (p(Note::G, 4), Duration::SIXTEENTH),
+                    (p(Note::F, 4), Duration::SIXTEENTH),
+                ],
+            )
             .end_barline()
             .render_svg()
     });
@@ -272,14 +333,21 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(p(Note::C, 4), Duration::QTR).dynamic(Dynamic::Ppp)
-            .note(p(Note::E, 4), Duration::QTR).dynamic(Dynamic::Mp)
-            .note(p(Note::G, 4), Duration::QTR).dynamic(Dynamic::Mf)
-            .note(p(Note::C, 5), Duration::QTR).dynamic(Dynamic::Fff)
+            .note(p(Note::C, 4), Duration::QTR)
+            .dynamic(Dynamic::Ppp)
+            .note(p(Note::E, 4), Duration::QTR)
+            .dynamic(Dynamic::Mp)
+            .note(p(Note::G, 4), Duration::QTR)
+            .dynamic(Dynamic::Mf)
+            .note(p(Note::C, 5), Duration::QTR)
+            .dynamic(Dynamic::Fff)
             .barline()
-            .note(p(Note::C, 5), Duration::QTR).dynamic(Dynamic::Sfz)
-            .note(p(Note::G, 4), Duration::QTR).dynamic(Dynamic::Fp)
-            .note(p(Note::E, 4), Duration::HALF).dynamic(Dynamic::Pp)
+            .note(p(Note::C, 5), Duration::QTR)
+            .dynamic(Dynamic::Sfz)
+            .note(p(Note::G, 4), Duration::QTR)
+            .dynamic(Dynamic::Fp)
+            .note(p(Note::E, 4), Duration::HALF)
+            .dynamic(Dynamic::Pp)
             .end_barline()
             .render_svg()
     });
@@ -289,15 +357,22 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(p(Note::C, 4), Duration::QTR).dynamic(Dynamic::Piano).hairpin_start(HairpinType::Crescendo)
+            .note(p(Note::C, 4), Duration::QTR)
+            .dynamic(Dynamic::Piano)
+            .hairpin_start(HairpinType::Crescendo)
             .note(p(Note::E, 4), Duration::QTR)
             .note(p(Note::G, 4), Duration::QTR)
-            .note(p(Note::C, 5), Duration::QTR).hairpin_end().dynamic(Dynamic::Forte)
+            .note(p(Note::C, 5), Duration::QTR)
+            .hairpin_end()
+            .dynamic(Dynamic::Forte)
             .barline()
-            .note(p(Note::C, 5), Duration::QTR).hairpin_start(HairpinType::Decrescendo)
+            .note(p(Note::C, 5), Duration::QTR)
+            .hairpin_start(HairpinType::Decrescendo)
             .note(p(Note::G, 4), Duration::QTR)
             .note(p(Note::E, 4), Duration::QTR)
-            .note(p(Note::C, 4), Duration::QTR).hairpin_end().dynamic(Dynamic::Piano)
+            .note(p(Note::C, 4), Duration::QTR)
+            .hairpin_end()
+            .dynamic(Dynamic::Piano)
             .end_barline()
             .render_svg()
     });
@@ -307,12 +382,15 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(p(Note::C, 4), Duration::QTR).slur_start()
+            .note(p(Note::C, 4), Duration::QTR)
+            .slur_start()
             .note(p(Note::E, 4), Duration::QTR)
             .note(p(Note::G, 4), Duration::QTR)
-            .note(p(Note::C, 5), Duration::QTR).slur_end()
+            .note(p(Note::C, 5), Duration::QTR)
+            .slur_end()
             .barline()
-            .note(p(Note::C, 5), Duration::HALF).tie()
+            .note(p(Note::C, 5), Duration::HALF)
+            .tie()
             .note(p(Note::C, 5), Duration::HALF)
             .end_barline()
             .render_svg()
@@ -323,13 +401,19 @@ fn samples() -> Vec<Sample> {
         ScoreBuilder::new()
             .clef(Clef::Treble)
             .time_signature(4, 4)
-            .note(p(Note::C, 5), Duration::QTR).articulation(Articulation::Staccato)
-            .note(p(Note::C, 5), Duration::QTR).articulation(Articulation::Accent)
-            .note(p(Note::C, 5), Duration::QTR).articulation(Articulation::Tenuto)
-            .note(p(Note::C, 5), Duration::QTR).articulation(Articulation::Marcato)
+            .note(p(Note::C, 5), Duration::QTR)
+            .articulation(Articulation::Staccato)
+            .note(p(Note::C, 5), Duration::QTR)
+            .articulation(Articulation::Accent)
+            .note(p(Note::C, 5), Duration::QTR)
+            .articulation(Articulation::Tenuto)
+            .note(p(Note::C, 5), Duration::QTR)
+            .articulation(Articulation::Marcato)
             .barline()
-            .note(p(Note::C, 5), Duration::HALF).articulation(Articulation::Fermata)
-            .note(p(Note::C, 5), Duration::HALF).articulation(Articulation::Staccatissimo)
+            .note(p(Note::C, 5), Duration::HALF)
+            .articulation(Articulation::Fermata)
+            .note(p(Note::C, 5), Duration::HALF)
+            .articulation(Articulation::Staccatissimo)
             .end_barline()
             .render_svg()
     });
@@ -343,10 +427,22 @@ fn samples() -> Vec<Sample> {
             .auto_line_breaks()
             .system_width_fu(8000.0)
             .show_measure_numbers();
-        let melody = [Note::G, Note::A, Note::B, Note::C, Note::D, Note::E, Note::Fis];
+        let melody = [
+            Note::G,
+            Note::A,
+            Note::B,
+            Note::C,
+            Note::D,
+            Note::E,
+            Note::Fis,
+        ];
         for m in 0..8 {
             for n in melody.iter() {
-                let oct = if *n == Note::C || *n == Note::D || *n == Note::E || *n == Note::Fis { 5 } else { 4 };
+                let oct = if *n == Note::C || *n == Note::D || *n == Note::E || *n == Note::Fis {
+                    5
+                } else {
+                    4
+                };
                 s = s.note(p(*n, oct), Duration::EIGHTH);
             }
             // 8th note 8 completes the measure: 7 melody eighths + this one
@@ -368,7 +464,10 @@ fn samples() -> Vec<Sample> {
             .note(p(Note::G, 2), Duration::QTR)
             .note(p(Note::C, 3), Duration::QTR)
             .barline()
-            .chord(vec![p(Note::C, 2), p(Note::G, 2), p(Note::E, 3)], Duration::HALF)
+            .chord(
+                vec![p(Note::C, 2), p(Note::G, 2), p(Note::E, 3)],
+                Duration::HALF,
+            )
             .note(p(Note::C, 3), Duration::HALF)
             .end_barline()
             .render_svg()
@@ -377,7 +476,7 @@ fn samples() -> Vec<Sample> {
     // 17. Treble-8 (8va / 8vb) clefs.
     sample!("17_treble_octave_clefs", "clefs", {
         ScoreBuilder::new()
-            .clef(Clef::Treble8ba)   // guitar / tenor octave clef
+            .clef(Clef::Treble8ba) // guitar / tenor octave clef
             .time_signature(4, 4)
             .note(p(Note::E, 4), Duration::QTR)
             .note(p(Note::G, 4), Duration::QTR)
@@ -414,7 +513,7 @@ fn samples() -> Vec<Sample> {
             .barline()
             .note(p(Note::F, 4), dotted(DurationKind::Eighth, 1))
             .note(p(Note::G, 4), Duration::SIXTEENTH)
-            .note(p(Note::A, 4), dotted(DurationKind::Qtr, 2))   // double-dotted
+            .note(p(Note::A, 4), dotted(DurationKind::Qtr, 2)) // double-dotted
             .note(p(Note::B, 4), Duration::SIXTEENTH)
             .end_barline()
             .render_svg()
@@ -436,35 +535,24 @@ fn samples() -> Vec<Sample> {
     v
 }
 
-/// Guitar tab (multi-staff: notation over tab) — separate because it returns
-/// via MultiStaffScore rather than ScoreBuilder.
+/// Guitar tab driven by the same sounding-pitch timeline as its notation stave.
 fn render_tab() -> String {
-    let notation = ScoreBuilder::new()
-        .clef(Clef::Treble8ba)
-        .key_signature(KeySignature::Open)
-        .time_signature(4, 4)
-        .note(p(Note::E, 4), Duration::QTR)
-        .note(p(Note::G, 4), Duration::QTR)
-        .note(p(Note::B, 4), Duration::QTR)
-        .note(p(Note::E, 5), Duration::QTR)
-        .barline()
-        .note(p(Note::E, 5), Duration::QTR)
-        .note(p(Note::B, 4), Duration::QTR)
-        .note(p(Note::G, 4), Duration::HALF)
-        .end_barline();
+    let mut score = GuitarScore::standard();
+    score
+        .set_clef(Clef::Treble8ba)
+        .set_key_signature(KeySignature::Open)
+        .set_time_signature(4, 4);
+    score.note(p(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+    score.note(p(Note::G, 4), Duration::QTR, 1, 3).unwrap();
+    score.note(p(Note::B, 4), Duration::QTR, 1, 7).unwrap();
+    score.note(p(Note::E, 5), Duration::QTR, 1, 12).unwrap();
+    score.barline().unwrap();
+    score.note(p(Note::E, 5), Duration::QTR, 1, 12).unwrap();
+    score.note(p(Note::B, 4), Duration::QTR, 1, 7).unwrap();
+    score.note(p(Note::G, 4), Duration::HALF, 1, 3).unwrap();
+    score.end_barline().unwrap();
 
-    let tab = TabScoreBuilder::guitar()
-        .quarter().fret(6, 0).next()
-        .quarter().fret(4, 0).next()
-        .quarter().fret(3, 0).next()
-        .quarter().fret(1, 0)
-        .barline()
-        .quarter().fret(1, 0).next()
-        .quarter().fret(3, 0).next()
-        .half().fret(4, 0)
-        .end_barline();
-
-    MultiStaffScore::guitar_tab(notation, tab)
+    MultiStaffScore::guitar(score)
         .system_width_fu(10000.0)
         .render_svg()
 }
@@ -498,7 +586,11 @@ fn main() {
                     s.category,
                     s.name,
                     svg.len(),
-                    if valid { "" } else { "  <-- WARNING: malformed SVG" }
+                    if valid {
+                        ""
+                    } else {
+                        "  <-- WARNING: malformed SVG"
+                    }
                 );
                 ok.push(s.name.to_string());
 
@@ -538,10 +630,7 @@ fn main() {
     }
 
     println!();
-    println!(
-        "Sample sheet written to: {}",
-        dir.display()
-    );
+    println!("Sample sheet written to: {}", dir.display());
     println!("Rendered OK: {}/{}", ok.len(), ok.len() + failed.len());
     if !failed.is_empty() {
         println!("FAILURES ({}):", failed.len());

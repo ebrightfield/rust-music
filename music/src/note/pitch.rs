@@ -1,11 +1,11 @@
+use crate::error::MusicSemanticsError;
+use crate::note::note::Note;
+use crate::note::pitch_class::Pc;
+use crate::note::spelling::Spelling;
+use crate::note_collections::spelling::HasSpelling;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use crate::note::note::Note;
-use crate::note::pitch_class::Pc;
-use crate::error::MusicSemanticsError;
-use crate::note::spelling::Spelling;
-use crate::note_collections::spelling::HasSpelling;
 
 pub const MIDDLE_C: u8 = 60;
 
@@ -73,7 +73,10 @@ impl Pitch {
     /// When `prefer_sharp` is true, accidentals are spelled as sharps (C#, D#, etc.).
     /// When `prefer_sharp` is false, accidentals are spelled as flats (Db, Eb, etc.).
     /// Natural notes (C, D, E, F, G, A, B) are always spelled as naturals.
-    pub fn from_midi_spelled(midi_note_value: u8, prefer_sharp: bool) -> Result<Self, MusicSemanticsError> {
+    pub fn from_midi_spelled(
+        midi_note_value: u8,
+        prefer_sharp: bool,
+    ) -> Result<Self, MusicSemanticsError> {
         // i16 intermediate avoids u8 underflow for MIDI 0–11 (octave -1).
         let octave: i8 = ((midi_note_value as i16 / 12) - 1) as i8;
         if !(-1..=9).contains(&octave) {
@@ -96,7 +99,10 @@ impl Pitch {
     /// "palette" of candidate note values (enharmonic alternatives).
     ///
     /// Returns the first note in `notes` whose pitch class matches the MIDI note.
-    pub fn from_midi_spelled_as(midi_note_value: u8, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
+    pub fn from_midi_spelled_as(
+        midi_note_value: u8,
+        notes: &Vec<Note>,
+    ) -> Result<Self, MusicSemanticsError> {
         // i16 intermediate avoids u8 underflow for MIDI 0–11 (octave -1).
         let octave: i8 = ((midi_note_value as i16 / 12) - 1) as i8;
         if !(-1..=9).contains(&octave) {
@@ -115,8 +121,8 @@ impl Pitch {
         }
         Err(MusicSemanticsError::NotAMember(
             *pc.notes().first().unwrap(),
-            notes.clone())
-        )
+            notes.clone(),
+        ))
     }
 
     /// Subtract up or down from a pitch to arrive at another one.
@@ -138,23 +144,23 @@ impl Pitch {
     /// to the input [Note]. For when you want to "go up to G from B3".
     pub fn up_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_up_to_note(note);
-        self.at_distance_from(d as isize)?.spelled_as_in(&vec![*note])
+        self.at_distance_from(d as isize)?
+            .spelled_as_in(&vec![*note])
     }
 
     /// Returns the next [Pitch] below [self] whose note is equivalent to
     /// to the input [Note]. For when you want to "go down to G from B3".
     pub fn down_to_note(&self, note: &Note) -> Result<Self, MusicSemanticsError> {
         let d = self.note.distance_down_to_note(note);
-        self.at_distance_from(-(d as isize))?.spelled_as_in(&vec![*note])
+        self.at_distance_from(-(d as isize))?
+            .spelled_as_in(&vec![*note])
     }
 
     /// Returns the number of letters up/down between self and other,
     /// accounting for octaves.
     pub fn diatonic_distance(&self, other: &Pitch) -> i32 {
-        let self_diat = (self.octave as i32) * 7
-            + i32::from(&Spelling::from(&self.note).letter);
-        let other_diat = (other.octave as i32) * 7
-            + i32::from(&Spelling::from(&other.note).letter);
+        let self_diat = (self.octave as i32) * 7 + i32::from(&Spelling::from(&self.note).letter);
+        let other_diat = (other.octave as i32) * 7 + i32::from(&Spelling::from(&other.note).letter);
         other_diat - self_diat
     }
 
@@ -189,37 +195,99 @@ impl Hash for Pitch {
 /// If that's not the behavior you want, use `Pitch::new` directly.
 #[macro_export]
 macro_rules! pitch {
-    (bis, $octave:expr) => { Pitch::new(Note::Bis, $octave)};
-    (c, $octave:expr) => { Pitch::new(Note::C, $octave)};
-    (deses, $octave:expr) => { Pitch::new(Note::Deses, $octave)};
-    (cis, $octave:expr) => { Pitch::new(Note::Cis, $octave)};
-    (des, $octave:expr) => { Pitch::new(Note::Des, $octave)};
-    (d, $octave:expr) => { Pitch::new(Note::D, $octave)};
-    (cisis, $octave:expr) => { Pitch::new(Note::Cisis, $octave)};
-    (eeses, $octave:expr) => { Pitch::new(Note::Eeses, $octave)};
-    (dis, $octave:expr) => { Pitch::new(Note::Dis, $octave)};
-    (ees, $octave:expr) => { Pitch::new(Note::Ees, $octave)};
-    (e, $octave:expr) => { Pitch::new(Note::E, $octave)};
-    (disis, $octave:expr) => { Pitch::new(Note::Disis, $octave)};
-    (fes, $octave:expr) => { Pitch::new(Note::Fes, $octave)};
-    (f, $octave:expr) => { Pitch::new(Note::F, $octave)};
-    (eis, $octave:expr) => { Pitch::new(Note::Eis, $octave)};
-    (geses, $octave:expr) => { Pitch::new(Note::Geses, $octave)};
-    (fis, $octave:expr) => { Pitch::new(Note::Fis, $octave)};
-    (ges, $octave:expr) => { Pitch::new(Note::Ges, $octave)};
-    (g, $octave:expr) => { Pitch::new(Note::G, $octave)};
-    (fisis, $octave:expr) => { Pitch::new(Note::Fisis, $octave)};
-    (aeses, $octave:expr) => { Pitch::new(Note::Aeses, $octave)};
-    (gis, $octave:expr) => { Pitch::new(Note::Gis, $octave)};
-    (aes, $octave:expr) => { Pitch::new(Note::Aes, $octave)};
-    (a, $octave:expr) => { Pitch::new(Note::A, $octave)};
-    (gisis, $octave:expr) => { Pitch::new(Note::Gisis, $octave)};
-    (beses, $octave:expr) => { Pitch::new(Note::Beses, $octave)};
-    (ais, $octave:expr) => { Pitch::new(Note::Ais, $octave)};
-    (bes, $octave:expr) => { Pitch::new(Note::Bes, $octave)};
-    (b, $octave:expr) => { Pitch::new(Note::B, $octave)};
-    (ces, $octave:expr) => { Pitch::new(Note::Ces, $octave)};
-    (aisis, $octave:expr) => { Pitch::new(Note::Aisis, $octave)};
+    (bis, $octave:expr) => {
+        Pitch::new(Note::Bis, $octave)
+    };
+    (c, $octave:expr) => {
+        Pitch::new(Note::C, $octave)
+    };
+    (deses, $octave:expr) => {
+        Pitch::new(Note::Deses, $octave)
+    };
+    (cis, $octave:expr) => {
+        Pitch::new(Note::Cis, $octave)
+    };
+    (des, $octave:expr) => {
+        Pitch::new(Note::Des, $octave)
+    };
+    (d, $octave:expr) => {
+        Pitch::new(Note::D, $octave)
+    };
+    (cisis, $octave:expr) => {
+        Pitch::new(Note::Cisis, $octave)
+    };
+    (eeses, $octave:expr) => {
+        Pitch::new(Note::Eeses, $octave)
+    };
+    (dis, $octave:expr) => {
+        Pitch::new(Note::Dis, $octave)
+    };
+    (ees, $octave:expr) => {
+        Pitch::new(Note::Ees, $octave)
+    };
+    (e, $octave:expr) => {
+        Pitch::new(Note::E, $octave)
+    };
+    (disis, $octave:expr) => {
+        Pitch::new(Note::Disis, $octave)
+    };
+    (fes, $octave:expr) => {
+        Pitch::new(Note::Fes, $octave)
+    };
+    (f, $octave:expr) => {
+        Pitch::new(Note::F, $octave)
+    };
+    (eis, $octave:expr) => {
+        Pitch::new(Note::Eis, $octave)
+    };
+    (geses, $octave:expr) => {
+        Pitch::new(Note::Geses, $octave)
+    };
+    (fis, $octave:expr) => {
+        Pitch::new(Note::Fis, $octave)
+    };
+    (ges, $octave:expr) => {
+        Pitch::new(Note::Ges, $octave)
+    };
+    (g, $octave:expr) => {
+        Pitch::new(Note::G, $octave)
+    };
+    (fisis, $octave:expr) => {
+        Pitch::new(Note::Fisis, $octave)
+    };
+    (aeses, $octave:expr) => {
+        Pitch::new(Note::Aeses, $octave)
+    };
+    (gis, $octave:expr) => {
+        Pitch::new(Note::Gis, $octave)
+    };
+    (aes, $octave:expr) => {
+        Pitch::new(Note::Aes, $octave)
+    };
+    (a, $octave:expr) => {
+        Pitch::new(Note::A, $octave)
+    };
+    (gisis, $octave:expr) => {
+        Pitch::new(Note::Gisis, $octave)
+    };
+    (beses, $octave:expr) => {
+        Pitch::new(Note::Beses, $octave)
+    };
+    (ais, $octave:expr) => {
+        Pitch::new(Note::Ais, $octave)
+    };
+    (bes, $octave:expr) => {
+        Pitch::new(Note::Bes, $octave)
+    };
+    (b, $octave:expr) => {
+        Pitch::new(Note::B, $octave)
+    };
+    (ces, $octave:expr) => {
+        Pitch::new(Note::Ces, $octave)
+    };
+    (aisis, $octave:expr) => {
+        Pitch::new(Note::Aisis, $octave)
+    };
 }
 
 #[cfg(test)]

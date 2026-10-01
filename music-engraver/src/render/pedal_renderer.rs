@@ -168,7 +168,12 @@ mod tests {
         // the same x-position. The glyph paths differ in d-attribute content.
         let (font, staff) = setup();
         let mut outputs = Vec::new();
-        for mark in [PedalMark::Down, PedalMark::Up, PedalMark::Half, PedalMark::Sost] {
+        for mark in [
+            PedalMark::Down,
+            PedalMark::Up,
+            PedalMark::Half,
+            PedalMark::Sost,
+        ] {
             let mut svg = SvgWriter::new(800.0, 300.0, -500.0, -200.0, 6000.0, 2000.0);
             draw_pedal(&mut svg, &staff, &font, mark, 500.0).unwrap();
             outputs.push((mark, svg.to_svg()));

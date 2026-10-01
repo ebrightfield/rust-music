@@ -1,4 +1,4 @@
-use music_ron::ast::{OwnedSnippet, OwnedTab, OwnedPitchCircle};
+use music_ron::ast::{OwnedPitchCircle, OwnedSnippet, OwnedTab};
 use music_ron::{parse_as, MusicRonError};
 
 #[test]
@@ -29,8 +29,14 @@ fn parse_as_kind_mismatch_is_syntax_error() {
     match err {
         MusicRonError::SyntaxError { message, .. } => {
             assert!(message.contains("kind mismatch"), "got: {message}");
-            assert!(message.contains("Tab"), "expected Tab in message, got: {message}");
-            assert!(message.contains("Snippet"), "expected Snippet in message, got: {message}");
+            assert!(
+                message.contains("Tab"),
+                "expected Tab in message, got: {message}"
+            );
+            assert!(
+                message.contains("Snippet"),
+                "expected Snippet in message, got: {message}"
+            );
         }
         other => panic!("expected SyntaxError, got: {other:?}"),
     }
@@ -40,5 +46,8 @@ fn parse_as_kind_mismatch_is_syntax_error() {
 fn parse_as_propagates_version_error() {
     let src = r#"(kind: "Snippet", version: 99, clef: "treble", events: [])"#;
     let err = parse_as::<OwnedSnippet>(src).unwrap_err();
-    assert!(matches!(err, MusicRonError::UnsupportedVersion { got: 99, .. }));
+    assert!(matches!(
+        err,
+        MusicRonError::UnsupportedVersion { got: 99, .. }
+    ));
 }

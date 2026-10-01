@@ -76,8 +76,7 @@ fn main() {
 
     // Write to file
     std::fs::create_dir_all("music-engraver/examples/output").ok();
-    std::fs::write("music-engraver/examples/output/tab_palm_mute.svg", &svg)
-        .expect("write SVG");
+    std::fs::write("music-engraver/examples/output/tab_palm_mute.svg", &svg).expect("write SVG");
 
     // Verify structural elements
     let text_count = svg.matches("<text ").count();
@@ -93,7 +92,10 @@ fn main() {
     );
 
     assert!(svg.starts_with("<svg"));
-    assert!(pm_count >= 8, "should have at least 8 P.M. text elements, got {pm_count}");
+    assert!(
+        pm_count >= 8,
+        "should have at least 8 P.M. text elements, got {pm_count}"
+    );
     assert!(
         svg.contains("stroke-dasharray"),
         "consecutive palm mutes should produce dashed continuation lines"

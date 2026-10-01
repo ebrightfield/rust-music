@@ -1,19 +1,18 @@
-use std::collections::HashSet;
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use std::collections::HashSet;
 
 /// Scale alteration.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Alt2nd {
     Sharp,
     Natural,
-    Flat
+    Flat,
 }
 
 impl Alt2nd {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc1 => Some(Alt2nd::Flat),
                 Pc2 => Some(Alt2nd::Natural),
@@ -44,13 +43,12 @@ impl Alt2nd {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Alt2ndMinor {
     Natural,
-    Flat
+    Flat,
 }
 
 impl Alt2ndMinor {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc1 => Some(Alt2ndMinor::Flat),
                 Pc2 => Some(Alt2ndMinor::Natural),
@@ -83,8 +81,7 @@ pub enum Alt4th {
 
 impl Alt4th {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc5 => Some(Alt4th::Natural),
                 Pc6 => Some(Alt4th::Sharp),
@@ -118,8 +115,7 @@ pub enum Alt4thMinor {
 
 impl Alt4thMinor {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc4 => Some(Alt4thMinor::Flat),
                 Pc5 => Some(Alt4thMinor::Natural),
@@ -156,8 +152,7 @@ pub enum Alt6thMaj7 {
 
 impl Alt6thMaj7 {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc8 => Some(Alt6thMaj7::Flat),
                 Pc9 => Some(Alt6thMaj7::Natural),
@@ -193,8 +188,7 @@ pub enum Alt6thDom7 {
 
 impl Alt6thDom7 {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc8 => Some(Alt6thDom7::Flat),
                 Pc9 => Some(Alt6thDom7::Natural),
@@ -227,8 +221,7 @@ pub enum Alt6thAugMaj7 {
 
 impl Alt6thAugMaj7 {
     pub fn from_pcs(pcs: &HashSet<Pc>) -> Vec<Self> {
-        pcs
-            .iter()
+        pcs.iter()
             .filter_map(|pc| match pc {
                 Pc9 => Some(Alt6thAugMaj7::Natural),
                 Pc10 => Some(Alt6thAugMaj7::Sharp),

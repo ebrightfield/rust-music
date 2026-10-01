@@ -25,7 +25,12 @@ struct Parser {
 
 impl Parser {
     fn new(tokens: Vec<Token>, eof: usize) -> Self {
-        Self { tokens, pos: 0, eof, last_duration: None }
+        Self {
+            tokens,
+            pos: 0,
+            eof,
+            last_duration: None,
+        }
     }
 
     fn peek(&self) -> Option<&Token> {
@@ -49,7 +54,9 @@ impl Parser {
     }
 
     fn cur_span(&self) -> Span {
-        self.peek().map(|t| t.span.clone()).unwrap_or_else(|| self.eof_span())
+        self.peek()
+            .map(|t| t.span.clone())
+            .unwrap_or_else(|| self.eof_span())
     }
 
     fn parse_items(&mut self, inside_braces: bool) -> Result<Vec<Item>, ParseError> {
@@ -144,7 +151,11 @@ impl Parser {
                 let den = self.expect_number("tuplet denominator")?;
                 self.expect_kind(&TokenKind::LBrace, "'{'")?;
                 let items = self.parse_items(true)?;
-                Ok(Item::Tuplet { numerator: num, denominator: den, items })
+                Ok(Item::Tuplet {
+                    numerator: num,
+                    denominator: den,
+                    items,
+                })
             }
             other => Err(ParseError::new(
                 ParseErrorKind::UnsupportedCommand(format!("\\{}", other)),
@@ -271,53 +282,65 @@ impl Parser {
     }
 
     fn expect_ident(&mut self, what: &'static str) -> Result<String, ParseError> {
-        let tok = self.bump().ok_or_else(|| {
-            ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span())
-        })?;
+        let tok = self
+            .bump()
+            .ok_or_else(|| ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span()))?;
         match tok.kind {
             TokenKind::Ident(s) => Ok(s),
             other => Err(ParseError::new(
-                ParseErrorKind::Expected { expected: what, found: format!("{:?}", other) },
+                ParseErrorKind::Expected {
+                    expected: what,
+                    found: format!("{:?}", other),
+                },
                 tok.span,
             )),
         }
     }
 
     fn expect_number(&mut self, what: &'static str) -> Result<u32, ParseError> {
-        let tok = self.bump().ok_or_else(|| {
-            ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span())
-        })?;
+        let tok = self
+            .bump()
+            .ok_or_else(|| ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span()))?;
         match tok.kind {
             TokenKind::Number(n) => Ok(n),
             other => Err(ParseError::new(
-                ParseErrorKind::Expected { expected: what, found: format!("{:?}", other) },
+                ParseErrorKind::Expected {
+                    expected: what,
+                    found: format!("{:?}", other),
+                },
                 tok.span,
             )),
         }
     }
 
     fn expect_command(&mut self, what: &'static str) -> Result<String, ParseError> {
-        let tok = self.bump().ok_or_else(|| {
-            ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span())
-        })?;
+        let tok = self
+            .bump()
+            .ok_or_else(|| ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span()))?;
         match tok.kind {
             TokenKind::Command(s) => Ok(s),
             other => Err(ParseError::new(
-                ParseErrorKind::Expected { expected: what, found: format!("{:?}", other) },
+                ParseErrorKind::Expected {
+                    expected: what,
+                    found: format!("{:?}", other),
+                },
                 tok.span,
             )),
         }
     }
 
     fn expect_kind(&mut self, want: &TokenKind, what: &'static str) -> Result<(), ParseError> {
-        let tok = self.bump().ok_or_else(|| {
-            ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span())
-        })?;
+        let tok = self
+            .bump()
+            .ok_or_else(|| ParseError::new(ParseErrorKind::UnexpectedEof(what), self.eof_span()))?;
         if &tok.kind == want {
             Ok(())
         } else {
             Err(ParseError::new(
-                ParseErrorKind::Expected { expected: what, found: format!("{:?}", tok.kind) },
+                ParseErrorKind::Expected {
+                    expected: what,
+                    found: format!("{:?}", tok.kind),
+                },
                 tok.span,
             ))
         }
@@ -397,9 +420,8 @@ fn pitch_from_parsed(note: Note, octave_delta: i32, span: Span) -> Result<Pitch,
             span,
         ));
     }
-    Pitch::try_new(note, original_octave as i8).map_err(|_| {
-        ParseError::new(ParseErrorKind::OctaveOutOfRange(original_octave), span)
-    })
+    Pitch::try_new(note, original_octave as i8)
+        .map_err(|_| ParseError::new(ParseErrorKind::OctaveOutOfRange(original_octave), span))
 }
 
 #[cfg(test)]
@@ -483,7 +505,11 @@ mod tests {
     fn tuplet() {
         let items = parse("\\tuplet 3/2 { c'8 d' e' }").unwrap();
         match &items[0] {
-            Item::Tuplet { numerator: 3, denominator: 2, items: inner } => {
+            Item::Tuplet {
+                numerator: 3,
+                denominator: 2,
+                items: inner,
+            } => {
                 assert_eq!(inner.len(), 3);
             }
             other => panic!("{:?}", other),
@@ -503,10 +529,13 @@ mod tests {
     fn octave_marks() {
         // Middle C = c' in LilyPond absolute mode (octave 4).
         let items = parse("c'4 c4 c,4 c''4").unwrap();
-        let octaves: Vec<i8> = items.iter().map(|i| match i {
-            Item::Event(Event::Note(p, _)) => p.octave,
-            _ => panic!(),
-        }).collect();
+        let octaves: Vec<i8> = items
+            .iter()
+            .map(|i| match i {
+                Item::Event(Event::Note(p, _)) => p.octave,
+                _ => panic!(),
+            })
+            .collect();
         assert_eq!(octaves, vec![4, 3, 2, 5]);
     }
 

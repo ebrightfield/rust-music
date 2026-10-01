@@ -23,35 +23,14 @@ fn main() {
         .clef(Clef::Treble)
         .key_signature(KeySignature::Sharps(2))
         .time_signature(4, 4)
-        .note(
-            Pitch::new(Note::D, 4),
-            Duration::QTR,
-        )
-        .note(
-            Pitch::new(Note::Fis, 4),
-            Duration::QTR,
-        )
-        .note(
-            Pitch::new(Note::A, 4),
-            Duration::HALF,
-        )
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
+        .note(Pitch::new(Note::Fis, 4), Duration::QTR)
+        .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
-        .note(
-            Pitch::new(Note::B, 4),
-            Duration::QTR,
-        )
-        .note(
-            Pitch::new(Note::A, 4),
-            Duration::QTR,
-        )
-        .note(
-            Pitch::new(Note::Fis, 4),
-            Duration::QTR,
-        )
-        .note(
-            Pitch::new(Note::D, 4),
-            Duration::QTR,
-        )
+        .note(Pitch::new(Note::B, 4), Duration::QTR)
+        .note(Pitch::new(Note::A, 4), Duration::QTR)
+        .note(Pitch::new(Note::Fis, 4), Duration::QTR)
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
         .end_barline()
         .render_svg();
 

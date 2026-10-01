@@ -60,7 +60,10 @@ mod tests {
         draw_grace_note(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
         assert!(svg.contains("<path"), "should contain a path element");
-        assert!(svg.contains("translate("), "should have translate transform");
+        assert!(
+            svg.contains("translate("),
+            "should have translate transform"
+        );
         assert!(svg.contains("scale("), "should have scale transform");
     }
 
@@ -140,7 +143,10 @@ mod tests {
         draw_grace_note(&mut w2, &font, &down_layout).unwrap();
         let svg2 = w2.to_svg();
 
-        assert_ne!(svg1, svg2, "stem up and down should produce different glyphs");
+        assert_ne!(
+            svg1, svg2,
+            "stem up and down should produce different glyphs"
+        );
     }
 
     #[test]

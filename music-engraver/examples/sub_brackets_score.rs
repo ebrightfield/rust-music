@@ -33,16 +33,37 @@ fn main() {
     let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/output");
     std::fs::create_dir_all(&out_dir).expect("create output dir");
 
-    let v1 = line(Clef::Treble, &[(Note::E, 5), (Note::G, 5), (Note::A, 5), (Note::B, 5)]);
-    let v2 = line(Clef::Treble, &[(Note::C, 5), (Note::E, 5), (Note::F, 5), (Note::G, 5)]);
-    let va = line(Clef::Treble, &[(Note::G, 4), (Note::A, 4), (Note::B, 4), (Note::C, 5)]);
-    let vc = line(Clef::Bass, &[(Note::E, 3), (Note::G, 3), (Note::A, 3), (Note::B, 3)]);
-    let cb = line(Clef::Bass, &[(Note::E, 2), (Note::E, 2), (Note::E, 2), (Note::E, 2)]);
+    let v1 = line(
+        Clef::Treble,
+        &[(Note::E, 5), (Note::G, 5), (Note::A, 5), (Note::B, 5)],
+    );
+    let v2 = line(
+        Clef::Treble,
+        &[(Note::C, 5), (Note::E, 5), (Note::F, 5), (Note::G, 5)],
+    );
+    let va = line(
+        Clef::Treble,
+        &[(Note::G, 4), (Note::A, 4), (Note::B, 4), (Note::C, 5)],
+    );
+    let vc = line(
+        Clef::Bass,
+        &[(Note::E, 3), (Note::G, 3), (Note::A, 3), (Note::B, 3)],
+    );
+    let cb = line(
+        Clef::Bass,
+        &[(Note::E, 2), (Note::E, 2), (Note::E, 2), (Note::E, 2)],
+    );
 
     let svg = MultiStaffScore::section(vec![v1, v2, va, vc, cb])
         .with_sub_brackets(vec![
-            SubBracket { start_index: 0, staff_count: 2 },
-            SubBracket { start_index: 2, staff_count: 3 },
+            SubBracket {
+                start_index: 0,
+                staff_count: 2,
+            },
+            SubBracket {
+                start_index: 2,
+                staff_count: 3,
+            },
         ])
         .render_svg();
 

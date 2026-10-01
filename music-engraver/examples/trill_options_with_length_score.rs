@@ -120,34 +120,24 @@ fn build_score_widened() -> String {
         .time_signature(4, 4)
         .measures_per_system(2)
         .note(p(Note::G, 4), Duration::WHOLE)
-        .trill_with_extension_full_options(
-            TrillExtensionFullOptions::from(
-                TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(2.0),
-            ),
-        )
+        .trill_with_extension_full_options(TrillExtensionFullOptions::from(
+            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(2.0),
+        ))
         .barline()
         .note(p(Note::A, 4), Duration::WHOLE)
-        .trill_with_extension_full_options(
-            TrillExtensionFullOptions::from(
-                TrillBracketOptions::new(TrillBracketSide::End).with_extension_length_ss(4.0),
-            ),
-        )
+        .trill_with_extension_full_options(TrillExtensionFullOptions::from(
+            TrillBracketOptions::new(TrillBracketSide::End).with_extension_length_ss(4.0),
+        ))
         .barline()
         .note(p(Note::B, 4), Duration::WHOLE)
-        .trill_with_extension_full_options(
-            TrillExtensionFullOptions::from(
-                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
-                    .with_extension_length_ss(2.0),
-            ),
-        )
+        .trill_with_extension_full_options(TrillExtensionFullOptions::from(
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow).with_extension_length_ss(2.0),
+        ))
         .barline()
         .note(p(Note::C, 5), Duration::WHOLE)
-        .trill_with_extension_full_options(
-            TrillExtensionFullOptions::from(
-                TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
-                    .with_extension_length_ss(3.0),
-            ),
-        )
+        .trill_with_extension_full_options(TrillExtensionFullOptions::from(
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster).with_extension_length_ss(3.0),
+        ))
         .end_barline()
         .render_svg()
 }

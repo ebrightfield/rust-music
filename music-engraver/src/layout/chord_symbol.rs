@@ -184,9 +184,7 @@ fn is_flat_context(prev: Option<char>) -> bool {
         // First character of the symbol — treat as flat (rare but defensible).
         None => true,
         Some(p) => {
-            matches!(p, 'A'..='G')
-                || p.is_ascii_digit()
-                || matches!(p, '(' | '+' | '-' | '/' | ',')
+            matches!(p, 'A'..='G') || p.is_ascii_digit() || matches!(p, '(' | '+' | '-' | '/' | ',')
         }
     }
 }
@@ -351,22 +349,29 @@ pub fn layout_chord_symbol_composite(
             units_per_em,
             &accidental_advance,
         ));
-        let needs_gap_before =
-            i > 0 && (seg.is_accidental() || segments[i - 1].is_accidental());
-        leading_gaps.push(if needs_gap_before { accidental_side_bearing } else { 0.0 });
+        let needs_gap_before = i > 0 && (seg.is_accidental() || segments[i - 1].is_accidental());
+        leading_gaps.push(if needs_gap_before {
+            accidental_side_bearing
+        } else {
+            0.0
+        });
     }
 
     let total_width: f64 = widths.iter().sum::<f64>() + leading_gaps.iter().sum::<f64>();
     let mut cursor = note_center_x - total_width / 2.0;
     let mut boxes: Vec<ChordSymbolSegmentBox> = Vec::with_capacity(segments.len());
 
-    for ((seg, width), gap) in segments.into_iter().zip(widths.iter()).zip(leading_gaps.iter()) {
+    for ((seg, width), gap) in segments
+        .into_iter()
+        .zip(widths.iter())
+        .zip(leading_gaps.iter())
+    {
         cursor += *gap;
         let (seg_font_size, seg_baseline) = match seg {
             ChordSymbolSegment::Text(_) => (font_size, y_baseline),
-            ChordSymbolSegment::Sharp
-            | ChordSymbolSegment::Flat
-            | ChordSymbolSegment::Natural => (accidental_font_size, accidental_y_baseline),
+            ChordSymbolSegment::Sharp | ChordSymbolSegment::Flat | ChordSymbolSegment::Natural => {
+                (accidental_font_size, accidental_y_baseline)
+            }
         };
         boxes.push(ChordSymbolSegmentBox {
             segment: seg,
@@ -569,11 +574,7 @@ mod tests {
     fn parse_b_after_paren_or_alteration_marker_is_flat() {
         assert_eq!(
             parse_chord_symbol_segments("C(b5)"),
-            vec![
-                S::Text("C(".into()),
-                S::Flat,
-                S::Text("5)".into()),
-            ]
+            vec![S::Text("C(".into()), S::Flat, S::Text("5)".into()),]
         );
         assert_eq!(
             parse_chord_symbol_segments("C+b9"),
@@ -692,14 +693,8 @@ mod tests {
 
     #[test]
     fn composite_f_sharp_yields_text_plus_sharp() {
-        let layout = layout_chord_symbol_composite(
-            "F#",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            fixed_advance,
-        );
+        let layout =
+            layout_chord_symbol_composite("F#", 500.0, &test_staff(), 250.0, 1000, fixed_advance);
         assert_eq!(layout.boxes.len(), 2);
         assert!(matches!(
             layout.boxes[0].segment,
@@ -710,28 +705,16 @@ mod tests {
 
     #[test]
     fn composite_b_flat_yields_text_plus_flat() {
-        let layout = layout_chord_symbol_composite(
-            "Bb",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            fixed_advance,
-        );
+        let layout =
+            layout_chord_symbol_composite("Bb", 500.0, &test_staff(), 250.0, 1000, fixed_advance);
         assert_eq!(layout.boxes.len(), 2);
         assert_eq!(layout.boxes[1].segment, ChordSymbolSegment::Flat);
     }
 
     #[test]
     fn composite_accidentals_use_reduced_font_size() {
-        let layout = layout_chord_symbol_composite(
-            "F#",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            fixed_advance,
-        );
+        let layout =
+            layout_chord_symbol_composite("F#", 500.0, &test_staff(), 250.0, 1000, fixed_advance);
         // Box[0] is text — full font size; Box[1] is sharp — reduced.
         let text_size = layout.boxes[0].font_size;
         let acc_size = layout.boxes[1].font_size;
@@ -744,14 +727,8 @@ mod tests {
 
     #[test]
     fn composite_accidentals_baseline_raised() {
-        let layout = layout_chord_symbol_composite(
-            "F#",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            fixed_advance,
-        );
+        let layout =
+            layout_chord_symbol_composite("F#", 500.0, &test_staff(), 250.0, 1000, fixed_advance);
         // Sharp box baseline should be y_baseline minus the configured raise.
         let text_baseline = layout.boxes[0].y_baseline;
         let acc_baseline = layout.boxes[1].y_baseline;
@@ -838,22 +815,10 @@ mod tests {
         // Doubling the accidental advance width must double the sharp segment's width.
         let big_advance = |_g: smufl::Glyph| 400u16;
         let small_advance = |_g: smufl::Glyph| 200u16;
-        let layout_big = layout_chord_symbol_composite(
-            "F#",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            big_advance,
-        );
-        let layout_small = layout_chord_symbol_composite(
-            "F#",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            small_advance,
-        );
+        let layout_big =
+            layout_chord_symbol_composite("F#", 500.0, &test_staff(), 250.0, 1000, big_advance);
+        let layout_small =
+            layout_chord_symbol_composite("F#", 500.0, &test_staff(), 250.0, 1000, small_advance);
         let big = layout_big.boxes[1].width;
         let small = layout_small.boxes[1].width;
         assert!(
@@ -864,14 +829,8 @@ mod tests {
 
     #[test]
     fn composite_empty_string_yields_empty_layout() {
-        let layout = layout_chord_symbol_composite(
-            "",
-            500.0,
-            &test_staff(),
-            250.0,
-            1000,
-            fixed_advance,
-        );
+        let layout =
+            layout_chord_symbol_composite("", 500.0, &test_staff(), 250.0, 1000, fixed_advance);
         assert!(layout.boxes.is_empty());
         assert_eq!(layout.total_width, 0.0);
         assert_eq!(layout.x_center, 500.0);
@@ -883,14 +842,8 @@ mod tests {
         // match the simple layout's baseline for the same input position.
         let staff = test_staff();
         let simple = layout_chord_symbol("Cmaj7", 500.0, &staff, 250.0);
-        let composite = layout_chord_symbol_composite(
-            "Cmaj7",
-            500.0,
-            &staff,
-            250.0,
-            1000,
-            fixed_advance,
-        );
+        let composite =
+            layout_chord_symbol_composite("Cmaj7", 500.0, &staff, 250.0, 1000, fixed_advance);
         assert!((simple.y_baseline - composite.y_baseline).abs() < 0.01);
         assert!((simple.font_size - composite.font_size).abs() < 0.01);
     }
@@ -898,14 +851,8 @@ mod tests {
     #[test]
     fn composite_units_per_em_zero_does_not_panic() {
         // Defensive: a junk units_per_em of 0 must not divide-by-zero.
-        let layout = layout_chord_symbol_composite(
-            "F#",
-            500.0,
-            &test_staff(),
-            250.0,
-            0,
-            fixed_advance,
-        );
+        let layout =
+            layout_chord_symbol_composite("F#", 500.0, &test_staff(), 250.0, 0, fixed_advance);
         // No panic; layout produced.
         assert_eq!(layout.boxes.len(), 2);
     }
@@ -976,33 +923,16 @@ mod tests {
     #[test]
     fn segment_advance_text_uses_char_width_factor() {
         // "Am" — 2 chars; width = 2 * font_size * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR.
-        let w = chord_symbol_segment_advance(
-            &S::Text("Am".into()),
-            400.0,
-            1000,
-            fixed_advance,
-        );
+        let w = chord_symbol_segment_advance(&S::Text("Am".into()), 400.0, 1000, fixed_advance);
         let expected = 2.0 * 400.0 * CHORD_SYMBOL_TEXT_CHAR_WIDTH_FACTOR;
-        assert!(
-            (w - expected).abs() < 0.01,
-            "expected {expected}, got {w}"
-        );
+        assert!((w - expected).abs() < 0.01, "expected {expected}, got {w}");
     }
 
     #[test]
     fn segment_advance_text_scales_linearly_with_length() {
-        let single = chord_symbol_segment_advance(
-            &S::Text("C".into()),
-            400.0,
-            1000,
-            fixed_advance,
-        );
-        let triple = chord_symbol_segment_advance(
-            &S::Text("CCC".into()),
-            400.0,
-            1000,
-            fixed_advance,
-        );
+        let single = chord_symbol_segment_advance(&S::Text("C".into()), 400.0, 1000, fixed_advance);
+        let triple =
+            chord_symbol_segment_advance(&S::Text("CCC".into()), 400.0, 1000, fixed_advance);
         assert!(
             (triple - 3.0 * single).abs() < 0.01,
             "3-char width {triple} should equal 3 × 1-char width {single}"
@@ -1011,18 +941,8 @@ mod tests {
 
     #[test]
     fn segment_advance_text_scales_linearly_with_font_size() {
-        let small = chord_symbol_segment_advance(
-            &S::Text("Am".into()),
-            200.0,
-            1000,
-            fixed_advance,
-        );
-        let large = chord_symbol_segment_advance(
-            &S::Text("Am".into()),
-            400.0,
-            1000,
-            fixed_advance,
-        );
+        let small = chord_symbol_segment_advance(&S::Text("Am".into()), 200.0, 1000, fixed_advance);
+        let large = chord_symbol_segment_advance(&S::Text("Am".into()), 400.0, 1000, fixed_advance);
         assert!(
             (large - 2.0 * small).abs() < 0.01,
             "doubling font_size must double text width: small={small}, large={large}"
@@ -1031,12 +951,7 @@ mod tests {
 
     #[test]
     fn segment_advance_empty_text_is_zero() {
-        let w = chord_symbol_segment_advance(
-            &S::Text(String::new()),
-            400.0,
-            1000,
-            fixed_advance,
-        );
+        let w = chord_symbol_segment_advance(&S::Text(String::new()), 400.0, 1000, fixed_advance);
         assert_eq!(w, 0.0);
     }
 
@@ -1049,12 +964,7 @@ mod tests {
             calls.set(calls.get() + 1);
             200
         };
-        let _ = chord_symbol_segment_advance(
-            &S::Text("Cmaj7".into()),
-            400.0,
-            1000,
-            counting,
-        );
+        let _ = chord_symbol_segment_advance(&S::Text("Cmaj7".into()), 400.0, 1000, counting);
         assert_eq!(
             calls.get(),
             0,
@@ -1066,34 +976,16 @@ mod tests {
     fn segment_advance_sharp_uses_advance_callback() {
         // advance=200, font_size=400, units_per_em=1000, ACCIDENTAL_SIZE_FACTOR=0.70
         // expected = 200 * (400 * 0.70) / 1000 = 200 * 280 / 1000 = 56
-        let w = chord_symbol_segment_advance(
-            &S::Sharp,
-            400.0,
-            1000,
-            fixed_advance,
-        );
+        let w = chord_symbol_segment_advance(&S::Sharp, 400.0, 1000, fixed_advance);
         let expected = 200.0 * 400.0 * ACCIDENTAL_SIZE_FACTOR / 1000.0;
-        assert!(
-            (w - expected).abs() < 0.01,
-            "expected {expected}, got {w}"
-        );
+        assert!((w - expected).abs() < 0.01, "expected {expected}, got {w}");
     }
 
     #[test]
     fn segment_advance_scales_linearly_with_advance() {
         // Doubling the advance callback's return must double the segment width.
-        let small = chord_symbol_segment_advance(
-            &S::Sharp,
-            400.0,
-            1000,
-            |_g| 200u16,
-        );
-        let big = chord_symbol_segment_advance(
-            &S::Sharp,
-            400.0,
-            1000,
-            |_g| 400u16,
-        );
+        let small = chord_symbol_segment_advance(&S::Sharp, 400.0, 1000, |_g| 200u16);
+        let big = chord_symbol_segment_advance(&S::Sharp, 400.0, 1000, |_g| 400u16);
         assert!(
             (big - 2.0 * small).abs() < 0.01,
             "doubling advance must double width: small={small}, big={big}"
@@ -1114,26 +1006,23 @@ mod tests {
         };
         let sharp = chord_symbol_segment_advance(&S::Sharp, 400.0, 1000, differentiating);
         let flat = chord_symbol_segment_advance(&S::Flat, 400.0, 1000, differentiating);
-        let natural =
-            chord_symbol_segment_advance(&S::Natural, 400.0, 1000, differentiating);
+        let natural = chord_symbol_segment_advance(&S::Natural, 400.0, 1000, differentiating);
         // Locked-in ordering: flat (200) = 2× sharp (100); natural (300) = 3× sharp.
         assert!((flat - 2.0 * sharp).abs() < 0.01);
         assert!((natural - 3.0 * sharp).abs() < 0.01);
         // Sanity: 999 (the catch-all in `differentiating`) is never reached.
         // If a refactor accidentally called the callback with a non-accidental
         // glyph, sharp would equal ~999*280/1000 = 280, not 100*280/1000 = 28.
-        assert!(sharp < 50.0, "sharp width {sharp} should reflect advance=100, not 999");
+        assert!(
+            sharp < 50.0,
+            "sharp width {sharp} should reflect advance=100, not 999"
+        );
     }
 
     #[test]
     fn segment_advance_units_per_em_zero_does_not_panic() {
         // Defensive: divide-by-zero floor — units_per_em.max(1) must hold.
-        let w = chord_symbol_segment_advance(
-            &S::Sharp,
-            400.0,
-            0,
-            fixed_advance,
-        );
+        let w = chord_symbol_segment_advance(&S::Sharp, 400.0, 0, fixed_advance);
         // The floor turns the divisor into 1, so the width is just
         // advance * accidental_font_size — large but finite, not NaN/Inf.
         assert!(w.is_finite());

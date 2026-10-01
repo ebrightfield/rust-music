@@ -29,11 +29,12 @@ pub struct TabPalmMuteDashLayout {
     pub stroke_width: f64,
 }
 
-/// Distance above the top staff line for palm mute text, in staff spaces.
+/// Distance above the top staff line for palm-mute text, in staff spaces.
 ///
-/// Positioned above rhythm stems (which sit at ~1.5ss above top line)
-/// to avoid collision.
-pub const PALM_MUTE_ABOVE_STAFF_SS: f64 = 3.5;
+/// The TAB rhythm beam and tuplet lanes can reach 5.2 staff spaces above the
+/// staff. Palm-mute spans sit above both so their dashed line cannot cut
+/// through stems, beams, or tuplet brackets.
+pub const PALM_MUTE_ABOVE_STAFF_SS: f64 = 6.2;
 
 /// Font size for "P.M." text relative to staff space.
 pub const PALM_MUTE_FONT_SIZE_RATIO: f64 = 1.0;
@@ -45,10 +46,7 @@ pub const PALM_MUTE_DASH_OFFSET_SS: f64 = 1.2;
 /// Compute layout for a palm mute text annotation on a tab staff.
 ///
 /// `x` is the horizontal position of the fret event.
-pub fn layout_tab_palm_mute(
-    tab_staff: &TabStaffLayout,
-    x: f64,
-) -> TabPalmMuteLayout {
+pub fn layout_tab_palm_mute(tab_staff: &TabStaffLayout, x: f64) -> TabPalmMuteLayout {
     let y = tab_staff.y_origin - tab_staff.staff_space * PALM_MUTE_ABOVE_STAFF_SS;
     let font_size = tab_staff.staff_space * PALM_MUTE_FONT_SIZE_RATIO;
 
@@ -111,7 +109,8 @@ mod tests {
         assert!(
             layout.y < staff.y_origin,
             "P.M. text should be above the top staff line: y={} < y_origin={}",
-            layout.y, staff.y_origin
+            layout.y,
+            staff.y_origin
         );
     }
 

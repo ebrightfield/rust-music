@@ -184,9 +184,9 @@ mod tests {
         let s = test_staff();
         let ys = s.line_ys();
         assert_eq!(ys.len(), 5);
-        assert!((ys[0] - 0.0).abs() < f64::EPSILON);   // top
+        assert!((ys[0] - 0.0).abs() < f64::EPSILON); // top
         assert!((ys[1] - 250.0).abs() < f64::EPSILON);
-        assert!((ys[2] - 500.0).abs() < f64::EPSILON);  // middle
+        assert!((ys[2] - 500.0).abs() < f64::EPSILON); // middle
         assert!((ys[3] - 750.0).abs() < f64::EPSILON);
         assert!((ys[4] - 1000.0).abs() < f64::EPSILON); // bottom
     }
@@ -200,11 +200,11 @@ mod tests {
 
     #[test]
     fn is_on_line_checks() {
-        assert!(StaffLayout::is_on_line(0));  // bottom
+        assert!(StaffLayout::is_on_line(0)); // bottom
         assert!(StaffLayout::is_on_line(2));
-        assert!(StaffLayout::is_on_line(4));  // middle
+        assert!(StaffLayout::is_on_line(4)); // middle
         assert!(StaffLayout::is_on_line(6));
-        assert!(StaffLayout::is_on_line(8));  // top
+        assert!(StaffLayout::is_on_line(8)); // top
         assert!(!StaffLayout::is_on_line(1)); // space
         assert!(!StaffLayout::is_on_line(3));
         assert!(!StaffLayout::is_on_line(-2)); // ledger line — not ON staff

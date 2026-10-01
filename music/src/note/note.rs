@@ -1,9 +1,9 @@
+use crate::error::MusicSemanticsError;
+use crate::note::pitch_class::Pc;
+use crate::note::spelling::{Accidental, Letter, Spelling};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
-use crate::note::spelling::{Accidental, Letter, Spelling};
-use crate::error::MusicSemanticsError;
-use crate::note::pitch_class::Pc;
 
 /// Every chromatic note in all possible enharmonic spellings,
 /// with the following caveats:
@@ -67,44 +67,50 @@ impl Note {
         let spelling: Spelling = self.into();
         match spelling.acc {
             Accidental::Natural => *self,
-            Accidental::DoubleFlat => {
-                Spelling {
-                    letter: spelling.letter.prev(),
-                    acc: Accidental::Natural,
-                }.try_into().unwrap()
-            },
-            Accidental::DoubleSharp => {
-                Spelling {
-                    letter: spelling.letter.next(),
-                    acc: Accidental::Natural,
-                }.try_into().unwrap()
-            },
+            Accidental::DoubleFlat => Spelling {
+                letter: spelling.letter.prev(),
+                acc: Accidental::Natural,
+            }
+            .try_into()
+            .unwrap(),
+            Accidental::DoubleSharp => Spelling {
+                letter: spelling.letter.next(),
+                acc: Accidental::Natural,
+            }
+            .try_into()
+            .unwrap(),
             Accidental::Flat => {
-                if spelling.letter == Letter::C ||
-                    spelling.letter == Letter::F {
+                if spelling.letter == Letter::C || spelling.letter == Letter::F {
                     return Spelling {
                         letter: spelling.letter.prev(),
                         acc: Accidental::Natural,
-                    }.try_into().unwrap();
+                    }
+                    .try_into()
+                    .unwrap();
                 }
                 Spelling {
                     letter: spelling.letter.prev(),
                     acc: Accidental::Sharp,
-                }.try_into().unwrap()
-            },
+                }
+                .try_into()
+                .unwrap()
+            }
             Accidental::Sharp => {
-                if spelling.letter == Letter::B ||
-                    spelling.letter == Letter::E {
+                if spelling.letter == Letter::B || spelling.letter == Letter::E {
                     return Spelling {
                         letter: spelling.letter.next(),
                         acc: Accidental::Natural,
-                    }.try_into().unwrap();
+                    }
+                    .try_into()
+                    .unwrap();
                 }
                 Spelling {
                     letter: spelling.letter.next(),
                     acc: Accidental::Flat,
-                }.try_into().unwrap()
-            },
+                }
+                .try_into()
+                .unwrap()
+            }
         }
     }
 
@@ -154,9 +160,9 @@ impl Note {
 
     /// Returns the letter distance upward (mod7).
     pub fn diatonic_distance_up(&self, other: &Note) -> u8 {
-        Spelling::from(self).letter.diatonic_distance_up(
-            &Spelling::from(other).letter
-        )
+        Spelling::from(self)
+            .letter
+            .diatonic_distance_up(&Spelling::from(other).letter)
     }
 
     /// Returns the note as a Unicode string with proper music symbols.
@@ -193,7 +199,8 @@ impl TryFrom<Spelling> for Note {
                 Accidental::Flat => Ok(Note::Ces),
                 Accidental::Sharp => Ok(Note::Cis),
                 Accidental::DoubleFlat => Err(MusicSemanticsError::ExcessiveAccidental(
-                    Letter::C, Accidental::DoubleFlat,
+                    Letter::C,
+                    Accidental::DoubleFlat,
                 )),
                 Accidental::DoubleSharp => Ok(Note::Cisis),
             },
@@ -219,7 +226,8 @@ impl TryFrom<Spelling> for Note {
                 Accidental::Flat => Ok(Note::Fes),
                 Accidental::Sharp => Ok(Note::Fis),
                 Accidental::DoubleFlat => Err(MusicSemanticsError::ExcessiveAccidental(
-                    Letter::F, Accidental::DoubleFlat,
+                    Letter::F,
+                    Accidental::DoubleFlat,
                 )),
                 Accidental::DoubleSharp => Ok(Note::Fisis),
             },

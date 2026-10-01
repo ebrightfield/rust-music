@@ -33,25 +33,65 @@ pub fn draw_hairpin(svg: &mut SvgWriter, layout: &HairpinLayout) {
     let (top_left_y, bot_left_y, top_right_y, bot_right_y) = match kind {
         HairpinType::Crescendo => {
             // Point on left, opening on right
-            (y_center, y_center, y_center - half_opening, y_center + half_opening)
+            (
+                y_center,
+                y_center,
+                y_center - half_opening,
+                y_center + half_opening,
+            )
         }
         HairpinType::Decrescendo => {
             // Opening on left, point on right
-            (y_center - half_opening, y_center + half_opening, y_center, y_center)
+            (
+                y_center - half_opening,
+                y_center + half_opening,
+                y_center,
+                y_center,
+            )
         }
     };
 
     if let Some(d) = dashed {
         let dash_array = format!("{},{}", d.dash_length, d.gap_length);
         // Top line of wedge (dashed)
-        svg.add_dashed_line(x_start, top_left_y, x_end, top_right_y, "black", stroke_width, &dash_array);
+        svg.add_dashed_line(
+            x_start,
+            top_left_y,
+            x_end,
+            top_right_y,
+            "black",
+            stroke_width,
+            &dash_array,
+        );
         // Bottom line of wedge (dashed)
-        svg.add_dashed_line(x_start, bot_left_y, x_end, bot_right_y, "black", stroke_width, &dash_array);
+        svg.add_dashed_line(
+            x_start,
+            bot_left_y,
+            x_end,
+            bot_right_y,
+            "black",
+            stroke_width,
+            &dash_array,
+        );
     } else {
         // Top line of wedge
-        svg.add_line(x_start, top_left_y, x_end, top_right_y, "black", stroke_width);
+        svg.add_line(
+            x_start,
+            top_left_y,
+            x_end,
+            top_right_y,
+            "black",
+            stroke_width,
+        );
         // Bottom line of wedge
-        svg.add_line(x_start, bot_left_y, x_end, bot_right_y, "black", stroke_width);
+        svg.add_line(
+            x_start,
+            bot_left_y,
+            x_end,
+            bot_right_y,
+            "black",
+            stroke_width,
+        );
     }
 
     // Niente "o" circle — open (fill="none") so it reads as a small ring.
@@ -77,7 +117,10 @@ mod tests {
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         let line_count = out.matches("<line ").count();
-        assert_eq!(line_count, 2, "hairpin should produce 2 lines, got {line_count}");
+        assert_eq!(
+            line_count, 2,
+            "hairpin should produce 2 lines, got {line_count}"
+        );
     }
 
     #[test]
@@ -101,7 +144,10 @@ mod tests {
         let y_center = layout.y_center;
         let y_str = format!("y1=\"{y_center}\"");
         let count = out.matches(&y_str).count();
-        assert_eq!(count, 2, "both lines should start at y_center for crescendo");
+        assert_eq!(
+            count, 2,
+            "both lines should start at y_center for crescendo"
+        );
     }
 
     #[test]
@@ -114,7 +160,10 @@ mod tests {
         let y_center = layout.y_center;
         let y_str = format!("y2=\"{y_center}\"");
         let count = out.matches(&y_str).count();
-        assert_eq!(count, 2, "both lines should end at y_center for decrescendo");
+        assert_eq!(
+            count, 2,
+            "both lines should end at y_center for decrescendo"
+        );
     }
 
     #[test]
@@ -134,7 +183,10 @@ mod tests {
         let layout = layout_hairpin(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 15.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
-        assert!(out.contains("stroke-width=\"15\""), "stroke-width should be 15");
+        assert!(
+            out.contains("stroke-width=\"15\""),
+            "stroke-width should be 15"
+        );
     }
 
     #[test]
@@ -158,8 +210,14 @@ mod tests {
         let y_bot = layout.y_center + layout.half_opening;
         let top_str = format!("y2=\"{y_top}\"");
         let bot_str = format!("y2=\"{y_bot}\"");
-        assert!(out.contains(&top_str), "top line should end at y_center - half_opening");
-        assert!(out.contains(&bot_str), "bottom line should end at y_center + half_opening");
+        assert!(
+            out.contains(&top_str),
+            "top line should end at y_center - half_opening"
+        );
+        assert!(
+            out.contains(&bot_str),
+            "bottom line should end at y_center + half_opening"
+        );
     }
 
     #[test]
@@ -172,8 +230,14 @@ mod tests {
         let y_bot = layout.y_center + layout.half_opening;
         let top_str = format!("y1=\"{y_top}\"");
         let bot_str = format!("y1=\"{y_bot}\"");
-        assert!(out.contains(&top_str), "top line should start at y_center - half_opening");
-        assert!(out.contains(&bot_str), "bottom line should start at y_center + half_opening");
+        assert!(
+            out.contains(&top_str),
+            "top line should start at y_center - half_opening"
+        );
+        assert!(
+            out.contains(&bot_str),
+            "bottom line should start at y_center + half_opening"
+        );
     }
 
     // ---- niente circle ----
@@ -196,7 +260,8 @@ mod tests {
     #[test]
     fn niente_hairpin_emits_exactly_one_circle() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         assert_eq!(
@@ -209,7 +274,8 @@ mod tests {
     #[test]
     fn niente_hairpin_still_emits_two_wedge_lines() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         assert_eq!(
@@ -222,27 +288,36 @@ mod tests {
     #[test]
     fn niente_crescendo_circle_anchored_at_x_start() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         // cx is the niente center; for crescendo, that's x_start (100.0).
-        assert!(out.contains(r#"cx="100""#), "crescendo niente cx should be x_start (100.0); SVG:\n{out}");
+        assert!(
+            out.contains(r#"cx="100""#),
+            "crescendo niente cx should be x_start (100.0); SVG:\n{out}"
+        );
     }
 
     #[test]
     fn niente_decrescendo_circle_anchored_at_x_end() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         // cx is the niente center; for decrescendo, that's x_end (600.0).
-        assert!(out.contains(r#"cx="600""#), "decrescendo niente cx should be x_end (600.0); SVG:\n{out}");
+        assert!(
+            out.contains(r#"cx="600""#),
+            "decrescendo niente cx should be x_end (600.0); SVG:\n{out}"
+        );
     }
 
     #[test]
     fn niente_cy_matches_hairpin_y_center() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         let cy = layout.y_center;
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -258,7 +333,8 @@ mod tests {
         // dot would be visually indistinguishable from a fermata dot or
         // staccato and is wrong notation.
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         // Extract the circle line — it must carry fill="none" AND stroke="black".
@@ -279,7 +355,8 @@ mod tests {
     #[test]
     fn niente_circle_radius_in_svg_matches_layout() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         let r = layout.niente.unwrap().radius;
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -295,7 +372,14 @@ mod tests {
         // reads as the same line weight as the wedge.
         let custom_sw = 13.0;
         let mut svg = make_svg();
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, custom_sw);
+        let layout = layout_hairpin_with_niente(
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            custom_sw,
+        );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         let circle_line = out
@@ -321,20 +405,27 @@ mod tests {
         // Sanity: a typical layout should not place the niente off-staff at
         // negative-or-zero radius. Smoke check that catches a future regression
         // where radius is computed from the wrong factor.
-        let layout = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         let n = layout.niente.unwrap();
         assert!(n.radius > 0.0, "radius must be strictly positive");
         // Stay reasonable — the engraved circle is small, well under one
         // staff space in diameter.
-        assert!(n.radius < 250.0, "radius should be << staff_space (250.0); got {}", n.radius);
+        assert!(
+            n.radius < 250.0,
+            "radius should be << staff_space (250.0); got {}",
+            n.radius
+        );
     }
 
     #[test]
     fn niente_crescendo_and_decrescendo_produce_different_svg() {
         let mut svg_c = make_svg();
         let mut svg_d = make_svg();
-        let c = layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
-        let d = layout_hairpin_with_niente(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let c =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let d =
+            layout_hairpin_with_niente(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg_c, &c);
         draw_hairpin(&mut svg_d, &d);
         // Different circle anchor (x_start vs x_end) → different SVG payload.
@@ -361,7 +452,8 @@ mod tests {
     #[test]
     fn dashed_hairpin_emits_dasharray_on_both_lines() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         assert_eq!(
@@ -375,7 +467,8 @@ mod tests {
     #[test]
     fn dashed_hairpin_still_emits_two_lines() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         assert_eq!(
@@ -390,7 +483,8 @@ mod tests {
         // dash_length = 0.4 * 250 = 100, gap_length = 0.2 * 250 = 50.
         // The dasharray string emitted by the renderer must contain those numbers.
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         let d = layout.dashed.unwrap();
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -408,7 +502,8 @@ mod tests {
         // forgets to multiply by staff_space would emit "0.4,0.2" — much
         // too fine — and this test catches it.
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         // For SS=250 the correct emitted values are 100,50. The wrong values
@@ -424,11 +519,20 @@ mod tests {
     fn dashed_hairpin_stroke_width_preserved() {
         let custom_sw = 14.0;
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, custom_sw);
+        let layout = layout_hairpin_dashed(
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            custom_sw,
+        );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         // Both wedge lines must carry the custom stroke width.
-        let count = out.matches(&format!(r#"stroke-width="{custom_sw}""#)).count();
+        let count = out
+            .matches(&format!(r#"stroke-width="{custom_sw}""#))
+            .count();
         assert_eq!(
             count, 2,
             "stroke-width {custom_sw} should appear on both dashed wedge lines; got {count}; SVG:\n{out}"
@@ -455,7 +559,8 @@ mod tests {
         // Both wedge lines must carry the SAME dasharray (a single dash
         // pattern across the whole wedge — not a per-line override).
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         // Extract all stroke-dasharray="..." values and assert they're all equal.
@@ -468,14 +573,22 @@ mod tests {
                 }
             }
         }
-        assert_eq!(values.len(), 2, "expected 2 dasharray values; got {values:?}");
-        assert_eq!(values[0], values[1], "both wedge lines must share the same dasharray");
+        assert_eq!(
+            values.len(),
+            2,
+            "expected 2 dasharray values; got {values:?}"
+        );
+        assert_eq!(
+            values[0], values[1],
+            "both wedge lines must share the same dasharray"
+        );
     }
 
     #[test]
     fn dashed_decrescendo_x_coordinates_in_svg() {
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Decrescendo, 200.0, 800.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Decrescendo, 200.0, 800.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         assert!(out.contains(r#"x1="200""#), "x_start should appear as x1");
@@ -488,9 +601,8 @@ mod tests {
         // lines must be dashed; the niente circle must remain solid (no
         // stroke-dasharray attribute on the <circle> element). Engraved
         // convention: the niente "o" is a definite symbol, never dashed.
-        let mut layout = layout_hairpin_with_niente(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
-        );
+        let mut layout =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         layout.dashed = Some(crate::layout::hairpin::HairpinDashStyle {
             dash_length: 100.0,
             gap_length: 50.0,
@@ -522,7 +634,8 @@ mod tests {
         // The dashed constructor must NOT also set niente — symmetry with
         // the layout-level "dashed_does_not_set_niente" test.
         let mut svg = make_svg();
-        let layout = layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
+        let layout =
+            layout_hairpin_dashed(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
         assert_eq!(
@@ -540,7 +653,12 @@ mod tests {
     fn open_end_niente_hairpin_emits_exactly_one_circle() {
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -555,7 +673,12 @@ mod tests {
     fn open_end_niente_hairpin_still_emits_two_wedge_lines() {
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Decrescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -571,7 +694,12 @@ mod tests {
         // For crescendo, the open end is the wide right side → cx == x_end.
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -590,7 +718,12 @@ mod tests {
         // For decrescendo, the open end is the wide left side → cx == x_start.
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Decrescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Decrescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -608,7 +741,12 @@ mod tests {
     fn open_end_niente_cy_matches_hairpin_y_center() {
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         let cy = layout.y_center;
         draw_hairpin(&mut svg, &layout);
@@ -624,7 +762,12 @@ mod tests {
         // Same convention as closed-end: open "o", fill="none", stroked black.
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -646,7 +789,12 @@ mod tests {
     fn open_end_niente_circle_radius_in_svg_matches_layout() {
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         let r = layout.niente.unwrap().radius;
         draw_hairpin(&mut svg, &layout);
@@ -662,7 +810,12 @@ mod tests {
         let custom_sw = 13.0;
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, custom_sw,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            custom_sw,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -688,11 +841,15 @@ mod tests {
     fn open_end_and_closed_end_niente_produce_different_svg() {
         // The two constructors must produce visually distinct SVG for the same
         // hairpin kind and args — different anchor → different cx in output.
-        let c = layout_hairpin_with_niente(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
-        );
+        let c =
+            layout_hairpin_with_niente(HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0);
         let o = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         let mut svg_c = make_svg();
         let mut svg_o = make_svg();
@@ -711,7 +868,12 @@ mod tests {
         // mirror of niente/dashed independence on the closed-end variant.
         let mut svg = make_svg();
         let layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         draw_hairpin(&mut svg, &layout);
         let out = svg.to_svg();
@@ -728,7 +890,12 @@ mod tests {
         // lines must be dashed; the niente circle must remain solid. Mirrors
         // the closed-end combo invariant.
         let mut layout = layout_hairpin_with_niente_at_open_end(
-            HairpinType::Crescendo, 100.0, 600.0, 1000.0, 250.0, 10.0,
+            HairpinType::Crescendo,
+            100.0,
+            600.0,
+            1000.0,
+            250.0,
+            10.0,
         );
         layout.dashed = Some(crate::layout::hairpin::HairpinDashStyle {
             dash_length: 100.0,

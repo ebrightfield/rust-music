@@ -1,9 +1,12 @@
-use tera::Context;
 use crate::notation::clef::Clef;
 use crate::notation::lilypond::staff_elements::LilypondVoiceElement;
+use crate::notation::lilypond::templates::{
+    NO_AUTOMATIC_BAR_LINES, OMIT_BAR_NUMBER, OMIT_CLEF, OMIT_STRING_NUMBER, OMIT_TIME_SIGNATURE,
+    TEMPLATE_ENGINE,
+};
 use crate::notation::lilypond::ToLilypondString;
-use crate::notation::lilypond::templates::{NO_AUTOMATIC_BAR_LINES, OMIT_BAR_NUMBER, OMIT_CLEF, OMIT_STRING_NUMBER, OMIT_TIME_SIGNATURE, TEMPLATE_ENGINE};
 use crate::notation::rhythm::meter::Meter;
+use tera::Context;
 
 pub struct LilypondStaff<'a> {
     clef: Option<Clef>,
@@ -23,7 +26,7 @@ impl<'a> LilypondStaff<'a> {
             show_bar_numbers: false,
             show_string_numbers: false,
             automatic_bar_lines: true,
-            voices: vec![]
+            voices: vec![],
         }
     }
 
@@ -68,7 +71,9 @@ impl<'a> LilypondStaff<'a> {
 mod tests {
     use super::*;
     use crate::notation::lilypond::staff_elements::LilypondVoiceElement;
-    use crate::notation::rhythm::{RhythmicNotatedEvent, duration::Duration, duration::DurationKind};
+    use crate::notation::rhythm::{
+        duration::Duration, duration::DurationKind, RhythmicNotatedEvent,
+    };
     use crate::note::pitch::Pitch;
 
     #[test]
@@ -85,19 +90,16 @@ impl<'a> ToLilypondString for LilypondStaff<'a> {
     fn to_lilypond_string(&self) -> String {
         let mut ctx = Context::new();
         let mut statements = vec![];
-        let clef = self.clef
-            .as_ref()
-            .map_or(
-                OMIT_CLEF.to_string(),
-                |clef| format!("\\clef {}", clef.to_lilypond_string()),
-            );
+        let clef = self.clef.as_ref().map_or(OMIT_CLEF.to_string(), |clef| {
+            format!("\\clef {}", clef.to_lilypond_string())
+        });
         statements.push(clef.as_str());
-        let time_sig = self.time_signature
+        let time_sig = self
+            .time_signature
             .as_ref()
-            .map_or(
-                OMIT_TIME_SIGNATURE.to_string(),
-                |meter| format!("\\time {}", meter.to_lilypond_string()),
-            );
+            .map_or(OMIT_TIME_SIGNATURE.to_string(), |meter| {
+                format!("\\time {}", meter.to_lilypond_string())
+            });
         statements.push(time_sig.as_str());
         if !self.show_bar_numbers {
             statements.push(OMIT_BAR_NUMBER)
@@ -109,7 +111,9 @@ impl<'a> ToLilypondString for LilypondStaff<'a> {
             statements.push(NO_AUTOMATIC_BAR_LINES)
         }
         ctx.insert("statements", &statements);
-        let voices = self.voices.iter()
+        let voices = self
+            .voices
+            .iter()
             .map(|voice| voice.to_lilypond_string())
             .collect::<Vec<String>>();
         ctx.insert("voices", &voices);

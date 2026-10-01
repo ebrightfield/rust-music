@@ -258,7 +258,7 @@ mod tests {
         let layout = time_signature_layout(&kind, fixed_advance);
         // Numerator glyphs at position 6
         assert_eq!(layout.glyphs[0].1, 6); // "7"
-        // Denominator glyphs at position 2
+                                           // Denominator glyphs at position 2
         assert_eq!(layout.glyphs[1].1, 2); // "1"
         assert_eq!(layout.glyphs[2].1, 2); // "6"
     }

@@ -35,18 +35,10 @@ pub const GRACE_NOTE_SPACING_SS: f64 = 0.5;
 /// and (for acciaccatura) the slash — all in a single glyph.
 pub fn grace_note_glyph(kind: GraceNoteKind, stem_dir: StemDirection) -> Glyph {
     match (kind, stem_dir) {
-        (GraceNoteKind::Acciaccatura, StemDirection::Up) => {
-            Glyph::GraceNoteAcciaccaturaStemUp
-        }
-        (GraceNoteKind::Acciaccatura, StemDirection::Down) => {
-            Glyph::GraceNoteAcciaccaturaStemDown
-        }
-        (GraceNoteKind::Appoggiatura, StemDirection::Up) => {
-            Glyph::GraceNoteAppoggiaturaStemUp
-        }
-        (GraceNoteKind::Appoggiatura, StemDirection::Down) => {
-            Glyph::GraceNoteAppoggiaturaStemDown
-        }
+        (GraceNoteKind::Acciaccatura, StemDirection::Up) => Glyph::GraceNoteAcciaccaturaStemUp,
+        (GraceNoteKind::Acciaccatura, StemDirection::Down) => Glyph::GraceNoteAcciaccaturaStemDown,
+        (GraceNoteKind::Appoggiatura, StemDirection::Up) => Glyph::GraceNoteAppoggiaturaStemUp,
+        (GraceNoteKind::Appoggiatura, StemDirection::Down) => Glyph::GraceNoteAppoggiaturaStemDown,
     }
 }
 
@@ -151,7 +143,9 @@ pub fn layout_grace_note_slur(
     let y_end = staff.y_of(principal_staff_position);
     let direction = slur_direction_from_stem(principal_stem_dir);
 
-    Some(layout_slur(x_start, x_end, y_start, y_end, direction, config))
+    Some(layout_slur(
+        x_start, x_end, y_start, y_end, direction, config,
+    ))
 }
 
 #[cfg(test)]
@@ -397,15 +391,8 @@ mod tests {
             StemDirection::Up,
             &staff,
         );
-        let slur = layout_grace_note_slur(
-            &grace,
-            principal_x,
-            4,
-            StemDirection::Up,
-            &staff,
-            &cfg,
-        )
-        .expect("non-degenerate slur");
+        let slur = layout_grace_note_slur(&grace, principal_x, 4, StemDirection::Up, &staff, &cfg)
+            .expect("non-degenerate slur");
 
         // Slur start should be to the right of the grace glyph origin.
         assert!(
@@ -546,14 +533,7 @@ mod tests {
             scale: GRACE_NOTE_SCALE,
             staff_position: 4,
         };
-        let slur = layout_grace_note_slur(
-            &degenerate,
-            1000.0,
-            4,
-            StemDirection::Up,
-            &staff,
-            &cfg,
-        );
+        let slur = layout_grace_note_slur(&degenerate, 1000.0, 4, StemDirection::Up, &staff, &cfg);
         assert!(slur.is_none(), "degenerate span should return None");
     }
 
@@ -571,15 +551,8 @@ mod tests {
             StemDirection::Up,
             &staff,
         );
-        let slur = layout_grace_note_slur(
-            &grace,
-            principal_x,
-            4,
-            StemDirection::Up,
-            &staff,
-            &cfg,
-        )
-        .expect("non-degenerate slur");
+        let slur = layout_grace_note_slur(&grace, principal_x, 4, StemDirection::Up, &staff, &cfg)
+            .expect("non-degenerate slur");
 
         // Expected start ≈ grace.x + 0.59 * staff_space * GRACE_NOTE_SCALE.
         let expected = grace.x + 0.59 * staff.staff_space * GRACE_NOTE_SCALE;
@@ -603,15 +576,8 @@ mod tests {
             StemDirection::Up,
             &staff,
         );
-        let slur = layout_grace_note_slur(
-            &grace,
-            principal_x,
-            4,
-            StemDirection::Up,
-            &staff,
-            &cfg,
-        )
-        .expect("non-degenerate slur");
+        let slur = layout_grace_note_slur(&grace, principal_x, 4, StemDirection::Up, &staff, &cfg)
+            .expect("non-degenerate slur");
 
         let expected_end = principal_x - 0.05 * staff.staff_space;
         assert!(

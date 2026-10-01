@@ -67,7 +67,14 @@ fn version_none_accepted() {
 fn version_99_rejected() {
     let src = r#"(kind: "Snippet", version: 99, clef: "treble", events: [])"#;
     let err = parse(src).unwrap_err();
-    assert!(matches!(err, MusicRonError::UnsupportedVersion { got: 99, max_supported: 1, .. }));
+    assert!(matches!(
+        err,
+        MusicRonError::UnsupportedVersion {
+            got: 99,
+            max_supported: 1,
+            ..
+        }
+    ));
 }
 
 #[test]

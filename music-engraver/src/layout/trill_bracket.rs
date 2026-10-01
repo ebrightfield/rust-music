@@ -654,8 +654,13 @@ mod tests {
     #[test]
     fn hooks_start_only_returns_one_hook_at_first_x() {
         let ext = make_extension();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Start, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Start,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         assert_eq!(hooks.len(), 1);
         assert_eq!(hooks[0].x, 100.0);
     }
@@ -673,8 +678,13 @@ mod tests {
     #[test]
     fn hooks_both_returns_two_hooks() {
         let ext = make_extension();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         assert_eq!(hooks.len(), 2);
         // First hook at start, second at right edge.
         assert_eq!(hooks[0].x, 100.0);
@@ -684,8 +694,13 @@ mod tests {
     #[test]
     fn hooks_share_extension_baseline_y() {
         let ext = make_extension();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         for h in &hooks {
             // Down hooks: y_top equals the baseline.
             assert_eq!(h.y_top, ext.y);
@@ -711,16 +726,26 @@ mod tests {
             glyph: Glyph::WiggleTrill,
             segment_advance: 80.0,
         };
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         assert!(hooks.is_empty());
     }
 
     #[test]
     fn hooks_single_segment_start_x_equals_extension_start() {
         let ext = layout_trill_extension(50.0, 130.0, 0.0, 80.0).unwrap();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Start, 20.0, HookDirection::Down, 2.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Start,
+            20.0,
+            HookDirection::Down,
+            2.0,
+        );
         assert_eq!(hooks[0].x, 50.0);
     }
 
@@ -736,8 +761,13 @@ mod tests {
     #[test]
     fn hooks_length_propagated_into_each_hook() {
         let ext = make_extension();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 42.0, HookDirection::Down, 1.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            42.0,
+            HookDirection::Down,
+            1.0,
+        );
         for h in &hooks {
             assert!((h.y_bottom - h.y_top - 42.0).abs() < 1e-9);
         }
@@ -746,8 +776,13 @@ mod tests {
     #[test]
     fn hooks_stroke_width_propagated_into_each_hook() {
         let ext = make_extension();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 5.5);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            5.5,
+        );
         for h in &hooks {
             assert!((h.stroke_width - 5.5).abs() < 1e-9);
         }
@@ -756,8 +791,13 @@ mod tests {
     #[test]
     fn hooks_start_x_strictly_less_than_end_x_for_both() {
         let ext = make_extension();
-        let hooks =
-            layout_trill_bracket_hooks(&ext, TrillBracketSide::Both, 30.0, HookDirection::Down, 4.0);
+        let hooks = layout_trill_bracket_hooks(
+            &ext,
+            TrillBracketSide::Both,
+            30.0,
+            HookDirection::Down,
+            4.0,
+        );
         assert!(hooks[0].x < hooks[1].x);
     }
 
@@ -935,7 +975,8 @@ mod tests {
 
     #[test]
     fn options_with_direction_sets_only_direction() {
-        let opts = TrillBracketOptions::new(TrillBracketSide::End).with_direction(HookDirection::Up);
+        let opts =
+            TrillBracketOptions::new(TrillBracketSide::End).with_direction(HookDirection::Up);
         assert_eq!(opts.direction, Some(HookDirection::Up));
         assert_eq!(opts.length_ss, None, "length must remain unset");
         assert_eq!(opts.side, TrillBracketSide::End, "side must remain End");
@@ -1041,8 +1082,7 @@ mod tests {
         // assertion fires if any field diverges.
         for &len in &[0.0, 0.5, 0.75, 1.0, 1.5, 3.5, -2.0] {
             let via_legacy = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(len);
-            let via_new =
-                TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss(len);
+            let via_new = TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss(len);
             assert_eq!(
                 via_legacy, via_new,
                 "with_length_ss({len}) and with_hook_length_ss({len}) must produce equal options"
@@ -1090,8 +1130,7 @@ mod tests {
         // for the new alias. The two methods MUST write to different fields
         // — hook length and extension length are semantically distinct knobs
         // even though both are lengths in staff spaces.
-        let hook_only =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss(1.0);
+        let hook_only = TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss(1.0);
         let ext_only =
             TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(1.0);
 
@@ -1155,8 +1194,7 @@ mod tests {
     fn hook_length_ss_getter_is_const_callable() {
         // The getter must be `const fn` for the same reason — symmetry with
         // the setter and to let callers read defaults at const-eval time.
-        const _LEN: Option<f64> =
-            TrillBracketOptions::new(TrillBracketSide::Both).hook_length_ss();
+        const _LEN: Option<f64> = TrillBracketOptions::new(TrillBracketSide::Both).hook_length_ss();
         // The accessor on the `None` default must yield `None` — basic value
         // check beyond the bare "compiles in const context" guarantee.
         assert_eq!(_LEN, None);
@@ -1228,8 +1266,8 @@ mod tests {
         // this at the layout layer: an unsupported ornament must still
         // round-trip through the field unchanged so the renderer can apply
         // the filter consistently.
-        let opts = TrillBracketOptions::new(TrillBracketSide::Both)
-            .with_ornament(Ornament::ShortTrill);
+        let opts =
+            TrillBracketOptions::new(TrillBracketSide::Both).with_ornament(Ornament::ShortTrill);
         assert_eq!(opts.ornament, Some(Ornament::ShortTrill));
         assert!(!Ornament::ShortTrill.supports_trill_extension());
     }
@@ -1303,7 +1341,10 @@ mod tests {
             TrillBracketSide::End,
             TrillBracketSide::Both,
         ] {
-            for &ornament in Ornament::ALL.iter().filter(|o| o.supports_trill_extension()) {
+            for &ornament in Ornament::ALL
+                .iter()
+                .filter(|o| o.supports_trill_extension())
+            {
                 let permissive = TrillBracketOptions::new(side)
                     .with_length_ss(0.8)
                     .with_direction(HookDirection::Up)
@@ -1400,8 +1441,7 @@ mod tests {
     fn options_with_extension_length_ss_sets_only_extension_length() {
         // Setting the new field must NOT disturb the hook length, direction,
         // ornament, or side — those are independent knobs.
-        let opts =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(2.75);
+        let opts = TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(2.75);
         assert_eq!(opts.extension_length_ss, Some(2.75));
         assert_eq!(opts.length_ss, None, "hook length must remain unset");
         assert_eq!(opts.direction, None, "direction must remain unset");
@@ -1468,11 +1508,9 @@ mod tests {
         // unsupported ornaments) — zero and negative values round-trip
         // unchanged. The renderer's existing non-positive fail-safe gives
         // them the "no wiggle" semantic at draw time.
-        let zero =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
+        let zero = TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
         assert_eq!(zero.extension_length_ss, Some(0.0));
-        let neg =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(-1.5);
+        let neg = TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(-1.5);
         assert_eq!(neg.extension_length_ss, Some(-1.5));
     }
 
@@ -1492,8 +1530,7 @@ mod tests {
         // the wiggle at the renderer's non-positive fail-safe; `None` lets
         // the natural span flow). PartialEq must keep them distinct.
         let none = TrillBracketOptions::new(TrillBracketSide::Both);
-        let zero =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
+        let zero = TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss(0.0);
         assert_ne!(none, zero);
     }
 
@@ -1510,8 +1547,8 @@ mod tests {
         // `0.0` is the headline rejection — the renderer's non-positive arm
         // suppresses the wiggle entirely. Construction-time rejection
         // surfaces the misuse rather than silently producing an empty SVG.
-        let result =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss_validated(0.0);
+        let result = TrillBracketOptions::new(TrillBracketSide::Both)
+            .with_extension_length_ss_validated(0.0);
         assert_eq!(result, None);
     }
 
@@ -1638,9 +1675,11 @@ mod tests {
         // that drops `const` from either branch trips this canary at
         // compile time.
         const SOME_OPTS: Option<TrillBracketOptions> =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss_validated(1.5);
+            TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_extension_length_ss_validated(1.5);
         const NONE_OPTS: Option<TrillBracketOptions> =
-            TrillBracketOptions::new(TrillBracketSide::Both).with_extension_length_ss_validated(0.0);
+            TrillBracketOptions::new(TrillBracketSide::Both)
+                .with_extension_length_ss_validated(0.0);
         assert!(SOME_OPTS.is_some());
         assert!(NONE_OPTS.is_none());
     }
@@ -1724,8 +1763,8 @@ mod tests {
         // magnitudes (small, unit, large, sub-unit) to lock in that the
         // predicate is `> 0.0` rather than a per-magnitude band.
         for len in [-0.001, -0.5, -1.0, -10.0, -1.0e6] {
-            let result = TrillBracketOptions::new(TrillBracketSide::Both)
-                .with_hook_length_ss_validated(len);
+            let result =
+                TrillBracketOptions::new(TrillBracketSide::Both).with_hook_length_ss_validated(len);
             assert_eq!(result, None, "expected rejection for len={len}");
         }
     }
@@ -1813,8 +1852,7 @@ mod tests {
         // validator must produce a bundle field-by-field equal to *either*
         // permissive setter. Pins down the three-way equivalence on accept.
         for len in [0.5, 0.85, 1.5] {
-            let via_legacy =
-                TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(len);
+            let via_legacy = TrillBracketOptions::new(TrillBracketSide::Both).with_length_ss(len);
             let via_validated = TrillBracketOptions::new(TrillBracketSide::Both)
                 .with_hook_length_ss_validated(len)
                 .unwrap_or_else(|| panic!("expected accept for len={len}"));

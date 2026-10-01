@@ -1,4 +1,8 @@
 use crate::error::MusicSemanticsError;
+use crate::note::note::*;
+use crate::note::pitch_class::Pc;
+use crate::note::spelling::Spelling;
+use crate::note::Pitch;
 /// This module solves the problem of crossing the gap from the
 /// "integer world" of [Pc] to the "alphabetical world" of [Note]s.
 ///
@@ -21,11 +25,7 @@ use crate::error::MusicSemanticsError;
 /// This module starts from approach (2), and enhances it with a collection of (3).
 /// The result is a pretty "smart" spelling engine to convert from
 /// collections of [Pc] to collections of [Note].
-use crate::note_collections::pc_set::{PcShape, PcContent, AsPcSlice};
-use crate::note::note::*;
-use crate::note::pitch_class::Pc;
-use crate::note::Pitch;
-use crate::note::spelling::Spelling;
+use crate::note_collections::pc_set::{AsPcSlice, PcContent, PcShape};
 use crate::note_collections::Voicing;
 
 pub trait HasSpelling: Sized {
@@ -45,10 +45,8 @@ impl HasSpelling for Pitch {
 
 impl HasSpelling for Voicing {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
-        Ok(Self::new(self
-            .iter()
-            .flat_map(|p| p.spelled_as_in(notes))
-            .collect()
+        Ok(Self::new(
+            self.iter().flat_map(|p| p.spelled_as_in(notes)).collect(),
         ))
     }
 }
@@ -59,7 +57,8 @@ fn spell_slice(root: &Note, pcs: &[Pc]) -> Result<Vec<Note>, MusicSemanticsError
     if Spelling::from(root).acc.is_double() {
         return Err(MusicSemanticsError::NoDoubleAccidentalRoot(*root));
     }
-    Ok(pcs.iter()
+    Ok(pcs
+        .iter()
         .map(|pc| {
             let default = default_spelling(root, pc).unwrap();
             let rules = spell_rules(root).unwrap();
@@ -142,17 +141,19 @@ impl SpellingRule {
         // Check that incl and excl don't overlap
         for pc in &self.incl {
             if self.excl.contains(pc) {
-                return Err(MusicSemanticsError::InvalidSpellingRule(
-                    format!("Pc {:?} appears in both incl and excl", pc)
-                ));
+                return Err(MusicSemanticsError::InvalidSpellingRule(format!(
+                    "Pc {:?} appears in both incl and excl",
+                    pc
+                )));
             }
         }
 
         // Check that target pc is not in excl (would make rule impossible)
         if self.excl.contains(&self.pc) {
-            return Err(MusicSemanticsError::InvalidSpellingRule(
-                format!("Target Pc {:?} appears in excl (rule can never apply)", self.pc)
-            ));
+            return Err(MusicSemanticsError::InvalidSpellingRule(format!(
+                "Target Pc {:?} appears in excl (rule can never apply)",
+                self.pc
+            )));
         }
 
         Ok(())
@@ -174,7 +175,12 @@ impl SpellingRule {
             return false;
         }
         // We pass if self.not_all is not empty, and pcs contains all of them.
-        if !self.not_all.is_empty() && self.not_all.iter().all(|not_all_pc| pcs.contains(not_all_pc)) {
+        if !self.not_all.is_empty()
+            && self
+                .not_all
+                .iter()
+                .all(|not_all_pc| pcs.contains(not_all_pc))
+        {
             return false;
         }
         // Otherwise, the rule is flagging the spelling, and suggests an aggressive
@@ -983,18 +989,13 @@ mod tests {
         let shape = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]);
         let root = Note::C;
         let spelling = spell_shape(&root, &shape).unwrap();
-        assert_eq!(
-            spelling,
-            vec![Note::C, Note::E, Note::G, Note::B],
-        );
+        assert_eq!(spelling, vec![Note::C, Note::E, Note::G, Note::B],);
         let spelling = spell_shape(
             &Note::D,
             &PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7, Pc::Pc11]),
-        ).unwrap();
-        assert_eq!(
-            spelling,
-            vec![Note::D, Note::Fis, Note::A, Note::Cis],
-        );
+        )
+        .unwrap();
+        assert_eq!(spelling, vec![Note::D, Note::Fis, Note::A, Note::Cis],);
     }
 
     #[test]
@@ -1015,7 +1016,7 @@ mod tests {
         let rule = SpellingRule {
             pc: Pc::Pc3,
             incl: vec![Pc::Pc4],
-            excl: vec![Pc::Pc4, Pc::Pc7],  // Pc4 overlaps with incl
+            excl: vec![Pc::Pc4, Pc::Pc7], // Pc4 overlaps with incl
             not_all: vec![],
         };
         let result = rule.validate();
@@ -1029,21 +1030,38 @@ mod tests {
         let rule = SpellingRule {
             pc: Pc::Pc3,
             incl: vec![Pc::Pc4],
-            excl: vec![Pc::Pc3, Pc::Pc7],  // Pc3 is the target but also excluded
+            excl: vec![Pc::Pc3, Pc::Pc7], // Pc3 is the target but also excluded
             not_all: vec![],
         };
         let result = rule.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("rule can never apply"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("rule can never apply"));
     }
 
     #[test]
     fn test_existing_rules_are_valid() {
         // Verify all existing rules defined in spell_rules are valid
         let roots = [
-            Note::C, Note::Cis, Note::Des, Note::D, Note::Dis, Note::Ees,
-            Note::E, Note::F, Note::Fis, Note::Ges, Note::G, Note::Gis,
-            Note::Aes, Note::A, Note::Ais, Note::Bes, Note::B,
+            Note::C,
+            Note::Cis,
+            Note::Des,
+            Note::D,
+            Note::Dis,
+            Note::Ees,
+            Note::E,
+            Note::F,
+            Note::Fis,
+            Note::Ges,
+            Note::G,
+            Note::Gis,
+            Note::Aes,
+            Note::A,
+            Note::Ais,
+            Note::Bes,
+            Note::B,
         ];
 
         for root in roots {
@@ -1066,7 +1084,7 @@ mod spelling_parity_tests {
     use super::*;
     use crate::note::note::Note;
     use crate::note::pitch_class::Pc::*;
-    use crate::note_collections::pc_set::{PcShape, PcContent};
+    use crate::note_collections::pc_set::{PcContent, PcShape};
 
     #[test]
     fn spell_shape_matches_prior_pcset_try_spell_cmaj7() {
@@ -1099,6 +1117,9 @@ mod spelling_parity_tests {
     fn double_accidental_root_errors() {
         let shape = PcShape::new(vec![Pc0, Pc4, Pc7]);
         let err = spell_shape(&Note::Cisis, &shape);
-        assert!(matches!(err, Err(MusicSemanticsError::NoDoubleAccidentalRoot(_))));
+        assert!(matches!(
+            err,
+            Err(MusicSemanticsError::NoDoubleAccidentalRoot(_))
+        ));
     }
 }

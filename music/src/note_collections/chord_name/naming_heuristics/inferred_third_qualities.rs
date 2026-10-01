@@ -1,8 +1,10 @@
-use std::collections::HashSet;
-use crate::note_collections::chord_name::naming_heuristics::{maj_and_min_qualities, NamingHeuristic};
-use crate::note_collections::chord_name::quality::chord::ChordQuality;
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use crate::note_collections::chord_name::naming_heuristics::{
+    maj_and_min_qualities, NamingHeuristic,
+};
+use crate::note_collections::chord_name::quality::chord::ChordQuality;
+use std::collections::HashSet;
 
 const SUGGESTIVE_OF_MAJOR_THIRD: &[Pc] = &[Pc0, Pc2, Pc5, Pc7, Pc9, Pc10, Pc11];
 
@@ -19,7 +21,6 @@ pub fn assumed_third_common_prefix(pcs: &HashSet<Pc>) -> Option<ChordQuality> {
     }
 }
 
-
 /// A perfect fifth, and possibly a sharp fourth, a sixth, and/or a seventh.
 ///
 /// After Tier 1.3, bare P5 (`{Pc0, Pc7}`) is handled by the fast-path in
@@ -35,9 +36,7 @@ impl NamingHeuristic for FifthAndUpperNotes {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc7]),
-        ]
+        vec![HashSet::from([Pc7])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
@@ -50,7 +49,9 @@ impl NamingHeuristic for FifthAndUpperNotes {
 
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
         // Delegate to the default required/optional cover check first.
-        if !default_validate(self, pcs) { return false; }
+        if !default_validate(self, pcs) {
+            return false;
+        }
         // Additional guard: at least one upper-extension pc must be present.
         // Pc6 alone is not enough — see Tier 1.5: a bare P5 + sharp-fourth is
         // not a triad-with-inferred-third.
@@ -71,10 +72,7 @@ fn default_validate<H: NamingHeuristic + ?Sized>(h: &H, pcs: &HashSet<Pc>) -> bo
     pcs.remove(&Pc0);
     let mut matched = vec![];
     for subset in h.required().iter() {
-        let intersection: Vec<Pc> = subset
-            .intersection(&pcs)
-            .copied()
-            .collect();
+        let intersection: Vec<Pc> = subset.intersection(&pcs).copied().collect();
         if intersection.len() == 1 {
             matched.extend(intersection);
         } else {
@@ -82,10 +80,7 @@ fn default_validate<H: NamingHeuristic + ?Sized>(h: &H, pcs: &HashSet<Pc>) -> bo
         }
     }
     for subset in h.optional().iter() {
-        let intersection: Vec<Pc> = subset
-            .intersection(&pcs)
-            .copied()
-            .collect();
+        let intersection: Vec<Pc> = subset.intersection(&pcs).copied().collect();
         if intersection.len() == 1 {
             matched.extend(intersection);
         }
@@ -100,16 +95,11 @@ impl NamingHeuristic for NinthAndSixthNoThird {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc1, Pc2]),
-            HashSet::from([Pc9]),
-        ]
+        vec![HashSet::from([Pc1, Pc2]), HashSet::from([Pc9])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc10, Pc11]),
-        ]
+        vec![HashSet::from([Pc10, Pc11])]
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
@@ -124,15 +114,11 @@ impl NamingHeuristic for TritoneAndSeventh {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc6]),
-            HashSet::from([Pc10, Pc11]),
-        ]
+        vec![HashSet::from([Pc6]), HashSet::from([Pc10, Pc11])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
-        vec![
-        ]
+        vec![]
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
@@ -147,15 +133,11 @@ impl NamingHeuristic for NinthAndSeventh {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc1, Pc2]),
-            HashSet::from([Pc10, Pc11]),
-        ]
+        vec![HashSet::from([Pc1, Pc2]), HashSet::from([Pc10, Pc11])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
-        vec![
-        ]
+        vec![]
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {

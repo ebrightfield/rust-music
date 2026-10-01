@@ -1,6 +1,6 @@
+use super::common::OwnedMeta;
 use music::note::note::Note;
 use serde::{Deserialize, Serialize};
-use super::common::OwnedMeta;
 
 /// Pitch-class circle diagram with 3-way identity XOR (REQ-O27).
 /// The XOR guard (exactly one of chord/pcs/scale) is enforced at convert-time.

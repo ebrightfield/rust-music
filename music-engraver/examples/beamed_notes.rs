@@ -18,9 +18,7 @@ fn main() {
     let config = font.engraving_config();
     let staff = StaffLayout::from_config(0.0, 0.0, 14000.0, &config);
 
-    let notehead_advance = font
-        .glyph_advance(smufl::Glyph::NoteheadBlack)
-        .unwrap() as f64;
+    let notehead_advance = font.glyph_advance(smufl::Glyph::NoteheadBlack).unwrap() as f64;
 
     let mut svg = SvgWriter::new(1400.0, 350.0, -200.0, -1500.0, 15000.0, 5000.0);
 
@@ -52,7 +50,12 @@ fn main() {
     // Draw noteheads + ledger lines
     for note in &group1_notes {
         draw_note(
-            &mut svg, &staff, &font, &config, note.x, note.staff_position,
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note.x,
+            note.staff_position,
             NoteheadKind::Filled,
         )
         .unwrap();
@@ -60,13 +63,17 @@ fn main() {
 
     let dir1 = beam_group_stem_direction(&group1_notes);
     let layout1 = layout_beam_group(&group1_notes, dir1, staff.staff_space);
-    draw_beam_group(&mut svg, &staff, &config, &group1_notes, &layout1, notehead_advance);
+    draw_beam_group(
+        &mut svg,
+        &staff,
+        &config,
+        &group1_notes,
+        &layout1,
+        notehead_advance,
+    );
 
     // --- Group 2: two sixteenth notes descending (stems down) ---
-    let group2_pitches = [
-        Pitch::new(Note::B, 4),
-        Pitch::new(Note::A, 4),
-    ];
+    let group2_pitches = [Pitch::new(Note::B, 4), Pitch::new(Note::A, 4)];
     let group2_start_x = 4000.0;
 
     let group2_notes: Vec<BeamedNote> = group2_pitches
@@ -81,7 +88,12 @@ fn main() {
 
     for note in &group2_notes {
         draw_note(
-            &mut svg, &staff, &font, &config, note.x, note.staff_position,
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note.x,
+            note.staff_position,
             NoteheadKind::Filled,
         )
         .unwrap();
@@ -89,7 +101,14 @@ fn main() {
 
     let dir2 = beam_group_stem_direction(&group2_notes);
     let layout2 = layout_beam_group(&group2_notes, dir2, staff.staff_space);
-    draw_beam_group(&mut svg, &staff, &config, &group2_notes, &layout2, notehead_advance);
+    draw_beam_group(
+        &mut svg,
+        &staff,
+        &config,
+        &group2_notes,
+        &layout2,
+        notehead_advance,
+    );
 
     // --- Group 3: three notes with mixed durations (eighth + two sixteenths, stems up) ---
     let group3_pitches = [
@@ -113,7 +132,12 @@ fn main() {
 
     for note in &group3_notes {
         draw_note(
-            &mut svg, &staff, &font, &config, note.x, note.staff_position,
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note.x,
+            note.staff_position,
             NoteheadKind::Filled,
         )
         .unwrap();
@@ -121,7 +145,14 @@ fn main() {
 
     let dir3 = beam_group_stem_direction(&group3_notes);
     let layout3 = layout_beam_group(&group3_notes, dir3, staff.staff_space);
-    draw_beam_group(&mut svg, &staff, &config, &group3_notes, &layout3, notehead_advance);
+    draw_beam_group(
+        &mut svg,
+        &staff,
+        &config,
+        &group3_notes,
+        &layout3,
+        notehead_advance,
+    );
 
     // --- Group 4: high notes stems down (F5, E5, D5), 32nd notes ---
     let group4_pitches = [
@@ -143,7 +174,12 @@ fn main() {
 
     for note in &group4_notes {
         draw_note(
-            &mut svg, &staff, &font, &config, note.x, note.staff_position,
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note.x,
+            note.staff_position,
             NoteheadKind::Filled,
         )
         .unwrap();
@@ -151,16 +187,19 @@ fn main() {
 
     let dir4 = beam_group_stem_direction(&group4_notes);
     let layout4 = layout_beam_group(&group4_notes, dir4, staff.staff_space);
-    draw_beam_group(&mut svg, &staff, &config, &group4_notes, &layout4, notehead_advance);
+    draw_beam_group(
+        &mut svg,
+        &staff,
+        &config,
+        &group4_notes,
+        &layout4,
+        notehead_advance,
+    );
 
     let output = svg.to_svg();
 
     std::fs::create_dir_all("music-engraver/examples/output").unwrap();
-    std::fs::write(
-        "music-engraver/examples/output/beamed_notes.svg",
-        &output,
-    )
-    .unwrap();
+    std::fs::write("music-engraver/examples/output/beamed_notes.svg", &output).unwrap();
     println!("Wrote music-engraver/examples/output/beamed_notes.svg");
 
     let path_count = output.matches("<path ").count();
@@ -168,6 +207,9 @@ fn main() {
     let polygon_count = output.matches("<polygon ").count();
     println!(
         "SVG: {} bytes, {} <path>, {} <line>, {} <polygon>",
-        output.len(), path_count, line_count, polygon_count,
+        output.len(),
+        path_count,
+        line_count,
+        polygon_count,
     );
 }

@@ -1,10 +1,10 @@
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
 
+use super::xor_identity;
 use crate::ast::scale_diagram::OwnedOrientation;
 use crate::ast::OwnedScaleDiagram;
 use crate::error::MusicRonError;
-use super::xor_identity;
 
 /// Identity source resolved from exactly one of pcs/scale (REQ-O27 XOR).
 #[derive(Debug)]
@@ -44,7 +44,10 @@ pub fn convert_scale_diagram(
     owned: &OwnedScaleDiagram,
 ) -> Result<ResolvedScaleDiagram, MusicRonError> {
     let _winner = xor_identity(
-        &[("pcs", owned.pcs.is_some()), ("scale", owned.scale.is_some())],
+        &[
+            ("pcs", owned.pcs.is_some()),
+            ("scale", owned.scale.is_some()),
+        ],
         "ScaleDiagram",
     )?;
 

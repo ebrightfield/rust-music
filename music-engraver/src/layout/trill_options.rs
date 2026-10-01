@@ -906,8 +906,7 @@ mod tests {
     fn with_ornament_validated_accepts_trill() {
         // Canonical accept case: plain Trill on a fresh bundle. Every
         // unset field stays unset on accept.
-        let opts =
-            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::Trill);
+        let opts = TrillExtensionFullOptions::new().with_ornament_validated(Ornament::Trill);
         let opts = opts.expect("Trill must be accepted");
         assert_eq!(opts.ornament, Some(Ornament::Trill));
         assert_eq!(opts.bracket, None);
@@ -921,8 +920,8 @@ mod tests {
     #[test]
     fn with_ornament_validated_accepts_trill_with_mordent() {
         // The other accept variant.
-        let opts = TrillExtensionFullOptions::new()
-            .with_ornament_validated(Ornament::TrillWithMordent);
+        let opts =
+            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::TrillWithMordent);
         let opts = opts.expect("TrillWithMordent must be accepted");
         assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
     }
@@ -930,8 +929,7 @@ mod tests {
     #[test]
     fn with_ornament_validated_rejects_short_trill() {
         // Headline rejection case for the full-options surface.
-        let opts =
-            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::ShortTrill);
+        let opts = TrillExtensionFullOptions::new().with_ornament_validated(Ornament::ShortTrill);
         assert!(opts.is_none(), "ShortTrill must be rejected");
     }
 
@@ -941,8 +939,7 @@ mod tests {
         // `!supports_trill_extension()`. Locks the validator's accept band
         // to the predicate's accept band.
         for &ornament in Ornament::ALL.iter() {
-            let result =
-                TrillExtensionFullOptions::new().with_ornament_validated(ornament);
+            let result = TrillExtensionFullOptions::new().with_ornament_validated(ornament);
             assert_eq!(
                 result.is_some(),
                 ornament.supports_trill_extension(),
@@ -957,7 +954,10 @@ mod tests {
         // bundle, the validated and permissive setters must produce
         // field-by-field equal bundles. Catches a future refactor that
         // started normalizing accepted inputs.
-        for &ornament in Ornament::ALL.iter().filter(|o| o.supports_trill_extension()) {
+        for &ornament in Ornament::ALL
+            .iter()
+            .filter(|o| o.supports_trill_extension())
+        {
             let permissive = TrillExtensionFullOptions::new()
                 .with_bracket(TrillBracketSide::Both)
                 .with_bracket_direction(HookDirection::Up)
@@ -1023,8 +1023,8 @@ mod tests {
     fn with_ornament_validated_is_const_callable() {
         // `const` items hold one Some and two Nones across distinct
         // rejected ornaments. Drops `const fn` would break this.
-        const ACCEPTED: Option<TrillExtensionFullOptions> = TrillExtensionFullOptions::new()
-            .with_ornament_validated(Ornament::TrillWithMordent);
+        const ACCEPTED: Option<TrillExtensionFullOptions> =
+            TrillExtensionFullOptions::new().with_ornament_validated(Ornament::TrillWithMordent);
         const REJECTED_SHORT_TRILL: Option<TrillExtensionFullOptions> =
             TrillExtensionFullOptions::new().with_ornament_validated(Ornament::ShortTrill);
         const REJECTED_MORDENT: Option<TrillExtensionFullOptions> =
@@ -1298,8 +1298,7 @@ mod tests {
         //   TrillBracketOptions::extension_length_ss
         //     → TrillExtensionFullOptions::length_ss
         //     → TrillExtensionFullOptions::extension_length_ss()
-        let bracket = TrillBracketOptions::new(TrillBracketSide::End)
-            .with_extension_length_ss(4.0);
+        let bracket = TrillBracketOptions::new(TrillBracketSide::End).with_extension_length_ss(4.0);
         let widened: TrillExtensionFullOptions = bracket.into();
         assert_eq!(widened.extension_length_ss(), Some(4.0));
         assert_eq!(widened.extension_length_ss(), widened.length_ss);
@@ -1329,10 +1328,8 @@ mod tests {
     fn ramp_spec_is_const_constructible() {
         // `TrillSpeedRampSpec::new` must be `const fn` so canonical specs
         // can live in module-level `const` items alongside the ramp.
-        const _SPEC: TrillSpeedRampSpec = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
-            3,
-        );
+        const _SPEC: TrillSpeedRampSpec =
+            TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Standard), 3);
         const _SPEC_LINEAR: TrillSpeedRampSpec = TrillSpeedRampSpec::new(
             TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
             7,
@@ -1342,14 +1339,8 @@ mod tests {
     #[test]
     fn ramp_spec_partial_eq_sensitive_to_ramp() {
         // Same region_count, different ramp → distinct specs.
-        let a = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Fast),
-            4,
-        );
-        let b = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Slow),
-            4,
-        );
+        let a = TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Fast), 4);
+        let b = TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Slow), 4);
         assert_ne!(a, b);
     }
 
@@ -1389,10 +1380,8 @@ mod tests {
         // variant does — particularly that it does not write into the
         // single-speed `speed` field. Catches a regression where the
         // sugar accidentally fanned out into two fields.
-        let opts = TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Faster),
-            4,
-        );
+        let opts = TrillExtensionFullOptions::new()
+            .with_speed_ramp_ramp_count(TrillSpeedRamp::constant(TrillWiggleSpeed::Faster), 4);
         assert_eq!(
             opts.speed_ramp,
             Some(TrillSpeedRampSpec::new(
@@ -1423,8 +1412,8 @@ mod tests {
             ] {
                 let spec_form = TrillExtensionFullOptions::new()
                     .with_speed_ramp(TrillSpeedRampSpec::new(ramp, region_count));
-                let sugar_form = TrillExtensionFullOptions::new()
-                    .with_speed_ramp_ramp_count(ramp, region_count);
+                let sugar_form =
+                    TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(ramp, region_count);
                 assert_eq!(
                     spec_form, sugar_form,
                     "ramp={ramp:?} region_count={region_count}"
@@ -1438,10 +1427,7 @@ mod tests {
         // Same last-write-wins semantic as the other setters. Catches a
         // regression where the setter accumulated into a `Vec` or kept the
         // first write.
-        let first = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Fast),
-            3,
-        );
+        let first = TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Fast), 3);
         let second = TrillSpeedRampSpec::new(
             TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
             7,
@@ -1460,10 +1446,8 @@ mod tests {
         // Cross-setter last-write-wins: chaining the two variants in
         // either order ends on the last call's value. Both setters write
         // the same field, so this must hold.
-        let spec_form = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
-            2,
-        );
+        let spec_form =
+            TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest), 2);
         let opts_a = TrillExtensionFullOptions::new()
             .with_speed_ramp_ramp_count(
                 TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
@@ -1474,10 +1458,7 @@ mod tests {
 
         let opts_b = TrillExtensionFullOptions::new()
             .with_speed_ramp(spec_form)
-            .with_speed_ramp_ramp_count(
-                TrillSpeedRamp::constant(TrillWiggleSpeed::Slowest),
-                4,
-            );
+            .with_speed_ramp_ramp_count(TrillSpeedRamp::constant(TrillWiggleSpeed::Slowest), 4);
         assert_eq!(
             opts_b.speed_ramp,
             Some(TrillSpeedRampSpec::new(
@@ -1519,10 +1500,7 @@ mod tests {
         // The seven setters all commute. Three different orderings of the
         // same setter calls must yield equal bundles. Catches a
         // regression where any setter accidentally cleared a sibling.
-        let spec = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Slow),
-            4,
-        );
+        let spec = TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Slow), 4);
         let a = TrillExtensionFullOptions::new()
             .with_bracket(TrillBracketSide::End)
             .with_speed_ramp(spec)
@@ -1546,16 +1524,13 @@ mod tests {
     fn with_speed_ramp_is_const_constructible() {
         // Locks in `const fn` on the new setter. A future change that
         // dropped `const` would break this compile-time canary.
-        const _OPTS: TrillExtensionFullOptions = TrillExtensionFullOptions::new()
-            .with_speed_ramp(TrillSpeedRampSpec::new(
+        const _OPTS: TrillExtensionFullOptions =
+            TrillExtensionFullOptions::new().with_speed_ramp(TrillSpeedRampSpec::new(
                 TrillSpeedRamp::linear(TrillWiggleSpeed::Slowest, TrillWiggleSpeed::Fastest),
                 4,
             ));
-        const _OPTS_SUGAR: TrillExtensionFullOptions =
-            TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(
-                TrillSpeedRamp::constant(TrillWiggleSpeed::Faster),
-                3,
-            );
+        const _OPTS_SUGAR: TrillExtensionFullOptions = TrillExtensionFullOptions::new()
+            .with_speed_ramp_ramp_count(TrillSpeedRamp::constant(TrillWiggleSpeed::Faster), 3);
     }
 
     #[test]
@@ -1583,10 +1558,7 @@ mod tests {
         // already-populated `speed_ramp` must not silently drop the ramp.
         // Catches a regression that "promoted" the single-speed setter
         // into a multi-speed reset.
-        let spec = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
-            2,
-        );
+        let spec = TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest), 2);
         let opts = TrillExtensionFullOptions::new()
             .with_speed_ramp(spec)
             .with_speed(TrillWiggleSpeed::Standard);
@@ -1676,14 +1648,12 @@ mod tests {
         // each assert other fields are unset but predate this field;
         // this test closes that gap in one place.
         let opts_bracket = TrillExtensionFullOptions::new().with_bracket(TrillBracketSide::End);
-        let opts_dir =
-            TrillExtensionFullOptions::new().with_bracket_direction(HookDirection::Up);
+        let opts_dir = TrillExtensionFullOptions::new().with_bracket_direction(HookDirection::Up);
         let opts_blen = TrillExtensionFullOptions::new().with_bracket_length_ss(0.9);
         let opts_speed = TrillExtensionFullOptions::new().with_speed(TrillWiggleSpeed::Fast);
         let opts_orn = TrillExtensionFullOptions::new().with_ornament(Ornament::Trill);
         let opts_len = TrillExtensionFullOptions::new().with_length_ss(2.0);
-        let opts_ext_len =
-            TrillExtensionFullOptions::new().with_extension_length_ss(2.0);
+        let opts_ext_len = TrillExtensionFullOptions::new().with_extension_length_ss(2.0);
         for opts in [
             opts_bracket,
             opts_dir,
@@ -1715,10 +1685,8 @@ mod tests {
         // options bundle unchanged. Locks in the
         // "no construction-time validation" policy that mirrors
         // unsupported-ornament and non-positive-length handling.
-        let degenerate_zero = TrillSpeedRampSpec::new(
-            TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
-            0,
-        );
+        let degenerate_zero =
+            TrillSpeedRampSpec::new(TrillSpeedRamp::constant(TrillWiggleSpeed::Standard), 0);
         let opts_zero = TrillExtensionFullOptions::new().with_speed_ramp(degenerate_zero);
         assert_eq!(opts_zero.speed_ramp, Some(degenerate_zero));
         assert_eq!(opts_zero.speed_ramp.unwrap().region_count, 0);
@@ -1727,8 +1695,7 @@ mod tests {
             TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
             1,
         );
-        let opts_one =
-            TrillExtensionFullOptions::new().with_speed_ramp(degenerate_one_linear);
+        let opts_one = TrillExtensionFullOptions::new().with_speed_ramp(degenerate_one_linear);
         assert_eq!(opts_one.speed_ramp, Some(degenerate_one_linear));
         assert_eq!(opts_one.speed_ramp.unwrap().region_count, 1);
     }
@@ -1781,8 +1748,7 @@ mod tests {
         // Per the underlying spec validator: zero region count is a
         // rejection for any ramp variant, including `Constant`.
         let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
-        let result = TrillExtensionFullOptions::new()
-            .with_speed_ramp_validated_ramp_count(ramp, 0);
+        let result = TrillExtensionFullOptions::new().with_speed_ramp_validated_ramp_count(ramp, 0);
         assert_eq!(result, None);
     }
 
@@ -1792,8 +1758,7 @@ mod tests {
         // as well. Walks the boundary where the two rejection rules
         // overlap.
         let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
-        let result = TrillExtensionFullOptions::new()
-            .with_speed_ramp_validated_ramp_count(ramp, 0);
+        let result = TrillExtensionFullOptions::new().with_speed_ramp_validated_ramp_count(ramp, 0);
         assert_eq!(result, None);
     }
 
@@ -1805,8 +1770,7 @@ mod tests {
         // produced a spec that fails at `synthesize_regions` time; the
         // validated setter rejects it up front.
         let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
-        let result = TrillExtensionFullOptions::new()
-            .with_speed_ramp_validated_ramp_count(ramp, 1);
+        let result = TrillExtensionFullOptions::new().with_speed_ramp_validated_ramp_count(ramp, 1);
         assert_eq!(result, None);
     }
 
@@ -1821,10 +1785,7 @@ mod tests {
         let opts = TrillExtensionFullOptions::new()
             .with_speed_ramp_validated_ramp_count(ramp, 1)
             .expect("Constant + 1 region is valid");
-        assert_eq!(
-            opts.speed_ramp,
-            Some(TrillSpeedRampSpec::new(ramp, 1))
-        );
+        assert_eq!(opts.speed_ramp, Some(TrillSpeedRampSpec::new(ramp, 1)));
     }
 
     #[test]
@@ -1836,10 +1797,7 @@ mod tests {
         let opts = TrillExtensionFullOptions::new()
             .with_speed_ramp_validated_ramp_count(ramp, 2)
             .expect("Linear + 2 regions is valid");
-        assert_eq!(
-            opts.speed_ramp,
-            Some(TrillSpeedRampSpec::new(ramp, 2))
-        );
+        assert_eq!(opts.speed_ramp, Some(TrillSpeedRampSpec::new(ramp, 2)));
     }
 
     #[test]
@@ -1861,8 +1819,8 @@ mod tests {
                 TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
                 TrillSpeedRamp::constant(TrillWiggleSpeed::Fastest),
             ] {
-                let permissive = TrillExtensionFullOptions::new()
-                    .with_speed_ramp_ramp_count(ramp, region_count);
+                let permissive =
+                    TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(ramp, region_count);
                 let validated = TrillExtensionFullOptions::new()
                     .with_speed_ramp_validated_ramp_count(ramp, region_count)
                     .unwrap_or_else(|| {
@@ -1887,8 +1845,8 @@ mod tests {
                 TrillSpeedRamp::linear(TrillWiggleSpeed::Fast, TrillWiggleSpeed::Slow),
                 TrillSpeedRamp::linear(TrillWiggleSpeed::Standard, TrillWiggleSpeed::Standard),
             ] {
-                let permissive = TrillExtensionFullOptions::new()
-                    .with_speed_ramp_ramp_count(ramp, region_count);
+                let permissive =
+                    TrillExtensionFullOptions::new().with_speed_ramp_ramp_count(ramp, region_count);
                 let validated = TrillExtensionFullOptions::new()
                     .with_speed_ramp_validated_ramp_count(ramp, region_count)
                     .unwrap_or_else(|| {
@@ -1915,10 +1873,7 @@ mod tests {
         let opts = TrillExtensionFullOptions::new()
             .with_speed_ramp_validated_ramp_count(ramp, 3)
             .expect("Constant + 3 regions is valid");
-        assert_eq!(
-            opts.speed_ramp,
-            Some(TrillSpeedRampSpec::new(ramp, 3))
-        );
+        assert_eq!(opts.speed_ramp, Some(TrillSpeedRampSpec::new(ramp, 3)));
         assert_eq!(opts.bracket, None);
         assert_eq!(opts.bracket_direction, None);
         assert_eq!(opts.bracket_length_ss, None);
@@ -1953,10 +1908,7 @@ mod tests {
         assert_eq!(opts.speed, Some(TrillWiggleSpeed::Standard));
         assert_eq!(opts.ornament, Some(Ornament::TrillWithMordent));
         assert_eq!(opts.length_ss, Some(3.25));
-        assert_eq!(
-            opts.speed_ramp,
-            Some(TrillSpeedRampSpec::new(ramp, 4))
-        );
+        assert_eq!(opts.speed_ramp, Some(TrillSpeedRampSpec::new(ramp, 4)));
     }
 
     #[test]
@@ -1979,8 +1931,8 @@ mod tests {
                 TrillSpeedRamp::constant(TrillWiggleSpeed::Standard),
                 0,
             );
-        const NONE_LINEAR_ONE: Option<TrillExtensionFullOptions> =
-            TrillExtensionFullOptions::new().with_speed_ramp_validated_ramp_count(
+        const NONE_LINEAR_ONE: Option<TrillExtensionFullOptions> = TrillExtensionFullOptions::new()
+            .with_speed_ramp_validated_ramp_count(
                 TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast),
                 1,
             );
@@ -2066,12 +2018,11 @@ mod tests {
         let ramp = TrillSpeedRamp::linear(TrillWiggleSpeed::Standard, TrillWiggleSpeed::Standard);
         let opts = TrillExtensionFullOptions::new()
             .with_speed_ramp_validated_ramp_count(ramp, 3)
-            .expect("Linear { s, s } + region_count >= 2 is accepted (rejection of \
-                     equal endpoints lives on `TrillSpeedRamp::linear_validated`)");
-        assert_eq!(
-            opts.speed_ramp,
-            Some(TrillSpeedRampSpec::new(ramp, 3))
-        );
+            .expect(
+                "Linear { s, s } + region_count >= 2 is accepted (rejection of \
+                     equal endpoints lives on `TrillSpeedRamp::linear_validated`)",
+            );
+        assert_eq!(opts.speed_ramp, Some(TrillSpeedRampSpec::new(ramp, 3)));
     }
 
     #[test]
@@ -2087,10 +2038,7 @@ mod tests {
             .expect("first pair valid")
             .with_speed_ramp_validated_ramp_count(second, 4)
             .expect("second pair valid");
-        assert_eq!(
-            opts.speed_ramp,
-            Some(TrillSpeedRampSpec::new(second, 4))
-        );
+        assert_eq!(opts.speed_ramp, Some(TrillSpeedRampSpec::new(second, 4)));
         // Sanity: confirm the two pairs would have produced distinct
         // specs — otherwise the overwrite assertion above is vacuous.
         assert_ne!(
@@ -2140,8 +2088,7 @@ mod tests {
 
     #[test]
     fn with_extension_length_ss_validated_rejects_zero() {
-        let result =
-            TrillExtensionFullOptions::new().with_extension_length_ss_validated(0.0);
+        let result = TrillExtensionFullOptions::new().with_extension_length_ss_validated(0.0);
         assert_eq!(result, None);
     }
 
@@ -2149,31 +2096,28 @@ mod tests {
     fn with_extension_length_ss_validated_rejects_negative_zero() {
         // `-0.0 > 0.0` is false. Catches a refactor that used
         // `length_ss.is_sign_negative()` or `length_ss != 0.0` instead.
-        let result =
-            TrillExtensionFullOptions::new().with_extension_length_ss_validated(-0.0);
+        let result = TrillExtensionFullOptions::new().with_extension_length_ss_validated(-0.0);
         assert_eq!(result, None);
     }
 
     #[test]
     fn with_extension_length_ss_validated_rejects_negative_finite() {
         for len in [-0.001, -0.5, -1.0, -10.0, -1.0e6] {
-            let result =
-                TrillExtensionFullOptions::new().with_extension_length_ss_validated(len);
+            let result = TrillExtensionFullOptions::new().with_extension_length_ss_validated(len);
             assert_eq!(result, None, "expected rejection for len={len}");
         }
     }
 
     #[test]
     fn with_extension_length_ss_validated_rejects_negative_infinity() {
-        let result = TrillExtensionFullOptions::new()
-            .with_extension_length_ss_validated(f64::NEG_INFINITY);
+        let result =
+            TrillExtensionFullOptions::new().with_extension_length_ss_validated(f64::NEG_INFINITY);
         assert_eq!(result, None);
     }
 
     #[test]
     fn with_extension_length_ss_validated_rejects_nan() {
-        let result =
-            TrillExtensionFullOptions::new().with_extension_length_ss_validated(f64::NAN);
+        let result = TrillExtensionFullOptions::new().with_extension_length_ss_validated(f64::NAN);
         assert_eq!(result, None);
     }
 
@@ -2185,7 +2129,11 @@ mod tests {
                 .unwrap_or_else(|| panic!("expected accept for len={len}"));
             assert_eq!(opts.length_ss, Some(len), "len={len}");
             // The accessor mirrors the field — also pin that down.
-            assert_eq!(opts.extension_length_ss(), Some(len), "accessor mismatch len={len}");
+            assert_eq!(
+                opts.extension_length_ss(),
+                Some(len),
+                "accessor mismatch len={len}"
+            );
         }
     }
 
@@ -2344,9 +2292,18 @@ mod tests {
         use crate::layout::trill_bracket::TrillBracketOptions;
         use crate::layout::trill_extension::TrillExtensionSpeedOptions;
         for len in [
-            -1.0e6, -2.0, -0.001, -0.0, 0.0,
-            f64::NEG_INFINITY, f64::NAN,
-            0.001, 0.5, 1.0, 1.0e6, f64::INFINITY,
+            -1.0e6,
+            -2.0,
+            -0.001,
+            -0.0,
+            0.0,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            0.001,
+            0.5,
+            1.0,
+            1.0e6,
+            f64::INFINITY,
         ] {
             let bracket_is_none = TrillBracketOptions::new(TrillBracketSide::Both)
                 .with_extension_length_ss_validated(len)
@@ -2403,8 +2360,7 @@ mod tests {
         // representative magnitudes to pin down `> 0.0` rather than a
         // per-magnitude band.
         for len in [-0.001, -0.5, -1.0, -10.0, -1.0e6] {
-            let result =
-                TrillExtensionFullOptions::new().with_bracket_length_ss_validated(len);
+            let result = TrillExtensionFullOptions::new().with_bracket_length_ss_validated(len);
             assert_eq!(result, None, "expected rejection for len={len}");
         }
     }
@@ -2413,8 +2369,8 @@ mod tests {
     fn with_bracket_length_ss_validated_rejects_negative_infinity() {
         // -∞ > 0.0 is false, so the validator rejects. The renderer would
         // otherwise apply `.abs()` and silently emit +∞.
-        let result = TrillExtensionFullOptions::new()
-            .with_bracket_length_ss_validated(f64::NEG_INFINITY);
+        let result =
+            TrillExtensionFullOptions::new().with_bracket_length_ss_validated(f64::NEG_INFINITY);
         assert_eq!(result, None);
     }
 
@@ -2422,8 +2378,7 @@ mod tests {
     fn with_bracket_length_ss_validated_rejects_nan() {
         // NaN > 0.0 is false. The renderer would otherwise emit NaN hook
         // coordinates.
-        let result =
-            TrillExtensionFullOptions::new().with_bracket_length_ss_validated(f64::NAN);
+        let result = TrillExtensionFullOptions::new().with_bracket_length_ss_validated(f64::NAN);
         assert_eq!(result, None);
     }
 

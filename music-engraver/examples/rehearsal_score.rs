@@ -79,12 +79,21 @@ fn main() {
     );
 
     // Should have at least 3 rehearsal mark texts (A, B, 1, Fine)
-    assert!(text_count >= 4, "expected at least 4 text elements for rehearsal marks, got {text_count}");
+    assert!(
+        text_count >= 4,
+        "expected at least 4 text elements for rehearsal marks, got {text_count}"
+    );
     // A, B, Fine are boxed → at least 3 rects
-    assert!(rect_count >= 3, "expected at least 3 rects for boxed rehearsal marks, got {rect_count}");
+    assert!(
+        rect_count >= 3,
+        "expected at least 3 rects for boxed rehearsal marks, got {rect_count}"
+    );
     // Verify specific rehearsal mark content
     assert!(svg.contains(">A<"), "rehearsal mark 'A' should appear");
     assert!(svg.contains(">B<"), "rehearsal mark 'B' should appear");
     assert!(svg.contains(">1<"), "rehearsal mark '1' should appear");
-    assert!(svg.contains(">Fine<"), "rehearsal mark 'Fine' should appear");
+    assert!(
+        svg.contains(">Fine<"),
+        "rehearsal mark 'Fine' should appear"
+    );
 }

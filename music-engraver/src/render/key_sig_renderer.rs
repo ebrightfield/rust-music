@@ -1,5 +1,5 @@
 use crate::font::{FontError, MusicFont};
-use crate::layout::key_signature::{KeySignature, KeySignatureLayout, key_signature_layout};
+use crate::layout::key_signature::{key_signature_layout, KeySignature, KeySignatureLayout};
 use crate::layout::staff::StaffLayout;
 use crate::render::SvgWriter;
 use music::notation::clef::Clef;
@@ -16,11 +16,16 @@ pub fn draw_key_signature(
     clef: &Clef,
 ) -> Result<f64, FontError> {
     let config = font.engraving_config();
-    let layout = key_signature_layout(key, clef, |g| {
-        font.glyph_outline(g)
-            .map(|o| o.advance_width as f64)
-            .unwrap_or(0.0)
-    }, config.staff_space);
+    let layout = key_signature_layout(
+        key,
+        clef,
+        |g| {
+            font.glyph_outline(g)
+                .map(|o| o.advance_width as f64)
+                .unwrap_or(0.0)
+        },
+        config.staff_space,
+    );
     render_key_sig_layout(svg, staff, font, x, &layout)
 }
 
@@ -57,9 +62,15 @@ mod tests {
     fn open_key_produces_no_paths() {
         let (font, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        let width =
-            draw_key_signature(&mut svg, &staff, &font, 500.0, &KeySignature::Open, &Clef::Treble)
-                .unwrap();
+        let width = draw_key_signature(
+            &mut svg,
+            &staff,
+            &font,
+            500.0,
+            &KeySignature::Open,
+            &Clef::Treble,
+        )
+        .unwrap();
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 0);
         assert!((width - 0.0).abs() < f64::EPSILON);

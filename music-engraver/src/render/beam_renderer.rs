@@ -9,6 +9,21 @@ use crate::render::SvgWriter;
 /// When a secondary beam can only connect on one side, a short stub is drawn.
 const FRACTIONAL_BEAM_LENGTH_SS: f64 = 0.75;
 
+#[derive(Clone, Copy)]
+enum NoteheadAdvances<'a> {
+    Uniform(f64),
+    PerNote(&'a [f64]),
+}
+
+impl NoteheadAdvances<'_> {
+    fn at(self, index: usize) -> f64 {
+        match self {
+            Self::Uniform(advance) => advance,
+            Self::PerNote(advances) => advances[index],
+        }
+    }
+}
+
 /// Draw a complete beam group: stems and beam lines.
 ///
 /// For each note, draws a vertical stem from the notehead to the beam line.
@@ -31,6 +46,44 @@ pub fn draw_beam_group(
     layout: &BeamGroupLayout,
     notehead_advance: f64,
 ) {
+    draw_beam_group_with_widths(
+        svg,
+        staff,
+        config,
+        notes,
+        layout,
+        NoteheadAdvances::Uniform(notehead_advance),
+    );
+}
+
+/// Draw a beam group whose semantic noteheads have distinct font advances.
+pub(crate) fn draw_beam_group_with_advances(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    config: &EngravingConfig,
+    notes: &[BeamedNote],
+    layout: &BeamGroupLayout,
+    notehead_advances: &[f64],
+) {
+    assert_eq!(notes.len(), notehead_advances.len());
+    draw_beam_group_with_widths(
+        svg,
+        staff,
+        config,
+        notes,
+        layout,
+        NoteheadAdvances::PerNote(notehead_advances),
+    );
+}
+
+fn draw_beam_group_with_widths(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    config: &EngravingConfig,
+    notes: &[BeamedNote],
+    layout: &BeamGroupLayout,
+    notehead_advances: NoteheadAdvances<'_>,
+) {
     assert_eq!(notes.len(), layout.stem_tip_ys.len());
     if notes.is_empty() {
         return;
@@ -50,11 +103,16 @@ pub fn draw_beam_group(
         ..layout.clone()
     };
 
-    // Draw stems: vertical line from notehead to beam attachment point
+    // Draw stems: vertical line from notehead to beam attachment point.
     for (i, note) in notes.iter().enumerate() {
         let notehead_y = staff.y_of(note.staff_position);
         let tip_y = layout.stem_tip_ys[i];
-        let sx = stem_x(note.x, notehead_advance, layout.direction, stem_thick);
+        let sx = stem_x(
+            note.x,
+            notehead_advances.at(i),
+            layout.direction,
+            stem_thick,
+        );
 
         let (y1, y2) = if tip_y < notehead_y {
             (tip_y, notehead_y)
@@ -64,13 +122,13 @@ pub fn draw_beam_group(
         svg.add_line(sx, y1, sx, y2, "black", stem_thick);
     }
 
-    // Draw beam lines at each level
+    // Draw beam lines at each level.
     for level in 0..layout.max_beam_level {
         draw_beam_level(
             svg,
             notes,
             layout,
-            notehead_advance,
+            notehead_advances,
             stem_thick,
             beam_thick,
             beam_gap,
@@ -86,7 +144,7 @@ fn draw_beam_level(
     svg: &mut SvgWriter,
     notes: &[BeamedNote],
     layout: &BeamGroupLayout,
-    notehead_advance: f64,
+    notehead_advances: NoteheadAdvances<'_>,
     stem_thick: f64,
     beam_thick: f64,
     beam_gap: f64,
@@ -100,7 +158,7 @@ fn draw_beam_level(
     // Beams stack away from the noteheads (toward the stem tip direction).
     let beam_offset = level as f64 * (beam_thick + beam_gap);
     let dir_sign = match layout.direction {
-        StemDirection::Up => 1.0,   // beams at top of stem, stack downward (positive y)
+        StemDirection::Up => 1.0, // beams at top of stem, stack downward (positive y)
         StemDirection::Down => -1.0, // beams at bottom of stem, stack upward (negative y)
     };
 
@@ -129,7 +187,7 @@ fn draw_beam_level(
                 svg,
                 notes,
                 layout,
-                notehead_advance,
+                notehead_advances,
                 stem_thick,
                 beam_thick,
                 beam_offset,
@@ -144,7 +202,7 @@ fn draw_beam_level(
                 svg,
                 notes,
                 layout,
-                notehead_advance,
+                notehead_advances,
                 stem_thick,
                 beam_thick,
                 beam_offset,
@@ -166,7 +224,7 @@ fn draw_beam_segment(
     svg: &mut SvgWriter,
     notes: &[BeamedNote],
     layout: &BeamGroupLayout,
-    notehead_advance: f64,
+    notehead_advances: NoteheadAdvances<'_>,
     stem_thick: f64,
     beam_thick: f64,
     beam_offset: f64,
@@ -174,8 +232,18 @@ fn draw_beam_segment(
     start: usize,
     end: usize,
 ) {
-    let x_left = stem_x(notes[start].x, notehead_advance, layout.direction, stem_thick);
-    let x_right = stem_x(notes[end].x, notehead_advance, layout.direction, stem_thick);
+    let x_left = stem_x(
+        notes[start].x,
+        notehead_advances.at(start),
+        layout.direction,
+        stem_thick,
+    );
+    let x_right = stem_x(
+        notes[end].x,
+        notehead_advances.at(end),
+        layout.direction,
+        stem_thick,
+    );
     let y_left = layout.stem_tip_ys[start] + beam_offset * dir_sign;
     let y_right = layout.stem_tip_ys[end] + beam_offset * dir_sign;
 
@@ -205,7 +273,7 @@ fn draw_fractional_beam(
     svg: &mut SvgWriter,
     notes: &[BeamedNote],
     layout: &BeamGroupLayout,
-    notehead_advance: f64,
+    notehead_advances: NoteheadAdvances<'_>,
     stem_thick: f64,
     beam_thick: f64,
     beam_offset: f64,
@@ -216,7 +284,7 @@ fn draw_fractional_beam(
 ) {
     let x_note = stem_x(
         notes[note_idx].x,
-        notehead_advance,
+        notehead_advances.at(note_idx),
         layout.direction,
         stem_thick,
     );
@@ -291,11 +359,7 @@ mod tests {
 
         // 2 stems (lines) + 1 primary beam (polygon)
         assert_eq!(count_element(&output, "line"), 2, "should have 2 stems");
-        assert_eq!(
-            count_element(&output, "polygon"),
-            1,
-            "should have 1 beam"
-        );
+        assert_eq!(count_element(&output, "polygon"), 1, "should have 1 beam");
     }
 
     #[test]
@@ -316,12 +380,7 @@ mod tests {
     #[test]
     fn four_eighths_produces_one_beam_polygon() {
         let (config, staff) = setup();
-        let notes = make_notes(&[
-            (500.0, 0, 3),
-            (800.0, 2, 3),
-            (1100.0, 4, 3),
-            (1400.0, 2, 3),
-        ]);
+        let notes = make_notes(&[(500.0, 0, 3), (800.0, 2, 3), (1100.0, 4, 3), (1400.0, 2, 3)]);
         let layout = layout_beam_group(&notes, StemDirection::Up, SS);
 
         let mut svg = SvgWriter::new(800.0, 200.0, -200.0, -500.0, 6000.0, 2500.0);
@@ -348,7 +407,10 @@ mod tests {
         // The stem tips are below noteheads for down stems
         let notehead_y_top = staff.y_of(8); // 0.0
         for tip in &layout.stem_tip_ys {
-            assert!(*tip > notehead_y_top, "tip {tip} should be below top-line notehead");
+            assert!(
+                *tip > notehead_y_top,
+                "tip {tip} should be below top-line notehead"
+            );
         }
     }
 
@@ -481,11 +543,7 @@ mod tests {
 
         assert_eq!(count_element(&output, "line"), 1, "1 stem");
         // Should have a fractional beam (left-pointing stub)
-        assert_eq!(
-            count_element(&output, "polygon"),
-            1,
-            "1 fractional beam"
-        );
+        assert_eq!(count_element(&output, "polygon"), 1, "1 fractional beam");
     }
 
     #[test]

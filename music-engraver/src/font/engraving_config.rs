@@ -59,19 +59,13 @@ impl EngravingConfig {
             tie_midpoint_thickness: unwrap_ss(defaults.tie_midpoint_thickness, 0.22),
             tuplet_bracket_thickness: unwrap_ss(defaults.tuplet_bracket_thickness, 0.16),
             hairpin_thickness: unwrap_ss(defaults.hairpin_thickness, 0.16),
-            repeat_barline_dot_separation: unwrap_ss(
-                defaults.repeat_barline_dot_separation,
-                0.16,
-            ),
+            repeat_barline_dot_separation: unwrap_ss(defaults.repeat_barline_dot_separation, 0.16),
             bracket_thickness: unwrap_ss(defaults.bracket_thickness, 0.5),
             sub_bracket_thickness: unwrap_ss(defaults.sub_bracket_thickness, 0.16),
             dashed_barline_thickness: unwrap_ss(defaults.dashed_barline_thickness, 0.16),
             dashed_barline_dash_length: unwrap_ss(defaults.dashed_barline_dash_length, 0.5),
             dashed_barline_gap_length: unwrap_ss(defaults.dashed_barline_gap_length, 0.25),
-            repeat_ending_line_thickness: unwrap_ss(
-                defaults.repeat_ending_line_thickness,
-                0.16,
-            ),
+            repeat_ending_line_thickness: unwrap_ss(defaults.repeat_ending_line_thickness, 0.16),
             staff_space: ss,
         }
     }

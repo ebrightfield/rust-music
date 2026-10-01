@@ -24,7 +24,10 @@ struct MockFs {
 
 impl MockFs {
     fn empty() -> Self {
-        Self { files: HashMap::new(), tmp: None }
+        Self {
+            files: HashMap::new(),
+            tmp: None,
+        }
     }
 
     fn with_file(mut self, path: impl Into<PathBuf>, bytes: Vec<u8>) -> Self {
@@ -35,19 +38,24 @@ impl MockFs {
     fn with_tempdir() -> (Self, PathBuf) {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().to_path_buf();
-        (Self { files: HashMap::new(), tmp: Some(tmp) }, root)
+        (
+            Self {
+                files: HashMap::new(),
+                tmp: Some(tmp),
+            },
+            root,
+        )
     }
 }
 
 impl FsCache for MockFs {
     fn read(&self, path: &Path) -> Result<Vec<u8>, MidiConversionError> {
-        self.files
-            .get(path)
-            .cloned()
-            .ok_or_else(|| MidiConversionError::Io(std::io::Error::new(
+        self.files.get(path).cloned().ok_or_else(|| {
+            MidiConversionError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("mock file not found: {}", path.display()),
-            )))
+            ))
+        })
     }
 
     fn write_atomic(&mut self, path: &Path, bytes: &[u8]) -> Result<(), MidiConversionError> {
@@ -91,11 +99,15 @@ struct MockHttp {
 
 impl MockHttp {
     fn returns(bytes: Vec<u8>) -> Self {
-        Self { response: Ok(bytes) }
+        Self {
+            response: Ok(bytes),
+        }
     }
 
     fn errors(msg: impl Into<String>) -> Self {
-        Self { response: Err(msg.into()) }
+        Self {
+            response: Err(msg.into()),
+        }
     }
 }
 
@@ -124,7 +136,6 @@ impl HttpFetch for MockHttp {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
 
 // ---------------------------------------------------------------------------
 // Tests — always-run (no real SF2 required)
@@ -181,7 +192,9 @@ fn checksum_mismatch_surfaces_error() {
     }
 
     let tampered = b"this is wrong data and will not match the pinned SHA-256".to_vec();
-    let mut any_mock_fs = AnyPathMockFs { bytes: tampered.clone() };
+    let mut any_mock_fs = AnyPathMockFs {
+        bytes: tampered.clone(),
+    };
     // The cache "exists" with tampered bytes → checksum error → delete → re-download.
     // Download returns the same tampered bytes → checksum error surfaces.
     let mut bad_http = MockHttp::returns(tampered);
@@ -274,7 +287,9 @@ fn atomic_write_no_partial_on_crash() {
     let partial_path = final_path.with_extension("partial");
     let payload = b"test sf2 payload";
 
-    mock_fs.write_atomic(&final_path, payload).expect("write_atomic must succeed");
+    mock_fs
+        .write_atomic(&final_path, payload)
+        .expect("write_atomic must succeed");
 
     // Final file must exist with correct contents.
     let on_disk = std::fs::read(&final_path).expect("final path must exist after atomic write");
@@ -319,14 +334,19 @@ fn cache_hit_skips_download() {
         fn get(&mut self, _url: &str, _max: u64) -> Result<Vec<u8>, MidiConversionError> {
             *self.0 = true;
             // Return wrong bytes to make it fail quickly without panicking.
-            Err(MidiConversionError::SoundFontDownload("test sentinel".into()))
+            Err(MidiConversionError::SoundFontDownload(
+                "test sentinel".into(),
+            ))
         }
     }
 
     let mut mock_fs = MockFs::empty();
     let mut http = CountingHttp(&mut http_called);
     let _ = SoundFont::general_user_gs_impl(&mut mock_fs, &mut http);
-    assert!(http_called, "HttpFetch::get must be called when cache is absent");
+    assert!(
+        http_called,
+        "HttpFetch::get must be called when cache is absent"
+    );
 }
 
 /// SF_URL constant must start with "https://".
@@ -344,10 +364,7 @@ fn soundfont_malformed_no_panic() {
     // A clearly-malformed header: RIFF size of 7 (impossibly small), followed by
     // nonsense. This has historically tripped oxisynth's parser into a panic.
     const MALFORMED: &[u8] = &[
-        b'R', b'I', b'F', b'F',
-        0x07, 0x00, 0x00, 0x00,
-        b's', b'f', b'b', b'k',
-        0xFF, 0xFF, 0xFF,
+        b'R', b'I', b'F', b'F', 0x07, 0x00, 0x00, 0x00, b's', b'f', b'b', b'k', 0xFF, 0xFF, 0xFF,
     ];
     let result = music_midi::soundfont::OxiSynthAdapter::new(MALFORMED, 48_000.0);
     match result {
@@ -366,10 +383,7 @@ fn soundfont_malformed_no_panic() {
 /// but we verify the constants have the expected shape).
 #[test]
 fn cache_path_constants_are_reasonable() {
-    assert!(
-        !CACHE_SUBDIR.is_empty(),
-        "CACHE_SUBDIR must be non-empty"
-    );
+    assert!(!CACHE_SUBDIR.is_empty(), "CACHE_SUBDIR must be non-empty");
     assert!(
         CACHE_FILE.ends_with(".sf2"),
         "CACHE_FILE must have .sf2 extension"

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use super::common::{OwnedDuration, OwnedMeta, OwnedStringConvention, OwnedTuning};
 use crate::visitor::bounded_vec::deserialize_bounded_vec;
+use serde::{Deserialize, Serialize};
 
 /// A single tablature event on a specific string/fret (REQ-O22).
 #[derive(Debug, Clone, Serialize, Deserialize)]

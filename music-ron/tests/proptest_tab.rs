@@ -32,10 +32,9 @@ fn arb_convention_ron() -> impl Strategy<Value = String> {
 
 /// A single tab event RON string.
 fn arb_tab_event_ron() -> impl Strategy<Value = String> {
-    (1u8..=6u8, 0u8..=24u8, arb_duration_str())
-        .prop_map(|(string, fret, dur)| {
-            format!("(string: {string}, fret: {fret}, duration: \"{dur}\")")
-        })
+    (1u8..=6u8, 0u8..=24u8, arb_duration_str()).prop_map(|(string, fret, dur)| {
+        format!("(string: {string}, fret: {fret}, duration: \"{dur}\")")
+    })
 }
 
 proptest! {

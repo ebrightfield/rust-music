@@ -118,16 +118,14 @@ mod tests {
 
     #[test]
     fn boxed_rehearsal_has_box_rect() {
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         assert!(layout.box_rect.is_some());
         assert_eq!(layout.style, RehearsalStyle::Boxed);
     }
 
     #[test]
     fn plain_rehearsal_has_no_box_rect() {
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Plain);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Plain);
         assert!(layout.box_rect.is_none());
         assert_eq!(layout.style, RehearsalStyle::Plain);
     }
@@ -136,8 +134,7 @@ mod tests {
     fn rehearsal_baseline_above_top_staff_line() {
         let staff = test_staff();
         let top_y = staff.y_of(8);
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &staff, 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &staff, 250.0, RehearsalStyle::Boxed);
         assert!(
             layout.y_baseline < top_y,
             "baseline {} should be above top line {}",
@@ -155,8 +152,7 @@ mod tests {
 
     #[test]
     fn box_centered_on_x() {
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         let (bx, _, bw, _) = layout.box_rect.unwrap();
         let box_center = bx + bw / 2.0;
         assert!(
@@ -169,10 +165,16 @@ mod tests {
     #[test]
     fn wider_text_produces_wider_box() {
         let single = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
-        let multi = layout_rehearsal_mark("ABC", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let multi =
+            layout_rehearsal_mark("ABC", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         let (_, _, w1, _) = single.box_rect.unwrap();
         let (_, _, w3, _) = multi.box_rect.unwrap();
-        assert!(w3 > w1, "3-char box width {} should exceed 1-char {}", w3, w1);
+        assert!(
+            w3 > w1,
+            "3-char box width {} should exceed 1-char {}",
+            w3,
+            w1
+        );
     }
 
     #[test]
@@ -187,8 +189,7 @@ mod tests {
 
     #[test]
     fn box_stroke_width_positive() {
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         assert!(layout.box_stroke_width > 0.0);
     }
 
@@ -201,8 +202,7 @@ mod tests {
 
     #[test]
     fn box_y_above_baseline() {
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         let (_, by, _, _) = layout.box_rect.unwrap();
         assert!(
             by < layout.y_baseline,

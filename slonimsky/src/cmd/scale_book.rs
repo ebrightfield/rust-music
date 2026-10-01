@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use music::note::pitch_class::Pc;
-use music::note_collections::pc_set::{AsPcSlice, PcShape};
 use music::note_collections::geometry::symmetry::transpositional::Modes;
+use music::note_collections::pc_set::{AsPcSlice, PcShape};
 use music::svg::PitchCircleBuilder;
 use musical_combinatorics::seven_note_scales::SevenNoteScaleQuality;
 use std::fs;
@@ -9,6 +9,11 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use super::input::{parse_pc, pc_label, resolve_theme};
+use super::scale_catalog::{mode_name, resolve_scale as resolve_catalog_scale};
+pub use super::scale_catalog::{
+    HARMONIC_MAJOR_MODE_NAMES, HARMONIC_MINOR_MODE_NAMES, MAJOR_MODE_NAMES,
+    MELODIC_MINOR_MODE_NAMES,
+};
 
 pub struct ScaleBookArgs {
     pub scale: String,
@@ -18,60 +23,18 @@ pub struct ScaleBookArgs {
     pub verbose: bool,
 }
 
-/// Names for the 7 modes of the major scale.
-pub const MAJOR_MODE_NAMES: &[&str] = &[
-    "Ionian", "Dorian", "Phrygian", "Lydian",
-    "Mixolydian", "Aeolian", "Locrian",
-];
-
-/// Names for the 7 modes of melodic minor.
-pub const MELODIC_MINOR_MODE_NAMES: &[&str] = &[
-    "Melodic Minor", "Dorian b2", "Lydian Augmented",
-    "Lydian Dominant", "Mixolydian b6", "Locrian #2",
-    "Altered",
-];
-
-/// Names for the 7 modes of harmonic minor.
-pub const HARMONIC_MINOR_MODE_NAMES: &[&str] = &[
-    "Harmonic Minor", "Locrian #6", "Ionian Augmented",
-    "Dorian #4", "Phrygian Dominant", "Lydian #2",
-    "Ultralocrian",
-];
-
-/// Names for the 7 modes of harmonic major.
-pub const HARMONIC_MAJOR_MODE_NAMES: &[&str] = &[
-    "Harmonic Major", "Dorian b5", "Phrygian b4",
-    "Lydian b3", "Mixolydian b2", "Lydian Augmented #2",
-    "Locrian bb7",
-];
-
 struct ScaleInfo {
     quality: SevenNoteScaleQuality,
-    mode_names: &'static [&'static str],
+    mode_names: Vec<String>,
 }
 
 fn resolve_scale(name: &str) -> Result<ScaleInfo> {
-    match name.to_lowercase().replace('-', " ").as_str() {
-        "major" | "ionian" => Ok(ScaleInfo {
-            quality: SevenNoteScaleQuality::Major,
-            mode_names: MAJOR_MODE_NAMES,
-        }),
-        "melodic minor" | "melodic_minor" => Ok(ScaleInfo {
-            quality: SevenNoteScaleQuality::MelodicMinor,
-            mode_names: MELODIC_MINOR_MODE_NAMES,
-        }),
-        "harmonic minor" | "harmonic_minor" => Ok(ScaleInfo {
-            quality: SevenNoteScaleQuality::HarmonicMinor,
-            mode_names: HARMONIC_MINOR_MODE_NAMES,
-        }),
-        "harmonic major" | "harmonic_major" => Ok(ScaleInfo {
-            quality: SevenNoteScaleQuality::HarmonicMajor,
-            mode_names: HARMONIC_MAJOR_MODE_NAMES,
-        }),
-        _ => anyhow::bail!(
-            "unknown scale: '{name}' (options: major, melodic-minor, harmonic-minor, harmonic-major)"
-        ),
-    }
+    let scale = resolve_catalog_scale(name)?;
+    let mode_names = (0..7).map(|index| mode_name(&scale, index)).collect();
+    Ok(ScaleInfo {
+        quality: scale.quality,
+        mode_names,
+    })
 }
 
 fn resolve_keys(keys_str: Option<&str>) -> Result<Vec<Pc>> {
@@ -84,8 +47,7 @@ fn resolve_keys(keys_str: Option<&str>) -> Result<Vec<Pc>> {
                 if part.is_empty() {
                     continue;
                 }
-                let pc = parse_pc(part)
-                    .with_context(|| format!("invalid key: '{part}'"))?;
+                let pc = parse_pc(part).with_context(|| format!("invalid key: '{part}'"))?;
                 keys.push(pc);
             }
             anyhow::ensure!(!keys.is_empty(), "no keys specified");
@@ -129,16 +91,15 @@ pub fn run(args: ScaleBookArgs) -> Result<()> {
                 ext == "svg",
                 "scale-book only supports .svg output (got .{ext})"
             );
-            let svg = build_grid_svg(&modes, scale_info.mode_names, &keys, &theme, &args.scale);
-            fs::write(p, &svg)
-                .with_context(|| format!("failed to write {path}"))?;
+            let svg = build_grid_svg(&modes, &scale_info.mode_names, &keys, &theme, &args.scale);
+            fs::write(p, &svg).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", svg.len());
             }
         }
         None => {
             // Text mode: print mode info for each key
-            print_text_report(&modes, scale_info.mode_names, &keys, &args.scale)?;
+            print_text_report(&modes, &scale_info.mode_names, &keys, &args.scale)?;
         }
     }
 
@@ -147,17 +108,23 @@ pub fn run(args: ScaleBookArgs) -> Result<()> {
 
 fn print_text_report(
     modes: &[PcShape],
-    mode_names: &[&str],
+    mode_names: &[String],
     keys: &[Pc],
     scale_name: &str,
 ) -> Result<()> {
     let mut out = io::stdout().lock();
-    writeln!(out, "Scale Book: {} ({} modes × {} keys = {} entries)",
-        scale_name, modes.len(), keys.len(), modes.len() * keys.len())?;
+    writeln!(
+        out,
+        "Scale Book: {} ({} modes × {} keys = {} entries)",
+        scale_name,
+        modes.len(),
+        keys.len(),
+        modes.len() * keys.len()
+    )?;
     writeln!(out, "{}", "=".repeat(60))?;
 
     for (mode_idx, mode) in modes.iter().enumerate() {
-        let name = mode_names.get(mode_idx).unwrap_or(&"?");
+        let name = mode_names.get(mode_idx).map(String::as_str).unwrap_or("?");
         writeln!(out)?;
         writeln!(out, "Mode {}: {}", mode_idx + 1, name)?;
         writeln!(out, "  Parent intervals: {mode}")?;
@@ -178,7 +145,7 @@ fn print_text_report(
 
 fn build_grid_svg(
     modes: &[PcShape],
-    mode_names: &[&str],
+    mode_names: &[String],
     keys: &[Pc],
     theme: &music::svg::SvgTheme,
     scale_name: &str,
@@ -217,7 +184,7 @@ fn build_grid_svg(
 
     // Grid of pitch circles
     for (row, mode) in modes.iter().enumerate() {
-        let name = mode_names.get(row).unwrap_or(&"?");
+        let name = mode_names.get(row).map(String::as_str).unwrap_or("?");
         let y_base = header_h + row * cell_h;
 
         // Row label

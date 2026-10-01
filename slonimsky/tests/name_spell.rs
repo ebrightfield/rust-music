@@ -20,10 +20,7 @@ fn name_c_major_triad_outputs_cmaj() {
         stdout.contains("Maj"),
         "C E G should be named as major; got: {stdout}"
     );
-    assert!(
-        stdout.contains("C"),
-        "root should be C; got: {stdout}"
-    );
+    assert!(stdout.contains("C"), "root should be C; got: {stdout}");
 }
 
 #[test]
@@ -39,10 +36,7 @@ fn name_d_minor_triad() {
         stdout.contains("min") || stdout.contains("Min") || stdout.contains("m"),
         "D F A should be named as minor; got: {stdout}"
     );
-    assert!(
-        stdout.contains("D"),
-        "root should be D; got: {stdout}"
-    );
+    assert!(stdout.contains("D"), "root should be D; got: {stdout}");
 }
 
 #[test]
@@ -71,10 +65,7 @@ fn name_dominant_seventh() {
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     // G B D F = G7 (dominant seventh)
-    assert!(
-        stdout.contains("G"),
-        "root should be G; got: {stdout}"
-    );
+    assert!(stdout.contains("G"), "root should be G; got: {stdout}");
     assert!(
         stdout.contains("7"),
         "G B D F should contain '7' in name; got: {stdout}"
@@ -90,10 +81,7 @@ fn name_with_explicit_root() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("A"),
-        "root should be A; got: {stdout}"
-    );
+    assert!(stdout.contains("A"), "root should be A; got: {stdout}");
     // A C E = Am
     assert!(
         stdout.contains("min") || stdout.contains("m"),
@@ -230,18 +218,9 @@ fn spell_dm7_intervals_shows_flat3_flat7() {
         stdout.contains("R"),
         "should start with root R; got: {stdout}"
     );
-    assert!(
-        stdout.contains("b3"),
-        "Dm7 should have b3; got: {stdout}"
-    );
-    assert!(
-        stdout.contains("b7"),
-        "Dm7 should have b7; got: {stdout}"
-    );
-    assert!(
-        stdout.contains("5"),
-        "Dm7 should have 5; got: {stdout}"
-    );
+    assert!(stdout.contains("b3"), "Dm7 should have b3; got: {stdout}");
+    assert!(stdout.contains("b7"), "Dm7 should have b7; got: {stdout}");
+    assert!(stdout.contains("5"), "Dm7 should have 5; got: {stdout}");
 }
 
 #[test]

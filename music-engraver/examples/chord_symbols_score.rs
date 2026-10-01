@@ -75,7 +75,10 @@ fn main() {
         "expected at least 9 chord symbol text elements, got {text_count}"
     );
     // Accidental-free symbols are still emitted as one text run.
-    assert!(svg.contains(">Cmaj7<"), "should contain 'Cmaj7' as one text run");
+    assert!(
+        svg.contains(">Cmaj7<"),
+        "should contain 'Cmaj7' as one text run"
+    );
     assert!(svg.contains(">G7<"), "should contain 'G7' as one text run");
     // F#m7b5 is now split into three text runs (F, m7, 5) + two SMuFL
     // accidental paths (# and b). The whole token must NOT appear in any
@@ -84,9 +87,18 @@ fn main() {
         !svg.contains(">F#m7b5<"),
         "F#m7b5 should be split into segments; '#' and 'b' should be glyph paths, not part of the text"
     );
-    assert!(svg.contains(">F<"), "should contain 'F' text fragment of F#m7b5");
-    assert!(svg.contains(">m7<"), "should contain 'm7' text fragment of F#m7b5");
-    assert!(svg.contains(">5<"), "should contain '5' text fragment of F#m7b5");
+    assert!(
+        svg.contains(">F<"),
+        "should contain 'F' text fragment of F#m7b5"
+    );
+    assert!(
+        svg.contains(">m7<"),
+        "should contain 'm7' text fragment of F#m7b5"
+    );
+    assert!(
+        svg.contains(">5<"),
+        "should contain '5' text fragment of F#m7b5"
+    );
     assert!(svg.contains("bold"), "chord symbols should be bold");
 
     println!(

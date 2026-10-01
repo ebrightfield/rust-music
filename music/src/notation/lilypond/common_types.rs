@@ -1,11 +1,11 @@
-use itertools::Itertools;
-use crate::notation::lilypond::ToLilypondString;
-use crate::{Note, Pitch, Spelling, Voicing};
 use crate::notation::clef::Clef;
+use crate::notation::lilypond::ToLilypondString;
 use crate::notation::rhythm::duration::{Duration, DurationKind};
-use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};
 use crate::notation::rhythm::meter::Meter;
+use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent};
 use crate::note::spelling::Accidental;
+use crate::{Note, Pitch, Spelling, Voicing};
+use itertools::Itertools;
 
 /// Lilypond represents time signatures as simple fractions
 impl ToLilypondString for Meter {
@@ -28,7 +28,8 @@ impl ToLilypondString for DurationKind {
             DurationKind::ThirtySecond => "32",
             DurationKind::SixtyFourth => "64",
             DurationKind::OneTwentyEighth => "128",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -48,7 +49,8 @@ impl ToLilypondString for Clef {
             Clef::Treble8va => "treble^8",
             Clef::Treble8ba => "treble_8",
             Clef::Bass => "bass",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -96,9 +98,7 @@ impl ToLilypondString for Pitch {
 /// Space separated interior elements, surrounded by `<` `>` angle brackets.
 impl ToLilypondString for Voicing {
     fn to_lilypond_string(&self) -> String {
-        let inner: String = self.iter()
-            .map(|p| p.to_lilypond_string())
-            .join(" ");
+        let inner: String = self.iter().map(|p| p.to_lilypond_string()).join(" ");
         format!("<{}>", inner)
     }
 }
@@ -116,13 +116,14 @@ impl<'a> ToLilypondString for RhythmicNotatedEvent<'a> {
                     }
                     SingleEvent::Voicing(v) => {
                         format!("{}{}", v.to_lilypond_string(), duration)
-                    },
+                    }
                     SingleEvent::Fretted(s) => {
                         let pitch = s.pitch.to_lilypond_string();
                         format!("{}{}\\{}", pitch, duration, s.string)
-                    },
+                    }
                     SingleEvent::FrettedMany(notes) => {
-                        let inner: String = notes.iter()
+                        let inner: String = notes
+                            .iter()
                             .map(|f| {
                                 let pitch = f.pitch.to_lilypond_string();
                                 format!("{}{}\\{}", pitch, duration, f.string)
@@ -137,7 +138,9 @@ impl<'a> ToLilypondString for RhythmicNotatedEvent<'a> {
             }
             NotatedEvent::Tuplet(tuplet) => {
                 let ratio = format!("{}/{}", tuplet.numerator, tuplet.denominator);
-                let content = tuplet.events.iter()
+                let content = tuplet
+                    .events
+                    .iter()
                     .map(|event| event.to_lilypond_string())
                     .join(" ");
                 // Notate the tuplet
@@ -188,9 +191,8 @@ mod pitch_to_lilypond_tests {
         // Every valid (Note, octave) must render without panicking.
         use crate::note::note::Note::*;
         let notes = [
-            C, Cis, Cisis, Ces, Deses, D, Dis, Disis, Des, Eeses,
-            E, Eis, Ees, Fes, F, Fis, Fisis, Geses, Ges, G, Gis,
-            Gisis, Aeses, Aes, A, Ais, Aisis, Beses, Bes, B, Bis,
+            C, Cis, Cisis, Ces, Deses, D, Dis, Disis, Des, Eeses, E, Eis, Ees, Fes, F, Fis, Fisis,
+            Geses, Ges, G, Gis, Gisis, Aeses, Aes, A, Ais, Aisis, Beses, Bes, B, Bis,
         ];
         for n in notes {
             for oct in -1i8..=9i8 {

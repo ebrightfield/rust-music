@@ -23,26 +23,20 @@ use crate::font::{bravura_font, EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, layout_muted_string, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
-use crate::layout::tab_rhythm::layout_tab_rhythm;
-use crate::layout::tab_bend::{
-    layout_tab_bend, layout_tab_bend_release, layout_tab_pre_bend, layout_tab_release, BendAmount,
-};
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
-use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_harmonic::layout_tab_harmonic;
 use crate::layout::tab_let_ring::{layout_tab_let_ring, layout_tab_let_ring_dash};
 use crate::layout::tab_palm_mute::{layout_tab_palm_mute, layout_tab_palm_mute_dash};
+use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
-use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
-use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
-use crate::render::tab_bend_renderer::{
-    draw_tab_bend, draw_tab_bend_release, draw_tab_pre_bend, draw_tab_release,
-};
+use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_harmonic_renderer::draw_tab_harmonic;
 use crate::render::tab_let_ring_renderer::{draw_tab_let_ring, draw_tab_let_ring_dash};
 use crate::render::tab_palm_mute_renderer::{draw_tab_palm_mute, draw_tab_palm_mute_dash};
-use crate::render::tab_hammer_renderer::draw_tab_legato;
+use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staff_lines};
+use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::tab_slide_renderer::draw_tab_slide;
 use crate::render::tab_vibrato_renderer::draw_tab_vibrato;
 use crate::render::{SvgWriter, TextStyle};
@@ -55,10 +49,6 @@ pub(crate) enum TabEvent {
     /// `duration_log2`: optional rhythm (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
     /// `slide_out`: when true, draw a slide line from this event to the next.
     /// `legato_out`: when Some, draw a hammer-on/pull-off arc to the next event.
-    /// `bend`: when Some, draw a bend arrow above the fret number(s).
-    /// `pre_bend`: when Some, draw a straight vertical pre-bend arrow.
-    /// `bend_release`: when Some, draw a combined bend-up-then-release-down arc.
-    /// `release`: when true, draw a downward release arrow.
     /// `vibrato`: when Some, draw a wavy vibrato line above the fret number.
     /// `harmonic`: when true, draw a natural harmonic indicator (○) above the fret number.
     /// `palm_mute`: when true, draw "P.M." text above the fret number(s).
@@ -69,10 +59,6 @@ pub(crate) enum TabEvent {
         duration_log2: Option<u8>,
         slide_out: bool,
         legato_out: Option<LegatoKind>,
-        bend: Option<BendAmount>,
-        pre_bend: Option<BendAmount>,
-        bend_release: Option<BendAmount>,
-        release: bool,
         vibrato: Option<VibratoKind>,
         harmonic: bool,
         palm_mute: bool,
@@ -81,14 +67,10 @@ pub(crate) enum TabEvent {
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
-    Rest {
-        duration_log2: Option<u8>,
-    },
+    Rest { duration_log2: Option<u8> },
     /// A beam group: multiple fret events connected by beam lines above the staff.
     /// Each sub-event is (frets, duration_log2).
-    BeamGroup {
-        events: Vec<(Vec<(u8, u8)>, u8)>,
-    },
+    BeamGroup { events: Vec<(Vec<(u8, u8)>, u8)> },
 }
 
 /// A completed tab measure: events + ending barline style.
@@ -130,14 +112,6 @@ pub struct TabScoreBuilder {
     pending_slide: bool,
     /// When Some, the next flushed Fret event gets `legato_out` set.
     pending_legato: Option<LegatoKind>,
-    /// When Some, the next flushed Fret event gets `bend` set.
-    pending_bend: Option<BendAmount>,
-    /// When Some, the next flushed Fret event gets `pre_bend` set.
-    pending_pre_bend: Option<BendAmount>,
-    /// When Some, the next flushed Fret event gets `bend_release` set.
-    pending_bend_release: Option<BendAmount>,
-    /// When true, the next flushed Fret event gets `release = true`.
-    pending_release: bool,
     /// When Some, the next flushed Fret event gets `vibrato` set.
     pending_vibrato: Option<VibratoKind>,
     /// When true, the next flushed Fret event gets `harmonic = true`.
@@ -166,10 +140,6 @@ impl TabScoreBuilder {
             beam_group_events: Vec::new(),
             pending_slide: false,
             pending_legato: None,
-            pending_bend: None,
-            pending_pre_bend: None,
-            pending_bend_release: None,
-            pending_release: false,
             pending_vibrato: None,
             pending_harmonic: false,
             pending_palm_mute: false,
@@ -216,10 +186,6 @@ impl TabScoreBuilder {
                 let duration_log2 = self.pending_duration.take();
                 let slide_out = std::mem::take(&mut self.pending_slide);
                 let legato_out = self.pending_legato.take();
-                let bend = self.pending_bend.take();
-                let pre_bend = self.pending_pre_bend.take();
-                let bend_release = self.pending_bend_release.take();
-                let release = std::mem::take(&mut self.pending_release);
                 let vibrato = self.pending_vibrato.take();
                 let harmonic = std::mem::take(&mut self.pending_harmonic);
                 let palm_mute = std::mem::take(&mut self.pending_palm_mute);
@@ -230,10 +196,6 @@ impl TabScoreBuilder {
                     duration_log2,
                     slide_out,
                     legato_out,
-                    bend,
-                    pre_bend,
-                    bend_release,
-                    release,
                     vibrato,
                     harmonic,
                     palm_mute,
@@ -376,64 +338,6 @@ impl TabScoreBuilder {
             self.pending_legato = Some(LegatoKind::PullOff);
         } else if let Some(TabEvent::Fret { legato_out, .. }) = self.current_events.last_mut() {
             *legato_out = Some(LegatoKind::PullOff);
-        }
-        self
-    }
-
-    /// Mark the current fret event for a bend arrow above the fret number(s).
-    ///
-    /// A curved arrow with the bend amount label (e.g. "full", "1/2") is drawn
-    /// above the fret number on each string. The bend arrow appears at the
-    /// fret position (in-place bend, not between two events like slides).
-    pub fn bend(mut self, amount: BendAmount) -> Self {
-        if !self.current_frets.is_empty() {
-            self.pending_bend = Some(amount);
-        } else if let Some(TabEvent::Fret { bend, .. }) = self.current_events.last_mut() {
-            *bend = Some(amount);
-        }
-        self
-    }
-
-    /// Mark the current fret event for a pre-bend arrow.
-    ///
-    /// A straight vertical arrow (not curved) with the bend amount label is
-    /// drawn above the fret number. Indicates the string is bent *before*
-    /// being picked — the player holds the bend then strikes the string.
-    pub fn pre_bend(mut self, amount: BendAmount) -> Self {
-        if !self.current_frets.is_empty() {
-            self.pending_pre_bend = Some(amount);
-        } else if let Some(TabEvent::Fret { pre_bend, .. }) = self.current_events.last_mut() {
-            *pre_bend = Some(amount);
-        }
-        self
-    }
-
-    /// Mark the current fret event for a combined bend-and-release arc.
-    ///
-    /// A single inverted-V arc with the bend amount label at its apex is drawn
-    /// above the fret number: the string is picked, bent up to the target
-    /// pitch, then released back to the original pitch — all on one event. Use
-    /// this instead of `.bend()` on one event plus `.release()` on the next
-    /// when the whole gesture happens on a single struck note.
-    pub fn bend_release(mut self, amount: BendAmount) -> Self {
-        if !self.current_frets.is_empty() {
-            self.pending_bend_release = Some(amount);
-        } else if let Some(TabEvent::Fret { bend_release, .. }) = self.current_events.last_mut() {
-            *bend_release = Some(amount);
-        }
-        self
-    }
-
-    /// Mark the current fret event for a release bend arrow.
-    ///
-    /// A downward-curving arrow is drawn above the fret number, indicating
-    /// the pitch returns to normal after a bend or pre-bend. Typically
-    /// follows a `.bend()` or `.pre_bend()` on a previous event.
-    pub fn release(mut self) -> Self {
-        if !self.current_frets.is_empty() {
-            self.pending_release = true;
-        } else if let Some(TabEvent::Fret { release, .. }) = self.current_events.last_mut() {
-            *release = true;
         }
         self
     }
@@ -618,8 +522,7 @@ impl TabScoreBuilder {
         let clef_width = 3.0 * staff_space;
 
         // Compute page dimensions
-        let tab_staff_height =
-            staff_space * (self.line_count.saturating_sub(1)) as f64;
+        let tab_staff_height = staff_space * (self.line_count.saturating_sub(1)) as f64;
         let inter_system_gap = 4.0 * staff_space;
         let total_systems = chunks.len();
         let page_height = if total_systems > 0 {
@@ -641,16 +544,10 @@ impl TabScoreBuilder {
         let mut svg = SvgWriter::new(px_w, px_h, vb_x, vb_y, vb_w, vb_h);
 
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
-            let sys_y =
-                sys_idx as f64 * (tab_staff_height + inter_system_gap);
+            let sys_y = sys_idx as f64 * (tab_staff_height + inter_system_gap);
 
-            let tab_staff = TabStaffLayout::new(
-                0.0,
-                sys_y,
-                sys_width,
-                staff_space,
-                self.line_count,
-            );
+            let tab_staff =
+                TabStaffLayout::new(0.0, sys_y, sys_width, staff_space, self.line_count);
 
             // Draw staff lines
             draw_tab_staff_lines(&mut svg, &tab_staff, &config);
@@ -690,8 +587,7 @@ impl TabScoreBuilder {
             };
 
             for (m_idx, measure) in measures_in_system.iter().enumerate() {
-                let measure_x =
-                    clef_width + m_idx as f64 * measure_width;
+                let measure_x = clef_width + m_idx as f64 * measure_width;
 
                 draw_tab_measure(
                     &mut svg,
@@ -784,7 +680,14 @@ pub(crate) fn draw_tab_measure(
     let event_count = measure.events.len();
     if event_count == 0 {
         // Still draw barline at the end
-        draw_measure_barline(svg, font, config, tab_staff, measure_x + measure_width, &measure.barline)?;
+        draw_measure_barline(
+            svg,
+            font,
+            config,
+            tab_staff,
+            measure_x + measure_width,
+            &measure.barline,
+        )?;
         return Ok(());
     }
 
@@ -816,8 +719,7 @@ pub(crate) fn draw_tab_measure(
                 ..
             } => {
                 for &(string, fret) in frets {
-                    let layout =
-                        layout_fret_number(tab_staff, string, fret, event_x);
+                    let layout = layout_fret_number(tab_staff, string, fret, event_x);
                     draw_fret_number(svg, &layout);
                 }
                 for &string in muted_strings {
@@ -843,7 +745,9 @@ pub(crate) fn draw_tab_measure(
                     }
                 }
             }
-            TabEvent::BeamGroup { events: beam_events } => {
+            TabEvent::BeamGroup {
+                events: beam_events,
+            } => {
                 draw_tab_beam_group_event(
                     svg,
                     config,
@@ -860,12 +764,20 @@ pub(crate) fn draw_tab_measure(
     // Second pass: draw slide lines between consecutive fret events
     let slide_stroke = config.stem_thickness_fu();
     for i in 0..event_count.saturating_sub(1) {
-        if let TabEvent::Fret { frets: src_frets, slide_out: true, .. } = &measure.events[i] {
+        if let TabEvent::Fret {
+            frets: src_frets,
+            slide_out: true,
+            ..
+        } = &measure.events[i]
+        {
             // Find the next Fret event (skip rests)
-            if let Some(target_idx) = (i + 1..event_count).find(|&j| {
-                matches!(&measure.events[j], TabEvent::Fret { .. })
-            }) {
-                if let TabEvent::Fret { frets: tgt_frets, .. } = &measure.events[target_idx] {
+            if let Some(target_idx) =
+                (i + 1..event_count).find(|&j| matches!(&measure.events[j], TabEvent::Fret { .. }))
+            {
+                if let TabEvent::Fret {
+                    frets: tgt_frets, ..
+                } = &measure.events[target_idx]
+                {
                     let src_x = if event_count == 1 {
                         measure_x + padding + usable_width / 2.0
                     } else {
@@ -876,9 +788,9 @@ pub(crate) fn draw_tab_measure(
                     // Draw a slide line for each string that appears in both events
                     for &(src_str, _) in src_frets {
                         if tgt_frets.iter().any(|&(ts, _)| ts == src_str) {
-                            if let Some(slide_layout) = layout_tab_slide(
-                                tab_staff, src_str, src_x, tgt_x, slide_stroke,
-                            ) {
+                            if let Some(slide_layout) =
+                                layout_tab_slide(tab_staff, src_str, src_x, tgt_x, slide_stroke)
+                            {
                                 draw_tab_slide(svg, &slide_layout);
                             }
                         }
@@ -888,54 +800,30 @@ pub(crate) fn draw_tab_measure(
         }
     }
 
-    // Third pass: draw bend/pre-bend/release arrows, vibrato, and harmonics at fret events
+    // Third pass: draw vibrato, harmonics, and sustained-technique labels.
     for (e_idx, event) in measure.events.iter().enumerate() {
-        if let TabEvent::Fret { frets, bend, pre_bend, bend_release, release, vibrato, harmonic, palm_mute, let_ring, .. } = event {
+        if let TabEvent::Fret {
+            frets,
+            vibrato,
+            harmonic,
+            palm_mute,
+            let_ring,
+            ..
+        } = event
+        {
             let event_x = if event_count == 1 {
                 measure_x + padding + usable_width / 2.0
             } else {
                 measure_x + padding + e_idx as f64 * spacing
             };
 
-            let bend_stroke = config.stem_thickness_fu();
-
-            // Regular bend
-            if let Some(amount) = bend {
-                for &(string, _) in frets {
-                    let bend_layout = layout_tab_bend(tab_staff, string, event_x, *amount, bend_stroke);
-                    draw_tab_bend(svg, &bend_layout);
-                }
-            }
-
-            // Pre-bend (straight vertical arrow)
-            if let Some(amount) = pre_bend {
-                for &(string, _) in frets {
-                    let pb_layout = layout_tab_pre_bend(tab_staff, string, event_x, *amount, bend_stroke);
-                    draw_tab_pre_bend(svg, &pb_layout);
-                }
-            }
-
-            // Combined bend-and-release arc
-            if let Some(amount) = bend_release {
-                for &(string, _) in frets {
-                    let br_layout =
-                        layout_tab_bend_release(tab_staff, string, event_x, *amount, bend_stroke);
-                    draw_tab_bend_release(svg, &br_layout);
-                }
-            }
-
-            // Release (downward arrow)
-            if *release {
-                for &(string, _) in frets {
-                    let rel_layout = layout_tab_release(tab_staff, string, event_x, bend_stroke);
-                    draw_tab_release(svg, &rel_layout);
-                }
-            }
+            let technique_stroke = config.stem_thickness_fu();
 
             // Vibrato wavy line
             if let Some(kind) = vibrato {
                 for &(string, _) in frets {
-                    let vib_layout = layout_tab_vibrato(tab_staff, string, event_x, *kind, bend_stroke);
+                    let vib_layout =
+                        layout_tab_vibrato(tab_staff, string, event_x, *kind, technique_stroke);
                     draw_tab_vibrato(svg, &vib_layout);
                 }
             }
@@ -964,11 +852,17 @@ pub(crate) fn draw_tab_measure(
 
     // Palm mute pass: draw dashed continuation lines between consecutive palm-muted events
     {
-        let bend_stroke = config.stem_thickness_fu();
+        let technique_stroke = config.stem_thickness_fu();
         let mut pm_start: Option<usize> = None;
 
         for (e_idx, event) in measure.events.iter().enumerate() {
-            let is_pm = matches!(event, TabEvent::Fret { palm_mute: true, .. });
+            let is_pm = matches!(
+                event,
+                TabEvent::Fret {
+                    palm_mute: true,
+                    ..
+                }
+            );
 
             if is_pm && pm_start.is_none() {
                 pm_start = Some(e_idx);
@@ -988,9 +882,9 @@ pub(crate) fn draw_tab_measure(
                     };
                     let end_x = measure_x + padding + end_idx as f64 * spacing;
 
-                    if let Some(dash_layout) = layout_tab_palm_mute_dash(
-                        tab_staff, start_x, end_x, bend_stroke,
-                    ) {
+                    if let Some(dash_layout) =
+                        layout_tab_palm_mute_dash(tab_staff, start_x, end_x, technique_stroke)
+                    {
                         draw_tab_palm_mute_dash(svg, &dash_layout);
                     }
                 }
@@ -1004,7 +898,7 @@ pub(crate) fn draw_tab_measure(
 
     // Let ring pass: draw dashed continuation lines between consecutive let-ring events
     {
-        let bend_stroke = config.stem_thickness_fu();
+        let technique_stroke = config.stem_thickness_fu();
         let mut lr_start: Option<usize> = None;
 
         for (e_idx, event) in measure.events.iter().enumerate() {
@@ -1026,9 +920,9 @@ pub(crate) fn draw_tab_measure(
                     };
                     let end_x = measure_x + padding + end_idx as f64 * spacing;
 
-                    if let Some(dash_layout) = layout_tab_let_ring_dash(
-                        tab_staff, start_x, end_x, bend_stroke,
-                    ) {
+                    if let Some(dash_layout) =
+                        layout_tab_let_ring_dash(tab_staff, start_x, end_x, technique_stroke)
+                    {
                         draw_tab_let_ring_dash(svg, &dash_layout);
                     }
                 }
@@ -1042,11 +936,19 @@ pub(crate) fn draw_tab_measure(
 
     // Fourth pass: draw hammer-on/pull-off arcs between consecutive fret events
     for i in 0..event_count.saturating_sub(1) {
-        if let TabEvent::Fret { frets: src_frets, legato_out: Some(kind), .. } = &measure.events[i] {
-            if let Some(target_idx) = (i + 1..event_count).find(|&j| {
-                matches!(&measure.events[j], TabEvent::Fret { .. })
-            }) {
-                if let TabEvent::Fret { frets: tgt_frets, .. } = &measure.events[target_idx] {
+        if let TabEvent::Fret {
+            frets: src_frets,
+            legato_out: Some(kind),
+            ..
+        } = &measure.events[i]
+        {
+            if let Some(target_idx) =
+                (i + 1..event_count).find(|&j| matches!(&measure.events[j], TabEvent::Fret { .. }))
+            {
+                if let TabEvent::Fret {
+                    frets: tgt_frets, ..
+                } = &measure.events[target_idx]
+                {
                     let src_x = if event_count == 1 {
                         measure_x + padding + usable_width / 2.0
                     } else {
@@ -1057,7 +959,12 @@ pub(crate) fn draw_tab_measure(
                     for &(src_str, _) in src_frets {
                         if tgt_frets.iter().any(|&(ts, _)| ts == src_str) {
                             if let Some(legato_layout) = layout_tab_legato(
-                                tab_staff, src_str, src_x, tgt_x, *kind, slide_stroke,
+                                tab_staff,
+                                src_str,
+                                src_x,
+                                tgt_x,
+                                *kind,
+                                slide_stroke,
                             ) {
                                 draw_tab_legato(svg, &legato_layout);
                             }
@@ -1069,7 +976,14 @@ pub(crate) fn draw_tab_measure(
     }
 
     // Barline at the right edge of the measure
-    draw_measure_barline(svg, font, config, tab_staff, measure_x + measure_width, &measure.barline)?;
+    draw_measure_barline(
+        svg,
+        font,
+        config,
+        tab_staff,
+        measure_x + measure_width,
+        &measure.barline,
+    )?;
 
     Ok(())
 }
@@ -1165,7 +1079,14 @@ pub(crate) fn draw_measure_barline(
         }
         BarlineStyle::StartRepeat => {
             svg.add_line(x, y_top, x, y_bottom, "black", thick);
-            svg.add_line(x + sep + thick / 2.0, y_top, x + sep + thick / 2.0, y_bottom, "black", thin);
+            svg.add_line(
+                x + sep + thick / 2.0,
+                y_top,
+                x + sep + thick / 2.0,
+                y_bottom,
+                "black",
+                thin,
+            );
         }
         BarlineStyle::EndRepeat => {
             svg.add_line(x, y_top, x, y_bottom, "black", thin);
@@ -1276,10 +1197,7 @@ mod tests {
 
     #[test]
     fn rest_produces_no_fret_numbers() {
-        let svg = TabScoreBuilder::guitar()
-            .rest()
-            .end_barline()
-            .render_svg();
+        let svg = TabScoreBuilder::guitar().rest().end_barline().render_svg();
         // No fret number text (but staff lines + clef still present)
         assert!(!svg.contains(">0</text>"));
         assert!(!svg.contains(">5</text>"));
@@ -1331,7 +1249,10 @@ mod tests {
             "2 systems should have at least 12 staff lines, got {total_lines}"
         );
         // Both systems should have TAB clef paths
-        assert!(svg.matches("<path ").count() >= 2, "should have at least 2 TAB clef paths");
+        assert!(
+            svg.matches("<path ").count() >= 2,
+            "should have at least 2 TAB clef paths"
+        );
     }
 
     #[test]
@@ -1346,7 +1267,10 @@ mod tests {
             .fret(1, 0)
             .end_barline()
             .render_svg();
-        assert_ne!(narrow, wide, "different widths should produce different SVGs");
+        assert_ne!(
+            narrow, wide,
+            "different widths should produce different SVGs"
+        );
     }
 
     #[test]
@@ -1388,7 +1312,10 @@ mod tests {
         assert!(svg.starts_with("<svg"));
         // Repeat barlines produce more line elements than single barlines
         let total_lines = svg.matches("<line ").count();
-        assert!(total_lines > 6, "repeat barlines should add lines, got {total_lines}");
+        assert!(
+            total_lines > 6,
+            "repeat barlines should add lines, got {total_lines}"
+        );
     }
 
     #[test]
@@ -1401,15 +1328,15 @@ mod tests {
             .fret(1, 0)
             .end_barline()
             .render_svg();
-        assert_eq!(default_svg, guitar_svg, "default should be guitar (6-string)");
+        assert_eq!(
+            default_svg, guitar_svg,
+            "default should be guitar (6-string)"
+        );
     }
 
     #[test]
     fn flush_pending_auto_closes_measure() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 0)
-            .fret(2, 1)
-            .render_svg();
+        let svg = TabScoreBuilder::guitar().fret(1, 0).fret(2, 1).render_svg();
         // Even without explicit barline, pending events are flushed
         assert!(svg.contains(">0</text>"));
         assert!(svg.contains(">1</text>"));
@@ -1682,17 +1609,27 @@ mod tests {
         );
         // Individual has flag paths; beamed has polygons
         assert!(beamed.contains("<polygon "), "beamed uses polygons");
-        assert!(!individual.contains("<polygon "), "individual uses flags, not polygons");
+        assert!(
+            !individual.contains("<polygon "),
+            "individual uses flags, not polygons"
+        );
     }
 
     #[test]
     fn beam_group_four_sixteenths_has_two_polygons() {
         let svg = TabScoreBuilder::guitar()
             .beam_start()
-            .duration(4).fret(1, 0).next()
-            .duration(4).fret(1, 2).next()
-            .duration(4).fret(1, 3).next()
-            .duration(4).fret(1, 5)
+            .duration(4)
+            .fret(1, 0)
+            .next()
+            .duration(4)
+            .fret(1, 2)
+            .next()
+            .duration(4)
+            .fret(1, 3)
+            .next()
+            .duration(4)
+            .fret(1, 5)
             .beam_end()
             .end_barline()
             .render_svg();
@@ -1702,16 +1639,25 @@ mod tests {
             "4 sixteenths should have 2 beam polygons (primary + secondary), got {polygon_count}"
         );
         // 4 fret numbers
-        assert_eq!(svg.matches("<text ").count(), 4, "should have 4 fret numbers");
+        assert_eq!(
+            svg.matches("<text ").count(),
+            4,
+            "should have 4 fret numbers"
+        );
     }
 
     #[test]
     fn beam_group_has_stems_as_lines() {
         let svg = TabScoreBuilder::guitar()
             .beam_start()
-            .eighth().fret(1, 0).next()
-            .eighth().fret(1, 2).next()
-            .eighth().fret(1, 3)
+            .eighth()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
+            .next()
+            .eighth()
+            .fret(1, 3)
             .beam_end()
             .end_barline()
             .render_svg();
@@ -1729,7 +1675,7 @@ mod tests {
             .beam_start()
             .eighth()
             .fret(1, 0)
-            .fret(2, 1)  // chord: two strings on same beat
+            .fret(2, 1) // chord: two strings on same beat
             .next()
             .eighth()
             .fret(1, 2)
@@ -1737,7 +1683,11 @@ mod tests {
             .end_barline()
             .render_svg();
         // 3 fret numbers (0, 1, 2)
-        assert_eq!(svg.matches("<text ").count(), 3, "should have 3 fret numbers");
+        assert_eq!(
+            svg.matches("<text ").count(),
+            3,
+            "should have 3 fret numbers"
+        );
         assert!(svg.contains("<polygon "), "should have beam polygon");
     }
 
@@ -1746,7 +1696,8 @@ mod tests {
         // If no duration is set in beam group, defaults to eighth
         let svg = TabScoreBuilder::guitar()
             .beam_start()
-            .fret(1, 0).next()
+            .fret(1, 0)
+            .next()
             .fret(1, 2)
             .beam_end()
             .end_barline()
@@ -1762,8 +1713,11 @@ mod tests {
     fn beam_group_no_flag_paths() {
         let svg = TabScoreBuilder::guitar()
             .beam_start()
-            .eighth().fret(1, 0).next()
-            .eighth().fret(1, 2)
+            .eighth()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
             .beam_end()
             .end_barline()
             .render_svg();
@@ -1927,10 +1881,15 @@ mod tests {
     #[test]
     fn beam_group_mixed_with_non_beamed() {
         let svg = TabScoreBuilder::guitar()
-            .quarter().fret(1, 5).next()    // individual quarter
+            .quarter()
+            .fret(1, 5)
+            .next() // individual quarter
             .beam_start()
-            .eighth().fret(1, 0).next()
-            .eighth().fret(1, 2)
+            .eighth()
+            .fret(1, 0)
+            .next()
+            .eighth()
+            .fret(1, 2)
             .beam_end()
             .end_barline()
             .render_svg();
@@ -1943,7 +1902,11 @@ mod tests {
         );
         // 1 beam polygon + 1 TAB clef path = 2 SVG elements with polygon/path
         assert_eq!(svg.matches("<polygon ").count(), 1, "1 beam polygon");
-        assert_eq!(svg.matches("<path ").count(), 1, "1 TAB clef path (no flags on beamed)");
+        assert_eq!(
+            svg.matches("<path ").count(),
+            1,
+            "1 TAB clef path (no flags on beamed)"
+        );
     }
 
     // --- Hammer-on / Pull-off tests ---
@@ -1959,7 +1922,8 @@ mod tests {
             .render_svg();
         // 1 TAB clef path + 1 arc path = 2 paths
         assert_eq!(
-            svg.matches("<path ").count(), 2,
+            svg.matches("<path ").count(),
+            2,
             "should have TAB clef + 1 hammer arc path"
         );
         assert!(svg.contains(">H</text>"), "should show 'H' label");
@@ -1975,7 +1939,8 @@ mod tests {
             .end_barline()
             .render_svg();
         assert_eq!(
-            svg.matches("<path ").count(), 2,
+            svg.matches("<path ").count(),
+            2,
             "should have TAB clef + 1 pull-off arc path"
         );
         assert!(svg.contains(">P</text>"), "should show 'P' label");
@@ -1990,7 +1955,8 @@ mod tests {
             .end_barline()
             .render_svg();
         assert_eq!(
-            svg_no.matches("<path ").count(), 1,
+            svg_no.matches("<path ").count(),
+            1,
             "without hammer/pull, only TAB clef path"
         );
         assert!(!svg_no.contains(">H</text>"));
@@ -2000,11 +1966,17 @@ mod tests {
     #[test]
     fn hammer_differs_from_pull() {
         let svg_h = TabScoreBuilder::guitar()
-            .fret(1, 5).hammer().next().fret(1, 7)
+            .fret(1, 5)
+            .hammer()
+            .next()
+            .fret(1, 7)
             .end_barline()
             .render_svg();
         let svg_p = TabScoreBuilder::guitar()
-            .fret(1, 5).pull().next().fret(1, 7)
+            .fret(1, 5)
+            .pull()
+            .next()
+            .fret(1, 7)
             .end_barline()
             .render_svg();
         assert_ne!(svg_h, svg_p, "hammer and pull should produce different SVG");
@@ -2013,7 +1985,10 @@ mod tests {
     #[test]
     fn hammer_on_arc_is_unfilled() {
         let svg = TabScoreBuilder::guitar()
-            .fret(1, 5).hammer().next().fret(1, 7)
+            .fret(1, 5)
+            .hammer()
+            .next()
+            .fret(1, 7)
             .end_barline()
             .render_svg();
         assert!(
@@ -2025,14 +2000,19 @@ mod tests {
     #[test]
     fn consecutive_hammer_pull_chain() {
         let svg = TabScoreBuilder::guitar()
-            .fret(1, 5).hammer().next()
-            .fret(1, 7).pull().next()
+            .fret(1, 5)
+            .hammer()
+            .next()
+            .fret(1, 7)
+            .pull()
+            .next()
             .fret(1, 5)
             .end_barline()
             .render_svg();
         // 1 TAB clef + 2 arcs = 3 paths
         assert_eq!(
-            svg.matches("<path ").count(), 3,
+            svg.matches("<path ").count(),
+            3,
             "chain of hammer + pull should produce 2 arc paths + 1 TAB clef"
         );
         assert!(svg.contains(">H</text>"), "should show H");
@@ -2042,13 +2022,16 @@ mod tests {
     #[test]
     fn hammer_on_rest_skips_no_target() {
         let svg = TabScoreBuilder::guitar()
-            .fret(1, 5).hammer().next()
+            .fret(1, 5)
+            .hammer()
+            .next()
             .rest()
             .end_barline()
             .render_svg();
         // No arc because the next event is a rest, not a fret
         assert_eq!(
-            svg.matches("<path ").count(), 1,
+            svg.matches("<path ").count(),
+            1,
             "hammer before rest should not produce an arc"
         );
     }
@@ -2056,372 +2039,20 @@ mod tests {
     #[test]
     fn legato_with_chord_draws_arc_per_matching_string() {
         let svg = TabScoreBuilder::guitar()
-            .fret(1, 5).fret(2, 5).hammer().next()
-            .fret(1, 7).fret(2, 7)
+            .fret(1, 5)
+            .fret(2, 5)
+            .hammer()
+            .next()
+            .fret(1, 7)
+            .fret(2, 7)
             .end_barline()
             .render_svg();
         // 1 TAB clef + 2 arcs (one per string) = 3 paths
         assert_eq!(
-            svg.matches("<path ").count(), 3,
+            svg.matches("<path ").count(),
+            3,
             "chord hammer should produce 1 arc per matching string + TAB clef"
         );
-    }
-
-    // --- Bend tests ---
-
-    #[test]
-    fn bend_adds_arrow_paths_and_text() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // 1 TAB clef + 1 bend curve + 1 arrowhead = 3 paths
-        assert_eq!(
-            svg.matches("<path ").count(), 3,
-            "should have TAB clef + bend curve + arrowhead = 3 paths"
-        );
-        assert!(svg.contains(">full</text>"), "should show 'full' label");
-    }
-
-    #[test]
-    fn no_bend_without_method_call() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .end_barline()
-            .render_svg();
-        // Only 1 path: TAB clef
-        assert_eq!(
-            svg.matches("<path ").count(), 1,
-            "without bend, only TAB clef path"
-        );
-        assert!(!svg.contains(">full</text>"));
-        assert!(!svg.contains(">1/2</text>"));
-    }
-
-    #[test]
-    fn half_bend_shows_half_label() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Half)
-            .end_barline()
-            .render_svg();
-        assert!(svg.contains(">1/2</text>"), "should show '1/2' label");
-    }
-
-    #[test]
-    fn quarter_bend_shows_quarter_label() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Quarter)
-            .end_barline()
-            .render_svg();
-        assert!(svg.contains(">1/4</text>"), "should show '1/4' label");
-    }
-
-    #[test]
-    fn different_bend_amounts_produce_different_svg() {
-        let svg_full = TabScoreBuilder::guitar()
-            .fret(1, 7).bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        let svg_half = TabScoreBuilder::guitar()
-            .fret(1, 7).bend(BendAmount::Half)
-            .end_barline()
-            .render_svg();
-        assert_ne!(svg_full, svg_half, "full and half bends should produce different SVG");
-    }
-
-    #[test]
-    fn bend_on_chord_draws_arrow_per_string() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .fret(2, 7)
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // 1 TAB clef + 2×(curve + arrowhead) = 5 paths
-        assert_eq!(
-            svg.matches("<path ").count(), 5,
-            "chord bend on 2 strings: 1 TAB + 2 curves + 2 arrowheads = 5 paths"
-        );
-    }
-
-    #[test]
-    fn bend_arrowhead_is_filled() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        assert!(svg.contains("fill=\"black\""), "arrowhead should be filled black");
-    }
-
-    #[test]
-    fn bend_after_already_flushed_event() {
-        // Call .bend() after .next() — should mark the already-flushed event
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .next()
-            .bend(BendAmount::Full)
-            .fret(1, 5)
-            .end_barline()
-            .render_svg();
-        // The .bend() after .next() marks the last flushed event
-        assert!(svg.contains(">full</text>"), "bend after flush should still show label");
-    }
-
-    // --- Pre-bend tests ---
-
-    #[test]
-    fn pre_bend_adds_line_and_arrow() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .pre_bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // 1 TAB clef path + 1 arrowhead path = 2 paths
-        assert_eq!(
-            svg.matches("<path ").count(), 2,
-            "should have TAB clef + arrowhead = 2 paths"
-        );
-        // Compare with no pre-bend to confirm line was added
-        let svg_no = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .end_barline()
-            .render_svg();
-        assert_eq!(
-            svg.matches("<line ").count(),
-            svg_no.matches("<line ").count() + 1,
-            "pre-bend should add exactly 1 vertical line (shaft)"
-        );
-        assert!(svg.contains(">full</text>"), "should show 'full' label");
-    }
-
-    #[test]
-    fn pre_bend_differs_from_regular_bend() {
-        let svg_pre = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .pre_bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        let svg_bend = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        assert_ne!(svg_pre, svg_bend, "pre-bend and bend should produce different SVG");
-    }
-
-    #[test]
-    fn pre_bend_half_shows_half_label() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .pre_bend(BendAmount::Half)
-            .end_barline()
-            .render_svg();
-        assert!(svg.contains(">1/2</text>"), "should show '1/2' label");
-    }
-
-    #[test]
-    fn pre_bend_on_chord_draws_per_string() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .fret(2, 7)
-            .pre_bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // 1 TAB clef + 2 arrowhead paths = 3 paths
-        assert_eq!(
-            svg.matches("<path ").count(), 3,
-            "chord pre-bend: 1 TAB + 2 arrowheads = 3 paths"
-        );
-        // Compare with single-string pre-bend: chord should have 1 extra line
-        let svg_single = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .pre_bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        assert_eq!(
-            svg.matches("<line ").count(),
-            svg_single.matches("<line ").count() + 1,
-            "chord pre-bend should add 1 extra line vs single"
-        );
-    }
-
-    #[test]
-    fn no_pre_bend_without_method_call() {
-        let svg_with = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .pre_bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        let svg_without = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .end_barline()
-            .render_svg();
-        assert_ne!(svg_with, svg_without, "pre_bend should change the output");
-    }
-
-    // --- Release tests ---
-
-    #[test]
-    fn release_adds_downward_arrow() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .release()
-            .end_barline()
-            .render_svg();
-        // 1 TAB clef + 1 curve + 1 arrowhead = 3 paths, no text label
-        assert_eq!(
-            svg.matches("<path ").count(), 3,
-            "should have TAB clef + release curve + arrowhead = 3 paths"
-        );
-        // Release has no text label
-        assert!(!svg.contains(">full</text>"));
-        assert!(!svg.contains(">1/2</text>"));
-    }
-
-    #[test]
-    fn release_differs_from_bend() {
-        let svg_release = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .release()
-            .end_barline()
-            .render_svg();
-        let svg_bend = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        assert_ne!(svg_release, svg_bend, "release and bend should differ");
-    }
-
-    // --- Bend-release tests ---
-
-    #[test]
-    fn bend_release_adds_arc_paths_and_label() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend_release(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // 1 TAB clef + 2 curves (up/down) + 2 arrowheads (up/down) = 5 paths
-        assert_eq!(
-            svg.matches("<path ").count(),
-            5,
-            "should have TAB clef + 2 curves + 2 arrowheads = 5 paths"
-        );
-        assert!(svg.contains(">full</text>"), "should show 'full' apex label");
-    }
-
-    #[test]
-    fn no_bend_release_without_method_call() {
-        let with = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend_release(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        let without = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .end_barline()
-            .render_svg();
-        assert_ne!(with, without, "bend_release should change the output");
-    }
-
-    #[test]
-    fn bend_release_differs_from_bend() {
-        let svg_br = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend_release(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        let svg_bend = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        assert_ne!(svg_br, svg_bend, "bend-release and bend should differ");
-    }
-
-    #[test]
-    fn bend_release_on_chord_draws_per_string() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 10)
-            .fret(2, 10)
-            .bend_release(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // TAB clef + per-string (2 curves + 2 arrowheads) = 1 + 4*2 = 9 paths
-        assert_eq!(
-            svg.matches("<path ").count(),
-            9,
-            "chord bend-release on 2 strings: 1 TAB + 2*(2 curves + 2 arrowheads) = 9 paths"
-        );
-    }
-
-    #[test]
-    fn bend_release_after_already_flushed_event() {
-        // Call .bend_release() after .next() — marks the already-flushed event.
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .next()
-            .bend_release(BendAmount::Half)
-            .end_barline()
-            .render_svg();
-        assert!(
-            svg.contains(">1/2</text>"),
-            "bend_release after flush should still show label"
-        );
-    }
-
-    #[test]
-    fn pre_bend_then_release_sequence() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .pre_bend(BendAmount::Full)
-            .next()
-            .fret(1, 5)
-            .release()
-            .end_barline()
-            .render_svg();
-        // Should have both pre-bend arrow (straight line + arrowhead) and
-        // release arrow (curve + arrowhead)
-        assert!(svg.contains(">full</text>"), "pre-bend label present");
-        // Pre-bend: 1 arrowhead + Release: 1 curve + 1 arrowhead + TAB = 4 paths
-        assert_eq!(
-            svg.matches("<path ").count(), 4,
-            "TAB + pre-bend arrowhead + release curve + release arrowhead = 4"
-        );
-    }
-
-    #[test]
-    fn release_on_chord_draws_per_string() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .fret(2, 7)
-            .release()
-            .end_barline()
-            .render_svg();
-        // 1 TAB + 2×(curve + arrowhead) = 5 paths
-        assert_eq!(
-            svg.matches("<path ").count(), 5,
-            "chord release: 1 TAB + 2 curves + 2 arrowheads = 5 paths"
-        );
-    }
-
-    #[test]
-    fn no_release_without_method_call() {
-        let svg_with = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .release()
-            .end_barline()
-            .render_svg();
-        let svg_without = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .end_barline()
-            .render_svg();
-        assert_ne!(svg_with, svg_without, "release should change the output");
     }
 
     // ── vibrato ───────────────────────────────────────────────
@@ -2434,8 +2065,14 @@ mod tests {
             .end_barline()
             .render_svg();
         // Vibrato is a stroke path with Q commands
-        assert!(svg.contains(" Q"), "vibrato should produce quadratic Bézier path");
-        assert!(svg.contains("fill=\"none\""), "vibrato path should have no fill");
+        assert!(
+            svg.contains(" Q"),
+            "vibrato should produce quadratic Bézier path"
+        );
+        assert!(
+            svg.contains("fill=\"none\""),
+            "vibrato path should have no fill"
+        );
     }
 
     #[test]
@@ -2455,16 +2092,10 @@ mod tests {
 
     #[test]
     fn vibrato_on_rest_is_noop() {
-        let with_vib = TabScoreBuilder::guitar()
-            .rest()
-            .end_barline()
-            .render_svg();
+        let with_vib = TabScoreBuilder::guitar().rest().end_barline().render_svg();
         // rest() flushes frets first — calling vibrato after rest should be no-op
         // since there's no Fret event to modify
-        let without = TabScoreBuilder::guitar()
-            .rest()
-            .end_barline()
-            .render_svg();
+        let without = TabScoreBuilder::guitar().rest().end_barline().render_svg();
         assert_eq!(with_vib, without);
     }
 
@@ -2502,22 +2133,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn vibrato_with_bend_both_rendered() {
-        let svg = TabScoreBuilder::guitar()
-            .fret(1, 7)
-            .vibrato()
-            .bend(BendAmount::Full)
-            .end_barline()
-            .render_svg();
-        // Should have both a bend arrow (filled path) and a vibrato wave (unfilled)
-        assert!(svg.contains("fill=\"none\""), "vibrato wave should be present");
-        assert!(
-            svg.matches("<path ").count() >= 2,
-            "should have both bend and vibrato paths"
-        );
-    }
-
     // ── harmonic ──────────────────────────────────────────────
 
     #[test]
@@ -2529,7 +2144,8 @@ mod tests {
             .render_svg();
         // 1 TAB clef + 1 harmonic glyph = 2 paths
         assert_eq!(
-            svg.matches("<path ").count(), 2,
+            svg.matches("<path ").count(),
+            2,
             "should have TAB clef + harmonic indicator = 2 paths"
         );
     }
@@ -2558,7 +2174,8 @@ mod tests {
             .render_svg();
         // 1 TAB clef + 2 harmonic glyphs = 3 paths
         assert_eq!(
-            svg.matches("<path ").count(), 3,
+            svg.matches("<path ").count(),
+            3,
             "chord harmonic: 1 TAB + 2 indicators = 3 paths"
         );
     }
@@ -2588,7 +2205,8 @@ mod tests {
         // .harmonic() after .next() marks the already-flushed event
         // 1 TAB clef + 1 harmonic = 2 paths
         assert_eq!(
-            svg.matches("<path ").count(), 2,
+            svg.matches("<path ").count(),
+            2,
             "harmonic after flush should mark the previous event"
         );
     }
@@ -2615,10 +2233,7 @@ mod tests {
             .palm_mute()
             .end_barline()
             .render_svg();
-        assert!(
-            svg.contains("P.M."),
-            "palm mute should add P.M. text"
-        );
+        assert!(svg.contains("P.M."), "palm mute should add P.M. text");
     }
 
     #[test]
@@ -2812,10 +2427,7 @@ mod tests {
             .end_barline()
             .render_svg();
         // Should have fret "0" and two "x" texts
-        assert!(
-            svg.contains(">0</text>"),
-            "should render fret number 0"
-        );
+        assert!(svg.contains(">0</text>"), "should render fret number 0");
         let x_count = svg.matches(">x</text>").count();
         assert_eq!(x_count, 2, "2 muted strings should produce 2 'x' texts");
     }
@@ -2916,23 +2528,13 @@ mod tests {
             let png_2x = builder().render_png(2.0);
             let (w1, h1) = png_dimensions(&png_1x);
             let (w2, h2) = png_dimensions(&png_2x);
-            assert!(
-                w2 > w1,
-                "2x width ({w2}) should be larger than 1x ({w1})"
-            );
-            assert!(
-                h2 > h1,
-                "2x height ({h2}) should be larger than 1x ({h1})"
-            );
+            assert!(w2 > w1, "2x width ({w2}) should be larger than 1x ({w1})");
+            assert!(h2 > h1, "2x height ({h2}) should be larger than 1x ({h1})");
         }
 
         #[test]
         fn tab_try_render_png_matches_render_png() {
-            let builder = || {
-                TabScoreBuilder::guitar()
-                    .fret(1, 3)
-                    .end_barline()
-            };
+            let builder = || TabScoreBuilder::guitar().fret(1, 3).end_barline();
             let try_result = builder().try_render_png(1.0).expect("should succeed");
             let direct = builder().render_png(1.0);
             assert_eq!(try_result.len(), direct.len());
@@ -2958,8 +2560,14 @@ mod tests {
                 .render_png(1.5);
             assert!(!png.is_empty());
             let (w, h) = png_dimensions(&png);
-            assert!(w > 100, "complex tab PNG width should be substantial, got {w}");
-            assert!(h > 30, "complex tab PNG height should be substantial, got {h}");
+            assert!(
+                w > 100,
+                "complex tab PNG width should be substantial, got {w}"
+            );
+            assert!(
+                h > 30,
+                "complex tab PNG height should be substantial, got {h}"
+            );
         }
 
         // -- Pixel-content verification --
@@ -3046,13 +2654,9 @@ mod tests {
                 .end_barline()
                 .render_png(1.0);
             let tab_png = rich_tab_score().render_png(1.0);
-            let standard_dense = count_dense_rows(
-                &decode_pixmap(&standard_png),
-                INK_ALPHA_THRESHOLD,
-                0.5,
-            );
-            let tab_dense =
-                count_dense_rows(&decode_pixmap(&tab_png), INK_ALPHA_THRESHOLD, 0.5);
+            let standard_dense =
+                count_dense_rows(&decode_pixmap(&standard_png), INK_ALPHA_THRESHOLD, 0.5);
+            let tab_dense = count_dense_rows(&decode_pixmap(&tab_png), INK_ALPHA_THRESHOLD, 0.5);
             assert!(
                 tab_dense > standard_dense,
                 "tab dense rows ({tab_dense}) should exceed standard staff ({standard_dense})"
@@ -3068,10 +2672,8 @@ mod tests {
             // difference would shrink to zero.
             let sparse_png = sparse_tab_score().render_png(1.0);
             let rich_png = rich_tab_score().render_png(1.0);
-            let sparse_ink =
-                count_inked_pixels(&decode_pixmap(&sparse_png), INK_ALPHA_THRESHOLD);
-            let rich_ink =
-                count_inked_pixels(&decode_pixmap(&rich_png), INK_ALPHA_THRESHOLD);
+            let sparse_ink = count_inked_pixels(&decode_pixmap(&sparse_png), INK_ALPHA_THRESHOLD);
+            let rich_ink = count_inked_pixels(&decode_pixmap(&rich_png), INK_ALPHA_THRESHOLD);
             assert!(
                 rich_ink > sparse_ink,
                 "tab with fret numbers ({rich_ink}) should have more ink than \
@@ -3114,11 +2716,7 @@ mod tests {
             let png = rich_tab_score().render_png(1.0);
             let pixmap = decode_pixmap(&png);
             let total = (pixmap.width() * pixmap.height()) as usize;
-            let transparent = pixmap
-                .pixels()
-                .iter()
-                .filter(|p| p.alpha() == 0)
-                .count();
+            let transparent = pixmap.pixels().iter().filter(|p| p.alpha() == 0).count();
             let transparent_fraction = transparent as f64 / total as f64;
             assert!(
                 transparent_fraction > 0.5,

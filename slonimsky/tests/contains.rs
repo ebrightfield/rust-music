@@ -82,7 +82,9 @@ fn contains_shows_header_and_total() {
 #[test]
 fn contains_c_major_scale_finds_subchords() {
     let out = slonimsky()
-        .args(["contains", "0", "2", "4", "5", "7", "9", "11", "--in", "chords"])
+        .args([
+            "contains", "0", "2", "4", "5", "7", "9", "11", "--in", "chords",
+        ])
         .output()
         .expect("command should run");
 
@@ -114,8 +116,16 @@ fn contains_c_major_scale_finds_subchords() {
 fn contains_explicit_sub_direction() {
     let out = slonimsky()
         .args([
-            "contains", "0", "2", "4", "5", "7", "9", "11",
-            "--direction", "sub",
+            "contains",
+            "0",
+            "2",
+            "4",
+            "5",
+            "7",
+            "9",
+            "11",
+            "--direction",
+            "sub",
         ])
         .output()
         .expect("command should run");
@@ -132,10 +142,7 @@ fn contains_explicit_sub_direction() {
 fn contains_explicit_super_direction() {
     // Force super direction even on large input
     let out = slonimsky()
-        .args([
-            "contains", "C", "E", "G",
-            "--direction", "super",
-        ])
+        .args(["contains", "C", "E", "G", "--direction", "super"])
         .output()
         .expect("command should run");
 

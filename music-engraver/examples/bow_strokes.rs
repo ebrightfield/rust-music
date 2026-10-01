@@ -71,18 +71,13 @@ fn main() {
         .render_svg();
 
     std::fs::create_dir_all("music-engraver/examples/output").ok();
-    std::fs::write("music-engraver/examples/output/bow_strokes.svg", &svg)
-        .expect("write SVG");
+    std::fs::write("music-engraver/examples/output/bow_strokes.svg", &svg).expect("write SVG");
 
     assert!(svg.starts_with("<svg"), "output should be SVG");
     assert!(svg.contains("</svg>"), "should have closing tag");
 
     let path_count = svg.matches("<path").count();
-    println!(
-        "bow_strokes.svg: {} bytes, {} paths",
-        svg.len(),
-        path_count
-    );
+    println!("bow_strokes.svg: {} bytes, {} paths", svg.len(), path_count);
 
     // Sanity bound: 2 clefs + 13 noteheads + 14 articulation/bow/fermata
     // glyphs (1+1+1+1, 1+1+1, 2+2+2, 3+2) = ≥ 29 paths. Use a permissive

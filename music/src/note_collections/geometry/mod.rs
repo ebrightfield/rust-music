@@ -1,10 +1,10 @@
-pub mod symmetry;
-pub mod sets;
 pub mod contour;
+pub mod sets;
+pub mod symmetry;
 
 use crate::note::pitch_class::Pc;
-use crate::note_collections::pc_set::PcShape;
 use crate::note_collections::interval_class::IntervalClass;
+use crate::note_collections::pc_set::PcShape;
 
 /// A matrix showing the interval between every pair of pitch classes in a set.
 ///
@@ -32,7 +32,7 @@ impl IntervalMatrix {
     /// every ordered pair of pitch classes in the shape.
     // REQ-O15
     pub fn new(pc_shape: &PcShape) -> Self {
-        let pcs_vec: &[Pc] = pc_shape;  // Uses Deref
+        let pcs_vec: &[Pc] = pc_shape; // Uses Deref
         let n = pcs_vec.len();
         let mut matrix = Vec::with_capacity(n);
 
@@ -113,14 +113,14 @@ impl IntervalMatrix {
             (full_vector[3] + full_vector[9]) / 2,  // IC3 + IC9 -> ic3
             (full_vector[4] + full_vector[8]) / 2,  // IC4 + IC8 -> ic4
             (full_vector[5] + full_vector[7]) / 2,  // IC5 + IC7 -> ic5
-            full_vector[6] / 2,                      // IC6 (tritone, its own inverse)
+            full_vector[6] / 2,                     // IC6 (tritone, its own inverse)
         ]
     }
 
     /// Finds all pairs of pitch classes that have the given interval.
     /// Returns a vector of (from_pc, to_pc) tuples.
     pub fn find_interval(&self, ic: IntervalClass) -> Vec<(Pc, Pc)> {
-        let pcs_vec: &[Pc] = &self.pcs;  // Uses Deref
+        let pcs_vec: &[Pc] = &self.pcs; // Uses Deref
         let n = pcs_vec.len();
         let mut pairs = Vec::new();
 
@@ -230,4 +230,3 @@ mod tests {
         assert_eq!(reduced[5], 2); // ic6: 2 unordered tritone pairs
     }
 }
-

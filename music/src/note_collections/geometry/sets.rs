@@ -1,21 +1,24 @@
-use itertools::Itertools;
 use crate::error::MusicSemanticsError;
 use crate::note::Pc;
-use crate::note_collections::pc_set::PcShape;
 use crate::note_collections::geometry::symmetry::transpositional::Modes;
+use crate::note_collections::pc_set::PcShape;
+use itertools::Itertools;
 
 pub fn get_subchords(pcs: &PcShape, size: u8) -> Result<Vec<Vec<Pc>>, MusicSemanticsError> {
     if size < 3 {
         return Err(MusicSemanticsError::SizeTooSmallForChords(size as usize));
     }
     if size as usize > pcs.len() - 1 {
-        return Err(MusicSemanticsError::SizeTooLargeForSubchords(size, pcs.clone()));
+        return Err(MusicSemanticsError::SizeTooLargeForSubchords(
+            size,
+            pcs.clone(),
+        ));
     }
-    Ok((**pcs).clone()
+    Ok((**pcs)
+        .clone()
         .into_iter()
         .combinations(size as usize)
-        .collect()
-    )
+        .collect())
 }
 
 impl PcShape {
@@ -72,9 +75,7 @@ impl PcShape {
         self.modes()
             .into_iter()
             .enumerate()
-            .filter(|(_, mode)| {
-                subchord.iter().all(|pc| mode.contains(pc))
-            })
+            .filter(|(_, mode)| subchord.iter().all(|pc| mode.contains(pc)))
             .collect()
     }
 }
@@ -124,9 +125,9 @@ mod tests {
 
         // Verify mode indices
         let indices: Vec<usize> = modes.iter().map(|(idx, _)| *idx).collect();
-        assert!(indices.contains(&0));  // Ionian
-        assert!(indices.contains(&3));  // Lydian
-        assert!(indices.contains(&4));  // Mixolydian
+        assert!(indices.contains(&0)); // Ionian
+        assert!(indices.contains(&3)); // Lydian
+        assert!(indices.contains(&4)); // Mixolydian
     }
 
     #[test]

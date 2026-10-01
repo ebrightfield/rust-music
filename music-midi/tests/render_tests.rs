@@ -1,11 +1,11 @@
 // REQ-O8, O11, O13: AudioRenderer tests (Phase 5e–5g)
 #![cfg(feature = "render")]
 
+use midly::{Format, Header, MetaMessage, MidiMessage, Smf, Timing, TrackEvent, TrackEventKind};
 use music_midi::{
     error::MidiConversionError,
     soundfont::{Synthesizer, WavSink},
 };
-use midly::{Format, Header, MetaMessage, MidiMessage, Smf, Timing, TrackEvent, TrackEventKind};
 use std::io::Cursor;
 use tempfile::TempDir;
 
@@ -19,7 +19,9 @@ struct SilentSynth {
 
 impl SilentSynth {
     fn new() -> Self {
-        Self { events_received: Vec::new() }
+        Self {
+            events_received: Vec::new(),
+        }
     }
 }
 
@@ -47,7 +49,10 @@ struct CapturingWav {
 
 impl CapturingWav {
     fn new() -> Self {
-        Self { frames: Vec::new(), finalized: false }
+        Self {
+            frames: Vec::new(),
+            finalized: false,
+        }
     }
 }
 
@@ -75,7 +80,10 @@ struct CapturingWavInner {
 
 impl SharedCapturingWav {
     fn new() -> (Self, Arc<Mutex<CapturingWavInner>>) {
-        let inner = Arc::new(Mutex::new(CapturingWavInner { frames: Vec::new(), finalized: false }));
+        let inner = Arc::new(Mutex::new(CapturingWavInner {
+            frames: Vec::new(),
+            finalized: false,
+        }));
         (Self(inner.clone()), inner)
     }
 }
@@ -101,7 +109,8 @@ fn build_minimal_smf(ppq: u16, events: Vec<TrackEvent<'static>>) -> Vec<u8> {
         tracks: vec![events],
     };
     let mut out = Vec::new();
-    smf.write_std(Cursor::new(&mut out)).expect("failed to write minimal SMF");
+    smf.write_std(Cursor::new(&mut out))
+        .expect("failed to write minimal SMF");
     out
 }
 
@@ -117,7 +126,10 @@ fn note_on(delta: u32, ch: u8, key: u8, vel: u8) -> TrackEvent<'static> {
         delta: delta.into(),
         kind: TrackEventKind::Midi {
             channel: ch.into(),
-            message: MidiMessage::NoteOn { key: key.into(), vel: vel.into() },
+            message: MidiMessage::NoteOn {
+                key: key.into(),
+                vel: vel.into(),
+            },
         },
     }
 }
@@ -127,7 +139,10 @@ fn note_off(delta: u32, ch: u8, key: u8) -> TrackEvent<'static> {
         delta: delta.into(),
         kind: TrackEventKind::Midi {
             channel: ch.into(),
-            message: MidiMessage::NoteOff { key: key.into(), vel: 0u8.into() },
+            message: MidiMessage::NoteOff {
+                key: key.into(),
+                vel: 0u8.into(),
+            },
         },
     }
 }
@@ -164,11 +179,7 @@ fn render_and_count_frames(smf: &midly::Smf, tail: f32, sample_rate: u32) -> usi
 fn silence_smoke() {
     let smf_bytes = build_minimal_smf(
         480,
-        vec![
-            note_on(0, 0, 60, 80),
-            note_off(240, 0, 60),
-            end_of_track(),
-        ],
+        vec![note_on(0, 0, 60, 80), note_off(240, 0, 60), end_of_track()],
     );
     let smf = Smf::parse(&smf_bytes).expect("parse failed");
 
@@ -181,7 +192,10 @@ fn silence_smoke() {
     let inner = shared.lock().unwrap();
     // At 44100 Hz, 120 BPM, 240 ticks = 0.25 s → ~11025 frames, plus 1 s tail.
     // We expect at least 1 frame to have been written.
-    assert!(!inner.frames.is_empty(), "render must produce at least one frame");
+    assert!(
+        !inner.frames.is_empty(),
+        "render must produce at least one frame"
+    );
     assert!(inner.finalized, "WAV sink must be finalized on success");
 }
 
@@ -306,10 +320,10 @@ fn mid_file_tempo_change_integrates_piecewise() {
         vec![
             tempo_event(0, 1_000_000), // 60 BPM: 1s/beat
             note_on(0, 0, 60, 80),
-            note_off(480, 0, 60),           // end of first beat
-            tempo_event(0, 250_000),   // 240 BPM: 0.25s/beat
+            note_off(480, 0, 60),    // end of first beat
+            tempo_event(0, 250_000), // 240 BPM: 0.25s/beat
             note_on(0, 0, 64, 80),
-            note_off(480, 0, 64),           // end of second beat (now faster)
+            note_off(480, 0, 64), // end of second beat (now faster)
             end_of_track(),
         ],
     );
@@ -420,9 +434,9 @@ fn frame_count_is_approximately_correct() {
     let smf_bytes = build_minimal_smf(
         480,
         vec![
-            tempo_event(0, 1_000_000),  // 60 BPM
+            tempo_event(0, 1_000_000), // 60 BPM
             note_on(0, 0, 60, 80),
-            note_off(480, 0, 60),        // 1 beat = 1 s = 100 frames
+            note_off(480, 0, 60), // 1 beat = 1 s = 100 frames
             end_of_track(),
         ],
     );
@@ -430,8 +444,7 @@ fn frame_count_is_approximately_correct() {
     let synth = SilentSynth::new();
     let (wav, shared) = SharedCapturingWav::new();
 
-    music_midi::render::render_smf_with_seams(&smf, synth, wav, SAMPLE_RATE)
-        .expect("render ok");
+    music_midi::render::render_smf_with_seams(&smf, synth, wav, SAMPLE_RATE).expect("render ok");
 
     let n = shared.lock().unwrap().frames.len();
     // Expect ~100 (note) + ~100 (tail) = ~200 frames. Allow ±10 for rounding.
@@ -460,15 +473,19 @@ fn seam_render_writes_wav_to_disk() {
 
     // Use production HoundWav directly.
     let synth = SilentSynth::new();
-    let wav = music_midi::soundfont::HoundWav::create(&wav_path, 44_100)
-        .expect("create wav");
+    let wav = music_midi::soundfont::HoundWav::create(&wav_path, 44_100).expect("create wav");
 
-    music_midi::render::render_smf_with_seams(&smf, synth, wav, 44_100)
-        .expect("seam render ok");
+    music_midi::render::render_smf_with_seams(&smf, synth, wav, 44_100).expect("seam render ok");
 
-    assert!(wav_path.exists(), "WAV file must exist after successful render");
+    assert!(
+        wav_path.exists(),
+        "WAV file must exist after successful render"
+    );
     let metadata = std::fs::metadata(&wav_path).unwrap();
-    assert!(metadata.len() > 44, "WAV file must be larger than the 44-byte header");
+    assert!(
+        metadata.len() > 44,
+        "WAV file must be larger than the 44-byte header"
+    );
 }
 
 /// REQ-O22: tail_seconds at 0.0 and a high value produce frame counts
@@ -514,15 +531,20 @@ fn c_triad_half_second_wav_has_audible_frames() {
     let tmp = TempDir::new().unwrap();
     let wav_path = tmp.path().join("c_triad.wav");
 
-    let mut renderer = AudioRenderer::new(sf).expect("AudioRenderer::new").sample_rate(48_000);
-    renderer.render_to_wav(&smf, &wav_path).expect("render_to_wav");
+    let mut renderer = AudioRenderer::new(sf)
+        .expect("AudioRenderer::new")
+        .sample_rate(48_000);
+    renderer
+        .render_to_wav(&smf, &wav_path)
+        .expect("render_to_wav");
 
     assert!(wav_path.exists(), "WAV must be written");
 
     // Verify at least one sample is non-zero (audible).
     let mut reader = hound::WavReader::open(&wav_path).expect("open wav");
-    let has_audible = reader
-        .samples::<i16>()
-        .any(|s| s.unwrap_or(0) != 0);
-    assert!(has_audible, "rendered WAV must contain non-zero (audible) samples");
+    let has_audible = reader.samples::<i16>().any(|s| s.unwrap_or(0) != 0);
+    assert!(
+        has_audible,
+        "rendered WAV must contain non-zero (audible) samples"
+    );
 }

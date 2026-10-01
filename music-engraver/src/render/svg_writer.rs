@@ -223,8 +223,21 @@ impl SvgWriter {
                 db = style.dominant_baseline,
             );
         }
-        let _ = write!(self.elements, ">{text}</text>");
-        self.elements.push('\n');
+        self.elements.push('>');
+        for character in text.chars() {
+            self.elements.push_str(match character {
+                '&' => "&amp;",
+                '<' => "&lt;",
+                '>' => "&gt;",
+                '\"' => "&quot;",
+                '\'' => "&apos;",
+                _ => {
+                    self.elements.push(character);
+                    continue;
+                }
+            });
+        }
+        self.elements.push_str("</text>\n");
     }
 
     /// Add a `<circle>` element with explicit stroke + fill.
@@ -249,7 +262,14 @@ impl SvgWriter {
     }
 
     /// Add a styled rectangle with fill, stroke, and stroke-width.
-    pub fn add_styled_rect(&mut self, x: f64, y: f64, width: f64, height: f64, style: &RectStyle<'_>) {
+    pub fn add_styled_rect(
+        &mut self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        style: &RectStyle<'_>,
+    ) {
         let _ = write!(
             self.elements,
             r#"  <rect x="{x}" y="{y}" width="{width}" height="{height}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"/>"#,
@@ -546,6 +566,20 @@ mod tests {
             svg.contains(r#"dominant-baseline="central""#),
             "central baseline should be emitted in the text element"
         );
+    }
+
+    #[test]
+    fn add_text_escapes_xml_metacharacters() {
+        let mut w = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 1000.0, 1000.0);
+        w.add_text(
+            0.0,
+            0.0,
+            "A&B < C > D \"quoted\" 'marked'",
+            &TextStyle::normal(50.0),
+        );
+        let svg = w.to_svg();
+        assert!(svg.contains("A&amp;B &lt; C &gt; D &quot;quoted&quot; &apos;marked&apos;</text>"));
+        assert!(!svg.contains("< C >"));
     }
 
     #[test]

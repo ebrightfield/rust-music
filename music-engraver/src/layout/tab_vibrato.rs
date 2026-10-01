@@ -54,10 +54,11 @@ pub fn layout_tab_vibrato(
     stroke_width: f64,
 ) -> TabVibratoLayout {
     let ss = tab_staff.staff_space;
-    let amplitude = ss * match kind {
-        VibratoKind::Normal => VIBRATO_AMPLITUDE_RATIO,
-        VibratoKind::Wide => WIDE_VIBRATO_AMPLITUDE_RATIO,
-    };
+    let amplitude = ss
+        * match kind {
+            VibratoKind::Normal => VIBRATO_AMPLITUDE_RATIO,
+            VibratoKind::Wide => WIDE_VIBRATO_AMPLITUDE_RATIO,
+        };
     let half_period = ss * VIBRATO_HALF_PERIOD_RATIO;
     let n = DEFAULT_WIDTH_HALF_CYCLES;
     let total_width = n as f64 * half_period;
@@ -77,7 +78,10 @@ pub fn layout_tab_vibrato(
         } else {
             center_y + amplitude
         };
-        path.push_str(&format!(" Q{:.2} {:.2} {:.2} {:.2}", ctrl_x, ctrl_y, end_x, center_y));
+        path.push_str(&format!(
+            " Q{:.2} {:.2} {:.2} {:.2}",
+            ctrl_x, ctrl_y, end_x, center_y
+        ));
     }
 
     TabVibratoLayout {
@@ -154,7 +158,8 @@ mod tests {
         assert!(
             layout.path_data.starts_with(&prefix),
             "expected path to start with '{}', got '{}'",
-            prefix, &layout.path_data[..50.min(layout.path_data.len())]
+            prefix,
+            &layout.path_data[..50.min(layout.path_data.len())]
         );
     }
 
@@ -172,7 +177,8 @@ mod tests {
         assert!(
             start_y < string_y,
             "vibrato y ({}) should be above string y ({})",
-            start_y, string_y
+            start_y,
+            string_y
         );
     }
 

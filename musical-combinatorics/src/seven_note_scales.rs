@@ -1,7 +1,10 @@
 use anyhow::anyhow;
 use music::note::Pc;
 use music::note::Pc::*;
-use music::note_collections::{OctavePartition, pc_set::{PcShape, AsPcSlice}};
+use music::note_collections::{
+    pc_set::{AsPcSlice, PcShape},
+    OctavePartition,
+};
 
 /// This is a non-exhaustive collection of pertinent seven-note scales.
 /// They all are derived from the following procedure:
@@ -88,13 +91,19 @@ impl From<&SevenNoteScaleQuality> for OctavePartition {
             SevenNoteScaleQuality::MixolydianSharp9Sharp11 => MIXOLYDIAN_SHARP9_SHARP11_PCS,
             SevenNoteScaleQuality::MixolydianFlat9Sharp11 => MIXOLYDIAN_FLAT9_SHARP11_PCS,
             SevenNoteScaleQuality::MelodicMinorFlat9Sharp11 => MELODIC_MINOR_FLAT9_SHARP11_PCS,
-            SevenNoteScaleQuality::MixolydianFlat9Sharp11Flat13 => MIXOLYDIAN_FLAT9_SHARP11_FLAT13_PCS,
+            SevenNoteScaleQuality::MixolydianFlat9Sharp11Flat13 => {
+                MIXOLYDIAN_FLAT9_SHARP11_FLAT13_PCS
+            }
             SevenNoteScaleQuality::MixolydianSharp9Flat13 => MIXOLYDIAN_SHARP9_FLAT13_PCS,
             SevenNoteScaleQuality::MelodicMinorFlat11 => MELODIC_MINOR_FLAT11_PCS,
-            SevenNoteScaleQuality::MixolydianSharp9Sharp11Flat13 => MIXOLYDIAN_SHARP9_SHARP11_FLAT13_PCS,
+            SevenNoteScaleQuality::MixolydianSharp9Sharp11Flat13 => {
+                MIXOLYDIAN_SHARP9_SHARP11_FLAT13_PCS
+            }
             SevenNoteScaleQuality::MelodicMinorFlat9Flat11 => MELODIC_MINOR_FLAT9_FLAT11_PCS,
             SevenNoteScaleQuality::LydianFlat9Flat13 => LYDIAN_FLAT9_FLAT13_PCS,
-            SevenNoteScaleQuality::MelodicMinorFlat9Sharp11Flat13 => MELODIC_MINOR_FLAT9_SHARP11_FLAT13_PCS,
+            SevenNoteScaleQuality::MelodicMinorFlat9Sharp11Flat13 => {
+                MELODIC_MINOR_FLAT9_SHARP11_FLAT13_PCS
+            }
             SevenNoteScaleQuality::LydianSharp9Flat13 => LYDIAN_SHARP9_FLAT13_PCS,
             SevenNoteScaleQuality::MajorSharp9Flat13 => MAJOR_SHARP9_FLAT13_PCS,
         })
@@ -129,13 +138,19 @@ impl TryFrom<&PcShape> for SevenNoteScaleQuality {
             MIXOLYDIAN_SHARP9_SHARP11_PCS => Ok(SevenNoteScaleQuality::MixolydianSharp9Sharp11),
             MIXOLYDIAN_FLAT9_SHARP11_PCS => Ok(SevenNoteScaleQuality::MixolydianFlat9Sharp11),
             MELODIC_MINOR_FLAT9_SHARP11_PCS => Ok(SevenNoteScaleQuality::MelodicMinorFlat9Sharp11),
-            MIXOLYDIAN_FLAT9_SHARP11_FLAT13_PCS => Ok(SevenNoteScaleQuality::MixolydianFlat9Sharp11Flat13),
+            MIXOLYDIAN_FLAT9_SHARP11_FLAT13_PCS => {
+                Ok(SevenNoteScaleQuality::MixolydianFlat9Sharp11Flat13)
+            }
             MIXOLYDIAN_SHARP9_FLAT13_PCS => Ok(SevenNoteScaleQuality::MixolydianSharp9Flat13),
             MELODIC_MINOR_FLAT11_PCS => Ok(SevenNoteScaleQuality::MelodicMinorFlat11),
-            MIXOLYDIAN_SHARP9_SHARP11_FLAT13_PCS => Ok(SevenNoteScaleQuality::MixolydianSharp9Sharp11Flat13),
+            MIXOLYDIAN_SHARP9_SHARP11_FLAT13_PCS => {
+                Ok(SevenNoteScaleQuality::MixolydianSharp9Sharp11Flat13)
+            }
             MELODIC_MINOR_FLAT9_FLAT11_PCS => Ok(SevenNoteScaleQuality::MelodicMinorFlat9Flat11),
             LYDIAN_FLAT9_FLAT13_PCS => Ok(SevenNoteScaleQuality::LydianFlat9Flat13),
-            MELODIC_MINOR_FLAT9_SHARP11_FLAT13_PCS => Ok(SevenNoteScaleQuality::MelodicMinorFlat9Sharp11Flat13),
+            MELODIC_MINOR_FLAT9_SHARP11_FLAT13_PCS => {
+                Ok(SevenNoteScaleQuality::MelodicMinorFlat9Sharp11Flat13)
+            }
             LYDIAN_SHARP9_FLAT13_PCS => Ok(SevenNoteScaleQuality::LydianSharp9Flat13),
             MAJOR_SHARP9_FLAT13_PCS => Ok(SevenNoteScaleQuality::MajorSharp9Flat13),
             _ => Err(anyhow!("Seven note scale not recognized: {:?}", value)),

@@ -18,9 +18,7 @@ use music::note_collections::chord_name::naming_heuristics::{
     infer_chord_quality_detailed, infer_chord_quality_with,
 };
 use music::note_collections::chord_name::quality::chord::QualityAmbiguity;
-use music::note_collections::chord_name::{
-    ChordNameDisplayConfig, MajNotation, NamingConfig,
-};
+use music::note_collections::chord_name::{ChordNameDisplayConfig, MajNotation, NamingConfig};
 
 /// Run inference with the supplied `NamingConfig` and render under the
 /// supplied `ChordNameDisplayConfig`.
@@ -37,7 +35,10 @@ fn render(pcs: &[Pc], naming: &NamingConfig, display: &ChordNameDisplayConfig) -
 #[test]
 fn maj_notation_delta_is_default() {
     let dsp = ChordNameDisplayConfig::default();
-    assert_eq!(render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp), "Δ7");
+    assert_eq!(
+        render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp),
+        "Δ7"
+    );
 }
 
 #[test]
@@ -46,7 +47,10 @@ fn maj_notation_maj_capital() {
         maj_notation: MajNotation::Maj,
         ..Default::default()
     };
-    assert_eq!(render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp), "Maj7");
+    assert_eq!(
+        render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp),
+        "Maj7"
+    );
 }
 
 #[test]
@@ -55,7 +59,10 @@ fn maj_notation_compact_m() {
         maj_notation: MajNotation::MajCap,
         ..Default::default()
     };
-    assert_eq!(render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp), "M7");
+    assert_eq!(
+        render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp),
+        "M7"
+    );
 }
 
 #[test]
@@ -64,7 +71,10 @@ fn maj_notation_lowercase_maj() {
         maj_notation: MajNotation::LowerMaj,
         ..Default::default()
     };
-    assert_eq!(render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp), "maj7");
+    assert_eq!(
+        render(&[Pc0, Pc4, Pc7, Pc11], &NamingConfig::default(), &dsp),
+        "maj7"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -204,10 +214,9 @@ fn ambiguity_duplicate_third() {
     let pcs: HashSet<Pc> = [Pc0, Pc3, Pc4, Pc7].iter().copied().collect();
     let (_q, ambiguities) = infer_chord_quality_detailed(&pcs, &naming);
     assert!(
-        ambiguities.iter().any(|a| matches!(
-            a,
-            QualityAmbiguity::DuplicateScaleDegree { degree: 3, .. }
-        )),
+        ambiguities
+            .iter()
+            .any(|a| matches!(a, QualityAmbiguity::DuplicateScaleDegree { degree: 3, .. })),
         "expected duplicate-3rd ambiguity, got {:?}",
         ambiguities,
     );
@@ -236,6 +245,31 @@ fn ambiguity_off_returns_empty() {
     assert!(
         ambiguities.is_empty(),
         "expected no ambiguities reported when flag is off"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// explicit_sus4
+// ---------------------------------------------------------------------------
+
+#[test]
+fn suspension_style_can_be_explicit_or_compact() {
+    let compact = ChordNameDisplayConfig::default();
+    let explicit = ChordNameDisplayConfig {
+        explicit_sus4: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        render(&[Pc0, Pc5, Pc7], &NamingConfig::default(), &compact),
+        "sus4"
+    );
+    assert_eq!(
+        render(&[Pc0, Pc5, Pc7, Pc10], &NamingConfig::default(), &compact),
+        "7sus"
+    );
+    assert_eq!(
+        render(&[Pc0, Pc5, Pc7, Pc10], &NamingConfig::default(), &explicit),
+        "7sus4"
     );
 }
 

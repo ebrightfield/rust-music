@@ -183,10 +183,7 @@ mod tests {
         let svg = writer.to_svg();
         // Grab the first path's d="..." literal and count its occurrences.
         let first_d_start = svg.find("d=\"").expect("at least one path") + 3;
-        let first_d_end = svg[first_d_start..]
-            .find('"')
-            .expect("closing quote")
-            + first_d_start;
+        let first_d_end = svg[first_d_start..].find('"').expect("closing quote") + first_d_start;
         let path_d = &svg[first_d_start..first_d_end];
         // 4 segments, identical d attribute on every <path>
         assert_eq!(svg.matches(path_d).count(), 4);
@@ -233,8 +230,7 @@ mod tests {
 
     fn advance_of(font: &MusicFont, glyph: Glyph) -> f64 {
         font.glyph_advance(glyph)
-            .unwrap_or_else(|_| panic!("{glyph:?} must have an advance"))
-            as f64
+            .unwrap_or_else(|_| panic!("{glyph:?} must have an advance")) as f64
     }
 
     #[test]
@@ -289,8 +285,14 @@ mod tests {
         let end_x = 2.0 * fast + 2.0 * slow;
         let layout = layout_trill_extension_multi_speed(end_x, 0.0, &regions).unwrap();
 
-        let fast_outline = font.glyph_outline(Glyph::WiggleTrillFast).unwrap().path_data;
-        let slow_outline = font.glyph_outline(Glyph::WiggleTrillSlow).unwrap().path_data;
+        let fast_outline = font
+            .glyph_outline(Glyph::WiggleTrillFast)
+            .unwrap()
+            .path_data;
+        let slow_outline = font
+            .glyph_outline(Glyph::WiggleTrillSlow)
+            .unwrap()
+            .path_data;
         assert_ne!(
             fast_outline, slow_outline,
             "test setup: Fast and Slow wiggle outlines must differ"
@@ -336,8 +338,14 @@ mod tests {
         let layout = layout_trill_extension_multi_speed(end_x, 25.0, &regions).unwrap();
         assert_eq!(layout.tiles.len(), 4);
 
-        let fast_outline = font.glyph_outline(Glyph::WiggleTrillFast).unwrap().path_data;
-        let slow_outline = font.glyph_outline(Glyph::WiggleTrillSlow).unwrap().path_data;
+        let fast_outline = font
+            .glyph_outline(Glyph::WiggleTrillFast)
+            .unwrap()
+            .path_data;
+        let slow_outline = font
+            .glyph_outline(Glyph::WiggleTrillSlow)
+            .unwrap()
+            .path_data;
 
         let mut writer = test_writer();
         draw_trill_extension_multi_speed(&mut writer, &font, &layout).unwrap();
@@ -429,8 +437,7 @@ mod tests {
             glyph: Glyph::WiggleTrillFast,
             segment_advance: fast,
         }];
-        let layout =
-            layout_trill_extension_multi_speed(2.0 * fast, 271.5, &regions).unwrap();
+        let layout = layout_trill_extension_multi_speed(2.0 * fast, 271.5, &regions).unwrap();
         let mut writer = test_writer();
         draw_trill_extension_multi_speed(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
@@ -501,8 +508,7 @@ mod tests {
             glyph: Glyph::WiggleTrillFast,
             segment_advance: fast,
         }];
-        let multi = layout_trill_extension_multi_speed(10.0 + 5.0 * fast, 25.0, &regions)
-            .unwrap();
+        let multi = layout_trill_extension_multi_speed(10.0 + 5.0 * fast, 25.0, &regions).unwrap();
         let single = layout_trill_extension_with_glyph(
             10.0,
             10.0 + 5.0 * fast,
@@ -581,7 +587,11 @@ mod tests {
             let after = &rest[p + "translate(".len()..];
             let comma = after.find(',').expect("translate must have comma");
             let x_str = &after[..comma];
-            xs.push(x_str.parse().unwrap_or_else(|_| panic!("not a number: {x_str:?}")));
+            xs.push(
+                x_str
+                    .parse()
+                    .unwrap_or_else(|_| panic!("not a number: {x_str:?}")),
+            );
             rest = &after[comma..];
         }
         assert_eq!(xs.len(), 4, "4 tiles -> 4 translates");

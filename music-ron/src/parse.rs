@@ -53,10 +53,7 @@ pub(crate) fn parse_internal(
     Ok(doc)
 }
 
-fn validate_version(
-    doc: &Document,
-    source_path: Option<PathBuf>,
-) -> Result<(), MusicRonError> {
+fn validate_version(doc: &Document, source_path: Option<PathBuf>) -> Result<(), MusicRonError> {
     let v = match doc {
         Document::Snippet(d) => d.version,
         Document::Tab(d) => d.version,
@@ -86,7 +83,8 @@ pub fn parse_as<T: DocumentKind>(input: &str) -> Result<T, MusicRonError> {
         col: 0,
         message: format!(
             "kind mismatch: expected \"{}\", got \"{}\"",
-            T::KIND, actual,
+            T::KIND,
+            actual,
         ),
         source_path: None,
         snippet: String::new(),

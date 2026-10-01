@@ -37,8 +37,17 @@ fn render_item(item: &Item) -> String {
         Item::Time(n, d) => format!("\\time {}/{}", n, d),
         Item::Key(tonic, mode) => format!("\\key {} \\{}", tonic, mode),
         Item::Block(items) => format!("{{ {} }}", render_items(items)),
-        Item::Tuplet { numerator, denominator, items } => {
-            format!("\\tuplet {}/{} {{ {} }}", numerator, denominator, render_items(items))
+        Item::Tuplet {
+            numerator,
+            denominator,
+            items,
+        } => {
+            format!(
+                "\\tuplet {}/{} {{ {} }}",
+                numerator,
+                denominator,
+                render_items(items)
+            )
         }
     }
 }
@@ -53,11 +62,7 @@ fn roundtrip(src: &str) -> String {
 }
 
 fn read_fixture(name: &str) -> String {
-    let path = format!(
-        "{}/tests/fixtures/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    );
+    let path = format!("{}/tests/fixtures/{}", env!("CARGO_MANIFEST_DIR"), name);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("read {:?}: {}", path, e))
         .trim_end_matches('\n')
@@ -180,8 +185,8 @@ fn jazz_ii_v_i() {
 /// parser-self-consistent, they agree with the canonical emitter).
 #[test]
 fn c_major_triad_matches_music_output() {
-    use music::{Note, Voicing};
     use music::notation::rhythm::duration::DurationKind;
+    use music::{Note, Voicing};
 
     let voicing = Voicing::new(vec![
         Pitch::new(Note::C, 4),
@@ -189,6 +194,10 @@ fn c_major_triad_matches_music_output() {
         Pitch::new(Note::G, 4),
     ]);
     let dur = Duration::new(DurationKind::Qtr, 0);
-    let rendered = format!("{}{}", voicing.to_lilypond_string(), dur.to_lilypond_string());
+    let rendered = format!(
+        "{}{}",
+        voicing.to_lilypond_string(),
+        dur.to_lilypond_string()
+    );
     assert_eq!(rendered, read_fixture("c_major_triad.ly"));
 }

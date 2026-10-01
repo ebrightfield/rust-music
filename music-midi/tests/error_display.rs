@@ -21,7 +21,12 @@ fn display_never_contains_prohibited_phrases() {
     ] {
         let s = e.to_string();
         for bad in ["Error occurred", "Operation failed", "Something went wrong"] {
-            assert!(!s.contains(bad), "variant `{:?}` violates error message standard: {}", e, s);
+            assert!(
+                !s.contains(bad),
+                "variant `{:?}` violates error message standard: {}",
+                e,
+                s
+            );
         }
     }
 }

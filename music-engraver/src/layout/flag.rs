@@ -54,10 +54,7 @@ mod tests {
 
     #[test]
     fn eighth_down_returns_flag_8th_down() {
-        assert_eq!(
-            flag_glyph(1, StemDirection::Down),
-            Some(Glyph::Flag8thDown)
-        );
+        assert_eq!(flag_glyph(1, StemDirection::Down), Some(Glyph::Flag8thDown));
     }
 
     #[test]

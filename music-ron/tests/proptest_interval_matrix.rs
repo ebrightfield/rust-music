@@ -6,8 +6,15 @@ use proptest::prelude::*;
 
 /// Generate a pcs array with 1..=12 values in 0..=11.
 fn arb_pcs_ron() -> impl Strategy<Value = String> {
-    prop::collection::vec(0u8..=11u8, 1..=12)
-        .prop_map(|pcs| format!("[{}]", pcs.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ")))
+    prop::collection::vec(0u8..=11u8, 1..=12).prop_map(|pcs| {
+        format!(
+            "[{}]",
+            pcs.iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
 }
 
 /// One of the 4 known styles.

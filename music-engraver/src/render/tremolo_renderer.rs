@@ -22,9 +22,9 @@ pub fn draw_tremolo(
 mod tests {
     use super::*;
     use crate::font::bravura_font;
-    use crate::layout::tremolo::{layout_tremolo, TremoloCount};
     use crate::layout::staff::StaffLayout;
     use crate::layout::stem::StemDirection;
+    use crate::layout::tremolo::{layout_tremolo, TremoloCount};
 
     fn test_font() -> MusicFont<'static> {
         bravura_font()
@@ -52,7 +52,10 @@ mod tests {
         draw_tremolo(&mut svg, &font, &layout).unwrap();
         let output = svg.to_svg();
         assert!(output.contains("<path"), "should contain a path element");
-        assert!(output.contains("translate("), "should have translate transform");
+        assert!(
+            output.contains("translate("),
+            "should have translate transform"
+        );
     }
 
     #[test]
@@ -97,15 +100,36 @@ mod tests {
         let staff = test_staff();
 
         let mut svg1 = SvgWriter::new(1000.0, 400.0, 0.0, 0.0, 1000.0, 400.0);
-        let l1 = layout_tremolo(TremoloCount::Single, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
+        let l1 = layout_tremolo(
+            TremoloCount::Single,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
         draw_tremolo(&mut svg1, &font, &l1).unwrap();
 
         let mut svg2 = SvgWriter::new(1000.0, 400.0, 0.0, 0.0, 1000.0, 400.0);
-        let l2 = layout_tremolo(TremoloCount::Double, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
+        let l2 = layout_tremolo(
+            TremoloCount::Double,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
         draw_tremolo(&mut svg2, &font, &l2).unwrap();
 
         let mut svg3 = SvgWriter::new(1000.0, 400.0, 0.0, 0.0, 1000.0, 400.0);
-        let l3 = layout_tremolo(TremoloCount::Triple, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
+        let l3 = layout_tremolo(
+            TremoloCount::Triple,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
         draw_tremolo(&mut svg3, &font, &l3).unwrap();
 
         assert_ne!(svg1.to_svg(), svg2.to_svg());
@@ -128,7 +152,10 @@ mod tests {
         let mut svg = SvgWriter::new(1000.0, 400.0, 0.0, 0.0, 1000.0, 400.0);
         draw_tremolo(&mut svg, &font, &layout).unwrap();
         let output = svg.to_svg();
-        assert!(output.contains("123"), "x-coordinate 123 should appear in translate");
+        assert!(
+            output.contains("123"),
+            "x-coordinate 123 should appear in translate"
+        );
     }
 
     #[test]

@@ -258,19 +258,18 @@ mod tests {
         let m = layout.metronome.unwrap();
         assert_eq!(m.eq_text, " = 132");
         // Note symbol should be to the right of the text
-        assert!(m.note_x > 50.0, "note_x {} should be right of x_left 50", m.note_x);
+        assert!(
+            m.note_x > 50.0,
+            "note_x {} should be right of x_left 50",
+            m.note_x
+        );
     }
 
     #[test]
     fn baseline_above_top_staff_line() {
         let staff = test_staff();
         let top_y = staff.y_of(8);
-        let layout = layout_tempo_mark(
-            &TempoMark::Text("Allegro".into()),
-            0.0,
-            &staff,
-            250.0,
-        );
+        let layout = layout_tempo_mark(&TempoMark::Text("Allegro".into()), 0.0, &staff, 250.0);
         assert!(
             layout.y_baseline < top_y,
             "baseline {} should be above top line {}",
@@ -292,18 +291,8 @@ mod tests {
 
     #[test]
     fn font_size_scales_with_staff_space() {
-        let small = layout_tempo_mark(
-            &TempoMark::Text("A".into()),
-            0.0,
-            &test_staff(),
-            125.0,
-        );
-        let large = layout_tempo_mark(
-            &TempoMark::Text("A".into()),
-            0.0,
-            &test_staff(),
-            250.0,
-        );
+        let small = layout_tempo_mark(&TempoMark::Text("A".into()), 0.0, &test_staff(), 125.0);
+        let large = layout_tempo_mark(&TempoMark::Text("A".into()), 0.0, &test_staff(), 250.0);
         assert!(
             (large.font_size - 2.0 * small.font_size).abs() < 0.01,
             "font size should scale linearly with staff_space"

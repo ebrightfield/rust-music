@@ -228,13 +228,7 @@ pub fn draw_multi_staff_connectors(
 ///
 /// Renders a single barline from the top of the first staff to the bottom
 /// of the last staff, connecting them visually.
-pub fn draw_joined_barline(
-    svg: &mut SvgWriter,
-    x: f64,
-    y_top: f64,
-    y_bottom: f64,
-    thickness: f64,
-) {
+pub fn draw_joined_barline(svg: &mut SvgWriter, x: f64, y_top: f64, y_bottom: f64, thickness: f64) {
     svg.add_line(x, y_top, x, y_bottom, "black", thickness);
 }
 
@@ -259,9 +253,18 @@ mod tests {
         draw_brace(&mut svg, &font, brace).unwrap();
 
         let output = svg.to_svg();
-        assert!(output.contains("<path"), "brace should produce a <path> element");
-        assert!(output.contains("translate("), "brace should have a transform");
-        assert!(output.contains("scale("), "brace should have vertical scaling");
+        assert!(
+            output.contains("<path"),
+            "brace should produce a <path> element"
+        );
+        assert!(
+            output.contains("translate("),
+            "brace should have a transform"
+        );
+        assert!(
+            output.contains("scale("),
+            "brace should have vertical scaling"
+        );
     }
 
     #[test]
@@ -360,7 +363,11 @@ mod tests {
 
         // Split on `<path ` and extract each path's `d="..."` attribute.
         let parts: Vec<&str> = output.split("<path ").collect();
-        assert_eq!(parts.len(), 3, "expected 2 path elements (plus 1 head split)");
+        assert_eq!(
+            parts.len(),
+            3,
+            "expected 2 path elements (plus 1 head split)"
+        );
         let extract_d = |s: &str| -> String {
             let d_start = s.find("d=\"").expect("path missing d attribute") + 3;
             let d_rest = &s[d_start..];
@@ -375,7 +382,10 @@ mod tests {
         );
         // Sanity: both must be non-empty SVG path commands.
         assert!(d_top.starts_with('M'), "top path must start with moveto");
-        assert!(d_bottom.starts_with('M'), "bottom path must start with moveto");
+        assert!(
+            d_bottom.starts_with('M'),
+            "bottom path must start with moveto"
+        );
     }
 
     #[test]
@@ -408,7 +418,10 @@ mod tests {
         draw_multi_staff_connectors(&mut svg, &font, &layout).unwrap();
 
         let output = svg.to_svg();
-        assert!(output.contains("<path"), "grand staff should have brace path");
+        assert!(
+            output.contains("<path"),
+            "grand staff should have brace path"
+        );
     }
 
     #[test]
@@ -459,7 +472,10 @@ mod tests {
         draw_joined_barline(&mut svg, 100.0, 0.0, 2500.0, 4.0);
 
         let output = svg.to_svg();
-        assert!(output.contains("<line"), "joined barline should produce a line");
+        assert!(
+            output.contains("<line"),
+            "joined barline should produce a line"
+        );
     }
 
     #[test]
@@ -879,8 +895,10 @@ mod tests {
         // attaches scroll paths or extra horizontal serifs to the inner
         // bracket (defeating the engraving convention that the inner bracket
         // reads as subordinate).
-        let group = StaffGroup::section(3)
-            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let group = StaffGroup::section(3).with_sub_brackets(vec![SubBracket {
+            start_index: 0,
+            staff_count: 2,
+        }]);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let sub = &layout.sub_brackets[0];
 
@@ -890,8 +908,14 @@ mod tests {
 
         let path_count = output.matches("<path").count();
         let line_count = output.matches("<line").count();
-        assert_eq!(line_count, 1, "sub-bracket: exactly 1 line, got {line_count}");
-        assert_eq!(path_count, 0, "sub-bracket: no paths (no scrolls), got {path_count}");
+        assert_eq!(
+            line_count, 1,
+            "sub-bracket: exactly 1 line, got {line_count}"
+        );
+        assert_eq!(
+            path_count, 0,
+            "sub-bracket: no paths (no scrolls), got {path_count}"
+        );
     }
 
     #[test]
@@ -899,8 +923,10 @@ mod tests {
         // Stroke width must equal `sub.thickness` (≈ 0.16 ss). A regression
         // that hard-coded `bracket_thickness` (0.5 ss) for the inner bracket
         // would visually merge with the outer one.
-        let group = StaffGroup::section(3)
-            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let group = StaffGroup::section(3).with_sub_brackets(vec![SubBracket {
+            start_index: 0,
+            staff_count: 2,
+        }]);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let sub = &layout.sub_brackets[0];
 
@@ -930,8 +956,10 @@ mod tests {
         // `y_top`/`y_bottom`. A regression that swaps the endpoints (or only
         // draws half the line) is caught here. The x coordinate is the
         // stroke centre — sub.x + thickness/2.
-        let group = StaffGroup::section(4)
-            .with_sub_brackets(vec![SubBracket { start_index: 1, staff_count: 3 }]);
+        let group = StaffGroup::section(4).with_sub_brackets(vec![SubBracket {
+            start_index: 1,
+            staff_count: 3,
+        }]);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let sub = &layout.sub_brackets[0];
 
@@ -945,10 +973,22 @@ mod tests {
         let needle_y1 = format!("y1=\"{}\"", sub.y_top);
         let needle_x2 = format!("x2=\"{}\"", x_centre);
         let needle_y2 = format!("y2=\"{}\"", sub.y_bottom);
-        assert!(output.contains(&needle_x1), "missing {needle_x1}; SVG:\n{output}");
-        assert!(output.contains(&needle_y1), "missing {needle_y1}; SVG:\n{output}");
-        assert!(output.contains(&needle_x2), "missing {needle_x2}; SVG:\n{output}");
-        assert!(output.contains(&needle_y2), "missing {needle_y2}; SVG:\n{output}");
+        assert!(
+            output.contains(&needle_x1),
+            "missing {needle_x1}; SVG:\n{output}"
+        );
+        assert!(
+            output.contains(&needle_y1),
+            "missing {needle_y1}; SVG:\n{output}"
+        );
+        assert!(
+            output.contains(&needle_x2),
+            "missing {needle_x2}; SVG:\n{output}"
+        );
+        assert!(
+            output.contains(&needle_y2),
+            "missing {needle_y2}; SVG:\n{output}"
+        );
         // Sanity: the y range matches the staves the sub-bracket spans
         // (staves 1..3, i.e. staves 1, 2, 3 inclusive).
         let staff_height = SS * 4.0;
@@ -956,11 +996,13 @@ mod tests {
         let expected_y_bottom = layout.staff_y_origins[3] + staff_height;
         assert!(
             (sub.y_top - expected_y_top).abs() < 1e-6,
-            "sub.y_top: expected {expected_y_top}, got {}", sub.y_top
+            "sub.y_top: expected {expected_y_top}, got {}",
+            sub.y_top
         );
         assert!(
             (sub.y_bottom - expected_y_bottom).abs() < 1e-6,
-            "sub.y_bottom: expected {expected_y_bottom}, got {}", sub.y_bottom
+            "sub.y_bottom: expected {expected_y_bottom}, got {}",
+            sub.y_bottom
         );
     }
 
@@ -973,8 +1015,10 @@ mod tests {
         // sub-brackets specifically (compare with the no-sub-brackets
         // baseline test `draw_multi_staff_connectors_bracket` which asserts
         // 1 line + 2 paths).
-        let group = StaffGroup::section(3)
-            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let group = StaffGroup::section(3).with_sub_brackets(vec![SubBracket {
+            start_index: 0,
+            staff_count: 2,
+        }]);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let font = bravura_font();
 
@@ -984,7 +1028,10 @@ mod tests {
         let output = svg.to_svg();
         let line_count = output.matches("<line").count();
         let path_count = output.matches("<path").count();
-        assert_eq!(line_count, 2, "main thick + sub thin = 2 lines, got {line_count}");
+        assert_eq!(
+            line_count, 2,
+            "main thick + sub thin = 2 lines, got {line_count}"
+        );
         assert_eq!(path_count, 2, "2 scroll-glyph paths, got {path_count}");
     }
 
@@ -994,8 +1041,14 @@ mod tests {
         // additional thin lines over the main-bracket baseline. Locks the
         // 1:1 layout→render mapping for sub-brackets.
         let group = StaffGroup::section(6).with_sub_brackets(vec![
-            SubBracket { start_index: 0, staff_count: 2 },
-            SubBracket { start_index: 3, staff_count: 3 },
+            SubBracket {
+                start_index: 0,
+                staff_count: 2,
+            },
+            SubBracket {
+                start_index: 3,
+                staff_count: 3,
+            },
         ]);
         let layout = layout_multi_staff(&group, 0.0, SS, 5000.0);
         let font = bravura_font();
@@ -1010,8 +1063,14 @@ mod tests {
         // Each of the two sub-brackets must contribute its own y-range.
         let sub0_y1 = format!("y1=\"{}\"", layout.sub_brackets[0].y_top);
         let sub1_y1 = format!("y1=\"{}\"", layout.sub_brackets[1].y_top);
-        assert!(output.contains(&sub0_y1), "missing sub-bracket 0 y1; SVG:\n{output}");
-        assert!(output.contains(&sub1_y1), "missing sub-bracket 1 y1; SVG:\n{output}");
+        assert!(
+            output.contains(&sub0_y1),
+            "missing sub-bracket 0 y1; SVG:\n{output}"
+        );
+        assert!(
+            output.contains(&sub1_y1),
+            "missing sub-bracket 1 y1; SVG:\n{output}"
+        );
         // The two y1 substrings must be distinct strings (the two sub-brackets
         // start at different y-coordinates by construction).
         assert_ne!(sub0_y1, sub1_y1);
@@ -1033,8 +1092,10 @@ mod tests {
         draw_multi_staff_connectors(&mut svg_plain, &font, &plain_layout).unwrap();
         let out_plain = svg_plain.to_svg();
 
-        let nested = StaffGroup::section(staff_count)
-            .with_sub_brackets(vec![SubBracket { start_index: 0, staff_count: 2 }]);
+        let nested = StaffGroup::section(staff_count).with_sub_brackets(vec![SubBracket {
+            start_index: 0,
+            staff_count: 2,
+        }]);
         let nested_layout = layout_multi_staff(&nested, 0.0, SS, 5000.0);
         let mut svg_nested = SvgWriter::new(200.0, 600.0, -400.0, -50.0, 5500.0, 4000.0);
         draw_multi_staff_connectors(&mut svg_nested, &font, &nested_layout).unwrap();

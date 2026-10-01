@@ -20,7 +20,9 @@ impl Pool {
             Some("chords") => Ok(Pool::Chords),
             Some("scales") => Ok(Pool::Scales),
             Some("both") => Ok(Pool::Both),
-            Some(other) => anyhow::bail!("unknown pool: {other} (expected chords, scales, or both)"),
+            Some(other) => {
+                anyhow::bail!("unknown pool: {other} (expected chords, scales, or both)")
+            }
         }
     }
 
@@ -48,9 +50,7 @@ impl Direction {
             None => Ok(Direction::Super), // overridden by auto-detect
             Some("super") => Ok(Direction::Super),
             Some("sub") => Ok(Direction::Sub),
-            Some(other) => anyhow::bail!(
-                "unknown direction: {other} (expected super or sub)"
-            ),
+            Some(other) => anyhow::bail!("unknown direction: {other} (expected super or sub)"),
         }
     }
 }
@@ -145,8 +145,8 @@ pub fn run(args: ContainsArgs) -> Result<()> {
     // Sort by size (ascending for sub, descending for super) then root
     matches.sort_by(|a, b| {
         let size_cmp = match direction {
-            Direction::Sub => b.size.cmp(&a.size),   // largest subsets first
-            Direction::Super => a.size.cmp(&b.size),  // smallest supersets first
+            Direction::Sub => b.size.cmp(&a.size), // largest subsets first
+            Direction::Super => a.size.cmp(&b.size), // smallest supersets first
         };
         size_cmp.then_with(|| u8::from(&a.root).cmp(&u8::from(&b.root)))
     });
@@ -156,7 +156,11 @@ pub fn run(args: ContainsArgs) -> Result<()> {
     }
 
     let pc_ints: Vec<u8> = pcs.iter().map(u8::from).collect();
-    let pc_display = pc_ints.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+    let pc_display = pc_ints
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
 
     match direction {
         Direction::Super => {
@@ -231,18 +235,16 @@ mod tests {
     #[test]
     fn auto_detect_sub_for_scale() {
         // Large input (7 PCs) → auto-detect sub direction
-        run_contains(
-            vec!["0", "2", "4", "5", "7", "9", "11"],
-            Pool::Both,
-            None,
-        )
-        .unwrap();
+        run_contains(vec!["0", "2", "4", "5", "7", "9", "11"], Pool::Both, None).unwrap();
     }
 
     #[test]
     fn pool_chords_excludes_scales() {
         let pcs = parse_input_to_pcs(
-            &["C", "E", "G"].iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &["C", "E", "G"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
         )
         .unwrap();
         let input_set: HashSet<Pc> = pcs.iter().copied().collect();

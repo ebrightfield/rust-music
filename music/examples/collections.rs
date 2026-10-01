@@ -1,8 +1,7 @@
-use music::prelude::*;
 use music::notation::clef::Clef;
+use music::prelude::*;
 
 fn main() {
-
     // A collection of Pc make up a PcShape.
     // They are deduplicated, ordered, and zeroed (in that order)
     {
@@ -35,7 +34,10 @@ fn main() {
         assert_eq!(spelled, vec![Note::A, Note::C, Note::Ees, Note::G]);
         let dom7sharp11 = pc_shape!(0, 4, 6, 7, 10);
         let spelled = dom7sharp11.try_spell(&Note::A).unwrap();
-        assert_eq!(spelled, vec![Note::A, Note::Cis, Note::Dis, Note::E, Note::G]);
+        assert_eq!(
+            spelled,
+            vec![Note::A, Note::Cis, Note::Dis, Note::E, Note::G]
+        );
 
         // They can be rooted at a specific pitch class to produce a PcContent.
         // PcContent is sorted, unzeroed absolute pitch class content.
@@ -70,27 +72,15 @@ fn main() {
 
     // Voicings are collections of pitches.
     {
-        let v = Voicing::new(vec![
-           pitch!(c, 4),
-           pitch!(g, 4),
-           pitch!(e, 5),
-        ]);
+        let v = Voicing::new(vec![pitch!(c, 4), pitch!(g, 4), pitch!(e, 5)]);
 
         // Sometimes, we might want to think of voicings purely in terms of stacking
         // intervals on top of one another, low to high
-        let stacked_intervals = StackedIntervals::new(vec![7,4,5]);
-        let v2 = Voicing::from_intervals(
-            &pitch!(c,4),
-            &stacked_intervals
-        ).unwrap();
+        let stacked_intervals = StackedIntervals::new(vec![7, 4, 5]);
+        let v2 = Voicing::from_intervals(&pitch!(c, 4), &stacked_intervals).unwrap();
         assert_eq!(
             v2,
-            voicing!(
-                pitch!(c,4),
-                pitch!(g,4),
-                pitch!(b,4),
-                pitch!(e,5)
-            )
+            voicing!(pitch!(c, 4), pitch!(g, 4), pitch!(b, 4), pitch!(e, 5))
         );
 
         // We can easily find out a voicing's lowest and highest notes
@@ -106,9 +96,9 @@ fn main() {
         );
 
         // Or to normalize their register to be best centered in a clef
-        let normalized = voicing!(
-            pitch!(c,6), pitch!(g,6), pitch!(e,7)
-        ).normalize_register_to_clef(Clef::Treble).unwrap();
+        let normalized = voicing!(pitch!(c, 6), pitch!(g, 6), pitch!(e, 7))
+            .normalize_register_to_clef(Clef::Treble)
+            .unwrap();
         assert_eq!(
             normalized,
             voicing!(pitch!(c, 4), pitch!(g, 4), pitch!(e, 5)),
@@ -117,17 +107,10 @@ fn main() {
         // We can also apply voiceleading paths to them.
         // Since chromatic paths do not imply spelling, we can also optionally
         // provide a spelling context as below.
-        let f_major = v.apply_paths(
-            &vec![0, 2, 1], Some(&vec![Note::F, Note::A, Note::C])
-        ).unwrap();
-        assert_eq!(
-            f_major,
-            vec![
-                pitch!(c, 4),
-                pitch!(a, 4),
-                pitch!(f, 5),
-            ]
-        );
+        let f_major = v
+            .apply_paths(&vec![0, 2, 1], Some(&vec![Note::F, Note::A, Note::C]))
+            .unwrap();
+        assert_eq!(f_major, vec![pitch!(c, 4), pitch!(a, 4), pitch!(f, 5),]);
     }
 
     // Collections implement IntoIterator for both owned and borrowed access,
@@ -146,17 +129,10 @@ fn main() {
 
         // FromIterator on PcShape lets you collect directly.
         let triad_pcs = vec![pc!(0), pc!(4), pc!(7)];
-        let transposed: PcShape = triad_pcs
-            .into_iter()
-            .map(|p| p.transpose(2))
-            .collect();
+        let transposed: PcShape = triad_pcs.into_iter().map(|p| p.transpose(2)).collect();
         assert_eq!(transposed.len(), 3);
 
-        let v = Voicing::new(vec![
-            pitch!(c, 4),
-            pitch!(g, 4),
-            pitch!(e, 5),
-        ]);
+        let v = Voicing::new(vec![pitch!(c, 4), pitch!(g, 4), pitch!(e, 5)]);
         for p in &v {
             let _ = p.midi_note;
         }

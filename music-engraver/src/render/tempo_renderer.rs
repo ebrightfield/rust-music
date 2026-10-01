@@ -11,11 +11,7 @@ use crate::render::SvgWriter;
 ///
 /// Renders bold text for the tempo name, and a SMuFL note glyph + "= BPM"
 /// text for metronome marks.
-pub fn draw_tempo_mark(
-    svg: &mut SvgWriter,
-    layout: &TempoMarkLayout,
-    font: &MusicFont,
-) {
+pub fn draw_tempo_mark(svg: &mut SvgWriter, layout: &TempoMarkLayout, font: &MusicFont) {
     let bold = TextStyle::bold(layout.font_size);
 
     // Draw text portion (if any)
@@ -86,7 +82,10 @@ mod tests {
         draw_tempo_mark(&mut svg, &layout, &font);
         let output = svg.to_svg();
         // Should have a path for the note glyph
-        assert!(output.contains("<path"), "should contain a path for note glyph");
+        assert!(
+            output.contains("<path"),
+            "should contain a path for note glyph"
+        );
         // Should have text for "= 120"
         assert!(output.contains("= 120"), "should contain '= 120'");
     }
@@ -185,12 +184,8 @@ mod tests {
     fn text_only_tempo_has_no_path() {
         let font = bravura_font();
         let mut svg = test_svg();
-        let layout = layout_tempo_mark(
-            &TempoMark::Text("Adagio".into()),
-            0.0,
-            &test_staff(),
-            250.0,
-        );
+        let layout =
+            layout_tempo_mark(&TempoMark::Text("Adagio".into()), 0.0, &test_staff(), 250.0);
         draw_tempo_mark(&mut svg, &layout, &font);
         let output = svg.to_svg();
         let path_count = output.matches("<path").count();

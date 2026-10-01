@@ -180,10 +180,9 @@ impl BeatGrid {
     /// Find the nearest grid position to a given tick value.
     /// Returns the grid position that is closest to the input.
     pub fn nearest_position(&self, tick_pos: DurationTicks) -> Option<&GridPosition> {
-        self.positions.iter().min_by_key(|p| {
-            
-            tick_pos.abs_diff(p.position)
-        })
+        self.positions
+            .iter()
+            .min_by_key(|p| tick_pos.abs_diff(p.position))
     }
 
     /// Quantize a tick position to the nearest grid position.
@@ -217,9 +216,7 @@ impl BeatGrid {
     /// Calculate the metric weight of an event at a given position.
     /// Returns a value from 1-4 based on beat strength.
     pub fn metric_weight_at(&self, tick_pos: DurationTicks) -> u8 {
-        self.strength_at(tick_pos)
-            .map(|s| s.weight())
-            .unwrap_or(0)
+        self.strength_at(tick_pos).map(|s| s.weight()).unwrap_or(0)
     }
 }
 
@@ -319,7 +316,7 @@ mod tests {
         let meter = Meter::new(4, MeterDenominator::Four, None);
         let grid = BeatGrid::from_meter(&meter);
 
-        assert_eq!(grid.metric_weight_at(0), 4);  // downbeat
+        assert_eq!(grid.metric_weight_at(0), 4); // downbeat
         assert_eq!(grid.metric_weight_at(64), 3); // strong
         assert_eq!(grid.metric_weight_at(32), 2); // medium
         assert_eq!(grid.metric_weight_at(15), 0); // not on grid

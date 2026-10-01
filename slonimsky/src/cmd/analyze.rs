@@ -52,17 +52,35 @@ struct ScaleType {
 }
 
 const SCALE_TYPES: &[ScaleType] = &[
-    ScaleType { name: "major", intervals: &[0, 2, 4, 5, 7, 9, 11] },
-    ScaleType { name: "natural-minor", intervals: &[0, 2, 3, 5, 7, 8, 10] },
-    ScaleType { name: "harmonic-minor", intervals: &[0, 2, 3, 5, 7, 8, 11] },
-    ScaleType { name: "melodic-minor", intervals: &[0, 2, 3, 5, 7, 9, 11] },
-    ScaleType { name: "harmonic-major", intervals: &[0, 2, 4, 5, 7, 8, 11] },
+    ScaleType {
+        name: "major",
+        intervals: &[0, 2, 4, 5, 7, 9, 11],
+    },
+    ScaleType {
+        name: "natural-minor",
+        intervals: &[0, 2, 3, 5, 7, 8, 10],
+    },
+    ScaleType {
+        name: "harmonic-minor",
+        intervals: &[0, 2, 3, 5, 7, 8, 11],
+    },
+    ScaleType {
+        name: "melodic-minor",
+        intervals: &[0, 2, 3, 5, 7, 9, 11],
+    },
+    ScaleType {
+        name: "harmonic-major",
+        intervals: &[0, 2, 4, 5, 7, 8, 11],
+    },
 ];
 
 /// Generate a PcSet for a scale given root and interval pattern.
 fn scale_pcs(root: Pc, intervals: &[u8]) -> BTreeSet<Pc> {
     let root_val = u8::from(root);
-    intervals.iter().map(|i| Pc::from((root_val + i) % 12)).collect()
+    intervals
+        .iter()
+        .map(|i| Pc::from((root_val + i) % 12))
+        .collect()
 }
 
 /// Estimate the key of a chord progression by brute-force scoring.
@@ -83,7 +101,11 @@ fn estimate_key(all_pcs: &BTreeSet<Pc>, first_chord_root: Option<Pc>) -> (Pc, &'
         for st in SCALE_TYPES {
             let s = scale_pcs(root, st.intervals);
             let score = all_pcs.iter().filter(|pc| s.contains(pc)).count();
-            let first_chord_bonus = if first_chord_root == Some(root) { 1u8 } else { 0 };
+            let first_chord_bonus = if first_chord_root == Some(root) {
+                1u8
+            } else {
+                0
+            };
             let major_bonus = if st.name == "major" { 1u8 } else { 0 };
             let low_root_bonus = 11 - root_val; // prefer lower root values
             let priority = (first_chord_bonus, major_bonus, low_root_bonus);
@@ -198,7 +220,9 @@ fn l1_cost(a: &BTreeSet<Pc>, b: &BTreeSet<Pc>) -> usize {
     b_vals.sort();
 
     // For each pair of sorted PCs, compute min(|a-b|, 12-|a-b|)
-    a_vals.iter().zip(b_vals.iter())
+    a_vals
+        .iter()
+        .zip(b_vals.iter())
         .map(|(a, b)| {
             let diff = a.abs_diff(*b);
             diff.min(12 - diff) as usize
@@ -231,7 +255,10 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
     }
 
     // Collect union of all PCs
-    let all_pcs: BTreeSet<Pc> = chord_sets.iter().flat_map(|(_, _, s)| s.iter().copied()).collect();
+    let all_pcs: BTreeSet<Pc> = chord_sets
+        .iter()
+        .flat_map(|(_, _, s)| s.iter().copied())
+        .collect();
 
     // Key estimation or user-provided key
     let (key_root, scale_name, confidence) = if let Some(key_str) = &args.key {
@@ -267,7 +294,9 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             let key_val = u8::from(key_root);
             let interval = (root_val + 12 - key_val) % 12;
             // Find closest diatonic degree
-            let closest = scale_intervals.iter().enumerate()
+            let closest = scale_intervals
+                .iter()
+                .enumerate()
                 .min_by_key(|(_, &si)| {
                     let d = si.abs_diff(interval);
                     d.min(12 - d)
@@ -296,7 +325,14 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
     };
 
     let output_str = match format {
-        OutputFormat::Text => format_text(&analyses, key_root, &scale_name, confidence, key_provided, args.verbose),
+        OutputFormat::Text => format_text(
+            &analyses,
+            key_root,
+            &scale_name,
+            confidence,
+            key_provided,
+            args.verbose,
+        ),
         OutputFormat::Json => format_json(&analyses, key_root, &scale_name, confidence),
     };
 
@@ -323,30 +359,66 @@ fn format_text(
 ) -> String {
     let mut out = String::new();
     let total_unique = {
-        let all: BTreeSet<Pc> = analyses.iter().flat_map(|a| a.pcs.iter().copied()).collect();
+        let all: BTreeSet<Pc> = analyses
+            .iter()
+            .flat_map(|a| a.pcs.iter().copied())
+            .collect();
         all.len()
     };
 
     if key_provided {
         writeln!(out, "Key: {} {}", pc_label(key_root), scale_name).unwrap();
     } else {
-        writeln!(out, "Key: {} {} (estimated, confidence: {}/{})",
-                 pc_label(key_root), scale_name, confidence, total_unique).unwrap();
+        writeln!(
+            out,
+            "Key: {} {} (estimated, confidence: {}/{})",
+            pc_label(key_root),
+            scale_name,
+            confidence,
+            total_unique
+        )
+        .unwrap();
     }
     writeln!(out).unwrap();
 
     // Chord table
-    writeln!(out, "  {:<12} {:<14} {:<12} {:<6} {:<8}",
-             "Chord", "PcSet", "Quality", "Deg", "Roman").unwrap();
-    writeln!(out, "  {:<12} {:<14} {:<12} {:<6} {:<8}",
-             "─".repeat(12), "─".repeat(14), "─".repeat(12), "─".repeat(6), "─".repeat(8)).unwrap();
+    writeln!(
+        out,
+        "  {:<12} {:<14} {:<12} {:<6} {:<8}",
+        "Chord", "PcSet", "Quality", "Deg", "Roman"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  {:<12} {:<14} {:<12} {:<6} {:<8}",
+        "─".repeat(12),
+        "─".repeat(14),
+        "─".repeat(12),
+        "─".repeat(6),
+        "─".repeat(8)
+    )
+    .unwrap();
 
     for a in analyses {
-        let pcs_str = format!("{{{}}}", a.pcs.iter().map(|pc| format!("{}", u8::from(*pc))).collect::<Vec<_>>().join(", "));
-        let deg_str = a.degree.map(|d| d.to_string()).unwrap_or_else(|| "-".to_string());
+        let pcs_str = format!(
+            "{{{}}}",
+            a.pcs
+                .iter()
+                .map(|pc| format!("{}", u8::from(*pc)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let deg_str = a
+            .degree
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "-".to_string());
         let diatonic_mark = if a.diatonic { "" } else { "*" };
-        writeln!(out, "  {:<12} {:<14} {:<12} {:<6} {:<8}{}",
-                 a.input_label, pcs_str, a.quality_name, deg_str, a.roman, diatonic_mark).unwrap();
+        writeln!(
+            out,
+            "  {:<12} {:<14} {:<12} {:<6} {:<8}{}",
+            a.input_label, pcs_str, a.quality_name, deg_str, a.roman, diatonic_mark
+        )
+        .unwrap();
     }
     writeln!(out).unwrap();
 
@@ -358,9 +430,20 @@ fn format_text(
             let ct_str = if ct.is_empty() {
                 "∅".to_string()
             } else {
-                format!("{{{}}}", ct.iter().map(|pc| format!("{}", u8::from(*pc))).collect::<Vec<_>>().join(", "))
+                format!(
+                    "{{{}}}",
+                    ct.iter()
+                        .map(|pc| format!("{}", u8::from(*pc)))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             };
-            ct_parts.push(format!("{}→{}: {}", analyses[i].input_label, analyses[i + 1].input_label, ct_str));
+            ct_parts.push(format!(
+                "{}→{}: {}",
+                analyses[i].input_label,
+                analyses[i + 1].input_label,
+                ct_str
+            ));
         }
         writeln!(out, "Common tones: {}", ct_parts.join("  ")).unwrap();
     }
@@ -378,16 +461,30 @@ fn format_text(
                 costs.push("n/a".to_string());
             }
         }
-        writeln!(out, "Voice-leading cost (L1): {}  total: {}", costs.join(" → "), total_cost).unwrap();
+        writeln!(
+            out,
+            "Voice-leading cost (L1): {}  total: {}",
+            costs.join(" → "),
+            total_cost
+        )
+        .unwrap();
     }
 
     if verbose {
-        eprintln!("analyze: {} chords, key={} {}, confidence={}/{}",
-                  analyses.len(), pc_label(key_root), scale_name, confidence,
-                  {
-                      let all: BTreeSet<Pc> = analyses.iter().flat_map(|a| a.pcs.iter().copied()).collect();
-                      all.len()
-                  });
+        eprintln!(
+            "analyze: {} chords, key={} {}, confidence={}/{}",
+            analyses.len(),
+            pc_label(key_root),
+            scale_name,
+            confidence,
+            {
+                let all: BTreeSet<Pc> = analyses
+                    .iter()
+                    .flat_map(|a| a.pcs.iter().copied())
+                    .collect();
+                all.len()
+            }
+        );
     }
 
     out
@@ -417,7 +514,14 @@ fn format_json(
         writeln!(out, "      \"pcs\": {:?},", pcs).unwrap();
         writeln!(out, "      \"root\": \"{}\",", pc_label(a.root)).unwrap();
         writeln!(out, "      \"quality\": \"{}\",", a.quality_name).unwrap();
-        writeln!(out, "      \"degree\": {},", a.degree.map(|d| d.to_string()).unwrap_or_else(|| "null".to_string())).unwrap();
+        writeln!(
+            out,
+            "      \"degree\": {},",
+            a.degree
+                .map(|d| d.to_string())
+                .unwrap_or_else(|| "null".to_string())
+        )
+        .unwrap();
         writeln!(out, "      \"roman\": \"{}\",", a.roman).unwrap();
         writeln!(out, "      \"diatonic\": {}", a.diatonic).unwrap();
         writeln!(out, "    }}{trailing}").unwrap();
@@ -455,7 +559,10 @@ mod tests {
     #[test]
     fn estimate_key_c_major() {
         // I-vi-ii-V in C major: C,E,G + A,C,E + D,F,A + G,B,D
-        let all: BTreeSet<Pc> = [0, 2, 4, 5, 7, 9, 11].iter().map(|&i| Pc::from(i)).collect();
+        let all: BTreeSet<Pc> = [0, 2, 4, 5, 7, 9, 11]
+            .iter()
+            .map(|&i| Pc::from(i))
+            .collect();
         let (root, name, score) = estimate_key(&all, Some(Pc::Pc0));
         assert_eq!(root, Pc::Pc0);
         assert_eq!(name, "major");
@@ -469,7 +576,10 @@ mod tests {
         // C major scores 6/7 (missing Bb). F major is best at 7/7 but not C-rooted.
         // With first-chord-root tiebreaking, when no candidate on root C beats the top score,
         // the algorithm should prefer F major (7/7) over D natural-minor (7/7).
-        let all: BTreeSet<Pc> = [0, 2, 4, 5, 7, 9, 10].iter().map(|&i| Pc::from(i)).collect();
+        let all: BTreeSet<Pc> = [0, 2, 4, 5, 7, 9, 10]
+            .iter()
+            .map(|&i| Pc::from(i))
+            .collect();
         let (root, name, score) = estimate_key(&all, Some(Pc::Pc0));
         // Should NOT pick D natural-minor (the old incorrect result)
         assert_ne!((root, name), (Pc::Pc2, "natural-minor"));
@@ -541,7 +651,12 @@ mod tests {
     #[test]
     fn run_basic_progression() {
         let args = AnalyzeArgs {
-            chords: vec!["0,4,7".into(), "9,0,4".into(), "2,5,9".into(), "7,11,2".into()],
+            chords: vec![
+                "0,4,7".into(),
+                "9,0,4".into(),
+                "2,5,9".into(),
+                "7,11,2".into(),
+            ],
             key: None,
             scale: None,
             format: OutputFormat::Text,

@@ -1,20 +1,21 @@
 use anyhow::{bail, Context, Result};
 use music::note::note::Note;
-use music::note::pitch_class::Pc;
 use music::note::pitch::Pitch;
+use music::note::pitch_class::Pc;
 use music::note_collections::geometry::symmetry::voiceleading::{
-    naive_distance, NoVoxCrossings, Voiceleading, VoiceleadingRule,
+    NoVoxCrossings, Voiceleading, VoiceleadingRule,
 };
 use music::note_collections::Voicing;
 use std::fmt::Write as FmtWrite;
 
 use super::input::{parse_input_to_pcs, pc_label};
-use super::voice_leading::Metric;
+use super::voice_leading::{metric_distance, parse_weights, Metric};
 
 pub struct ProgressionArgs {
     pub chords: Vec<String>,
     pub no_crossings: bool,
     pub metric: String,
+    pub weights: Option<String>,
     pub output: Option<String>,
     pub verbose: bool,
 }
@@ -95,11 +96,8 @@ fn parse_chord(s: &str) -> Result<Vec<Pc>> {
 }
 
 /// Score a voice-leading by the chosen metric.
-fn score_voiceleading(vl: &Voiceleading, metric: Metric) -> usize {
-    match metric {
-        Metric::L1 => naive_distance(vl),
-        Metric::Linf => vl.paths.iter().map(|p| p.unsigned_abs() as usize).max().unwrap_or(0),
-    }
+fn score_voiceleading(vl: &Voiceleading, metric: Metric, weights: Option<&[usize]>) -> usize {
+    metric_distance(vl, metric, weights)
 }
 
 /// A step in the progression chain, for output formatting.
@@ -119,8 +117,7 @@ pub fn run(args: ProgressionArgs) -> Result<()> {
     // Parse all chords
     let mut chord_pcs: Vec<Vec<Pc>> = Vec::with_capacity(args.chords.len());
     for (i, s) in args.chords.iter().enumerate() {
-        let pcs = parse_chord(s)
-            .with_context(|| format!("parsing chord {} ('{}')", i + 1, s))?;
+        let pcs = parse_chord(s).with_context(|| format!("parsing chord {} ('{}')", i + 1, s))?;
         chord_pcs.push(pcs);
     }
 
@@ -137,6 +134,8 @@ pub fn run(args: ProgressionArgs) -> Result<()> {
             );
         }
     }
+
+    let weights = parse_weights(args.weights.as_deref(), metric, voice_count)?;
 
     if voice_count < 2 {
         bail!("chords must have at least 2 notes for voice-leading");
@@ -189,7 +188,7 @@ pub fn run(args: ProgressionArgs) -> Result<()> {
         // Re-score by chosen metric and pick the best
         let mut scored: Vec<(usize, &Voiceleading)> = results
             .iter()
-            .map(|(_l1, vl)| (score_voiceleading(vl, metric), vl))
+            .map(|(_l1, vl)| (score_voiceleading(vl, metric, weights.as_deref()), vl))
             .collect();
         scored.sort_by_key(|(s, _)| *s);
 
@@ -222,6 +221,7 @@ pub fn run(args: ProgressionArgs) -> Result<()> {
             voice_count,
             metric,
             args.no_crossings,
+            weights.as_deref(),
             &start_voicing,
             &steps,
             total_cost,
@@ -244,6 +244,7 @@ pub fn run(args: ProgressionArgs) -> Result<()> {
         voice_count,
         metric,
         args.no_crossings,
+        weights.as_deref(),
         &start_voicing,
         &steps,
         total_cost,
@@ -251,8 +252,7 @@ pub fn run(args: ProgressionArgs) -> Result<()> {
     );
 
     if let Some(ref path) = args.output {
-        std::fs::write(path, &text)
-            .with_context(|| format!("writing output to {}", path))?;
+        std::fs::write(path, &text).with_context(|| format!("writing output to {}", path))?;
         if args.verbose {
             eprintln!("Wrote text output to {}", path);
         }
@@ -274,6 +274,7 @@ fn format_text(
     voice_count: usize,
     metric: Metric,
     no_crossings: bool,
+    weights: Option<&[usize]>,
     start_voicing: &Voicing,
     steps: &[ProgressionStep],
     total_cost: usize,
@@ -283,6 +284,17 @@ fn format_text(
     let _ = writeln!(out, "Progression: {}", chord_labels.join(" → "));
     let _ = writeln!(out, "Voices: {}", voice_count);
     let _ = writeln!(out, "Metric: {}", metric.label());
+    if let Some(weights) = weights {
+        let _ = writeln!(
+            out,
+            "Weights: {} (lowest to highest voice)",
+            weights
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    }
     if no_crossings {
         let _ = writeln!(out, "Rule: no voice crossings");
     }
@@ -309,15 +321,24 @@ fn format_text(
             step.cost
         );
         if verbose {
-            let other_cost = match metric {
-                Metric::L1 => step.paths.iter().map(|p| p.unsigned_abs() as usize).max().unwrap_or(0),
-                Metric::Linf => step.paths.iter().map(|p| p.unsigned_abs() as usize).sum(),
-            };
-            let other_label = match metric {
-                Metric::L1 => "L∞",
-                Metric::Linf => "L1",
-            };
-            let _ = write!(out, "  {}={}  paths=[{}]", other_label, other_cost, format_paths(&step.paths));
+            let l1: usize = step.paths.iter().map(|p| p.unsigned_abs() as usize).sum();
+            let linf = step
+                .paths
+                .iter()
+                .map(|p| p.unsigned_abs() as usize)
+                .max()
+                .unwrap_or(0);
+            let _ = write!(out, "  L1={} L∞={}", l1, linf);
+            if let Some(weights) = weights {
+                let weighted: usize = step
+                    .paths
+                    .iter()
+                    .zip(weights)
+                    .map(|(path, weight)| path.unsigned_abs() as usize * weight)
+                    .sum();
+                let _ = write!(out, " weighted={}", weighted);
+            }
+            let _ = write!(out, "  paths=[{}]", format_paths(&step.paths));
         }
         let _ = writeln!(out, "  ({})", chord_labels[i + 1]);
     }
@@ -341,6 +362,7 @@ fn print_text_summary(
     voice_count: usize,
     metric: Metric,
     no_crossings: bool,
+    weights: Option<&[usize]>,
     start_voicing: &Voicing,
     steps: &[ProgressionStep],
     total_cost: usize,
@@ -351,6 +373,7 @@ fn print_text_summary(
         voice_count,
         metric,
         no_crossings,
+        weights,
         start_voicing,
         steps,
         total_cost,
@@ -369,8 +392,8 @@ fn write_midi(
     verbose: bool,
 ) -> Result<()> {
     use midly::{
+        num::{u15, u24, u28, u4, u7},
         Format, Header, MetaMessage, MidiMessage as MM, Smf, Timing, TrackEvent, TrackEventKind,
-        num::{u4, u7, u15, u24, u28},
     };
 
     let ppq: u16 = 480;
@@ -461,8 +484,7 @@ fn write_midi(
     let mut bytes = Vec::new();
     smf.write(&mut bytes)
         .map_err(|e| anyhow::anyhow!("MIDI write error: {}", e))?;
-    std::fs::write(path, &bytes)
-        .with_context(|| format!("writing MIDI to {}", path))?;
+    std::fs::write(path, &bytes).with_context(|| format!("writing MIDI to {}", path))?;
 
     if verbose {
         eprintln!(
@@ -527,6 +549,7 @@ mod tests {
             chords: vec!["C,E,G".to_string(), "F,A,C".to_string()],
             no_crossings: false,
             metric: "l1".to_string(),
+            weights: None,
             output: None,
             verbose: false,
         };
@@ -543,6 +566,7 @@ mod tests {
             ],
             no_crossings: true,
             metric: "l1".to_string(),
+            weights: None,
             output: None,
             verbose: false,
         };
@@ -555,6 +579,7 @@ mod tests {
             chords: vec!["C,E,G".to_string(), "F,A,C".to_string()],
             no_crossings: false,
             metric: "linf".to_string(),
+            weights: None,
             output: None,
             verbose: false,
         };
@@ -567,6 +592,7 @@ mod tests {
             chords: vec!["C,E,G".to_string()],
             no_crossings: false,
             metric: "l1".to_string(),
+            weights: None,
             output: None,
             verbose: false,
         };
@@ -582,6 +608,7 @@ mod tests {
             chords: vec!["C,E,G".to_string(), "D,F,A,C".to_string()],
             no_crossings: false,
             metric: "l1".to_string(),
+            weights: None,
             output: None,
             verbose: false,
         };
@@ -597,6 +624,7 @@ mod tests {
             chords: vec!["C,E,G".to_string(), "F,A,C".to_string()],
             no_crossings: false,
             metric: "euclidean".to_string(),
+            weights: None,
             output: None,
             verbose: false,
         };
@@ -612,9 +640,14 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let midi_path = tmp.path().join("test_prog.mid");
         let args = ProgressionArgs {
-            chords: vec!["C,E,G".to_string(), "F,A,C".to_string(), "G,B,D".to_string()],
+            chords: vec![
+                "C,E,G".to_string(),
+                "F,A,C".to_string(),
+                "G,B,D".to_string(),
+            ],
             no_crossings: false,
             metric: "l1".to_string(),
+            weights: None,
             output: Some(midi_path.to_string_lossy().to_string()),
             verbose: false,
         };
@@ -623,7 +656,11 @@ mod tests {
         // Check MThd magic
         assert_eq!(&bytes[0..4], b"MThd", "MIDI file should start with MThd");
         // Should have 2 tracks (conductor + instrument)
-        assert!(bytes.len() > 30, "MIDI file should be non-trivial (got {} bytes)", bytes.len());
+        assert!(
+            bytes.len() > 30,
+            "MIDI file should be non-trivial (got {} bytes)",
+            bytes.len()
+        );
         // Check MTrk marker exists at least twice
         let mtrk_count = bytes.windows(4).filter(|w| w == b"MTrk").count();
         assert_eq!(mtrk_count, 2, "should have 2 tracks (conductor + notes)");
@@ -634,10 +671,17 @@ mod tests {
         // C→F→G — each step should have some cost
         let pcs1 = parse_chord("C,E,G").unwrap();
         let v1 = initial_voicing(&pcs1);
-        let target = vec![pc_to_note(Pc::from(5)), pc_to_note(Pc::from(9)), pc_to_note(Pc::from(0))];
+        let target = vec![
+            pc_to_note(Pc::from(5)),
+            pc_to_note(Pc::from(9)),
+            pc_to_note(Pc::from(0)),
+        ];
         let results = Voiceleading::find_all(&v1, &target, None).unwrap();
         assert!(!results.is_empty());
         // Best voice-leading should have cost > 0 (different chords)
-        assert!(results[0].0 > 0, "different chords should have positive cost");
+        assert!(
+            results[0].0 > 0,
+            "different chords should have positive cost"
+        );
     }
 }

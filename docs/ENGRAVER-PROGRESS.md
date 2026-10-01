@@ -7537,3 +7537,196 @@
   question raised in an earlier draft of this entry is resolved
   (see above): the code was already correct, the comment was
   not.
+
+## 2026-09-27 — Shared guitar timeline and TAB rhythm parity
+
+- Did: Added `score::guitar::GuitarScore`, the single semantic source for
+  coordinated standard notation and TAB. The model owns stable
+  `GuitarEventId`s, sounding pitches, durations, voices, validated string/fret
+  realizations, beam and tuplet groups, rests, event-local TAB techniques, and
+  event-anchored technique spans. Standard notation is generated from that
+  timeline; TAB fret numbers, rhythm stems, beams, tuplets, and rests reuse the
+  standard system layout's exact rhythmic x anchors. Slide, hammer-on,
+  pull-off, palm-mute, and let-ring spans split across barlines and system
+  boundaries from stable event endpoints. Removed the public
+  `MultiStaffScore::guitar_tab(ScoreBuilder, TabScoreBuilder)` split-authoring
+  path and migrated combined-score callers to `MultiStaffScore::guitar`.
+  Standalone `TabScoreBuilder` remains available for standalone TAB scores.
+  Reworked `examples/guitar_tab_score.rs` into a mixed-duration, beamed,
+  tuplet, two-voice, multi-system proof with tuning-mismatch rejection and
+  beam-subevent annotations.
+- Verified:
+  - `cargo test -p music-engraver` → 3013 passed across 4 suites, 1 ignored,
+    0 failed.
+  - `cargo run -q -p music-engraver --example guitar_tab_score` → 30 paths,
+    88 lines, 27,260 bytes.
+  - `cargo run -q -p music-engraver --example qa_sample_sheet` → 21/21
+    rendered successfully; PNG skipped because the build omitted `--features
+    png`.
+  - Visually inspected `music-engraver/examples/output/guitar_tab_score.svg`.
+  - Updated the `guitar_tab` golden SVG for the intentional semantic-layout
+    cutover.
+- Next: Continue with the separate Semantic Bend Gestures and Guitar Event and
+  Span Annotations threads; their domain-specific APIs build on this timeline.
+- Open issues: Standalone `TabScoreBuilder` intentionally retains its legacy
+  independent spacing and measure-local technique behavior. Combined
+  staff+TAB rendering no longer uses that path.
+
+## 2026-09-28 — Typed guitar event and span annotations
+
+- Did: Extended `score::guitar::GuitarScore` with typed physical-performance
+  assignments for left-hand fingers, pick direction, classical `p-i-m-a-c`
+  plucking, left-hand attacks, fretting- and picking-hand taps, slap/pop, and
+  body/fretboard/string percussion. String-targeted assignments validate
+  against the event's physical realization, including independent chord-tone
+  assignments. Added event-anchored text and position labels plus explicit
+  start/end position, cell-bracket, and text spans. Annotation spans segment at
+  system boundaries with continuation lines and one source label.
+- Did: Integrated the annotation pass into the shared staff+TAB renderer for
+  standalone notes, chords, rests, beam/tuplet subevents, and multiple systems.
+  Left-hand fingers render as circled numbers beside the relevant fret;
+  attack-source labels render beside their target string or in an event lane.
+  Score-local text supports above/below placement and circle/rectangle
+  enclosures. Position shifts use arrows and Roman numerals. Optional legends
+  are generated only from techniques used in the score. The page reserves a
+  dynamic score-local annotation lane; document titles, prose, and regimen
+  layout remain outside the engraver.
+- Did: Added `examples/guitar_mechanics.rs`, a two-system mechanics proof with
+  beamed events, a hybrid-picked chord, left-hand fingering, alternate picking,
+  classical plucking, picking-hand tapping, slap/pop, percussion, positions,
+  enclosed text, generated legend, and cross-system annotation spans. Updated
+  `SvgWriter::add_text` to XML-escape arbitrary score-local text without an
+  intermediate allocation.
+- Verified:
+  - `cargo test -p music-engraver score::guitar::tests::` → 10 passed across 3
+    suites, 2,995 filtered, 0 failed.
+  - `cargo test -p music-engraver
+    render::svg_writer::tests::add_text_escapes_xml_metacharacters` → 1 passed,
+    0 failed.
+  - `cargo test -p music-engraver` → 3,017 passed across 4 suites, 1 ignored,
+    0 failed.
+  - `cargo run -q -p music-engraver --example guitar_mechanics` → 29 text
+    labels, 62 line segments, 25,697 bytes.
+  - Visually inspected
+    `music-engraver/examples/output/guitar_mechanics.svg`.
+- Next: Semantic Bend Gestures can now reuse the typed event/range annotation
+  contract. Extended Guitar Vocabulary can add conventional technique families
+  without introducing independent builder flags.
+- Open issues: Standalone `TabScoreBuilder` retains its legacy closed annotation
+  fields. Typed physical assignments intentionally target the coordinated
+  `GuitarScore` path, where string/fret validation and shared rhythmic anchors
+  are available.
+
+## 2026-09-28 — Guitar staff/TAB collision repair
+
+- Did: Corrected coordinated guitar layout after visual inspection exposed
+  collisions. TAB fret numbers and rhythm stems now align to standard
+  notehead centers rather than glyph-left origins; combined layouts reserve
+  barline clearance and sufficient vertical lanes for TAB rhythm, tuplets,
+  palm mute, and let-ring spans.
+- Did: Standard guitar scores now use the octave-transposing treble clef and
+  write sounding pitches one octave higher. Additional voices inherit the
+  first-system prefix offset, preventing low-voice notation and TAB events
+  from rendering through clefs. Tuplet brackets clear their actual beam
+  geometry, and multi-staff guitar viewboxes include the resulting extents.
+- Verified:
+  - `cargo test -p music-engraver` → 3,021 passed across 4 suites, 1 ignored,
+    0 failed.
+  - `cargo run -q -p music-engraver --example guitar_tab_score` → 30 paths,
+    83 lines, 27,954 bytes.
+  - `cargo run -q -p music-engraver --example qa_sample_sheet` → 21/21
+    rendered successfully.
+  - Rasterized the final transparent SVG against white and visually confirmed
+    separation of notation, technique, rhythm, tuplet, barline, and TAB
+    symbol lanes.
+
+## 2026-09-28 — Semantic bend gestures
+
+- Did: Replaced event-local bend/pre-bend/release flags with
+  `score::guitar::BendGesture`, a score-owned gesture keyed by stable
+  `GuitarEventId`s. The public model records the physical source string,
+  exact sounding `BendPitch` (including cents), picked or pre-bent attack,
+  onset and arrival `GuitarMoment`s, an optional held-target/release interval,
+  and ordered held-state reattacks. Validation resolves exact per-voice
+  fractions through beams, tuplets, measures, and voices; rejects missing or
+  wrong-string sources, non-forward targets, invalid interior offsets,
+  cross-voice or out-of-order phases, invalid release targets, mismatched
+  reattacks, duplicates, and overlapping same-string gestures.
+- Did: Added one post-layout bend pass that consumes the shared standard/TAB
+  event anchors. Rise, hold, release, and reattack semantics render on both
+  staves; a barline inside one system does not split a phase, while system
+  crossings emit explicit start/middle/end continuation fragments without
+  duplicating the bend-amount label. Standard notation shows the sounding
+  target pitch; TAB retains the physical fret and derives its amount label
+  from source and target.
+- Did: Removed `BendAmount`, the old TAB bend layout/render modules,
+  `TabScoreBuilder::{bend, pre_bend, bend_release, release}`, all pending bend
+  fields, event-local `GuitarAnnotation` bend variants, and their
+  implementation-detail tests. Migrated every example and golden builder to
+  the semantic `GuitarScore` API. Added `guitar_bend_study`, which visibly
+  exercises source, delayed arrival, hold, cross-system reattack, release,
+  pre-bend, and event-relative release timing.
+- Coverage: Focused model tests exercise invalid source/phase offsets,
+  target/release/reattack mismatches, one-string chord targeting, coordinated
+  reattack markers, three-system rise segmentation, and unsplit
+  same-system/cross-barline phases. The `semantic_bends` golden replaces the
+  three obsolete independent-TAB bend fixtures.
+- Correctness follow-up: `MultiStaffScore::guitar` now derives notation only
+  after pending guitar measures are finalized; explicit arbitrary tuplet
+  ratios survive into standard layout; release-onset events project the held
+  target; and cross-system phase heights interpolate from exact timeline
+  bounds rather than equal-sized system fractions. Regression tests cover
+  pending final/error behavior, 5:3 versus 5:4 advance, release-start pitch,
+  and partial first/last-system interpolation.
+- Verification and generated-artifact refresh are delegated to the integrated
+  parent gate. Exact refresh commands:
+  - `GOLDEN_UPDATE=1 cargo test -p music-engraver --test golden_svg golden_semantic_bends`
+  - `cargo run -p music-engraver --example guitar_bend_study`
+  - `cargo run -p music-engraver --example tab_bends`
+  - `cargo run -p music-engraver --example tab_pre_bends`
+  - `cargo run -p music-engraver --example tab_vibrato`
+
+## 2026-09-28 — Extended guitar vocabulary
+
+- Did: Extended the shared `GuitarScore` event/span model (without adding
+  parallel state to `TabScoreBuilder`) with typed natural, artificial, pinch,
+  and tapped harmonics; dedicated down/up guitar strums; physically validated
+  full and partial barres; unvoiced and physically realized rhythmic slashes;
+  slap/pop, pitched ghost, dead-string, and body/fretboard/string-percussion
+  semantics; capo; named scordatura; tuning-label policy; and generated
+  technique legends.
+- Did: Projected semantic noteheads through single notes, chords, beams, and
+  tuplets using duration-resolved Bravura diamond, X, circled-X, slash, square,
+  and parenthesis glyphs. Stem/beam and within-/cross-system span endpoints now
+  use the actual selected glyph advances rather than a normal-notehead proxy.
+  Harmonic sounding pitch remains distinct from the physical TAB realization,
+  and physically realized comping slashes retain exact TAB frets.
+- Did: Added explicit start/middle/end/complete ownership for cross-system
+  barre fragments, score-start capo/tuning metadata, a generated semantic
+  legend, focused model/render tests, an integrated four-measure multi-system
+  fixture, the `advanced_guitar_vocabulary` example, and the
+  `advanced_guitar_vocabulary` golden contract.
+- Correctness remediation: artificial/tapped harmonics now validate supported
+  node partials; grouped beam/tuplet members carry full chords and every dead
+  string head; barres validate all overlapping voices and render separated
+  SMuFL/Roman labels with visible first-event continuation fragments; bend
+  phases reject re-fretting; vibrato rejects stringless events; and unpitched
+  placements are clef-independent with distinct extended-string positions,
+  bypass key-signature accidentals, and leave accidental tracking untouched.
+  Per-system interval-colored span lanes now reuse vertical space with a
+  glyph-cleared 2.7-ss pitch, legends stack beneath first-system annotations
+  with scaled/centered strum glyphs, setup metadata has its own reserved
+  header, and standard harmonic/attack/tap labels clear event geometry.
+  The integrated fixture now exercises grouped realized slash comping, grouped
+  multi-string dead attacks, common 5/7-node physics, actual strum-glyph legend
+  semantics, and structural glyph assertions for every vocabulary family.
+- Evidence matrix:
+  `.context-board/threads/extended-guitar-vocabulary/notes/2026-09-28-implementation-report.md`.
+- Verification and golden generation are delegated to the integrated parent
+  gate by task constraint. Exact commands:
+  - `cargo fmt --all`
+  - `cargo fmt --all -- --check`
+  - `cargo test -p music-engraver`
+  - `GOLDEN_UPDATE=1 cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
+  - `cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
+  - `cargo run -p music-engraver --example advanced_guitar_vocabulary`

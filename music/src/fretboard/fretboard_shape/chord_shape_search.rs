@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-use itertools::Itertools;
 use crate::error::MusicSemanticsError;
-use crate::note_collections::voicing::Voicing;
-use crate::fretboard::Fretboard;
 use crate::fretboard::fretboard_shape::{ChordShapeClassification, FretboardShape};
 use crate::fretboard::fretted_note::FrettedNote;
+use crate::fretboard::Fretboard;
 use crate::notation::clef::Clef;
 use crate::note::note::Note;
 use crate::note_collections::spelling::HasSpelling;
+use crate::note_collections::voicing::Voicing;
+use itertools::Itertools;
+use std::collections::HashMap;
 
 /// Categorized results of a search for fretboard chord shapes.
 /// Each category is a `HashMap` indexed by voicing, equivocated over the octave.
@@ -52,7 +52,7 @@ impl<'a> ChordShapeSearchResult<'a> {
 /// If the string is not played in the chord, we denote it with a [FrettedNote::Muted].
 pub fn find_chord_shapes<'a>(
     chord: &Vec<Note>,
-    fretboard: &'a Fretboard
+    fretboard: &'a Fretboard,
 ) -> Result<ChordShapeSearchResult<'a>, MusicSemanticsError> {
     let chord_len = chord.len();
     let num_strings: u8 = fretboard.num_strings();
@@ -90,7 +90,7 @@ pub fn find_chord_shapes<'a>(
                         let index = grouping.iter().position(|item| *item == i);
                         if let Some(index) = index {
                             return Ok::<_, MusicSemanticsError>(FrettedNote::Sounded(
-                                fretboard.sounded_note(i, *fret_shape[index])?
+                                fretboard.sounded_note(i, *fret_shape[index])?,
                             ));
                         }
                         Ok::<_, MusicSemanticsError>(FrettedNote::Muted {
@@ -110,35 +110,32 @@ pub fn find_chord_shapes<'a>(
                 match shape.classify() {
                     ChordShapeClassification::Playable => {
                         if key.has_wide_intervals() {
-                            valid_shapes.wide_intervals
+                            valid_shapes
+                                .wide_intervals
                                 .entry(key)
                                 .or_default()
                                 .push(shape);
                         } else {
-                            valid_shapes.playable
-                                .entry(key)
-                                .or_default()
-                                .push(shape);
+                            valid_shapes.playable.entry(key).or_default().push(shape);
                         }
-                    },
+                    }
                     ChordShapeClassification::AllAbove12thFret => {
-                        valid_shapes.all_above_12th_fret
+                        valid_shapes
+                            .all_above_12th_fret
                             .entry(key)
                             .or_default()
                             .push(shape);
-                    },
+                    }
                     ChordShapeClassification::NonTransposable => {
-                        valid_shapes.nontransposable
+                        valid_shapes
+                            .nontransposable
                             .entry(key)
                             .or_default()
                             .push(shape);
-                    },
+                    }
                     ChordShapeClassification::Unplayable => {
-                        valid_shapes.unplayable
-                            .entry(key)
-                            .or_default()
-                            .push(shape);
-                    },
+                        valid_shapes.unplayable.entry(key).or_default().push(shape);
+                    }
                 }
             }
         }
@@ -160,7 +157,9 @@ mod tests {
 
         // Check that we have shapes in the all_above_12th_fret category
         // This proves high-fret positions are being considered
-        let high_fret_count = results.all_above_12th_fret.values()
+        let high_fret_count = results
+            .all_above_12th_fret
+            .values()
             .map(|shapes| shapes.len())
             .sum::<usize>();
 
@@ -180,7 +179,9 @@ mod tests {
         let results = find_chord_shapes(&d_power_chord, &STD_6STR_GTR).unwrap();
 
         // Verify we find some playable shapes
-        let playable_count = results.playable.values()
+        let playable_count = results
+            .playable
+            .values()
             .map(|shapes| shapes.len())
             .sum::<usize>();
 
@@ -190,7 +191,9 @@ mod tests {
         );
 
         // Check we have shapes with high frets in the all_above_12th_fret category
-        let high_fret_count = results.all_above_12th_fret.values()
+        let high_fret_count = results
+            .all_above_12th_fret
+            .values()
             .map(|shapes| shapes.len())
             .sum::<usize>();
 

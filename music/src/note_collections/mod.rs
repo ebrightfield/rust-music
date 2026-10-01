@@ -1,23 +1,23 @@
+use crate::note::note::Note;
+use crate::note::pitch_class::Pc;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use crate::note::note::Note;
-use crate::note::pitch_class::Pc;
 
 pub mod chord_name;
+pub mod geometry;
+pub mod interval_class;
 pub mod octave_partition;
 pub mod pc_set;
 pub mod spelling;
 pub mod voicing;
-pub mod geometry;
-pub mod interval_class;
 
-pub use pc_set::{PcShape, PcContent, AsPcSlice};
-pub use interval_class::IntervalClass;
-pub use octave_partition::OctavePartition;
-pub use voicing::{StackedIntervals, Voicing};
 use crate::error::MusicSemanticsError;
 use crate::note_collections::geometry::symmetry::transpositional::TranspositionalSymmetry;
+pub use interval_class::IntervalClass;
+pub use octave_partition::OctavePartition;
+pub use pc_set::{AsPcSlice, PcContent, PcShape};
+pub use voicing::{StackedIntervals, Voicing};
 
 /// Wraps a vector of [Note]s to provide some ordering guarantees on construction.
 ///
@@ -74,7 +74,10 @@ impl NoteSet {
     /// This assumes the data in [self] is well-ordered,
     /// but the [NoteSet] constructor takes care of this.
     pub fn up_n_steps(&self, from: &Note, n: u8) -> Result<Note, MusicSemanticsError> {
-        let index: usize = self.0.iter().position(|i| *i == *from)
+        let index: usize = self
+            .0
+            .iter()
+            .position(|i| *i == *from)
             .ok_or(MusicSemanticsError::NotAMember(*from, (**self).clone()))?;
         let n = (index + (n as usize)).rem_euclid(self.0.len());
         Ok(self.0[n])
@@ -82,7 +85,10 @@ impl NoteSet {
 
     /// Same as the `up_n_steps` method, but in the downward direction.
     pub fn down_n_steps(&self, from: &Note, n: u8) -> Result<Note, MusicSemanticsError> {
-        let index = self.0.iter().position(|i| *i == *from)
+        let index = self
+            .0
+            .iter()
+            .position(|i| *i == *from)
             .ok_or(MusicSemanticsError::NotAMember(*from, (**self).clone()))?;
         let equivalent_up = self.0.len() - (n as usize).rem_euclid(self.0.len());
         let n = (index + equivalent_up).rem_euclid(self.0.len());
@@ -98,10 +104,7 @@ impl NoteSet {
         let mut symmetries = pcs.transpositional_symmetry();
         let mut indexed_by_note = HashMap::new();
         for (i, note) in self.iter().enumerate() {
-            indexed_by_note.insert(
-                *note,
-                symmetries.remove(&pcs[i]).unwrap(),
-            );
+            indexed_by_note.insert(*note, symmetries.remove(&pcs[i]).unwrap());
         }
         indexed_by_note
     }
@@ -132,7 +135,9 @@ impl NoteSet {
 
         // Find the closest note in the set to the pitch's note
         let from_note = self.closest_to_note(&from.note)?;
-        let pos = self.0.iter()
+        let pos = self
+            .0
+            .iter()
             .position(|n| n == from_note)
             .ok_or(MusicSemanticsError::EmptySetOfNotes)?;
 
@@ -174,15 +179,18 @@ impl NoteSet {
         }
 
         let new_note = &self.0[cur.rem_euclid(len) as usize];
-        let new_octave = i8::try_from(octave)
-            .map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
+        let new_octave =
+            i8::try_from(octave).map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
         Pitch::try_new(*new_note, new_octave)
     }
 
     /// Find the note in this set closest (by pitch class distance) to the given pitch.
     ///
     /// Returns the note that minimizes the distance around the pitch class circle.
-    pub fn closest_to(&self, pitch: &crate::note::pitch::Pitch) -> Result<&Note, MusicSemanticsError> {
+    pub fn closest_to(
+        &self,
+        pitch: &crate::note::pitch::Pitch,
+    ) -> Result<&Note, MusicSemanticsError> {
         self.closest_to_note(&pitch.note)
     }
 
@@ -325,9 +333,15 @@ mod tests {
         use crate::note::pitch::Pitch;
 
         // C major scale: C, D, E, F, G, A, B
-        let scale = NoteSet::new(
-            vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B],
-        );
+        let scale = NoteSet::new(vec![
+            Note::C,
+            Note::D,
+            Note::E,
+            Note::F,
+            Note::G,
+            Note::A,
+            Note::B,
+        ]);
 
         let c4 = Pitch::new(Note::C, 4);
 
@@ -412,7 +426,15 @@ mod tests {
         // at the array wrap point. Previously stepping up from Bb4 gave C4
         // (midi 60, a major-7th DOWN) instead of C5 (midi 72).
         let scale = NoteSet::with_root(
-            vec![Note::Bes, Note::C, Note::D, Note::Ees, Note::F, Note::G, Note::A],
+            vec![
+                Note::Bes,
+                Note::C,
+                Note::D,
+                Note::Ees,
+                Note::F,
+                Note::G,
+                Note::A,
+            ],
             &Note::Bes,
         );
         let bb4 = Pitch::new(Note::Bes, 4);
@@ -430,7 +452,9 @@ mod tests {
             assert!(
                 p.midi_note > prev,
                 "step {steps}: {}{} (midi {}) should be higher than previous midi {prev}",
-                p.note, p.octave, p.midi_note,
+                p.note,
+                p.octave,
+                p.midi_note,
             );
             prev = p.midi_note;
         }
@@ -447,7 +471,9 @@ mod tests {
             assert!(
                 p.midi_note < prev,
                 "step -{steps}: {}{} (midi {}) should be lower than previous midi {prev}",
-                p.note, p.octave, p.midi_note,
+                p.note,
+                p.octave,
+                p.midi_note,
             );
             prev = p.midi_note;
         }

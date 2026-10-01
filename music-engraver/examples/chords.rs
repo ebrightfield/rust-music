@@ -77,5 +77,9 @@ fn main() {
     println!("SVG contains {} paths, {} lines", path_count, line_count);
 
     // Should have multiple noteheads per chord — more paths than a single-note melody
-    assert!(path_count > 20, "expected many paths for chords, got {}", path_count);
+    assert!(
+        path_count > 20,
+        "expected many paths for chords, got {}",
+        path_count
+    );
 }

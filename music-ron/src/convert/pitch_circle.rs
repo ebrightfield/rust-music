@@ -3,15 +3,19 @@ use music::note::pitch_class::Pc;
 use music::note_collections::chord_name::parsing::parse_chord_name;
 use music::note_collections::pc_set::PcShape;
 
+use super::xor_identity;
 use crate::ast::OwnedPitchCircle;
 use crate::error::MusicRonError;
-use super::xor_identity;
 
 /// Identity source resolved from exactly one of chord/pcs/scale (REQ-O27).
 #[derive(Debug)]
 pub enum PitchCircleIdentity {
     /// Chord symbol parsed into root + shape (REQ-O20).
-    Chord { root: Note, shape: PcShape, symbol: String },
+    Chord {
+        root: Note,
+        shape: PcShape,
+        symbol: String,
+    },
     /// Raw pitch-class integers validated to 0..=11.
     Pcs(Vec<Pc>),
     /// Scale name (opaque string for downstream consumers).
@@ -35,20 +39,27 @@ pub fn convert_pitch_circle(
     owned: &OwnedPitchCircle,
 ) -> Result<ResolvedPitchCircle, MusicRonError> {
     let winner = xor_identity(
-        &[("chord", owned.chord.is_some()), ("pcs", owned.pcs.is_some()), ("scale", owned.scale.is_some())],
+        &[
+            ("chord", owned.chord.is_some()),
+            ("pcs", owned.pcs.is_some()),
+            ("scale", owned.scale.is_some()),
+        ],
         "PitchCircle",
     )?;
 
     let identity = if let Some(chord) = &owned.chord {
         debug_assert_eq!(winner, "chord");
-        let (root, shape) = parse_chord_name(chord).map_err(|e| {
-            MusicRonError::UnknownChordSymbol {
+        let (root, shape) =
+            parse_chord_name(chord).map_err(|e| MusicRonError::UnknownChordSymbol {
                 input: chord.clone(),
                 inner: e.to_string(),
                 path: "PitchCircle.chord".into(),
-            }
-        })?;
-        PitchCircleIdentity::Chord { root, shape, symbol: chord.clone() }
+            })?;
+        PitchCircleIdentity::Chord {
+            root,
+            shape,
+            symbol: chord.clone(),
+        }
     } else if let Some(pcs) = &owned.pcs {
         let mut validated = Vec::with_capacity(pcs.len());
         for (i, &val) in pcs.iter().enumerate() {
@@ -80,29 +91,37 @@ mod tests {
 
     fn make_with_chord(symbol: &str) -> OwnedPitchCircle {
         OwnedPitchCircle {
-            meta: None, version: None,
+            meta: None,
+            version: None,
             chord: Some(symbol.to_string()),
-            pcs: None, scale: None,
-            root: None, theme: None,
+            pcs: None,
+            scale: None,
+            root: None,
+            theme: None,
         }
     }
 
     fn make_with_pcs(pcs: Vec<u8>) -> OwnedPitchCircle {
         OwnedPitchCircle {
-            meta: None, version: None,
+            meta: None,
+            version: None,
             chord: None,
             pcs: Some(pcs),
             scale: None,
-            root: None, theme: None,
+            root: None,
+            theme: None,
         }
     }
 
     fn make_with_scale(name: &str) -> OwnedPitchCircle {
         OwnedPitchCircle {
-            meta: None, version: None,
-            chord: None, pcs: None,
+            meta: None,
+            version: None,
+            chord: None,
+            pcs: None,
             scale: Some(name.to_string()),
-            root: None, theme: None,
+            root: None,
+            theme: None,
         }
     }
 
@@ -147,11 +166,13 @@ mod tests {
     #[test]
     fn ambiguous_chord_and_pcs_errors() {
         let owned = OwnedPitchCircle {
-            meta: None, version: None,
+            meta: None,
+            version: None,
             chord: Some("C".to_string()),
             pcs: Some(vec![0, 4, 7]),
             scale: None,
-            root: None, theme: None,
+            root: None,
+            theme: None,
         };
         let err = convert_pitch_circle(&owned).unwrap_err();
         match err {
@@ -165,9 +186,13 @@ mod tests {
     #[test]
     fn no_identity_errors() {
         let owned = OwnedPitchCircle {
-            meta: None, version: None,
-            chord: None, pcs: None, scale: None,
-            root: None, theme: None,
+            meta: None,
+            version: None,
+            chord: None,
+            pcs: None,
+            scale: None,
+            root: None,
+            theme: None,
         };
         let err = convert_pitch_circle(&owned).unwrap_err();
         match err {

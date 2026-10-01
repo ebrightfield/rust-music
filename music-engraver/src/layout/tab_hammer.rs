@@ -137,48 +137,61 @@ mod tests {
     #[test]
     fn arc_x_start_after_source() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
-        assert!(layout.x_start > 500.0, "arc start should be after source fret x");
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        assert!(
+            layout.x_start > 500.0,
+            "arc start should be after source fret x"
+        );
     }
 
     #[test]
     fn arc_x_end_before_target() {
         let staff = test_staff();
         let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::PullOff, 5.0).unwrap();
-        assert!(layout.x_end < 1000.0, "arc end should be before target fret x");
+        assert!(
+            layout.x_end < 1000.0,
+            "arc end should be before target fret x"
+        );
     }
 
     #[test]
     fn arc_apex_above_string_line() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 3, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 3, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         assert!(
             layout.y_apex < layout.y_string,
             "arc apex ({}) should be above string line ({}) in SVG coords",
-            layout.y_apex, layout.y_string
+            layout.y_apex,
+            layout.y_string
         );
     }
 
     #[test]
     fn text_centered_horizontally() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 400.0, 1200.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 400.0, 1200.0, LegatoKind::HammerOn, 5.0).unwrap();
         let expected_mid = (layout.x_start + layout.x_end) / 2.0;
         assert!(
             (layout.x_text - expected_mid).abs() < 0.001,
             "text x ({}) should be at midpoint ({})",
-            layout.x_text, expected_mid
+            layout.x_text,
+            expected_mid
         );
     }
 
     #[test]
     fn text_at_or_above_apex() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         assert!(
             layout.y_text <= layout.y_apex,
             "text y ({}) should be at or above arc apex ({})",
-            layout.y_text, layout.y_apex
+            layout.y_text,
+            layout.y_apex
         );
     }
 
@@ -196,7 +209,8 @@ mod tests {
     #[test]
     fn stroke_width_preserved() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 7.5).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 7.5).unwrap();
         assert!((layout.stroke_width - 7.5).abs() < 0.001);
     }
 
@@ -204,8 +218,10 @@ mod tests {
     fn font_size_scales_with_staff_space() {
         let small = TabStaffLayout::new(0.0, 0.0, 5000.0, 100.0, 6);
         let large = TabStaffLayout::new(0.0, 0.0, 5000.0, 400.0, 6);
-        let l_small = layout_tab_legato(&small, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
-        let l_large = layout_tab_legato(&large, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let l_small =
+            layout_tab_legato(&small, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let l_large =
+            layout_tab_legato(&large, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         assert!(
             l_large.font_size > l_small.font_size,
             "larger staff space should produce larger font size"

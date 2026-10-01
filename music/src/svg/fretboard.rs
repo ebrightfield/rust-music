@@ -330,9 +330,10 @@ pub fn fretboard_shape_svg(
             match note {
                 FrettedNote::Muted { .. } => FretPosition::Muted { string },
                 FrettedNote::Sounded(SoundedNote { fret: 0, .. }) => FretPosition::Open { string },
-                FrettedNote::Sounded(SoundedNote { fret, .. }) => {
-                    FretPosition::Fretted { string, fret: *fret }
-                }
+                FrettedNote::Sounded(SoundedNote { fret, .. }) => FretPosition::Fretted {
+                    string,
+                    fret: *fret,
+                },
             }
         })
         .collect();
@@ -369,7 +370,13 @@ pub fn fretboard_shape_svg(
         }
     }
 
-    fretboard_positions_svg(&positions, root_positions, barres, fingerings, &adjusted_config)
+    fretboard_positions_svg(
+        &positions,
+        root_positions,
+        barres,
+        fingerings,
+        &adjusted_config,
+    )
 }
 
 /// Translate an absolute fret number into the index of the visible fret space
@@ -406,12 +413,22 @@ pub fn fretboard_positions_svg(
         .unwrap_or(6);
 
     match config.orientation {
-        Orientation::Vertical => {
-            draw_vertical_fretboard(positions, root_positions, barres, fingerings, num_strings, config)
-        }
-        Orientation::Horizontal => {
-            draw_horizontal_fretboard(positions, root_positions, barres, fingerings, num_strings, config)
-        }
+        Orientation::Vertical => draw_vertical_fretboard(
+            positions,
+            root_positions,
+            barres,
+            fingerings,
+            num_strings,
+            config,
+        ),
+        Orientation::Horizontal => draw_horizontal_fretboard(
+            positions,
+            root_positions,
+            barres,
+            fingerings,
+            num_strings,
+            config,
+        ),
     }
 }
 
@@ -525,8 +542,22 @@ fn draw_vertical_fretboard(
             let y = margin_top as f64 + (relative_fret as f64 - 0.5) * fret_spacing as f64;
             // Two dots, offset from center
             let offset = fretboard_width as f64 * 0.25;
-            svg.circle(center_x - offset, y, 4, config.theme.inactive_color, "none", 0.0);
-            svg.circle(center_x + offset, y, 4, config.theme.inactive_color, "none", 0.0);
+            svg.circle(
+                center_x - offset,
+                y,
+                4,
+                config.theme.inactive_color,
+                "none",
+                0.0,
+            );
+            svg.circle(
+                center_x + offset,
+                y,
+                4,
+                config.theme.inactive_color,
+                "none",
+                0.0,
+            );
         }
     }
 
@@ -540,13 +571,14 @@ fn draw_vertical_fretboard(
 
     // Draw barres first (before dots so dots can overlay)
     for barre in barres {
-        let Some(relative_fret) = relative_fret(barre.fret, config) else { continue };
+        let Some(relative_fret) = relative_fret(barre.fret, config) else {
+            continue;
+        };
 
         if relative_fret >= 1 && relative_fret <= config.num_frets {
             let x1 = (margin_left + barre.from_string as u32 * string_spacing) as f64;
             let x2 = (margin_left + barre.to_string as u32 * string_spacing) as f64;
-            let y = margin_top as f64
-                + (relative_fret as f64 * fret_spacing as f64)
+            let y = margin_top as f64 + (relative_fret as f64 * fret_spacing as f64)
                 - (fret_spacing as f64 / 2.0);
 
             // Draw barre as a rounded rectangle
@@ -583,11 +615,12 @@ fn draw_vertical_fretboard(
                 }
 
                 // Only draw if within visible range
-                let Some(relative_fret) = relative_fret(*fret, config) else { continue };
+                let Some(relative_fret) = relative_fret(*fret, config) else {
+                    continue;
+                };
                 if relative_fret >= 1 && relative_fret <= config.num_frets {
                     let x = (margin_left + *string as u32 * string_spacing) as f64;
-                    let y = margin_top as f64
-                        + (relative_fret as f64 * fret_spacing as f64)
+                    let y = margin_top as f64 + (relative_fret as f64 * fret_spacing as f64)
                         - (fret_spacing as f64 / 2.0);
 
                     let is_root = root_positions.contains(&(*string, *fret));
@@ -706,12 +739,16 @@ fn draw_horizontal_fretboard(
 
     // Draw barres (horizontal bar in horizontal view means vertical rectangle)
     for barre in barres {
-        let Some(relative_fret) = relative_fret(barre.fret, config) else { continue };
+        let Some(relative_fret) = relative_fret(barre.fret, config) else {
+            continue;
+        };
 
         if relative_fret >= 1 && relative_fret <= config.num_frets {
             let x = margin_left as f64 + (relative_fret as f64 - 0.5) * fret_spacing as f64;
-            let y1 = (margin_top + (num_strings - 1 - barre.to_string) as u32 * string_spacing) as f64;
-            let y2 = (margin_top + (num_strings - 1 - barre.from_string) as u32 * string_spacing) as f64;
+            let y1 =
+                (margin_top + (num_strings - 1 - barre.to_string) as u32 * string_spacing) as f64;
+            let y2 =
+                (margin_top + (num_strings - 1 - barre.from_string) as u32 * string_spacing) as f64;
 
             // Draw barre as a rounded rectangle (vertical in horizontal layout)
             let barre_width = 12.0;
@@ -749,11 +786,12 @@ fn draw_horizontal_fretboard(
                     continue;
                 }
 
-                let Some(relative_fret) = relative_fret(*fret, config) else { continue };
+                let Some(relative_fret) = relative_fret(*fret, config) else {
+                    continue;
+                };
 
                 if relative_fret >= 1 && relative_fret <= config.num_frets {
-                    let x = margin_left as f64
-                        + (relative_fret as f64 - 0.5) * fret_spacing as f64;
+                    let x = margin_left as f64 + (relative_fret as f64 - 0.5) * fret_spacing as f64;
                     let y =
                         (margin_top + (num_strings - 1 - *string) as u32 * string_spacing) as f64;
 
@@ -1000,7 +1038,7 @@ mod tests {
             .position(FretPosition::Fretted { string: 3, fret: 2 })
             .position(FretPosition::Fretted { string: 4, fret: 1 })
             .position(FretPosition::Fretted { string: 5, fret: 1 })
-            .barre(Barre::new(1, 0, 5))  // Barre across strings 0-5 at fret 1
+            .barre(Barre::new(1, 0, 5)) // Barre across strings 0-5 at fret 1
             .title("F Major")
             .build();
 
@@ -1024,7 +1062,7 @@ mod tests {
     #[test]
     fn test_full_barre_method() {
         let svg = FretboardBuilder::new()
-            .full_barre(3, 6)  // Full barre at 3rd fret across 6 strings
+            .full_barre(3, 6) // Full barre at 3rd fret across 6 strings
             .build();
 
         assert!(svg.contains("<rect"));
@@ -1046,9 +1084,9 @@ mod tests {
             .position(FretPosition::Fretted { string: 1, fret: 3 })
             .position(FretPosition::Fretted { string: 2, fret: 2 })
             .position(FretPosition::Fretted { string: 4, fret: 1 })
-            .finger_at(1, 3, Finger::Ring)     // Ring finger on string 1, fret 3
-            .finger_at(2, 2, Finger::Middle)   // Middle finger on string 2, fret 2
-            .finger_at(4, 1, Finger::Index)    // Index finger on string 4, fret 1
+            .finger_at(1, 3, Finger::Ring) // Ring finger on string 1, fret 3
+            .finger_at(2, 2, Finger::Middle) // Middle finger on string 2, fret 2
+            .finger_at(4, 1, Finger::Index) // Index finger on string 4, fret 1
             .title("C Major with Fingering")
             .build();
 
@@ -1087,7 +1125,7 @@ mod tests {
             .position(FretPosition::Fretted { string: 0, fret: 1 })
             .position(FretPosition::Fretted { string: 1, fret: 1 })
             .position(FretPosition::Fretted { string: 2, fret: 1 })
-            .barre(Barre::new(1, 0, 2))  // Barre covers strings 0-2 at fret 1
+            .barre(Barre::new(1, 0, 2)) // Barre covers strings 0-2 at fret 1
             .build();
 
         // Should have rect for barre
@@ -1100,7 +1138,7 @@ mod tests {
     fn test_barre_new_normalizes_order() {
         // Barre::new should work regardless of from/to order
         let barre1 = Barre::new(5, 0, 5);
-        let barre2 = Barre::new(5, 5, 0);  // Reversed order
+        let barre2 = Barre::new(5, 5, 0); // Reversed order
 
         assert_eq!(barre1.from_string, 0);
         assert_eq!(barre1.to_string, 5);

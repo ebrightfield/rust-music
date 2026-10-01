@@ -16,26 +16,33 @@ use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
 use music_engraver::layout::arpeggio::ArpeggioDirection;
-use music_engraver::layout::breath::BreathMark;
 use music_engraver::layout::articulation::Articulation;
+use music_engraver::layout::breath::BreathMark;
 use music_engraver::layout::cresc_text::CrescTextKind;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::glissando::GlissandoStyle;
 use music_engraver::layout::grace::GraceNoteKind;
 use music_engraver::layout::hairpin::{HairpinType, NientePlacement};
 use music_engraver::layout::key_signature::KeySignature;
+use music_engraver::layout::lyric::LyricSyllable;
+use music_engraver::layout::measure::NoteheadStyle;
 use music_engraver::layout::multi_staff::SubBracket;
 use music_engraver::layout::navigation::NavigationSign;
 use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::ottava::OttavaKind;
-use music_engraver::layout::tremolo::TremoloCount;
 use music_engraver::layout::rehearsal::RehearsalStyle;
-use music_engraver::layout::lyric::LyricSyllable;
 use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
+use music_engraver::layout::tremolo::TremoloCount;
+use music_engraver::score::guitar::{
+    BendGesture, BendPitch, BendRelease, GuitarMoment, GuitarScore,
+};
 use music_engraver::score::multi_staff::MultiStaffScore;
-use music_engraver::layout::tab_bend::BendAmount;
 use music_engraver::score::tab::TabScoreBuilder;
 use music_engraver::score::ScoreBuilder;
+use smufl::Glyph;
+
+#[path = "support/advanced_guitar.rs"]
+mod advanced_guitar_fixture;
 
 fn p(name: &str, octave: i8) -> Pitch {
     let note = match name {
@@ -57,7 +64,9 @@ fn p(name: &str, octave: i8) -> Pitch {
 }
 
 fn golden_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("golden")
 }
 
 /// Compare SVG output against a frozen baseline. If GOLDEN_UPDATE=1,
@@ -108,7 +117,9 @@ fn assert_golden(name: &str, actual_svg: &str) {
         let act = actual_lines.get(i).copied().unwrap_or("<EOF>");
         if exp != act {
             diff_count += 1;
-            diff.push_str(&format!("Line {i}: \n  expected: {exp}\n  actual:   {act}\n"));
+            diff.push_str(&format!(
+                "Line {i}: \n  expected: {exp}\n  actual:   {act}\n"
+            ));
             if diff_count >= 20 {
                 diff.push_str("... (truncated, more differences follow)\n");
                 break;
@@ -176,7 +187,10 @@ fn build_chords() -> String {
         .chord(vec![p("D", 4), p("F", 4), p("A", 4)], Duration::HALF)
         .barline()
         .chord(vec![p("E", 4), p("F", 4)], Duration::QTR)
-        .chord(vec![p("C", 4), p("E", 4), p("G", 4), p("C", 5)], Duration::QTR)
+        .chord(
+            vec![p("C", 4), p("E", 4), p("G", 4), p("C", 5)],
+            Duration::QTR,
+        )
         .rest(Duration::HALF)
         .end_barline()
         .render_svg()
@@ -288,13 +302,34 @@ fn build_dynamics_variants_plain() -> String {
 /// `build_dynamics_full`, its no-dynamic sibling, and the golden test so
 /// all three see the same list.
 const DYNAMICS_FULL_PITCHES: [(&str, i8); 28] = [
-    ("C", 4), ("D", 4), ("E", 4), ("F", 4),
-    ("G", 4), ("A", 4), ("B", 4), ("C", 5),
-    ("D", 5), ("E", 5), ("F", 5), ("G", 5),
-    ("A", 5), ("B", 5), ("C", 4), ("D", 4),
-    ("E", 4), ("F", 4), ("G", 4), ("A", 4),
-    ("B", 4), ("C", 5), ("D", 5), ("E", 5),
-    ("F", 5), ("G", 5), ("A", 5), ("B", 5),
+    ("C", 4),
+    ("D", 4),
+    ("E", 4),
+    ("F", 4),
+    ("G", 4),
+    ("A", 4),
+    ("B", 4),
+    ("C", 5),
+    ("D", 5),
+    ("E", 5),
+    ("F", 5),
+    ("G", 5),
+    ("A", 5),
+    ("B", 5),
+    ("C", 4),
+    ("D", 4),
+    ("E", 4),
+    ("F", 4),
+    ("G", 4),
+    ("A", 4),
+    ("B", 4),
+    ("C", 5),
+    ("D", 5),
+    ("E", 5),
+    ("F", 5),
+    ("G", 5),
+    ("A", 5),
+    ("B", 5),
 ];
 
 /// Every variant in `Dynamic::ALL` (28 dynamics) — one per quarter note,
@@ -604,10 +639,7 @@ fn build_accent_extensions_plain() -> String {
 /// (placing them stem-opposite) or the fermata bucket (placing them
 /// outside any fermatas) would change the rendered placement and trip
 /// the byte-exact baseline.
-const BOW_STROKE_VARIANTS: [Articulation; 2] = [
-    Articulation::UpBow,
-    Articulation::DownBow,
-];
+const BOW_STROKE_VARIANTS: [Articulation; 2] = [Articulation::UpBow, Articulation::DownBow];
 
 /// Pitches for the bow-stroke score. Alternating low/high so the engraver
 /// assigns alternating stem directions across the two measures: position
@@ -985,8 +1017,14 @@ fn build_sub_brackets_score() -> String {
 
     MultiStaffScore::section(vec![v1, v2, va, vc, cb])
         .with_sub_brackets(vec![
-            SubBracket { start_index: 0, staff_count: 2 },
-            SubBracket { start_index: 2, staff_count: 3 },
+            SubBracket {
+                start_index: 0,
+                staff_count: 2,
+            },
+            SubBracket {
+                start_index: 2,
+                staff_count: 3,
+            },
         ])
         .render_svg()
 }
@@ -1038,10 +1076,21 @@ fn build_ornaments() -> String {
 /// `Ornament::ALL` was introduced.
 fn build_ornaments_full() -> String {
     let pitches = [
-        ("C", 4), ("D", 4), ("E", 4), ("F", 4),
-        ("G", 4), ("A", 4), ("B", 4), ("C", 5),
-        ("D", 5), ("E", 5), ("F", 5), ("G", 5),
-        ("A", 5), ("B", 5), ("C", 6),
+        ("C", 4),
+        ("D", 4),
+        ("E", 4),
+        ("F", 4),
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+        ("B", 5),
+        ("C", 6),
     ];
     let mut b = ScoreBuilder::new()
         .clef(Clef::Treble)
@@ -1853,10 +1902,7 @@ fn golden_accent_extensions() {
 
     // Structural validity
     assert!(svg.starts_with("<svg"), "accent_extensions should be SVG");
-    assert!(
-        svg.contains("</svg>"),
-        "accent_extensions should close SVG"
-    );
+    assert!(svg.contains("</svg>"), "accent_extensions should close SVG");
 
     // Path-count guard: each variant must add exactly one path on top of
     // the same score with no articulations. Catches a silent regression
@@ -2337,8 +2383,14 @@ fn golden_lyrics() {
     );
 
     // The source syllables must appear standalone.
-    assert!(svg.contains(">Hap<"), "should contain 'Hap' as its own text");
-    assert!(svg.contains(">birth<"), "should contain 'birth' as its own text");
+    assert!(
+        svg.contains(">Hap<"),
+        "should contain 'Hap' as its own text"
+    );
+    assert!(
+        svg.contains(">birth<"),
+        "should contain 'birth' as its own text"
+    );
 
     // At least two standalone hyphens '-' should appear (one between
     // Hap/py, one between birth/day). The melisma "to/you!" pair uses an
@@ -2350,7 +2402,10 @@ fn golden_lyrics() {
     );
 
     // The extender is still drawn as a <line> for the melisma "to/you!".
-    assert!(svg.contains("<line"), "extender or staff/stem lines should exist");
+    assert!(
+        svg.contains("<line"),
+        "extender or staff/stem lines should exist"
+    );
 
     assert_golden("lyrics", &svg);
 }
@@ -2388,7 +2443,10 @@ fn golden_chord_symbols_with_accidentals() {
     // baseline would *visually* differ but might produce text content
     // equivalent to the plain-text path; the assertion below also relies on
     // the byte-inequality at the SVG level.
-    assert_ne!(svg, plain, "accidental-bearing score must differ byte-wise from plain chord-symbol score");
+    assert_ne!(
+        svg, plain,
+        "accidental-bearing score must differ byte-wise from plain chord-symbol score"
+    );
 
     // Composite-renderer-specific marker: text-anchor="start" must appear
     // in the rendered SVG (the composite path always uses start anchor;
@@ -2443,10 +2501,21 @@ fn golden_ornaments_full() {
     // This proves every ornament call actually drew a path, rather than
     // silently no-oping.
     let pitches = [
-        ("C", 4), ("D", 4), ("E", 4), ("F", 4),
-        ("G", 4), ("A", 4), ("B", 4), ("C", 5),
-        ("D", 5), ("E", 5), ("F", 5), ("G", 5),
-        ("A", 5), ("B", 5), ("C", 6),
+        ("C", 4),
+        ("D", 4),
+        ("E", 4),
+        ("F", 4),
+        ("G", 4),
+        ("A", 4),
+        ("B", 4),
+        ("C", 5),
+        ("D", 5),
+        ("E", 5),
+        ("F", 5),
+        ("G", 5),
+        ("A", 5),
+        ("B", 5),
+        ("C", 6),
     ];
     let mut plain = ScoreBuilder::new()
         .clef(Clef::Treble)
@@ -2489,7 +2558,10 @@ fn golden_ornaments_full() {
         }
         out
     }
-    let added: HashSet<_> = distinct_d(&svg).difference(&distinct_d(&plain_svg)).cloned().collect();
+    let added: HashSet<_> = distinct_d(&svg)
+        .difference(&distinct_d(&plain_svg))
+        .cloned()
+        .collect();
     assert_eq!(
         added.len(),
         14,
@@ -2900,15 +2972,21 @@ fn build_tab_score() -> String {
     TabScoreBuilder::guitar()
         .measures_per_system(2)
         // Measure 1: E minor arpeggio
-        .fret(6, 0).next()
-        .fret(5, 2).next()
-        .fret(4, 2).next()
+        .fret(6, 0)
+        .next()
+        .fret(5, 2)
+        .next()
+        .fret(4, 2)
+        .next()
         .fret(3, 0)
         .barline()
         // Measure 2: scale on string 1
-        .fret(1, 0).next()
-        .fret(1, 3).next()
-        .fret(1, 5).next()
+        .fret(1, 0)
+        .next()
+        .fret(1, 3)
+        .next()
+        .fret(1, 5)
+        .next()
         .fret(1, 7)
         .barline()
         // Measure 3: power chord
@@ -2921,9 +2999,12 @@ fn build_tab_score() -> String {
         .fret(4, 5)
         .barline()
         // Measure 4: high frets
-        .fret(1, 12).next()
-        .fret(2, 12).next()
-        .fret(1, 15).next()
+        .fret(1, 12)
+        .next()
+        .fret(2, 12)
+        .next()
+        .fret(1, 15)
+        .next()
         .fret(1, 17)
         .end_barline()
         .render_svg()
@@ -2939,27 +3020,49 @@ fn build_tab_slides() -> String {
         .measures_per_system(2)
         .system_width_fu(12000.0)
         // Measure 1: ascending slide on string 1
-        .fret(1, 5).slide().next()
-        .fret(1, 7).next()
-        .fret(1, 3).next()
+        .fret(1, 5)
+        .slide()
+        .next()
+        .fret(1, 7)
+        .next()
+        .fret(1, 3)
+        .next()
         .fret(1, 0)
         .barline()
         // Measure 2: descending slide on string 2
-        .fret(2, 12).slide().next()
-        .fret(2, 9).next()
-        .fret(2, 7).next()
+        .fret(2, 12)
+        .slide()
+        .next()
+        .fret(2, 9)
+        .next()
+        .fret(2, 7)
+        .next()
         .fret(1, 5)
         .barline()
         // Measure 3: chord slide (power chord shift)
-        .fret(6, 3).fret(5, 5).fret(4, 5).slide().next()
-        .fret(6, 5).fret(5, 7).fret(4, 7).next()
-        .rest().next()
+        .fret(6, 3)
+        .fret(5, 5)
+        .fret(4, 5)
+        .slide()
+        .next()
+        .fret(6, 5)
+        .fret(5, 7)
+        .fret(4, 7)
+        .next()
+        .rest()
+        .next()
         .fret(6, 0)
         .barline()
         // Measure 4: consecutive slides (chain)
-        .fret(1, 5).slide().next()
-        .fret(1, 7).slide().next()
-        .fret(1, 9).slide().next()
+        .fret(1, 5)
+        .slide()
+        .next()
+        .fret(1, 7)
+        .slide()
+        .next()
+        .fret(1, 9)
+        .slide()
+        .next()
         .fret(1, 12)
         .end_barline()
         .render_svg()
@@ -2974,17 +3077,45 @@ fn build_tab_hammer_pull() -> String {
     TabScoreBuilder::guitar()
         .measures_per_system(2)
         // Measure 1: hammer-on 5→7
-        .fret(1, 5).hammer().next().fret(1, 7).next().rest().next().rest()
+        .fret(1, 5)
+        .hammer()
+        .next()
+        .fret(1, 7)
+        .next()
+        .rest()
+        .next()
+        .rest()
         .barline()
         // Measure 2: pull-off 7→5
-        .fret(1, 7).pull().next().fret(1, 5).next().rest().next().rest()
+        .fret(1, 7)
+        .pull()
+        .next()
+        .fret(1, 5)
+        .next()
+        .rest()
+        .next()
+        .rest()
         .barline()
         // Measure 3: chain 5→7→5
-        .fret(2, 5).hammer().next().fret(2, 7).pull().next().fret(2, 5).next().rest()
+        .fret(2, 5)
+        .hammer()
+        .next()
+        .fret(2, 7)
+        .pull()
+        .next()
+        .fret(2, 5)
+        .next()
+        .rest()
         .barline()
         // Measure 4: multi-string chord hammer
-        .fret(5, 5).fret(4, 7).fret(3, 7).hammer().next()
-        .fret(5, 7).fret(4, 9).fret(3, 9)
+        .fret(5, 5)
+        .fret(4, 7)
+        .fret(3, 7)
+        .hammer()
+        .next()
+        .fret(5, 7)
+        .fret(4, 9)
+        .fret(3, 9)
         .end_barline()
         .render_svg()
 }
@@ -2994,39 +3125,48 @@ fn golden_tab_hammer_pull() {
     assert_golden("tab_hammer_pull", &build_tab_hammer_pull());
 }
 
-fn build_tab_bends() -> String {
-    TabScoreBuilder::guitar()
+fn build_semantic_bends() -> String {
+    let mut score = GuitarScore::standard();
+    score.set_time_signature(1, 4);
+    let source = score.note(p("G", 4), Duration::QTR, 1, 3).unwrap();
+    score.barline().unwrap();
+    let arrival = score.note(p("G", 4), Duration::QTR, 1, 3).unwrap();
+    score.barline().unwrap();
+    let reattack = score.note(p("G", 4), Duration::QTR, 1, 3).unwrap();
+    score.barline().unwrap();
+    let release_end = score.note(p("G", 4), Duration::QTR, 1, 3).unwrap();
+    score.end_barline().unwrap();
+    score
+        .bend(
+            BendGesture::new(
+                source,
+                1,
+                BendPitch::exact(p("A", 4)),
+                GuitarMoment::onset(arrival),
+            )
+            .with_release(BendRelease::new(
+                GuitarMoment::after(reattack, Duration::EIGHTH),
+                GuitarMoment::onset(release_end),
+                BendPitch::exact(p("G", 4)),
+            ))
+            .reattacked_at(reattack),
+        )
+        .unwrap();
+    MultiStaffScore::guitar(score)
         .measures_per_system(2)
-        .system_width_fu(10000.0)
-        // Measure 1: full bend, half bend
-        .fret(2, 8)
-        .bend(BendAmount::Full)
-        .next()
-        .fret(1, 7)
-        .bend(BendAmount::Half)
-        .next()
-        .fret(3, 9)
-        .next()
-        .fret(1, 5)
-        .barline()
-        // Measure 2: quarter bend, chord bend
-        .fret(3, 7)
-        .bend(BendAmount::Quarter)
-        .next()
-        .fret(1, 10)
-        .fret(2, 10)
-        .bend(BendAmount::Full)
-        .next()
-        .fret(1, 12)
-        .next()
-        .fret(1, 7)
-        .end_barline()
+        .system_width_fu(10_000.0)
         .render_svg()
 }
 
 #[test]
-fn golden_tab_bends() {
-    assert_golden("tab_bends", &build_tab_bends());
+fn golden_semantic_bends() {
+    let svg = build_semantic_bends();
+    assert!(svg.contains("data-bend-view=\"standard\""));
+    assert!(svg.contains("data-bend-view=\"tab\""));
+    assert!(svg.contains("data-bend-phase=\"hold\""));
+    assert!(svg.contains("data-bend-phase=\"release\""));
+    assert!(svg.contains("data-bend-phase=\"reattack\""));
+    assert_golden("semantic_bends", &svg);
 }
 
 fn build_volta_brackets() -> String {
@@ -3145,32 +3285,21 @@ fn golden_cross_system_volta() {
 }
 
 fn build_guitar_tab() -> String {
-    let notation = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .key_signature(KeySignature::Open)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .note(p("G", 4), Duration::QTR)
-        .note(p("B", 4), Duration::QTR)
-        .note(p("E", 5), Duration::QTR)
-        .barline()
-        .note(p("E", 5), Duration::QTR)
-        .note(p("B", 4), Duration::QTR)
-        .note(p("G", 4), Duration::HALF)
-        .end_barline();
+    let mut score = GuitarScore::standard();
+    score
+        .set_key_signature(KeySignature::Open)
+        .set_time_signature(4, 4);
+    score.note(p("E", 4), Duration::QTR, 1, 0).unwrap();
+    score.note(p("G", 4), Duration::QTR, 1, 3).unwrap();
+    score.note(p("B", 4), Duration::QTR, 1, 7).unwrap();
+    score.note(p("E", 5), Duration::QTR, 1, 12).unwrap();
+    score.barline().unwrap();
+    score.note(p("E", 5), Duration::QTR, 1, 12).unwrap();
+    score.note(p("B", 4), Duration::QTR, 1, 7).unwrap();
+    score.note(p("G", 4), Duration::HALF, 1, 3).unwrap();
+    score.end_barline().unwrap();
 
-    let tab = TabScoreBuilder::guitar()
-        .quarter().fret(1, 0).next()
-        .quarter().fret(3, 0).next()
-        .quarter().fret(2, 0).next()
-        .quarter().fret(1, 5)
-        .barline()
-        .quarter().fret(1, 5).next()
-        .quarter().fret(2, 0).next()
-        .half().fret(3, 0)
-        .end_barline();
-
-    MultiStaffScore::guitar_tab(notation, tab)
+    MultiStaffScore::guitar(score)
         .system_width_fu(10000.0)
         .render_svg()
 }
@@ -3188,7 +3317,7 @@ fn golden_guitar_tab() {
 
     // Tab should show fret numbers
     assert!(svg.contains(">0</text>"), "should show fret 0");
-    assert!(svg.contains(">5</text>"), "should show fret 5");
+    assert!(svg.contains(">12</text>"), "should show fret 12");
 
     // Should have both notation and tab content
     let path_count = svg.matches("<path").count();
@@ -3257,7 +3386,10 @@ fn golden_ottava_brackets() {
     let svg = build_ottava_brackets();
     assert!(svg.contains(">8va</text>"), "should contain 8va label");
     assert!(svg.contains(">8vb</text>"), "should contain 8vb label");
-    assert!(svg.contains("stroke-dasharray"), "should contain dashed lines");
+    assert!(
+        svg.contains("stroke-dasharray"),
+        "should contain dashed lines"
+    );
     assert_golden("ottava_brackets", &svg);
 }
 
@@ -3299,7 +3431,10 @@ fn golden_cross_system_ottava() {
         count_8va >= 2,
         "cross-system ottava should produce at least 2 '8va' labels, got {count_8va}"
     );
-    assert!(svg.contains("stroke-dasharray"), "should contain dashed lines");
+    assert!(
+        svg.contains("stroke-dasharray"),
+        "should contain dashed lines"
+    );
     assert_golden("cross_system_ottava", &svg);
 }
 
@@ -3483,96 +3618,6 @@ fn golden_all_pedal_marks() {
     );
 
     assert_golden("all_pedal_marks", &svg);
-}
-
-fn build_tab_pre_bends() -> String {
-    TabScoreBuilder::guitar()
-        .measures_per_system(2)
-        .system_width_fu(10000.0)
-        // Measure 1: full pre-bend, half pre-bend
-        .fret(2, 8)
-        .pre_bend(BendAmount::Full)
-        .next()
-        .fret(1, 7)
-        .pre_bend(BendAmount::Half)
-        .next()
-        .fret(3, 9)
-        .next()
-        .fret(1, 5)
-        .barline()
-        // Measure 2: pre-bend→release sequence, chord pre-bend
-        .fret(1, 7)
-        .pre_bend(BendAmount::Full)
-        .next()
-        .fret(1, 5)
-        .release()
-        .next()
-        .fret(1, 10)
-        .fret(2, 10)
-        .pre_bend(BendAmount::Half)
-        .next()
-        .fret(1, 12)
-        .end_barline()
-        .render_svg()
-}
-
-#[test]
-fn golden_tab_pre_bends() {
-    let svg = build_tab_pre_bends();
-    // Pre-bends produce straight vertical arrows (lines), not curves
-    assert!(svg.contains(">full</text>"), "should have 'full' pre-bend label");
-    assert!(svg.contains(">1/2</text>"), "should have '1/2' pre-bend label");
-    // Release bends produce downward curve paths with arrowheads
-    let filled_paths = svg.matches("fill=\"black\"").count();
-    assert!(
-        filled_paths >= 4,
-        "should have at least 4 filled arrowheads (pre-bends + release), got {filled_paths}"
-    );
-    assert_golden("tab_pre_bends", &svg);
-}
-
-fn build_tab_bend_release() -> String {
-    TabScoreBuilder::guitar()
-        .measures_per_system(2)
-        .system_width_fu(10000.0)
-        // Measure 1: full bend-release, half bend-release
-        .fret(2, 8)
-        .bend_release(BendAmount::Full)
-        .next()
-        .fret(1, 7)
-        .bend_release(BendAmount::Half)
-        .next()
-        .fret(3, 9)
-        .next()
-        .fret(1, 5)
-        .barline()
-        // Measure 2: quarter bend-release, chord bend-release (two strings)
-        .fret(1, 7)
-        .bend_release(BendAmount::Quarter)
-        .next()
-        .fret(1, 10)
-        .fret(2, 10)
-        .bend_release(BendAmount::Full)
-        .next()
-        .fret(1, 12)
-        .end_barline()
-        .render_svg()
-}
-
-#[test]
-fn golden_tab_bend_release() {
-    let svg = build_tab_bend_release();
-    // Labels appear at the apex of each arc.
-    assert!(svg.contains(">full</text>"), "should have 'full' bend-release label");
-    assert!(svg.contains(">1/2</text>"), "should have '1/2' bend-release label");
-    assert!(svg.contains(">1/4</text>"), "should have '1/4' bend-release label");
-    // A bend-release is visually distinct from a plain bend of the same amount.
-    let plain_bends = build_tab_bends();
-    assert_ne!(
-        svg, plain_bends,
-        "bend-release should differ from plain bends"
-    );
-    assert_golden("tab_bend_release", &svg);
 }
 
 /// Tremolo slashes on stems: single, double, triple across notes.
@@ -3905,34 +3950,22 @@ fn build_arpeggios() -> String {
         .time_signature(4, 4)
         .measures_per_system(2)
         // Measure 1: upward arpeggio on C major triad + plain quarter
-        .chord(
-            vec![p("C", 4), p("E", 4), p("G", 4)],
-            Duration::HALF,
-        )
+        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::HALF)
         .arpeggio(ArpeggioDirection::Up)
         .note(p("C", 5), Duration::QTR)
         .note(p("G", 4), Duration::QTR)
         .barline()
         // Measure 2: downward arpeggio on D minor triad + single-note arpeggio
-        .chord(
-            vec![p("D", 4), p("F", 4), p("A", 4)],
-            Duration::HALF,
-        )
+        .chord(vec![p("D", 4), p("F", 4), p("A", 4)], Duration::HALF)
         .arpeggio(ArpeggioDirection::Down)
         .note(p("E", 5), Duration::QTR)
         .arpeggio(ArpeggioDirection::Up)
         .rest(Duration::QTR)
         .barline()
         // Measure 3: wide voicing + downward arpeggio on two-note chord
-        .chord(
-            vec![p("C", 4), p("G", 4), p("E", 5)],
-            Duration::HALF,
-        )
+        .chord(vec![p("C", 4), p("G", 4), p("E", 5)], Duration::HALF)
         .arpeggio(ArpeggioDirection::Up)
-        .chord(
-            vec![p("B", 4), p("D", 5)],
-            Duration::HALF,
-        )
+        .chord(vec![p("B", 4), p("D", 5)], Duration::HALF)
         .arpeggio(ArpeggioDirection::Down)
         .barline()
         // Measure 4: whole-note 4-note chord with arpeggio
@@ -3951,7 +3984,10 @@ fn golden_arpeggios() {
 
     // Structural assertions: arpeggios use scale(1,...) transforms
     let scale_count = svg.matches("scale(1,").count();
-    assert!(scale_count >= 5, "should have ≥5 arpeggio scale transforms: {scale_count}");
+    assert!(
+        scale_count >= 5,
+        "should have ≥5 arpeggio scale transforms: {scale_count}"
+    );
 
     // More paths than a plain chord score (arpeggio glyphs add paths)
     let paths = svg.matches("<path ").count();
@@ -4582,7 +4618,10 @@ fn golden_church_rest() {
     );
 
     // The two renderings must differ.
-    assert_ne!(svg, hbar_version, "church-rest and H-bar must render differently");
+    assert_ne!(
+        svg, hbar_version,
+        "church-rest and H-bar must render differently"
+    );
 
     assert_golden("church_rest", &svg);
 }
@@ -4950,41 +4989,25 @@ fn build_trill_bracket_custom() -> String {
         .measures_per_system(2)
         // Both, Down direction, longer-than-default 1.2 ss hook.
         .note(p("G", 4), Duration::WHOLE)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Both,
-            HookDirection::Down,
-            1.2,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Both, HookDirection::Down, 1.2)
         .barline()
         .note(p("A", 4), Duration::WHOLE)
         .barline()
         // Start, Up direction, default-length 0.75 ss.
         .note(p("E", 5), Duration::WHOLE)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Start,
-            HookDirection::Up,
-            0.75,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Start, HookDirection::Up, 0.75)
         .barline()
         .note(p("D", 5), Duration::WHOLE)
         .barline()
         // End, Up direction, short 0.5 ss hook.
         .note(p("C", 5), Duration::WHOLE)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::End,
-            HookDirection::Up,
-            0.5,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::End, HookDirection::Up, 0.5)
         .barline()
         .note(p("B", 4), Duration::WHOLE)
         .barline()
         // Chord trill: Both, Up direction, 1.0 ss hook.
         .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Both,
-            HookDirection::Up,
-            1.0,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Both, HookDirection::Up, 1.0)
         .end_barline()
         .note(p("F", 4), Duration::WHOLE)
         .end_barline()
@@ -5060,11 +5083,7 @@ fn golden_trill_bracket_custom() {
         .key_signature(KeySignature::Open)
         .time_signature(4, 4)
         .note(p("E", 4), Duration::WHOLE)
-        .trill_with_extension_bracketed_custom(
-            TrillBracketSide::Start,
-            HookDirection::Up,
-            0.9,
-        )
+        .trill_with_extension_bracketed_custom(TrillBracketSide::Start, HookDirection::Up, 0.9)
         .end_barline()
         .note(p("F", 4), Duration::QTR)
         .end_barline()
@@ -5468,9 +5487,7 @@ fn golden_trill_bracket_with_mordent() {
 /// `TrillExtensionSpeedOptions` introduction chunk by freezing a baseline
 /// for "compound at every speed."
 fn build_trill_speed_with_mordent() -> String {
-    use music_engraver::layout::trill_extension::{
-        TrillExtensionSpeedOptions, TrillWiggleSpeed,
-    };
+    use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
     let mut b = ScoreBuilder::new()
         .clef(Clef::Treble)
         .key_signature(KeySignature::Open)
@@ -5493,8 +5510,7 @@ fn build_trill_speed_with_mordent() -> String {
         b = b
             .note(p(n, oct), Duration::WHOLE)
             .trill_with_extension_speed_with_options(
-                TrillExtensionSpeedOptions::new(*speed)
-                    .with_ornament(Ornament::TrillWithMordent),
+                TrillExtensionSpeedOptions::new(*speed).with_ornament(Ornament::TrillWithMordent),
             )
             .barline();
     }
@@ -5537,9 +5553,7 @@ fn build_trill_speed_with_mordent_plain_trill_variant() -> String {
 /// `Slowest` speed. Lower bookend for the sandwich check that the mixed
 /// speeds aren't being collapsed to a single glyph.
 fn build_trill_speed_with_mordent_all_slowest() -> String {
-    use music_engraver::layout::trill_extension::{
-        TrillExtensionSpeedOptions, TrillWiggleSpeed,
-    };
+    use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
     let mut b = ScoreBuilder::new()
         .clef(Clef::Treble)
         .key_signature(KeySignature::Open)
@@ -5572,9 +5586,7 @@ fn build_trill_speed_with_mordent_all_slowest() -> String {
 /// Same musical content, every measure uses the compound ornament at
 /// `Fastest` speed. Upper bookend.
 fn build_trill_speed_with_mordent_all_fastest() -> String {
-    use music_engraver::layout::trill_extension::{
-        TrillExtensionSpeedOptions, TrillWiggleSpeed,
-    };
+    use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
     let mut b = ScoreBuilder::new()
         .clef(Clef::Treble)
         .key_signature(KeySignature::Open)
@@ -6039,9 +6051,7 @@ fn golden_trill_short_extension() {
 /// widen to `TrillExtensionFullOptions` first.
 fn build_trill_options_with_length() -> String {
     use music_engraver::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
-    use music_engraver::layout::trill_extension::{
-        TrillExtensionSpeedOptions, TrillWiggleSpeed,
-    };
+    use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
     ScoreBuilder::new()
         .clef(Clef::Treble)
         .key_signature(KeySignature::Open)
@@ -6064,8 +6074,7 @@ fn build_trill_options_with_length() -> String {
         .barline()
         .note(p("C", 5), Duration::WHOLE)
         .trill_with_extension_speed_with_options(
-            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
-                .with_extension_length_ss(3.0),
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster).with_extension_length_ss(3.0),
         )
         .end_barline()
         .render_svg()
@@ -6077,9 +6086,7 @@ fn build_trill_options_with_length() -> String {
 /// `build_trill_options_with_length` comes from the explicit-length field.
 fn build_trill_options_with_length_no_length_variant() -> String {
     use music_engraver::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
-    use music_engraver::layout::trill_extension::{
-        TrillExtensionSpeedOptions, TrillWiggleSpeed,
-    };
+    use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
     ScoreBuilder::new()
         .clef(Clef::Treble)
         .key_signature(KeySignature::Open)
@@ -6115,9 +6122,7 @@ fn build_trill_options_with_length_no_length_variant() -> String {
 /// single-purpose-bundle path and the widened-full-options path.
 fn build_trill_options_with_length_widened_variant() -> String {
     use music_engraver::layout::trill_bracket::{TrillBracketOptions, TrillBracketSide};
-    use music_engraver::layout::trill_extension::{
-        TrillExtensionSpeedOptions, TrillWiggleSpeed,
-    };
+    use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
     use music_engraver::layout::trill_options::TrillExtensionFullOptions;
     ScoreBuilder::new()
         .clef(Clef::Treble)
@@ -6141,8 +6146,7 @@ fn build_trill_options_with_length_widened_variant() -> String {
         .barline()
         .note(p("C", 5), Duration::WHOLE)
         .trill_with_extension_full_options(TrillExtensionFullOptions::from(
-            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
-                .with_extension_length_ss(3.0),
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster).with_extension_length_ss(3.0),
         ))
         .end_barline()
         .render_svg()
@@ -6393,6 +6397,74 @@ fn golden_trill_full_options_with_length() {
     assert_golden("trill_full_options_with_length", &svg);
 }
 
+/// Advanced guitar vocabulary stays visually stable as one integrated score.
+#[test]
+fn golden_advanced_guitar_vocabulary() {
+    let svg = advanced_guitar_fixture::render()
+        .expect("the integrated advanced-guitar fixture should be valid");
+
+    assert_eq!(
+        svg.matches("Capo II · Tuning: DADGAD · 1=D4 2=A3 3=G3 4=D3 5=A2 6=D2")
+            .count(),
+        1
+    );
+    let setup_header = svg
+        .find("data-guitar-setup-header=\"true\"")
+        .expect("setup metadata has a reserved header group");
+    let first_chord_symbol = svg
+        .find(">E</text>")
+        .expect("first-system chord symbol is rendered");
+    assert!(setup_header < first_chord_symbol);
+    assert_eq!(svg.matches(">Legend:</text>").count(), 1);
+    assert!(svg.contains("data-guitar-barre-fragment=\"start\""));
+    assert!(svg.contains("data-guitar-barre-fragment=\"end\""));
+    assert!(svg.contains("data-guitar-barre-fragment=\"complete\""));
+    assert!(!svg.contains(
+        "data-guitar-barre-fragment=\"end\" data-guitar-barre-lane=\"0\" data-guitar-barre-length=\"0.000\""
+    ));
+    assert!(svg.contains(">harm.</text>"));
+    assert!(svg.contains(">A.H.</text>"));
+    assert!(svg.contains(">P.H.</text>"));
+    assert!(svg.contains(">T.H.</text>"));
+    assert!(svg.contains(">&lt;12&gt;</text>"));
+    assert!(svg.contains(">&lt;10&gt;</text>"));
+    assert!(svg.contains(">(5)</text>"));
+    assert!(svg.contains(">x</text>"));
+    assert!(svg.contains(">slap</text>"));
+    assert!(svg.contains(">pop</text>"));
+    assert!(svg.contains(">golpe  body percussion</text>"));
+    assert!(svg.contains(">square  fretboard percussion</text>"));
+    assert!(svg.contains(">x-perc.  string percussion</text>"));
+    assert!(svg.contains(">down strum</text>"));
+    assert!(svg.contains(">up strum</text>"));
+    assert!(svg.contains(">↓  down-pick</text>"));
+    assert!(!svg.contains(">D  down strum</text>"));
+    assert_eq!(svg.matches("data-guitar-legend-scale=\"0.3\"").count(), 2);
+    assert!(!svg.contains(">U  up strum</text>"));
+    assert!(!svg.contains(">CII</text>"));
+    assert!(svg.contains(">II</text>"));
+
+    let font = music_engraver::font::bravura_font();
+    let glyph_count = |glyph| {
+        let outline = font
+            .glyph_outline(glyph)
+            .expect("advanced guitar fixture glyph must exist");
+        svg.matches(&outline.path_data).count()
+    };
+    assert!(glyph_count(Glyph::GuitarStrumDown) > 0);
+    assert!(glyph_count(Glyph::GuitarStrumUp) > 0);
+    assert!(glyph_count(Glyph::GuitarBarreFull) > 0);
+    assert!(glyph_count(Glyph::GuitarBarreHalf) > 0);
+    assert!(glyph_count(Glyph::StringsHarmonic) > 0);
+    assert!(glyph_count(NoteheadStyle::Diamond.glyph(2)) > 0);
+    assert!(glyph_count(NoteheadStyle::CircleX.glyph(3)) > 0);
+    assert!(glyph_count(NoteheadStyle::Square.glyph(3)) > 0);
+    assert!(glyph_count(NoteheadStyle::Slash.glyph(3)) > 0);
+    assert!(glyph_count(NoteheadStyle::X.glyph(3)) >= 8);
+
+    assert_golden("advanced_guitar_vocabulary", &svg);
+}
+
 /// Verify all golden baselines are valid SVGs with expected structure.
 #[test]
 fn golden_baselines_are_valid_svgs() {
@@ -6430,7 +6502,7 @@ fn golden_baselines_are_valid_svgs() {
         "tab_score",
         "tab_slides",
         "tab_hammer_pull",
-        "tab_bends",
+        "semantic_bends",
         "volta_brackets",
         "cross_system_volta",
         "guitar_tab",
@@ -6438,8 +6510,6 @@ fn golden_baselines_are_valid_svgs() {
         "ottava_brackets",
         "cross_system_ottava",
         "pedal_marks",
-        "tab_pre_bends",
-        "tab_bend_release",
         "tremolo",
         "tab_vibrato",
         "tab_harmonics",
@@ -6466,6 +6536,7 @@ fn golden_baselines_are_valid_svgs() {
         "trill_short_extension",
         "trill_options_with_length",
         "trill_full_options_with_length",
+        "advanced_guitar_vocabulary",
     ];
 
     for name in &names {

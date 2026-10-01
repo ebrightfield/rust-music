@@ -80,14 +80,20 @@ mod tests {
     fn slide_x_start_is_after_source() {
         let staff = test_staff();
         let layout = layout_tab_slide(&staff, 1, 500.0, 1000.0, 5.0).unwrap();
-        assert!(layout.x_start > 500.0, "slide start should be after source fret x");
+        assert!(
+            layout.x_start > 500.0,
+            "slide start should be after source fret x"
+        );
     }
 
     #[test]
     fn slide_x_end_is_before_target() {
         let staff = test_staff();
         let layout = layout_tab_slide(&staff, 1, 500.0, 1000.0, 5.0).unwrap();
-        assert!(layout.x_end < 1000.0, "slide end should be before target fret x");
+        assert!(
+            layout.x_end < 1000.0,
+            "slide end should be before target fret x"
+        );
     }
 
     #[test]
@@ -104,7 +110,10 @@ mod tests {
         let staff = test_staff();
         // Two fret positions very close together — padding overlap
         let layout = layout_tab_slide(&staff, 1, 500.0, 510.0, 5.0);
-        assert!(layout.is_none(), "should return None when x positions too close");
+        assert!(
+            layout.is_none(),
+            "should return None when x positions too close"
+        );
     }
 
     #[test]

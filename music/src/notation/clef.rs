@@ -19,22 +19,10 @@ impl Clef {
     /// Returns pitch of the bottom and top lines of the clef respectively.
     pub fn bounds(&self) -> (Pitch, Pitch) {
         match &self {
-            Clef::Treble => (
-                Pitch::new(Note::E, 4),
-                Pitch::new(Note::F, 5),
-            ),
-            Clef::Treble8va => (
-                Pitch::new(Note::E, 5),
-                Pitch::new(Note::F, 6),
-            ),
-            Clef::Treble8ba => (
-                Pitch::new(Note::E, 3),
-                Pitch::new(Note::F, 4),
-            ),
-            Clef::Bass => (
-                Pitch::new(Note::G, 2),
-                Pitch::new(Note::A, 3),
-            ),
+            Clef::Treble => (Pitch::new(Note::E, 4), Pitch::new(Note::F, 5)),
+            Clef::Treble8va => (Pitch::new(Note::E, 5), Pitch::new(Note::F, 6)),
+            Clef::Treble8ba => (Pitch::new(Note::E, 3), Pitch::new(Note::F, 4)),
+            Clef::Bass => (Pitch::new(Note::G, 2), Pitch::new(Note::A, 3)),
         }
     }
 

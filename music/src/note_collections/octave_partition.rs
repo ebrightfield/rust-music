@@ -1,8 +1,8 @@
-use std::ops::Deref;
-use crate::note_collections::pc_set::PcShape;
-use crate::note::pitch_class::Pc;
 use crate::error::MusicSemanticsError;
+use crate::note::pitch_class::Pc;
 use crate::note_collections::interval_class::IntervalClass;
+use crate::note_collections::pc_set::PcShape;
+use std::ops::Deref;
 
 /// An ordered, cyclic series of intervals that sum to an octave.
 /// An instance of this type represents one way of "cutting" the octave
@@ -72,10 +72,7 @@ impl From<&PcShape> for OctavePartition {
 
         let mut diffs: Vec<i32> = vals.zip(next_vals).map(|(cur, next)| next - cur).collect();
         diffs.push(i32::from(pc_shape.first().unwrap()) - i32::from(pc_shape.last().unwrap()));
-        let diffs = diffs
-            .iter()
-            .map(IntervalClass::from)
-            .collect();
+        let diffs = diffs.iter().map(IntervalClass::from).collect();
         OctavePartition::try_new(diffs).unwrap()
     }
 }
@@ -124,12 +121,10 @@ mod tests {
 
     #[test]
     fn test_invalid_octave_partition() {
-        let intervals = vec![
-            IntervalClass::Ic4,
-            IntervalClass::Ic3,
-            IntervalClass::Ic6,
-        ];
+        let intervals = vec![IntervalClass::Ic4, IntervalClass::Ic3, IntervalClass::Ic6];
         let result = OctavePartition::try_new(intervals.clone());
-        if result.is_ok() { panic!("octave partition should have failed") }
+        if result.is_ok() {
+            panic!("octave partition should have failed")
+        }
     }
 }

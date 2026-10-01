@@ -2,7 +2,10 @@
 // [AMEND-A] entire file is gated by `cfg(feature = "score")` at submodule declaration.
 
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent}, error::MidiConversionError};
+use crate::{
+    error::MidiConversionError,
+    event::{AbsoluteTicks, MidiEvent},
+};
 use music::notation::lilypond::document::score::LilypondScore;
 use music::notation::rhythm::flatten::iter_events;
 
@@ -16,8 +19,13 @@ fn derive_channel(global_voice_idx: usize) -> u8 {
 }
 
 impl<'a> ToMidiEvents for LilypondScore<'a> {
-    fn append_midi(&self, _base_tick: AbsoluteTicks, _channel: u8, ctx: &ConvertCtx<'_>,
-                   out: &mut Vec<MidiEvent>) -> Result<AbsoluteTicks, MidiConversionError> {
+    fn append_midi(
+        &self,
+        _base_tick: AbsoluteTicks,
+        _channel: u8,
+        ctx: &ConvertCtx<'_>,
+        out: &mut Vec<MidiEvent>,
+    ) -> Result<AbsoluteTicks, MidiConversionError> {
         // REQ-O18: count distinct (staff, voice) pairs; fail if > 16.
         // We need a two-pass or one-pass with known max. Use one pass, tracking max global idx.
         // Build a (staff, voice) -> global_idx mapping from the flat events.
@@ -47,7 +55,9 @@ impl<'a> ToMidiEvents for LilypondScore<'a> {
 
         let mut end_tick: AbsoluteTicks = 0;
         for fe in &flat_events {
-            let global_idx = voice_map.iter().position(|&p| p == (fe.staff, fe.voice))
+            let global_idx = voice_map
+                .iter()
+                .position(|&p| p == (fe.staff, fe.voice))
                 .unwrap_or_else(|| unreachable!("voice_map invariant: pair must be in map"));
             let ch = derive_channel(global_idx);
             let tick_end = fe.event.append_midi(fe.tick, ch, ctx, out)?;
@@ -67,11 +77,18 @@ mod tests {
     use music::notation::lilypond::document::score::{LilypondScore, LilypondStaffGroup};
     use music::notation::lilypond::document::staff::LilypondStaff;
     use music::notation::lilypond::staff_elements::LilypondVoiceElement;
-    use music::notation::rhythm::{RhythmicNotatedEvent, duration::{Duration, DurationKind}};
+    use music::notation::rhythm::{
+        duration::{Duration, DurationKind},
+        RhythmicNotatedEvent,
+    };
     use music::note::pitch::Pitch;
 
-    fn ctx() -> StaticTempoMap { StaticTempoMap::constant(120.0) }
-    fn instr(_s: &str) -> u8 { 0 }
+    fn ctx() -> StaticTempoMap {
+        StaticTempoMap::constant(120.0)
+    }
+    fn instr(_s: &str) -> u8 {
+        0
+    }
 
     #[test]
     fn score_single_note_emits_two_events() {

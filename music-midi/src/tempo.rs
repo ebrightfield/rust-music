@@ -21,7 +21,9 @@ pub trait TempoSource: Send + Sync {
     /// `SmfBuilder::build` calls this to populate the conductor track's
     /// `Tempo` meta events. Returns an empty slice by default (override
     /// for offline export).
-    fn change_points(&self) -> &[(AbsoluteTicks, f32)] { &[] }
+    fn change_points(&self) -> &[(AbsoluteTicks, f32)] {
+        &[]
+    }
 }
 
 /// A heap-allocated, type-erased [`TempoSource`].
@@ -55,8 +57,15 @@ impl StaticTempoMap {
     /// rather than panicking, so consumer-supplied values never crash the
     /// library.
     pub fn constant(bpm: f32) -> Self {
-        let bpm = if bpm.is_finite() && bpm > 0.0 { bpm } else { 120.0 };
-        Self { entries: vec![(0, bpm)], ppq: crate::DEFAULT_PPQ }  // REQ-O10
+        let bpm = if bpm.is_finite() && bpm > 0.0 {
+            bpm
+        } else {
+            120.0
+        };
+        Self {
+            entries: vec![(0, bpm)],
+            ppq: crate::DEFAULT_PPQ,
+        } // REQ-O10
     }
 
     /// Append (or replace) a tempo change at `tick`.
@@ -68,7 +77,11 @@ impl StaticTempoMap {
     /// rather than panicking, so consumer-supplied values never crash the
     /// library.
     pub fn push(&mut self, tick: AbsoluteTicks, bpm: f32) {
-        let bpm = if bpm.is_finite() && bpm > 0.0 { bpm } else { 120.0 };
+        let bpm = if bpm.is_finite() && bpm > 0.0 {
+            bpm
+        } else {
+            120.0
+        };
         match self.entries.last() {
             Some((last, _)) if *last >= tick => {
                 self.entries.retain(|(t, _)| *t < tick);
@@ -90,10 +103,14 @@ impl StaticTempoMap {
         for window in self.entries.windows(2) {
             let (t0, bpm0) = window[0];
             let (t1, _) = window[1];
-            if tick <= t0 { return seconds; }
+            if tick <= t0 {
+                return seconds;
+            }
             let end = tick.min(t1);
             seconds += ((end - t0) as f64 / ppq) * 60.0 / bpm0 as f64;
-            if tick <= t1 { return seconds; }
+            if tick <= t1 {
+                return seconds;
+            }
         }
         if let Some(&(t, bpm)) = self.entries.last() {
             if tick > t {
@@ -110,5 +127,7 @@ impl TempoSource for StaticTempoMap {
         let i = idx.saturating_sub(1);
         self.entries[i].1
     }
-    fn change_points(&self) -> &[(AbsoluteTicks, f32)] { &self.entries }
+    fn change_points(&self) -> &[(AbsoluteTicks, f32)] {
+        &self.entries
+    }
 }

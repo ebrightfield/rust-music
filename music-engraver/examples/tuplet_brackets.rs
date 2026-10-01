@@ -27,8 +27,14 @@ fn main() {
 
     for (i, &pos) in positions.iter().enumerate() {
         draw_stemmed_note(
-            &mut svg, &staff, &font, &config, note_xs[i], pos,
-            NoteheadKind::Filled, Some(StemDirection::Down),
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note_xs[i],
+            pos,
+            NoteheadKind::Filled,
+            Some(StemDirection::Down),
         )
         .unwrap();
     }
@@ -38,8 +44,14 @@ fn main() {
         .map(|g| font.glyph_advance(*g).unwrap_or(0) as f64)
         .sum();
     let triplet_layout = layout_tuplet_bracket(
-        note_xs[0], note_xs[2], positions, TupletPlacement::Above,
-        3, ss, config.tuplet_bracket_thickness, number_width_3,
+        note_xs[0],
+        note_xs[2],
+        positions,
+        TupletPlacement::Above,
+        3,
+        ss,
+        config.tuplet_bracket_thickness,
+        number_width_3,
     );
     draw_tuplet_bracket(&mut svg, &triplet_layout, &font, 0.0, staff.y_origin);
 
@@ -49,8 +61,14 @@ fn main() {
 
     for (i, &pos) in positions5.iter().enumerate() {
         draw_stemmed_note(
-            &mut svg, &staff, &font, &config, note_xs5[i], pos,
-            NoteheadKind::Filled, Some(StemDirection::Up),
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note_xs5[i],
+            pos,
+            NoteheadKind::Filled,
+            Some(StemDirection::Up),
         )
         .unwrap();
     }
@@ -60,8 +78,14 @@ fn main() {
         .map(|g| font.glyph_advance(*g).unwrap_or(0) as f64)
         .sum();
     let quint_layout = layout_tuplet_bracket(
-        note_xs5[0], note_xs5[4], positions5, TupletPlacement::Below,
-        5, ss, config.tuplet_bracket_thickness, number_width_5,
+        note_xs5[0],
+        note_xs5[4],
+        positions5,
+        TupletPlacement::Below,
+        5,
+        ss,
+        config.tuplet_bracket_thickness,
+        number_width_5,
     );
     draw_tuplet_bracket(&mut svg, &quint_layout, &font, 0.0, staff.y_origin);
 
@@ -71,15 +95,27 @@ fn main() {
 
     for (i, &pos) in positions_high.iter().enumerate() {
         draw_stemmed_note(
-            &mut svg, &staff, &font, &config, note_xs_high[i], pos,
-            NoteheadKind::Filled, Some(StemDirection::Down),
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note_xs_high[i],
+            pos,
+            NoteheadKind::Filled,
+            Some(StemDirection::Down),
         )
         .unwrap();
     }
 
     let triplet_high_layout = layout_tuplet_bracket(
-        note_xs_high[0], note_xs_high[2], positions_high, TupletPlacement::Above,
-        3, ss, config.tuplet_bracket_thickness, number_width_3,
+        note_xs_high[0],
+        note_xs_high[2],
+        positions_high,
+        TupletPlacement::Above,
+        3,
+        ss,
+        config.tuplet_bracket_thickness,
+        number_width_3,
     );
     draw_tuplet_bracket(&mut svg, &triplet_high_layout, &font, 0.0, staff.y_origin);
 
@@ -89,7 +125,9 @@ fn main() {
     let line_count = output.matches("<line ").count();
     eprintln!(
         "Tuplet brackets example: {} paths, {} lines, {} bytes",
-        path_count, line_count, output.len()
+        path_count,
+        line_count,
+        output.len()
     );
 
     std::fs::create_dir_all("music-engraver/examples/output").ok();

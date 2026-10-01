@@ -71,6 +71,9 @@ fn main() {
     assert!(svg.contains(">3.<"), "should contain '3.' volta label");
 
     // Should have at least some lines from volta brackets (hooks + top lines)
-    assert!(line_count >= 15, "expected at least 15 lines (staff + stems + volta brackets)");
+    assert!(
+        line_count >= 15,
+        "expected at least 15 lines (staff + stems + volta brackets)"
+    );
     assert!(text_count >= 3, "expected at least 3 texts (volta labels)");
 }

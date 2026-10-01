@@ -2,10 +2,12 @@
 // Note: rescale_quarter_note_at_480 cannot live here (rescale_ticks is pub(crate)).
 // That test is placed in a #[cfg(test)] module inside convert/mod.rs.
 
-use music_midi::*;
 use music_midi::tempo::StaticTempoMap;
+use music_midi::*;
 
-fn instr(_s: &str) -> u8 { 0 }
+fn instr(_s: &str) -> u8 {
+    0
+}
 
 #[test]
 fn rejects_ppq_not_multiple_of_32() {

@@ -4,9 +4,9 @@ use std::collections::HashSet;
 
 use super::input::{parse_input_to_pcs, pc_label};
 
-use musical_combinatorics::three_note_chords;
 use musical_combinatorics::four_note_chords;
 use musical_combinatorics::seven_note_scales;
+use musical_combinatorics::three_note_chords;
 
 pub struct SuperchordsArgs {
     pub input: Vec<String>,
@@ -25,74 +25,262 @@ pub(crate) struct KnownType {
 pub(crate) fn known_types() -> Vec<KnownType> {
     vec![
         // 3-note chords
-        KnownType { name: "Major", pcs: three_note_chords::MAJOR_PCS },
-        KnownType { name: "Minor", pcs: three_note_chords::MINOR_PCS },
-        KnownType { name: "Aug", pcs: three_note_chords::AUG_PCS },
-        KnownType { name: "Dim", pcs: three_note_chords::DIM_PCS },
-        KnownType { name: "PP (sus4+5)", pcs: three_note_chords::PP_PCS },
-        KnownType { name: "AP", pcs: three_note_chords::AP_PCS },
-        KnownType { name: "PA", pcs: three_note_chords::PA_PCS },
-        KnownType { name: "MW", pcs: three_note_chords::MW_PCS },
-        KnownType { name: "WM", pcs: three_note_chords::WM_PCS },
-        KnownType { name: "MH", pcs: three_note_chords::MH_PCS },
-        KnownType { name: "HM", pcs: three_note_chords::HM_PCS },
-        KnownType { name: "AW", pcs: three_note_chords::AW_PCS },
-        KnownType { name: "WA", pcs: three_note_chords::WA_PCS },
-        KnownType { name: "HA", pcs: three_note_chords::HA_PCS },
-        KnownType { name: "AH", pcs: three_note_chords::AH_PCS },
-        KnownType { name: "WW", pcs: three_note_chords::WW_PCS },
-        KnownType { name: "WH", pcs: three_note_chords::WH_PCS },
-        KnownType { name: "HW", pcs: three_note_chords::HW_PCS },
-        KnownType { name: "HH", pcs: three_note_chords::HH_PCS },
+        KnownType {
+            name: "Major",
+            pcs: three_note_chords::MAJOR_PCS,
+        },
+        KnownType {
+            name: "Minor",
+            pcs: three_note_chords::MINOR_PCS,
+        },
+        KnownType {
+            name: "Aug",
+            pcs: three_note_chords::AUG_PCS,
+        },
+        KnownType {
+            name: "Dim",
+            pcs: three_note_chords::DIM_PCS,
+        },
+        KnownType {
+            name: "PP (sus4+5)",
+            pcs: three_note_chords::PP_PCS,
+        },
+        KnownType {
+            name: "AP",
+            pcs: three_note_chords::AP_PCS,
+        },
+        KnownType {
+            name: "PA",
+            pcs: three_note_chords::PA_PCS,
+        },
+        KnownType {
+            name: "MW",
+            pcs: three_note_chords::MW_PCS,
+        },
+        KnownType {
+            name: "WM",
+            pcs: three_note_chords::WM_PCS,
+        },
+        KnownType {
+            name: "MH",
+            pcs: three_note_chords::MH_PCS,
+        },
+        KnownType {
+            name: "HM",
+            pcs: three_note_chords::HM_PCS,
+        },
+        KnownType {
+            name: "AW",
+            pcs: three_note_chords::AW_PCS,
+        },
+        KnownType {
+            name: "WA",
+            pcs: three_note_chords::WA_PCS,
+        },
+        KnownType {
+            name: "HA",
+            pcs: three_note_chords::HA_PCS,
+        },
+        KnownType {
+            name: "AH",
+            pcs: three_note_chords::AH_PCS,
+        },
+        KnownType {
+            name: "WW",
+            pcs: three_note_chords::WW_PCS,
+        },
+        KnownType {
+            name: "WH",
+            pcs: three_note_chords::WH_PCS,
+        },
+        KnownType {
+            name: "HW",
+            pcs: three_note_chords::HW_PCS,
+        },
+        KnownType {
+            name: "HH",
+            pcs: three_note_chords::HH_PCS,
+        },
         // 4-note chords
-        KnownType { name: "Maj7", pcs: four_note_chords::MAJ7_PCS },
-        KnownType { name: "Dom7", pcs: four_note_chords::DOM7_PCS },
-        KnownType { name: "Min7", pcs: four_note_chords::MIN7_PCS },
-        KnownType { name: "MinMaj7", pcs: four_note_chords::MINMAJ7_PCS },
-        KnownType { name: "Dim7", pcs: four_note_chords::DIM7_PCS },
-        KnownType { name: "Min7b5", pcs: four_note_chords::MIN7_FLAT5_PCS },
-        KnownType { name: "Aug7", pcs: four_note_chords::AUG7_PCS },
-        KnownType { name: "AugMaj7", pcs: four_note_chords::AUG_MAJ7_PCS },
-        KnownType { name: "Dom7b5", pcs: four_note_chords::DOM7_FLAT5_PCS },
-        KnownType { name: "Maj(add9)", pcs: four_note_chords::MAJ9_PCS },
-        KnownType { name: "Maj(addb9)", pcs: four_note_chords::MAJ_FLAT9_PCS },
-        KnownType { name: "Maj(add#9)", pcs: four_note_chords::MAJ_SHARP9_PCS },
-        KnownType { name: "Min(add9)", pcs: four_note_chords::MIN9_PCS },
-        KnownType { name: "Min(addb9)", pcs: four_note_chords::MIN_FLAT9_PCS },
-        KnownType { name: "Dim(add9)", pcs: four_note_chords::DIM9_PCS },
-        KnownType { name: "Dim(addb9)", pcs: four_note_chords::DIM_FLAT9_PCS },
-        KnownType { name: "Maj(add11)", pcs: four_note_chords::MAJ11_PCS },
-        KnownType { name: "Maj(add#11)", pcs: four_note_chords::MAJ_SHARP11_PCS },
-        KnownType { name: "Min(add11)", pcs: four_note_chords::MIN11_PCS },
-        KnownType { name: "Min(add#11)", pcs: four_note_chords::MIN_SHARP11_PCS },
-        KnownType { name: "Dim(add11)", pcs: four_note_chords::DIM11_PCS },
-        KnownType { name: "Dim(addb11)", pcs: four_note_chords::DIM_FLAT11_PCS },
+        KnownType {
+            name: "Maj7",
+            pcs: four_note_chords::MAJ7_PCS,
+        },
+        KnownType {
+            name: "Dom7",
+            pcs: four_note_chords::DOM7_PCS,
+        },
+        KnownType {
+            name: "Min7",
+            pcs: four_note_chords::MIN7_PCS,
+        },
+        KnownType {
+            name: "MinMaj7",
+            pcs: four_note_chords::MINMAJ7_PCS,
+        },
+        KnownType {
+            name: "Dim7",
+            pcs: four_note_chords::DIM7_PCS,
+        },
+        KnownType {
+            name: "Min7b5",
+            pcs: four_note_chords::MIN7_FLAT5_PCS,
+        },
+        KnownType {
+            name: "Aug7",
+            pcs: four_note_chords::AUG7_PCS,
+        },
+        KnownType {
+            name: "AugMaj7",
+            pcs: four_note_chords::AUG_MAJ7_PCS,
+        },
+        KnownType {
+            name: "Dom7b5",
+            pcs: four_note_chords::DOM7_FLAT5_PCS,
+        },
+        KnownType {
+            name: "Maj(add9)",
+            pcs: four_note_chords::MAJ9_PCS,
+        },
+        KnownType {
+            name: "Maj(addb9)",
+            pcs: four_note_chords::MAJ_FLAT9_PCS,
+        },
+        KnownType {
+            name: "Maj(add#9)",
+            pcs: four_note_chords::MAJ_SHARP9_PCS,
+        },
+        KnownType {
+            name: "Min(add9)",
+            pcs: four_note_chords::MIN9_PCS,
+        },
+        KnownType {
+            name: "Min(addb9)",
+            pcs: four_note_chords::MIN_FLAT9_PCS,
+        },
+        KnownType {
+            name: "Dim(add9)",
+            pcs: four_note_chords::DIM9_PCS,
+        },
+        KnownType {
+            name: "Dim(addb9)",
+            pcs: four_note_chords::DIM_FLAT9_PCS,
+        },
+        KnownType {
+            name: "Maj(add11)",
+            pcs: four_note_chords::MAJ11_PCS,
+        },
+        KnownType {
+            name: "Maj(add#11)",
+            pcs: four_note_chords::MAJ_SHARP11_PCS,
+        },
+        KnownType {
+            name: "Min(add11)",
+            pcs: four_note_chords::MIN11_PCS,
+        },
+        KnownType {
+            name: "Min(add#11)",
+            pcs: four_note_chords::MIN_SHARP11_PCS,
+        },
+        KnownType {
+            name: "Dim(add11)",
+            pcs: four_note_chords::DIM11_PCS,
+        },
+        KnownType {
+            name: "Dim(addb11)",
+            pcs: four_note_chords::DIM_FLAT11_PCS,
+        },
         // 7-note scales
-        KnownType { name: "Major", pcs: seven_note_scales::MAJOR_SCALE_PCS },
-        KnownType { name: "Melodic Minor", pcs: seven_note_scales::MELODIC_MINOR_PCS },
-        KnownType { name: "Harmonic Minor", pcs: seven_note_scales::HARMONIC_MINOR_PCS },
-        KnownType { name: "Harmonic Major", pcs: seven_note_scales::HARMONIC_MAJOR_PCS },
-        KnownType { name: "Major b9 b13", pcs: seven_note_scales::MAJOR_FLAT9_FLAT13_PCS },
-        KnownType { name: "Mixolydian #11 b13", pcs: seven_note_scales::MIXOLYDIAN_SHARP11_FLAT13_PCS },
-        KnownType { name: "Major b9", pcs: seven_note_scales::MAJOR_FLAT9_PCS },
-        KnownType { name: "Major #9", pcs: seven_note_scales::MAJOR_SHARP9_PCS },
-        KnownType { name: "Mixolydian #9", pcs: seven_note_scales::MIXOLYDIAN_SHARP9_PCS },
-        KnownType { name: "Lydian b9", pcs: seven_note_scales::LYDIAN_FLAT9_PCS },
-        KnownType { name: "Mixolydian #9 #11", pcs: seven_note_scales::MIXOLYDIAN_SHARP9_SHARP11_PCS },
-        KnownType { name: "Mixolydian b9 #11", pcs: seven_note_scales::MIXOLYDIAN_FLAT9_SHARP11_PCS },
-        KnownType { name: "Melodic Minor b9 #11", pcs: seven_note_scales::MELODIC_MINOR_FLAT9_SHARP11_PCS },
-        KnownType { name: "Mixolydian b9 #11 b13", pcs: seven_note_scales::MIXOLYDIAN_FLAT9_SHARP11_FLAT13_PCS },
-        KnownType { name: "Mixolydian #9 b13", pcs: seven_note_scales::MIXOLYDIAN_SHARP9_FLAT13_PCS },
-        KnownType { name: "Melodic Minor b11", pcs: seven_note_scales::MELODIC_MINOR_FLAT11_PCS },
-        KnownType { name: "Mixolydian #9 #11 b13", pcs: seven_note_scales::MIXOLYDIAN_SHARP9_SHARP11_FLAT13_PCS },
-        KnownType { name: "Melodic Minor b9 b11", pcs: seven_note_scales::MELODIC_MINOR_FLAT9_FLAT11_PCS },
-        KnownType { name: "Lydian b9 b13", pcs: seven_note_scales::LYDIAN_FLAT9_FLAT13_PCS },
-        KnownType { name: "Melodic Minor b9 #11 b13", pcs: seven_note_scales::MELODIC_MINOR_FLAT9_SHARP11_FLAT13_PCS },
-        KnownType { name: "Lydian #9 b13", pcs: seven_note_scales::LYDIAN_SHARP9_FLAT13_PCS },
-        KnownType { name: "Major #9 b13", pcs: seven_note_scales::MAJOR_SHARP9_FLAT13_PCS },
+        KnownType {
+            name: "Major",
+            pcs: seven_note_scales::MAJOR_SCALE_PCS,
+        },
+        KnownType {
+            name: "Melodic Minor",
+            pcs: seven_note_scales::MELODIC_MINOR_PCS,
+        },
+        KnownType {
+            name: "Harmonic Minor",
+            pcs: seven_note_scales::HARMONIC_MINOR_PCS,
+        },
+        KnownType {
+            name: "Harmonic Major",
+            pcs: seven_note_scales::HARMONIC_MAJOR_PCS,
+        },
+        KnownType {
+            name: "Major b9 b13",
+            pcs: seven_note_scales::MAJOR_FLAT9_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Mixolydian #11 b13",
+            pcs: seven_note_scales::MIXOLYDIAN_SHARP11_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Major b9",
+            pcs: seven_note_scales::MAJOR_FLAT9_PCS,
+        },
+        KnownType {
+            name: "Major #9",
+            pcs: seven_note_scales::MAJOR_SHARP9_PCS,
+        },
+        KnownType {
+            name: "Mixolydian #9",
+            pcs: seven_note_scales::MIXOLYDIAN_SHARP9_PCS,
+        },
+        KnownType {
+            name: "Lydian b9",
+            pcs: seven_note_scales::LYDIAN_FLAT9_PCS,
+        },
+        KnownType {
+            name: "Mixolydian #9 #11",
+            pcs: seven_note_scales::MIXOLYDIAN_SHARP9_SHARP11_PCS,
+        },
+        KnownType {
+            name: "Mixolydian b9 #11",
+            pcs: seven_note_scales::MIXOLYDIAN_FLAT9_SHARP11_PCS,
+        },
+        KnownType {
+            name: "Melodic Minor b9 #11",
+            pcs: seven_note_scales::MELODIC_MINOR_FLAT9_SHARP11_PCS,
+        },
+        KnownType {
+            name: "Mixolydian b9 #11 b13",
+            pcs: seven_note_scales::MIXOLYDIAN_FLAT9_SHARP11_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Mixolydian #9 b13",
+            pcs: seven_note_scales::MIXOLYDIAN_SHARP9_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Melodic Minor b11",
+            pcs: seven_note_scales::MELODIC_MINOR_FLAT11_PCS,
+        },
+        KnownType {
+            name: "Mixolydian #9 #11 b13",
+            pcs: seven_note_scales::MIXOLYDIAN_SHARP9_SHARP11_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Melodic Minor b9 b11",
+            pcs: seven_note_scales::MELODIC_MINOR_FLAT9_FLAT11_PCS,
+        },
+        KnownType {
+            name: "Lydian b9 b13",
+            pcs: seven_note_scales::LYDIAN_FLAT9_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Melodic Minor b9 #11 b13",
+            pcs: seven_note_scales::MELODIC_MINOR_FLAT9_SHARP11_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Lydian #9 b13",
+            pcs: seven_note_scales::LYDIAN_SHARP9_FLAT13_PCS,
+        },
+        KnownType {
+            name: "Major #9 b13",
+            pcs: seven_note_scales::MAJOR_SHARP9_FLAT13_PCS,
+        },
     ]
 }
-
 
 /// Transpose a slice of Pcs by `offset` semitones, returning a HashSet.
 pub(crate) fn transpose(pcs: &[Pc], offset: u8) -> HashSet<Pc> {
@@ -123,9 +311,7 @@ pub fn run(args: SuperchordsArgs) -> Result<()> {
 
     if args.verbose {
         let pc_ints: Vec<u8> = pcs.iter().map(u8::from).collect();
-        eprintln!(
-            "superchords: input={pc_ints:?}, size range={min_size}..={max_size}"
-        );
+        eprintln!("superchords: input={pc_ints:?}, size range={min_size}..={max_size}");
     }
 
     let catalog = known_types();
@@ -154,7 +340,8 @@ pub fn run(args: SuperchordsArgs) -> Result<()> {
 
     // Sort by size then by root
     matches.sort_by(|a, b| {
-        a.size.cmp(&b.size)
+        a.size
+            .cmp(&b.size)
             .then_with(|| u8::from(&a.root).cmp(&u8::from(&b.root)))
     });
 
@@ -165,7 +352,11 @@ pub fn run(args: SuperchordsArgs) -> Result<()> {
     header_pcs.sort();
     println!(
         "Superchords of {{{}}} (size {min_size}..={max_size}):",
-        header_pcs.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
+        header_pcs
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
     );
     println!();
 

@@ -3,10 +3,13 @@ use music::note::pitch_class::Pc;
 use music::note_collections::chord_name::naming_heuristics::infer_chord_quality;
 use music::note_collections::chord_name::{ChordNameDisplayConfig, MajNotation};
 use music::note_collections::geometry::sets::get_subchords;
-use music::note_collections::pc_set::PcShape;
+use music::note_collections::geometry::IntervalMatrix;
+use music::note_collections::pc_set::{PcContent, PcShape};
 use std::collections::HashSet;
 
+use super::forte::lookup_forte;
 use super::input::{parse_input_to_pcs, pc_label};
+use super::prime_form::prime_form;
 
 pub struct SubchordsArgs {
     pub input: Vec<String>,
@@ -56,6 +59,26 @@ fn try_name_subset(pcs: &[Pc], preferred_root: Option<Pc>) -> Option<String> {
     }
 }
 
+fn set_analysis_fallback(pcs: &[Pc]) -> String {
+    let prime = prime_form(pcs);
+    let prime_text = prime
+        .iter()
+        .map(u8::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let shape = PcContent::new(pcs.to_vec()).to_shape();
+    let vector = IntervalMatrix::new(&shape).reduced_interval_vector();
+    let vector_text = vector
+        .iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let class = lookup_forte(&prime)
+        .map(|forte| format!("set {forte}"))
+        .unwrap_or_else(|| "set".to_string());
+    format!("{class} pf=[{prime_text}] iv=<{vector_text}>")
+}
+
 pub fn run(args: SubchordsArgs) -> Result<()> {
     let pcs = parse_input_to_pcs(&args.input)?;
     let pc_set = PcShape::new(pcs.clone());
@@ -72,8 +95,7 @@ pub fn run(args: SubchordsArgs) -> Result<()> {
         pcs.len()
     );
 
-    let subchords = get_subchords(&pc_set, args.size)
-        .context("failed to compute subchords")?;
+    let subchords = get_subchords(&pc_set, args.size).context("failed to compute subchords")?;
 
     // `PcShape::new` sorts and zero-anchors, so the shape is rooted on pc 0
     // regardless of what was queried. Unless the caller explicitly asked for
@@ -143,7 +165,8 @@ pub fn run(args: SubchordsArgs) -> Result<()> {
             .join(",");
 
         if args.name {
-            let name = try_name_subset(sub, Some(query_root)).unwrap_or_else(|| "?".to_string());
+            let name = try_name_subset(sub, Some(query_root))
+                .unwrap_or_else(|| set_analysis_fallback(sub));
             println!("  {:>3}. {{{set_str}}}  {name}", i + 1);
         } else {
             println!("  {:>3}. {{{set_str}}}", i + 1);
@@ -163,8 +186,15 @@ mod tests {
     #[test]
     fn subchords_of_major_scale_size_3() {
         let args = SubchordsArgs {
-            input: vec!["C".into(), "D".into(), "E".into(), "F".into(),
-                        "G".into(), "A".into(), "B".into()],
+            input: vec![
+                "C".into(),
+                "D".into(),
+                "E".into(),
+                "F".into(),
+                "G".into(),
+                "A".into(),
+                "B".into(),
+            ],
             size: 3,
             name: false,
             relative: false,
@@ -177,8 +207,15 @@ mod tests {
     #[test]
     fn subchords_with_naming() {
         let args = SubchordsArgs {
-            input: vec!["C".into(), "D".into(), "E".into(), "F".into(),
-                        "G".into(), "A".into(), "B".into()],
+            input: vec![
+                "C".into(),
+                "D".into(),
+                "E".into(),
+                "F".into(),
+                "G".into(),
+                "A".into(),
+                "B".into(),
+            ],
             size: 3,
             name: true,
             relative: false,
@@ -220,7 +257,10 @@ mod tests {
         // G,A,B in a G-major query → G major (add 9), not C-anything.
         let g_a_b = vec![Pc::Pc7, Pc::Pc9, Pc::Pc11];
         let name = try_name_subset(&g_a_b, Some(Pc::Pc7)).expect("should name");
-        assert!(name.starts_with('G'), "expected a G-rooted name, got: {name}");
+        assert!(
+            name.starts_with('G'),
+            "expected a G-rooted name, got: {name}"
+        );
 
         // Bb,C,D,F in a Bb-major query → Bb-rooted.
         let bb_set = vec![Pc::Pc10, Pc::Pc0, Pc::Pc2, Pc::Pc5];
@@ -238,14 +278,24 @@ mod tests {
         // D,F,A with a G query: no G present, so name from the lowest pc (D).
         let d_min = vec![Pc::Pc5, Pc::Pc9, Pc::Pc2];
         let name = try_name_subset(&d_min, Some(Pc::Pc7)).expect("should name");
-        assert!(name.starts_with('D'), "expected a D-rooted name, got: {name}");
+        assert!(
+            name.starts_with('D'),
+            "expected a D-rooted name, got: {name}"
+        );
     }
 
     /// `--relative` keeps the historical prime-form output; the default does not.
     #[test]
     fn relative_flag_reports_prime_form() {
-        let input = vec!["G".into(), "A".into(), "B".into(), "C".into(),
-                         "D".into(), "E".into(), "F#".into()];
+        let input = vec![
+            "G".into(),
+            "A".into(),
+            "B".into(),
+            "C".into(),
+            "D".into(),
+            "E".into(),
+            "F#".into(),
+        ];
         for relative in [true, false] {
             let args = SubchordsArgs {
                 input: input.clone(),
@@ -264,8 +314,10 @@ mod tests {
         let name = try_name_subset(&pcs, None);
         assert!(name.is_some());
         let n = name.unwrap();
-        assert!(n.contains("Maj") || n.contains("maj"),
-                "C major triad should be named as major, got: {n}");
+        assert!(
+            n.contains("Maj") || n.contains("maj"),
+            "C major triad should be named as major, got: {n}"
+        );
     }
 
     #[test]
@@ -275,6 +327,15 @@ mod tests {
         assert!(name.is_some());
         let n = name.unwrap();
         assert!(n.starts_with("D"), "root should be D, got: {n}");
+    }
+
+    #[test]
+    fn unnamed_subsets_fall_back_to_set_analysis() {
+        let pcs = vec![Pc::Pc0, Pc::Pc1, Pc::Pc2];
+        assert_eq!(
+            set_analysis_fallback(&pcs),
+            "set 3-1 pf=[0,1,2] iv=<2,1,0,0,0,0>"
+        );
     }
 
     #[test]

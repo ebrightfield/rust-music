@@ -3,14 +3,14 @@ use music::melody::context::ChordProgression;
 use music::melody::pattern::IntervalPattern;
 use music::melody::sequencer::{MelodicEvent, MelodicSequencer, MelodicSequencerConfig};
 use music::melody::{Direction, PitchBounds, TurnaroundMode};
+use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::note::note::Note;
+use music::note::pitch::Pitch;
 use music::note::pitch_class::Pc;
 use music::note_collections::pc_set::PcShape;
 use music::note_collections::spelling::spell_shape;
 use music::note_collections::NoteSet;
 use music::note_collections::OctavePartition;
-use music::note::pitch::Pitch;
-use music::notation::rhythm::duration::{Duration, DurationKind};
 use musical_combinatorics::seven_note_scales::SevenNoteScaleQuality;
 
 use super::input::parse_pc;
@@ -86,14 +86,14 @@ fn parse_key_note(token: &str) -> Option<Note> {
 fn conventional_key_note(pc: Pc) -> Note {
     match u8::from(&pc) {
         0 => Note::C,
-        1 => Note::Des,  // Db major
+        1 => Note::Des, // Db major
         2 => Note::D,
-        3 => Note::Ees,  // Eb major
+        3 => Note::Ees, // Eb major
         4 => Note::E,
         5 => Note::F,
-        6 => Note::Fis,  // F# major (could be Gb; F# is the common choice)
+        6 => Note::Fis, // F# major (could be Gb; F# is the common choice)
         7 => Note::G,
-        8 => Note::Aes,  // Ab major
+        8 => Note::Aes, // Ab major
         9 => Note::A,
         10 => Note::Bes, // Bb major
         _ => Note::B,
@@ -173,10 +173,8 @@ fn difficulty_config(difficulty: u8, seed: Option<u64>) -> (IntervalPattern, Vec
             // Multi-level pattern: level 0 does step-skip-step, level 1 leaps a third
             let rotated = rotate_pattern(&[1, 2, -1, 3, -1, 2, -2, 1], offset);
             let half = rotated.len() / 2;
-            let pattern = IntervalPattern::new(
-                vec![rotated[..half].to_vec(), rotated[half..].to_vec()],
-                1,
-            );
+            let pattern =
+                IntervalPattern::new(vec![rotated[..half].to_vec(), rotated[half..].to_vec()], 1);
             let rhythm = vec![
                 Duration::EIGHTH,
                 Duration::QTR,
@@ -192,8 +190,11 @@ fn difficulty_config(difficulty: u8, seed: Option<u64>) -> (IntervalPattern, Vec
             let rotated = rotate_pattern(&[2, -1, 3, -2, 4, 1, -3, 2], offset);
             let third = rotated.len() / 3;
             let pattern = IntervalPattern::new(
-                vec![rotated[..third].to_vec(), rotated[third..2*third].to_vec()],
-                rotated[2*third],
+                vec![
+                    rotated[..third].to_vec(),
+                    rotated[third..2 * third].to_vec(),
+                ],
+                rotated[2 * third],
             );
             let rhythm = vec![
                 Duration::EIGHTH,
@@ -262,21 +263,18 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
 
     // Notes per measure: assume 4/4 time, difficulty affects density
     let notes_per_measure = match args.difficulty {
-        1 => 4,       // all quarter notes
-        2 => 6,       // mix of quarter + eighth
-        3 => 5,       // varied
-        4 => 6,       // syncopated
-        _ => 7,       // complex
+        1 => 4, // all quarter notes
+        2 => 6, // mix of quarter + eighth
+        3 => 5, // varied
+        4 => 6, // syncopated
+        _ => 7, // complex
     };
     let total_notes = args.measures * notes_per_measure;
 
     let (pattern, rhythm) = difficulty_config(args.difficulty, args.seed);
 
     let starting_pitch = Pitch::new(root, 4);
-    let bounds = PitchBounds::try_new(
-        Pitch::new(Note::C, 3),
-        Pitch::new(Note::C, 6),
-    )?;
+    let bounds = PitchBounds::try_new(Pitch::new(Note::C, 3), Pitch::new(Note::C, 6))?;
 
     let config = MelodicSequencerConfig {
         chord_progression: ChordProgression::static_chord(scale),
@@ -290,7 +288,8 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
     };
 
     let mut sequencer = MelodicSequencer::new(config);
-    let melody = sequencer.generate()
+    let melody = sequencer
+        .generate()
         .map_err(|e| anyhow::anyhow!("Melody generation failed: {e:?}"))?;
 
     // If an output file was requested, render staff notation via the engraver
@@ -320,11 +319,29 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
     print_melody_text(&melody, args.measures);
 
     if args.verbose {
-        eprintln!("Generated {} events in {} {} over {} measures",
-            melody.len(), key_name, scale_name, args.measures);
-        eprintln!("Pitch range: {}–{}",
-            format_pitch(&melody.iter().min_by_key(|e| e.pitch.midi_note).unwrap().pitch),
-            format_pitch(&melody.iter().max_by_key(|e| e.pitch.midi_note).unwrap().pitch),
+        eprintln!(
+            "Generated {} events in {} {} over {} measures",
+            melody.len(),
+            key_name,
+            scale_name,
+            args.measures
+        );
+        eprintln!(
+            "Pitch range: {}–{}",
+            format_pitch(
+                &melody
+                    .iter()
+                    .min_by_key(|e| e.pitch.midi_note)
+                    .unwrap()
+                    .pitch
+            ),
+            format_pitch(
+                &melody
+                    .iter()
+                    .max_by_key(|e| e.pitch.midi_note)
+                    .unwrap()
+                    .pitch
+            ),
         );
     }
 
@@ -348,7 +365,12 @@ fn print_melody_text(melody: &[MelodicEvent], measures: usize) {
             .iter()
             .map(|e| {
                 let tied = if e.tied { "~" } else { "" };
-                format!("{}{} ({})", format_pitch(&e.pitch), tied, format_duration(&e.duration))
+                format!(
+                    "{}{} ({})",
+                    format_pitch(&e.pitch),
+                    tied,
+                    format_duration(&e.duration)
+                )
             })
             .collect();
         println!("  m{}: {}", m + 1, bar.join("  "));
@@ -358,7 +380,13 @@ fn print_melody_text(melody: &[MelodicEvent], measures: usize) {
     if idx < melody.len() {
         let bar: Vec<String> = melody[idx..]
             .iter()
-            .map(|e| format!("{} ({})", format_pitch(&e.pitch), format_duration(&e.duration)))
+            .map(|e| {
+                format!(
+                    "{} ({})",
+                    format_pitch(&e.pitch),
+                    format_duration(&e.duration)
+                )
+            })
             .collect();
         println!("  extra: {}", bar.join("  "));
     }
@@ -473,10 +501,7 @@ mod tests {
             chord_progression: ChordProgression::static_chord(scale),
             interval_pattern: pattern,
             rhythm_pattern: rhythm,
-            bounds: PitchBounds::try_new(
-                Pitch::new(Note::C, 3),
-                Pitch::new(Note::C, 6),
-            ).unwrap(),
+            bounds: PitchBounds::try_new(Pitch::new(Note::C, 3), Pitch::new(Note::C, 6)).unwrap(),
             starting_pitch: Pitch::new(Note::C, 4),
             direction: Direction::Up,
             turnaround_mode: TurnaroundMode::Reflect,

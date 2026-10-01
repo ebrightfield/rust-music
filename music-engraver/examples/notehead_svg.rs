@@ -32,11 +32,7 @@ fn main() {
     }
 
     // Place the notehead centered on the middle staff line
-    writer.add_path(
-        &outline.path_data,
-        "black",
-        Some("translate(400, 0)"),
-    );
+    writer.add_path(&outline.path_data, "black", Some("translate(400, 0)"));
 
     let svg = writer.to_svg();
 

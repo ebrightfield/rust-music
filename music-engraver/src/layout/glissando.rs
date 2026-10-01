@@ -222,7 +222,10 @@ mod tests {
         let layout = layout_glissando(X1, 0, X2, 4, &staff, GlissandoStyle::Line, None)
             .expect("should produce layout");
         // Ascending: y_end < y_start (lower y = higher pitch in SVG)
-        assert!(layout.y_end < layout.y_start, "ascending should have y_end < y_start");
+        assert!(
+            layout.y_end < layout.y_start,
+            "ascending should have y_end < y_start"
+        );
     }
 
     #[test]
@@ -231,7 +234,10 @@ mod tests {
         let layout = layout_glissando(X1, 8, X2, 0, &staff, GlissandoStyle::Line, None)
             .expect("should produce layout");
         // Descending: y_end > y_start
-        assert!(layout.y_end > layout.y_start, "descending should have y_end > y_start");
+        assert!(
+            layout.y_end > layout.y_start,
+            "descending should have y_end > y_start"
+        );
     }
 
     #[test]
@@ -305,7 +311,10 @@ mod tests {
         let asc = layout_glissando(X1, 0, X2, 8, &staff, GlissandoStyle::Line, None).unwrap();
         let desc = layout_glissando(X1, 8, X2, 0, &staff, GlissandoStyle::Line, None).unwrap();
         // y_start and y_end should be swapped
-        assert!((asc.y_start - desc.y_end).abs() < 1.0, "endpoint y values should approximately swap");
+        assert!(
+            (asc.y_start - desc.y_end).abs() < 1.0,
+            "endpoint y values should approximately swap"
+        );
     }
 
     // --- half-glissando right (trailing) ---
@@ -320,14 +329,19 @@ mod tests {
     #[test]
     fn half_right_x_start_past_notehead() {
         let staff = test_staff();
-        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
-        assert!(layout.x_start > 100.0, "x_start should be right of source x");
+        let layout =
+            layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
+        assert!(
+            layout.x_start > 100.0,
+            "x_start should be right of source x"
+        );
     }
 
     #[test]
     fn half_right_x_end_near_staff_edge() {
         let staff = test_staff();
-        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
+        let layout =
+            layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
         assert!(layout.x_end < 5000.0, "x_end should be left of right edge");
         assert!(layout.x_end > 4900.0, "x_end should be near the right edge");
     }
@@ -337,7 +351,8 @@ mod tests {
         let staff = test_staff();
         let mid_y = staff.y_of(4);
         // Source at bottom line (pos 0), above middle → should slope toward middle
-        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
+        let layout =
+            layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::Line).unwrap();
         let source_y = staff.y_of(0);
         // y_end should be between source and mid_y
         assert!(
@@ -357,8 +372,13 @@ mod tests {
     #[test]
     fn half_right_with_text_shows_text() {
         let staff = test_staff();
-        let layout = layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::LineWithText).unwrap();
-        assert!(layout.show_text, "LineWithText should show text on trailing half");
+        let layout =
+            layout_half_glissando_right(100.0, 0, 5000.0, &staff, GlissandoStyle::LineWithText)
+                .unwrap();
+        assert!(
+            layout.show_text,
+            "LineWithText should show text on trailing half"
+        );
     }
 
     // --- half-glissando left (incoming) ---

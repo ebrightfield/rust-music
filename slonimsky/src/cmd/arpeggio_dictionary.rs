@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use music::fretboard::fretboard_shape::chord_shape_search::find_chord_shapes;
-use music::fretboard::{
-    Fretboard, FretboardShape, BASS_4, BASS_5, DADGAD, DROP_D, OPEN_G, STANDARD_7, STD_6STR_GTR,
-};
+use music::fretboard::{Fretboard, FretboardShape};
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
 use music::svg::FretboardBuilder;
@@ -11,21 +9,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use super::input::{parse_input_to_pcs, pc_label, resolve_theme};
-
-fn resolve_tuning(name: &str) -> Result<&'static Fretboard> {
-    match name.to_lowercase().as_str() {
-        "standard" => Ok(&STD_6STR_GTR),
-        "drop-d" | "dropd" => Ok(&DROP_D),
-        "dadgad" => Ok(&DADGAD),
-        "open-g" | "openg" => Ok(&OPEN_G),
-        "7-string" | "7string" => Ok(&STANDARD_7),
-        "bass-4" | "bass4" => Ok(&BASS_4),
-        "bass-5" | "bass5" => Ok(&BASS_5),
-        other => anyhow::bail!(
-            "unknown tuning: '{other}' (options: standard, drop-d, dadgad, open-g, 7-string, bass-4, bass-5)"
-        ),
-    }
-}
+use super::tuning::TuningSpec;
 
 /// Pick the most common spelling for a pitch class.
 fn pc_to_note(pc: Pc) -> Note {
@@ -62,8 +46,7 @@ fn resolve_keys(keys_str: Option<&str>) -> Result<Vec<Pc>> {
                 if part.is_empty() {
                     continue;
                 }
-                let pc = parse_pc(part)
-                    .with_context(|| format!("invalid key: '{part}'"))?;
+                let pc = parse_pc(part).with_context(|| format!("invalid key: '{part}'"))?;
                 keys.push(pc);
             }
             anyhow::ensure!(!keys.is_empty(), "no keys specified");
@@ -81,8 +64,8 @@ fn find_arpeggio_shapes<'a>(
     positions: usize,
 ) -> Result<Vec<FretboardShape<'a>>> {
     let notes: Vec<Note> = pcs.iter().map(|pc| pc_to_note(*pc)).collect();
-    let results = find_chord_shapes(&notes, fretboard)
-        .with_context(|| "chord shape search failed")?;
+    let results =
+        find_chord_shapes(&notes, fretboard).with_context(|| "chord shape search failed")?;
 
     let mut shapes: Vec<FretboardShape> = Vec::new();
 
@@ -117,10 +100,14 @@ fn find_arpeggio_shapes<'a>(
 pub fn run(args: ArpeggioDictionaryArgs) -> Result<()> {
     let base_pcs = parse_input_to_pcs(&args.input)?;
     let keys = resolve_keys(args.keys.as_deref())?;
-    let tuning = resolve_tuning(&args.tuning)?;
+    let tuning = TuningSpec::parse(&args.tuning)?;
     let theme = resolve_theme(args.theme.as_deref())?;
 
-    let base_label: String = base_pcs.iter().map(|pc| pc_label(*pc)).collect::<Vec<_>>().join(", ");
+    let base_label: String = base_pcs
+        .iter()
+        .map(|pc| pc_label(*pc))
+        .collect::<Vec<_>>()
+        .join(", ");
 
     if args.verbose {
         eprintln!(
@@ -145,11 +132,10 @@ pub fn run(args: ArpeggioDictionaryArgs) -> Result<()> {
         );
     }
 
-    let is_svg = args.output.as_ref().is_some_and(|p| {
-        Path::new(p)
-            .extension()
-            .and_then(|e| e.to_str()) == Some("svg")
-    });
+    let is_svg = args
+        .output
+        .as_ref()
+        .is_some_and(|p| Path::new(p).extension().and_then(|e| e.to_str()) == Some("svg"));
 
     // Compute arpeggio shapes per key
     let mut per_key: Vec<(Pc, Vec<FretboardShape<'_>>)> = Vec::new();
@@ -158,7 +144,12 @@ pub fn run(args: ArpeggioDictionaryArgs) -> Result<()> {
     for &key in &keys {
         let offset = u8::from(key);
         let transposed = transpose(&base_pcs, offset);
-        let shapes = find_arpeggio_shapes(&transposed, tuning, args.max_span, args.positions)?;
+        let shapes = find_arpeggio_shapes(
+            &transposed,
+            &tuning.fretboard,
+            args.max_span,
+            args.positions,
+        )?;
         total_shapes += shapes.len();
         per_key.push((key, shapes));
     }
@@ -166,17 +157,26 @@ pub fn run(args: ArpeggioDictionaryArgs) -> Result<()> {
     if is_svg {
         let path = args.output.as_ref().unwrap();
         let svg = build_grid_svg(&per_key, &base_label, args.positions, &theme);
-        fs::write(path, &svg)
-            .with_context(|| format!("failed to write {path}"))?;
+        fs::write(path, &svg).with_context(|| format!("failed to write {path}"))?;
         if args.verbose {
-            eprintln!("wrote {path} ({} bytes, {} keys × up to {} positions)", svg.len(), keys.len(), args.positions);
+            eprintln!(
+                "wrote {path} ({} bytes, {} keys × up to {} positions)",
+                svg.len(),
+                keys.len(),
+                args.positions
+            );
         }
     } else {
-        let text = build_text_report(&per_key, &base_label, &args.tuning, args.max_span, total_shapes);
+        let text = build_text_report(
+            &per_key,
+            &base_label,
+            &args.tuning,
+            args.max_span,
+            total_shapes,
+        );
         match args.output {
             Some(ref path) => {
-                fs::write(path, &text)
-                    .with_context(|| format!("failed to write {path}"))?;
+                fs::write(path, &text).with_context(|| format!("failed to write {path}"))?;
                 if args.verbose {
                     eprintln!("wrote {path} ({} bytes)", text.len());
                 }
@@ -230,7 +230,11 @@ fn build_text_report(
         }
     }
 
-    out.push_str(&format!("\nTotal: {} shapes across {} keys\n", total_shapes, per_key.len()));
+    out.push_str(&format!(
+        "\nTotal: {} shapes across {} keys\n",
+        total_shapes,
+        per_key.len()
+    ));
     out
 }
 
@@ -315,6 +319,7 @@ fn strip_svg_wrapper(svg: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use music::fretboard::STD_6STR_GTR;
 
     #[test]
     fn resolve_keys_all() {
@@ -376,7 +381,10 @@ mod tests {
         };
         run(args).unwrap();
         let content = std::fs::read_to_string(&out).unwrap();
-        assert!(content.contains("Arpeggio Dictionary:"), "should have header");
+        assert!(
+            content.contains("Arpeggio Dictionary:"),
+            "should have header"
+        );
         assert!(content.contains("Key: C"), "should have key header");
         assert!(content.contains("Total:"), "should have total line");
     }
@@ -399,8 +407,14 @@ mod tests {
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(content.starts_with("<svg"), "should start with <svg");
         assert!(content.contains("</svg>"), "should close with </svg>");
-        assert!(content.contains("Arpeggio Dictionary:"), "should have title");
-        assert!(content.contains("<g transform"), "should have positioned groups");
+        assert!(
+            content.contains("Arpeggio Dictionary:"),
+            "should have title"
+        );
+        assert!(
+            content.contains("<g transform"),
+            "should have positioned groups"
+        );
     }
 
     #[test]
@@ -450,7 +464,10 @@ mod tests {
         let content1 = std::fs::read_to_string(&out1).unwrap();
         let content3 = std::fs::read_to_string(&out3).unwrap();
         // 3-key report should be longer than 1-key
-        assert!(content3.len() > content1.len(), "3-key report should be larger");
+        assert!(
+            content3.len() > content1.len(),
+            "3-key report should be larger"
+        );
         // 3-key should mention all 3 keys
         assert!(content3.contains("Key: C"));
         assert!(content3.contains("Key: G"));

@@ -9,10 +9,7 @@ fn slonimsky() -> Command {
 
 #[test]
 fn default_produces_header_and_measures() {
-    let out = slonimsky()
-        .args(["sight-reading"])
-        .output()
-        .unwrap();
+    let out = slonimsky().args(["sight-reading"]).output().unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
@@ -51,10 +48,7 @@ fn g_major_key() {
         .unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("Key: G major"),
-        "should show G major"
-    );
+    assert!(stdout.contains("Key: G major"), "should show G major");
 }
 
 #[test]
@@ -77,7 +71,10 @@ fn harmonic_minor_scale() {
         .args(["sight-reading", "--scale", "harmonic-minor"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("harmonic-minor").or(predicate::str::contains("harmonic minor")));
+        .stdout(
+            predicate::str::contains("harmonic-minor")
+                .or(predicate::str::contains("harmonic minor")),
+        );
 }
 
 #[test]
@@ -86,7 +83,10 @@ fn harmonic_major_scale() {
         .args(["sight-reading", "--scale", "harmonic-major"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("harmonic-major").or(predicate::str::contains("harmonic major")));
+        .stdout(
+            predicate::str::contains("harmonic-major")
+                .or(predicate::str::contains("harmonic major")),
+        );
 }
 
 #[test]
@@ -150,7 +150,13 @@ fn difficulty_5_produces_more_notes() {
 fn all_difficulty_levels_succeed() {
     for d in 1..=5 {
         slonimsky()
-            .args(["sight-reading", "--difficulty", &d.to_string(), "--seed", "7"])
+            .args([
+                "sight-reading",
+                "--difficulty",
+                &d.to_string(),
+                "--seed",
+                "7",
+            ])
             .assert()
             .success();
     }
@@ -220,10 +226,7 @@ fn single_measure() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("Measures: 1"), "should show 1 measure");
     assert!(stdout.contains("m1:"), "should have measure 1");
-    assert!(
-        !stdout.contains("m2:"),
-        "should not have measure 2"
-    );
+    assert!(!stdout.contains("m2:"), "should not have measure 2");
 }
 
 // --- Output content validation ---
@@ -256,7 +259,17 @@ fn notes_contain_pitch_and_duration() {
 #[test]
 fn c_major_pitches_within_bounds() {
     let out = slonimsky()
-        .args(["sight-reading", "--key", "C", "--seed", "42", "--difficulty", "3", "--measures", "8"])
+        .args([
+            "sight-reading",
+            "--key",
+            "C",
+            "--seed",
+            "42",
+            "--difficulty",
+            "3",
+            "--measures",
+            "8",
+        ])
         .output()
         .unwrap();
     assert!(out.status.success());
@@ -300,11 +313,16 @@ fn g_harmonic_minor_difficulty_4() {
     let out = slonimsky()
         .args([
             "sight-reading",
-            "--key", "G",
-            "--scale", "harmonic-minor",
-            "--difficulty", "4",
-            "--measures", "2",
-            "--seed", "99",
+            "--key",
+            "G",
+            "--scale",
+            "harmonic-minor",
+            "--difficulty",
+            "4",
+            "--measures",
+            "2",
+            "--seed",
+            "99",
         ])
         .output()
         .unwrap();
@@ -365,13 +383,26 @@ fn treble8_places_noteheads_like_treble() {
         let path = dir.path().join(name);
         let out = slonimsky()
             .args([
-                "sight-reading", "--key", "C", "--scale", "major",
-                "--measures", "1", "--seed", "5", "--clef", clef,
-                "-o", path.to_str().unwrap(),
+                "sight-reading",
+                "--key",
+                "C",
+                "--scale",
+                "major",
+                "--measures",
+                "1",
+                "--seed",
+                "5",
+                "--clef",
+                clef,
+                "-o",
+                path.to_str().unwrap(),
             ])
             .output()
             .unwrap();
-        assert!(out.status.success(), "rendering with --clef {clef} should succeed");
+        assert!(
+            out.status.success(),
+            "rendering with --clef {clef} should succeed"
+        );
         std::fs::read_to_string(&path).unwrap()
     };
 

@@ -64,18 +64,23 @@ fn main() {
 
     let path_count = svg.matches("<path").count();
     let line_count = svg.matches("<line").count();
-    println!(
-        "SVG contains {} paths, {} lines",
-        path_count, line_count
-    );
+    println!("SVG contains {} paths, {} lines", path_count, line_count);
 
     // Expect noteheads + clef + dynamics + hairpin lines
     // 12 notes + 1 clef + 8 dynamics = ~21 paths
-    assert!(path_count > 15, "expected paths for notes, clef, dynamics: got {}", path_count);
+    assert!(
+        path_count > 15,
+        "expected paths for notes, clef, dynamics: got {}",
+        path_count
+    );
     // 5 staff lines per system × 2 systems + stems + hairpin wedge lines
     // Each hairpin = 2 lines, 4 hairpins = 8 lines
     // Staff: 10, stems: ~12, hairpins: ~8 = ~30
-    assert!(line_count > 20, "expected staff lines + stems + hairpin wedges: got {}", line_count);
+    assert!(
+        line_count > 20,
+        "expected staff lines + stems + hairpin wedges: got {}",
+        line_count
+    );
 
     // Hairpins are drawn as <line> elements — count lines that are not staff lines or stems
     // (can't easily distinguish, but at least verify we have enough)

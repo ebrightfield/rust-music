@@ -21,13 +21,13 @@
 //! // Generate melody...
 //! ```
 
-pub mod pattern;
 pub mod context;
+pub mod pattern;
 pub mod sequencer;
 
-pub use pattern::{PatternLevel, IntervalPattern};
-pub use context::{TimedChord, ChordProgression};
-pub use sequencer::{MelodicSequencer, MelodicSequencerConfig, MelodicEvent};
+pub use context::{ChordProgression, TimedChord};
+pub use pattern::{IntervalPattern, PatternLevel};
+pub use sequencer::{MelodicEvent, MelodicSequencer, MelodicSequencerConfig};
 
 use crate::error::MusicSemanticsError;
 use crate::note::pitch::Pitch;
@@ -94,8 +94,7 @@ impl PitchBounds {
 
     /// Check if a pitch is within bounds (inclusive).
     pub fn contains(&self, pitch: &Pitch) -> bool {
-        pitch.midi_note >= self.lowest.midi_note
-            && pitch.midi_note <= self.highest.midi_note
+        pitch.midi_note >= self.lowest.midi_note && pitch.midi_note <= self.highest.midi_note
     }
 
     /// Get the span in semitones between lowest and highest.

@@ -1,4 +1,5 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::measure::NoteheadStyle;
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::StemDirection;
 use crate::layout::StaffPosition;
@@ -21,6 +22,15 @@ impl NoteheadKind {
             NoteheadKind::Whole => Glyph::NoteheadWhole,
             NoteheadKind::Half => Glyph::NoteheadHalf,
             NoteheadKind::Filled => Glyph::NoteheadBlack,
+        }
+    }
+
+    /// Representative log2 duration used by duration-aware notehead styles.
+    pub fn duration_log2(self) -> u8 {
+        match self {
+            Self::Whole => 0,
+            Self::Half => 1,
+            Self::Filled => 2,
         }
     }
 }
@@ -64,11 +74,63 @@ pub fn draw_notehead(
     position: StaffPosition,
     kind: NoteheadKind,
 ) -> Result<f64, FontError> {
-    let outline = font.glyph_outline(kind.glyph())?;
+    draw_styled_notehead(
+        svg,
+        staff,
+        font,
+        x,
+        position,
+        kind,
+        NoteheadStyle::Normal,
+        false,
+    )
+}
+
+/// Return the actual font advance for a duration-aware semantic notehead.
+pub fn notehead_advance(
+    font: &MusicFont,
+    duration_log2: u8,
+    style: NoteheadStyle,
+) -> Result<f64, FontError> {
+    Ok(font
+        .glyph_outline(style.glyph(duration_log2))?
+        .advance_width as f64)
+}
+
+/// Draw a semantic notehead and optional real SMuFL notehead parentheses.
+///
+/// The returned advance is the selected notehead's advance, excluding the
+/// parentheses, so stems remain attached to the notehead rather than its
+/// enclosure.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_styled_notehead(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    x: f64,
+    position: StaffPosition,
+    kind: NoteheadKind,
+    style: NoteheadStyle,
+    parenthesized: bool,
+) -> Result<f64, FontError> {
+    let outline = font.glyph_outline(style.glyph(kind.duration_log2()))?;
+    let advance = outline.advance_width as f64;
     let y = staff.y_of(position);
+    if parenthesized {
+        let left = font.glyph_outline(Glyph::NoteheadParenthesisLeft)?;
+        let left_x = x - left.advance_width as f64;
+        let left_transform = format!("translate({left_x}, {y})");
+        svg.add_path(&left.path_data, "black", Some(&left_transform));
+    }
     let transform = format!("translate({x}, {y})");
     svg.add_path(&outline.path_data, "black", Some(&transform));
-    Ok(outline.advance_width as f64)
+    if parenthesized {
+        let right = font.glyph_outline(Glyph::NoteheadParenthesisRight)?;
+        let right_x = x + advance;
+        let right_transform = format!("translate({right_x}, {y})");
+        svg.add_path(&right.path_data, "black", Some(&right_transform));
+    }
+    Ok(advance)
 }
 
 /// Draw a complete note: notehead + ledger lines (if needed).
@@ -326,7 +388,16 @@ mod tests {
     fn draw_note_on_staff_has_path_no_ledger_lines() {
         let (font, config, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_note(&mut svg, &staff, &font, &config, 500.0, 4, NoteheadKind::Filled).unwrap();
+        draw_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            500.0,
+            4,
+            NoteheadKind::Filled,
+        )
+        .unwrap();
         let output = svg.to_svg();
 
         assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
@@ -358,11 +429,27 @@ mod tests {
     fn draw_whole_note_has_wider_advance_than_filled() {
         let (font, config, staff) = setup();
         let mut svg1 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        let advance_filled =
-            draw_note(&mut svg1, &staff, &font, &config, 0.0, 4, NoteheadKind::Filled).unwrap();
+        let advance_filled = draw_note(
+            &mut svg1,
+            &staff,
+            &font,
+            &config,
+            0.0,
+            4,
+            NoteheadKind::Filled,
+        )
+        .unwrap();
         let mut svg2 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        let advance_whole =
-            draw_note(&mut svg2, &staff, &font, &config, 0.0, 4, NoteheadKind::Whole).unwrap();
+        let advance_whole = draw_note(
+            &mut svg2,
+            &staff,
+            &font,
+            &config,
+            0.0,
+            4,
+            NoteheadKind::Whole,
+        )
+        .unwrap();
         // Whole notes are wider than filled noteheads in Bravura
         assert!(
             advance_whole > advance_filled,
@@ -442,15 +529,27 @@ mod tests {
         let output = svg.to_svg();
 
         assert_eq!(output.matches("<path ").count(), 1, "one notehead path");
-        assert_eq!(output.matches("<line ").count(), 0, "no stem for whole note");
+        assert_eq!(
+            output.matches("<line ").count(),
+            0,
+            "no stem for whole note"
+        );
     }
 
     #[test]
     fn stemmed_note_returns_same_advance_as_draw_note() {
         let (font, config, staff) = setup();
         let mut svg1 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        let adv1 =
-            draw_note(&mut svg1, &staff, &font, &config, 0.0, 4, NoteheadKind::Filled).unwrap();
+        let adv1 = draw_note(
+            &mut svg1,
+            &staff,
+            &font,
+            &config,
+            0.0,
+            4,
+            NoteheadKind::Filled,
+        )
+        .unwrap();
         let mut svg2 = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
         let adv2 = draw_stemmed_note(
             &mut svg2,
@@ -494,5 +593,40 @@ mod tests {
             output.contains(&y1_str),
             "stem y1 should be at notehead y={notehead_y}"
         );
+    }
+
+    #[test]
+    fn styled_parenthesized_notehead_uses_assigned_smufl_paths() {
+        let (font, _, staff) = setup();
+        let selected = font
+            .glyph_outline(Glyph::NoteheadDiamondBlack)
+            .unwrap()
+            .path_data;
+        let ordinary = font.glyph_outline(Glyph::NoteheadBlack).unwrap().path_data;
+        let left = font
+            .glyph_outline(Glyph::NoteheadParenthesisLeft)
+            .unwrap()
+            .path_data;
+        let right = font
+            .glyph_outline(Glyph::NoteheadParenthesisRight)
+            .unwrap()
+            .path_data;
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_styled_notehead(
+            &mut svg,
+            &staff,
+            &font,
+            500.0,
+            4,
+            NoteheadKind::Filled,
+            NoteheadStyle::Diamond,
+            true,
+        )
+        .unwrap();
+        let output = svg.to_svg();
+        assert!(output.contains(&selected));
+        assert!(output.contains(&left));
+        assert!(output.contains(&right));
+        assert!(!output.contains(&ordinary));
     }
 }

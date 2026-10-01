@@ -32,9 +32,7 @@ pub fn run(args: IntervalVectorArgs) -> Result<()> {
         "svg" => write_svg(&pc_set, &args),
         "txt" => write_text(&pc_set, &args),
         _ if args.output.is_none() => write_text(&pc_set, &args),
-        ext => anyhow::bail!(
-            "interval-vector supports .svg and .txt output (got .{ext})"
-        ),
+        ext => anyhow::bail!("interval-vector supports .svg and .txt output (got .{ext})"),
     }
 }
 
@@ -56,8 +54,7 @@ fn write_svg(pc_set: &PcContent, args: &IntervalVectorArgs) -> Result<()> {
 
     match args.output {
         Some(ref path) => {
-            fs::write(path, &svg)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(path, &svg).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", svg.len());
             }
@@ -81,7 +78,10 @@ fn write_text(pc_set: &PcContent, args: &IntervalVectorArgs) -> Result<()> {
     }
 
     // Show the PcSet
-    let pcs_str: Vec<String> = pc_set.iter().map(|pc| format!("{}", u8::from(*pc))).collect();
+    let pcs_str: Vec<String> = pc_set
+        .iter()
+        .map(|pc| format!("{}", u8::from(*pc)))
+        .collect();
     lines.push(format!("PcSet: {{{}}}", pcs_str.join(", ")));
     lines.push(String::new());
 
@@ -110,8 +110,7 @@ fn write_text(pc_set: &PcContent, args: &IntervalVectorArgs) -> Result<()> {
 
     match args.output {
         Some(ref path) => {
-            fs::write(path, &text)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(path, &text).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", text.len());
             }
@@ -154,9 +153,21 @@ mod tests {
         assert!(content.contains("Interval vector: <"));
         // Major triad {0,4,7}: ic3=1, ic4=1, ic5=1, others=0
         // But library counts both directions, so doubled: ic3=2, ic4=2, ic5=2
-        let iv_line = content.lines().find(|l| l.starts_with("Interval vector:")).unwrap();
-        let inner = iv_line.split('<').nth(1).unwrap().split('>').next().unwrap();
-        let vals: Vec<usize> = inner.split(',').map(|s| s.trim().parse().unwrap()).collect();
+        let iv_line = content
+            .lines()
+            .find(|l| l.starts_with("Interval vector:"))
+            .unwrap();
+        let inner = iv_line
+            .split('<')
+            .nth(1)
+            .unwrap()
+            .split('>')
+            .next()
+            .unwrap();
+        let vals: Vec<usize> = inner
+            .split(',')
+            .map(|s| s.trim().parse().unwrap())
+            .collect();
         assert_eq!(vals.len(), 6, "reduced IV should have 6 elements");
     }
 
@@ -184,7 +195,10 @@ mod tests {
             full: false,
         });
         assert!(content.contains("ic1:"), "should have labeled ic breakdown");
-        assert!(content.contains("m2/M7"), "should show interval class names");
+        assert!(
+            content.contains("m2/M7"),
+            "should show interval class names"
+        );
         assert!(content.contains("tritone"), "should show tritone label");
     }
 
@@ -231,8 +245,10 @@ mod tests {
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(content.starts_with("<svg"), "should be valid SVG");
         assert!(content.contains("</svg>"), "SVG should close");
-        assert!(content.contains("<rect") || content.contains("<text"),
-            "SVG should contain bar chart elements");
+        assert!(
+            content.contains("<rect") || content.contains("<text"),
+            "SVG should contain bar chart elements"
+        );
     }
 
     #[test]

@@ -10,8 +10,8 @@ use music_engraver::layout::clef::ClefLayout;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::note_placement::pitch_to_staff_position;
 use music_engraver::layout::staff::StaffLayout;
-use music_engraver::render::dynamics_renderer::draw_dynamic;
 use music_engraver::layout::stem::auto_stem_direction;
+use music_engraver::render::dynamics_renderer::draw_dynamic;
 use music_engraver::render::note_renderer::{draw_stemmed_note, NoteheadKind};
 use music_engraver::render::{draw_clef, draw_staff_lines, SvgWriter};
 
@@ -48,7 +48,14 @@ fn main() {
         let pos = pitch_to_staff_position(pitch, &clef);
         let dir = auto_stem_direction(pos);
         let advance = draw_stemmed_note(
-            &mut svg, &staff, &font, &config, x, pos, NoteheadKind::Filled, Some(dir),
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            x,
+            pos,
+            NoteheadKind::Filled,
+            Some(dir),
         )
         .unwrap();
 

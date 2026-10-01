@@ -14,6 +14,7 @@ pub enum Metric {
     L1,
     /// Maximum single-voice absolute semitone motion.
     Linf,
+    Weighted,
 }
 
 impl Metric {
@@ -21,7 +22,8 @@ impl Metric {
         match s.to_lowercase().as_str() {
             "l1" => Ok(Metric::L1),
             "linf" | "l_inf" | "max" => Ok(Metric::Linf),
-            _ => bail!("unknown metric '{}': expected l1 or linf", s),
+            "weighted" => Ok(Metric::Weighted),
+            _ => bail!("unknown metric '{}': expected l1, linf, or weighted", s),
         }
     }
 
@@ -29,13 +31,70 @@ impl Metric {
         match self {
             Metric::L1 => "L1",
             Metric::Linf => "L∞",
+            Metric::Weighted => "weighted L1",
         }
     }
 }
 
 /// Compute L∞ distance: max absolute single-voice motion.
 fn linf_distance(vl: &Voiceleading) -> usize {
-    vl.paths.iter().map(|p| p.unsigned_abs() as usize).max().unwrap_or(0)
+    vl.paths
+        .iter()
+        .map(|p| p.unsigned_abs() as usize)
+        .max()
+        .unwrap_or(0)
+}
+
+pub fn parse_weights(
+    value: Option<&str>,
+    metric: Metric,
+    voices: usize,
+) -> Result<Option<Vec<usize>>> {
+    match (metric, value) {
+        (Metric::Weighted, None) => bail!("--metric weighted requires --weights"),
+        (Metric::Weighted, Some(value)) => {
+            let weights = value
+                .split(',')
+                .map(|part| {
+                    part.trim()
+                        .parse::<u16>()
+                        .map(usize::from)
+                        .with_context(|| {
+                            format!(
+                                "invalid voice weight '{}': expected a non-negative integer",
+                                part
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            if weights.len() != voices {
+                bail!(
+                    "--weights has {} values but the voicing has {} voices",
+                    weights.len(),
+                    voices
+                );
+            }
+            if weights.iter().all(|weight| *weight == 0) {
+                bail!("--weights must contain at least one non-zero value");
+            }
+            Ok(Some(weights))
+        }
+        (_, Some(_)) => bail!("--weights requires --metric weighted"),
+        (_, None) => Ok(None),
+    }
+}
+
+pub fn metric_distance(vl: &Voiceleading, metric: Metric, weights: Option<&[usize]>) -> usize {
+    match metric {
+        Metric::L1 => naive_distance(vl),
+        Metric::Linf => linf_distance(vl),
+        Metric::Weighted => vl
+            .paths
+            .iter()
+            .zip(weights.expect("weighted metric validated before scoring"))
+            .map(|(path, weight)| path.unsigned_abs() as usize * weight)
+            .sum(),
+    }
 }
 
 pub struct VoiceLeadingArgs {
@@ -44,6 +103,7 @@ pub struct VoiceLeadingArgs {
     pub limit: Option<usize>,
     pub no_crossings: bool,
     pub metric: String,
+    pub weights: Option<String>,
     pub verbose: bool,
 }
 
@@ -84,7 +144,10 @@ fn parse_pitch(s: &str) -> Result<Pitch> {
         .map(|i| i + 1)
         .unwrap_or(0);
     if digit_start == 0 || digit_start >= s.len() {
-        bail!("pitch '{}' must have a note name and octave number (e.g. C4, Eb3)", s);
+        bail!(
+            "pitch '{}' must have a note name and octave number (e.g. C4, Eb3)",
+            s
+        );
     }
     let note_str = &s[..digit_start];
     let octave_str = &s[digit_start..];
@@ -146,10 +209,9 @@ fn format_paths(paths: &[i8]) -> String {
 
 pub fn run(args: VoiceLeadingArgs) -> Result<()> {
     let metric = Metric::parse(&args.metric)?;
-    let from_voicing = parse_voicing(&args.from)
-        .context("parsing --from voicing")?;
-    let to_notes = parse_target_notes(&args.to)
-        .context("parsing --to notes")?;
+    let from_voicing = parse_voicing(&args.from).context("parsing --from voicing")?;
+    let to_notes = parse_target_notes(&args.to).context("parsing --to notes")?;
+    let weights = parse_weights(args.weights.as_deref(), metric, from_voicing.len())?;
 
     if from_voicing.len() != to_notes.len() {
         bail!(
@@ -175,10 +237,7 @@ pub fn run(args: VoiceLeadingArgs) -> Result<()> {
     let mut scored: Vec<(usize, Voiceleading)> = results
         .into_iter()
         .map(|(_, vl)| {
-            let score = match metric {
-                Metric::L1 => naive_distance(&vl),
-                Metric::Linf => linf_distance(&vl),
-            };
+            let score = metric_distance(&vl, metric, weights.as_deref());
             (score, vl)
         })
         .collect();
@@ -192,10 +251,27 @@ pub fn run(args: VoiceLeadingArgs) -> Result<()> {
     };
 
     // Header
-    println!("Voice-leading: {} → {}", format_voicing(&from_voicing),
-        to_notes.iter().map(|n| format!("{}", n)).collect::<Vec<_>>().join(" "));
+    println!(
+        "Voice-leading: {} → {}",
+        format_voicing(&from_voicing),
+        to_notes
+            .iter()
+            .map(|n| format!("{}", n))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
     println!("Voices: {}", from_voicing.len());
     println!("Metric: {}", metric.label());
+    if let Some(weights) = &weights {
+        println!(
+            "Weights: {} (lowest to highest source voice)",
+            weights
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    }
     if args.no_crossings {
         println!("Rule: no voice crossings");
     }
@@ -210,13 +286,26 @@ pub fn run(args: VoiceLeadingArgs) -> Result<()> {
     for (i, (score, vl)) in display_results.iter().enumerate() {
         let mut line = String::new();
         write!(line, "  {}. ", i + 1)?;
-        write!(line, "{} → {}", format_voicing(&vl.from), format_voicing(&vl.to))?;
+        write!(
+            line,
+            "{} → {}",
+            format_voicing(&vl.from),
+            format_voicing(&vl.to)
+        )?;
         write!(line, "  dist={}", score)?;
 
         if args.verbose {
             let l1 = naive_distance(vl);
             let linf = linf_distance(vl);
-            write!(line, "  L1={} L∞={}  paths=[{}]", l1, linf, format_paths(&vl.paths))?;
+            write!(line, "  L1={} L∞={}", l1, linf)?;
+            if weights.is_some() {
+                write!(
+                    line,
+                    " weighted={}",
+                    metric_distance(vl, Metric::Weighted, weights.as_deref())
+                )?;
+            }
+            write!(line, "  paths=[{}]", format_paths(&vl.paths))?;
         }
 
         println!("{}", line);
@@ -224,7 +313,10 @@ pub fn run(args: VoiceLeadingArgs) -> Result<()> {
 
     println!();
     if shown < total {
-        println!("Total: {} voice-leadings found (showing {}/{})", total, shown, total);
+        println!(
+            "Total: {} voice-leadings found (showing {}/{})",
+            total, shown, total
+        );
     } else {
         println!("Total: {} voice-leadings found", total);
     }
@@ -282,6 +374,7 @@ mod tests {
             limit: None,
             no_crossings: true,
             metric: "l1".to_string(),
+            weights: None,
             verbose: false,
         };
         // Just verify it runs without error
@@ -289,7 +382,10 @@ mod tests {
         let to = parse_target_notes(&args.to).unwrap();
         let rules: Vec<Box<dyn VoiceleadingRule>> = vec![Box::new(NoVoxCrossings)];
         let results = Voiceleading::find_all(&from, &to, Some(&rules)).unwrap();
-        assert!(!results.is_empty(), "should find voice-leadings from C to F");
+        assert!(
+            !results.is_empty(),
+            "should find voice-leadings from C to F"
+        );
         // First result should have lowest distance
         if results.len() > 1 {
             assert!(results[0].0 <= results[1].0);
@@ -304,6 +400,7 @@ mod tests {
             limit: None,
             no_crossings: false,
             metric: "l1".to_string(),
+            weights: None,
             verbose: false,
         };
         let result = run(args);
@@ -339,7 +436,8 @@ mod tests {
             vec![0, 5],
             None,
             &no_rules,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(linf_distance(&vl), 5);
         assert_eq!(naive_distance(&vl), 5);
     }
@@ -353,7 +451,8 @@ mod tests {
             vec![1, -3],
             None,
             &no_rules,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(naive_distance(&vl), 4);
         assert_eq!(linf_distance(&vl), 3);
     }
@@ -363,7 +462,10 @@ mod tests {
         let from = parse_voicing("C4,E4,G4").unwrap();
         let to = parse_target_notes("F,A,C").unwrap();
         let results = Voiceleading::find_all(&from, &to, None).unwrap();
-        assert!(results.len() > 2, "should find more than 2 voice-leadings without rules");
+        assert!(
+            results.len() > 2,
+            "should find more than 2 voice-leadings without rules"
+        );
     }
 
     #[test]
@@ -373,7 +475,9 @@ mod tests {
         let all = Voiceleading::find_all(&from, &to, None).unwrap();
         let rules: Vec<Box<dyn VoiceleadingRule>> = vec![Box::new(NoVoxCrossings)];
         let constrained = Voiceleading::find_all(&from, &to, Some(&rules)).unwrap();
-        assert!(constrained.len() <= all.len(),
-            "no-crossings rule should produce fewer or equal results");
+        assert!(
+            constrained.len() <= all.len(),
+            "no-crossings rule should produce fewer or equal results"
+        );
     }
 }

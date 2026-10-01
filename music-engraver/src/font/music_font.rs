@@ -66,8 +66,7 @@ pub struct MusicFont<'a> {
 impl<'a> MusicFont<'a> {
     /// Parse a font from raw OTF/TTF bytes and its SMuFL metadata JSON.
     pub fn new(font_data: &'a [u8], metadata_json: &[u8]) -> Result<Self, FontError> {
-        let face =
-            Face::parse(font_data, 0).map_err(|e| FontError::ParseError(format!("{e}")))?;
+        let face = Face::parse(font_data, 0).map_err(|e| FontError::ParseError(format!("{e}")))?;
         let metadata: smufl::Metadata = serde_json::from_slice(metadata_json)
             .map_err(|e| FontError::MetadataError(format!("{e}")))?;
         Ok(Self { face, metadata })
@@ -102,10 +101,7 @@ impl<'a> MusicFont<'a> {
             .outline_glyph(gid, &mut builder)
             .ok_or(FontError::NoOutline(glyph))?;
 
-        let advance_width = self
-            .face
-            .glyph_hor_advance(gid)
-            .unwrap_or(0);
+        let advance_width = self.face.glyph_hor_advance(gid).unwrap_or(0);
 
         Ok(GlyphOutline {
             path_data: builder.into_path_data(),
@@ -310,7 +306,10 @@ mod tests {
         let tol = 0.01;
         assert!((bbox.x_left - 0.0).abs() < tol);
         assert!((bbox.y_bottom - 0.0).abs() < tol);
-        assert!(bbox.y_top < 0.0, "bracketTop extends upward (SVG-negative y)");
+        assert!(
+            bbox.y_top < 0.0,
+            "bracketTop extends upward (SVG-negative y)"
+        );
         // Bravura's 1.18 sp = 295 design units.
         assert!(
             (bbox.height() - 295.0).abs() < 0.5,

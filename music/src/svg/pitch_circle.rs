@@ -8,8 +8,7 @@ use crate::svg::theme::SvgTheme;
 use crate::svg::util::{pc_to_coords, SvgBuilder};
 
 /// How to label the 12 pitch classes on the circle.
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub enum NoteLabels {
     /// C, C#, D, D#, E, F, F#, G, G#, A, A#, B
     Sharps,
@@ -24,21 +23,20 @@ pub enum NoteLabels {
     Custom([&'static str; 12]),
 }
 
-
 impl NoteLabels {
     /// Get the label for a pitch class.
     pub fn label(&self, pc: &Pc) -> &'static str {
         let idx = u8::from(pc) as usize;
         match self {
-            NoteLabels::Sharps => {
-                ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][idx]
-            }
-            NoteLabels::Flats => {
-                ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"][idx]
-            }
-            NoteLabels::Mixed => {
-                ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"][idx]
-            }
+            NoteLabels::Sharps => [
+                "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+            ][idx],
+            NoteLabels::Flats => [
+                "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
+            ][idx],
+            NoteLabels::Mixed => [
+                "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
+            ][idx],
             NoteLabels::PitchClass => {
                 ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"][idx]
             }
@@ -301,7 +299,15 @@ mod tests {
 
     #[test]
     fn test_pitch_circle_from_pc_set() {
-        let pc_set = PcShape::new(vec![Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11]);
+        let pc_set = PcShape::new(vec![
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
+        ]);
         let svg = PitchCircleBuilder::new().from_pc_shape(&pc_set).build();
 
         assert!(svg.starts_with("<svg"));

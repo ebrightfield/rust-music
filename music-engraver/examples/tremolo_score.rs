@@ -52,8 +52,7 @@ fn main() {
         .render_svg();
 
     std::fs::create_dir_all("music-engraver/examples/output").ok();
-    std::fs::write("music-engraver/examples/output/tremolo_score.svg", &svg)
-        .expect("write SVG");
+    std::fs::write("music-engraver/examples/output/tremolo_score.svg", &svg).expect("write SVG");
 
     // Verify structure
     assert!(svg.starts_with("<svg"), "output should be SVG");

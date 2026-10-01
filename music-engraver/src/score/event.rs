@@ -13,7 +13,10 @@ use music::note::spelling::{Accidental, Spelling};
 
 use crate::layout::accidental::accidental_glyph;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{BeamGroupEvent, ChordEvent, NoteAnnotations, NoteEvent, RestEvent, TupletGroupEvent};
+use crate::layout::measure::{
+    BeamGroupEvent, ChordEvent, GroupedChordMember, NoteAnnotations, NoteEvent, RestEvent,
+    TupletGroupEvent,
+};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::system::MeasureEvent;
 
@@ -36,9 +39,18 @@ pub(crate) enum ScoreEvent {
     BeamGroup {
         notes: Vec<(Pitch, Duration)>,
     },
+    StyledBeamGroup {
+        members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
+    },
     TupletGroup {
         notes: Vec<(Pitch, Duration)>,
         tuplet_number: u32,
+        in_time_of: u32,
+    },
+    StyledTupletGroup {
+        members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
+        tuplet_number: u32,
+        in_time_of: u32,
     },
     /// Multi-measure rest: the rendered measure consists of an H-bar (or a
     /// church-rest cluster, for small counts) with a count number indicating
@@ -109,7 +121,10 @@ pub(crate) fn effective_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Opt
 /// Double sharps/flats are always shown since they never appear in key signatures.
 /// Does not track within-measure accidental state — each note is resolved independently.
 #[cfg(test)]
-pub(crate) fn should_show_accidental(pitch: &Pitch, key_sig: &KeySignature) -> Option<smufl::Glyph> {
+pub(crate) fn should_show_accidental(
+    pitch: &Pitch,
+    key_sig: &KeySignature,
+) -> Option<smufl::Glyph> {
     resolve_accidental(pitch, key_sig, None)
 }
 
@@ -178,7 +193,10 @@ pub(crate) fn resolve_accidental(
 }
 
 /// Check whether a letter name is altered (has a sharp or flat) in the given key signature.
-pub(crate) fn note_altered_in_key(letter: music::note::spelling::Letter, key_sig: &KeySignature) -> bool {
+pub(crate) fn note_altered_in_key(
+    letter: music::note::spelling::Letter,
+    key_sig: &KeySignature,
+) -> bool {
     use music::note::spelling::Letter;
 
     let sharp_order = [
@@ -253,6 +271,43 @@ fn pitch_to_note_event(
     }
 }
 
+fn pitches_to_styled_group_member(
+    pitches: &[Pitch],
+    duration: &Duration,
+    annotations: &NoteAnnotations,
+    clef: &Clef,
+    key_sig: &KeySignature,
+    mut seen: Option<&mut AccidentalTracker>,
+) -> NoteEvent {
+    let mut staff_positions = Vec::with_capacity(pitches.len());
+    let mut accidentals = Vec::with_capacity(pitches.len());
+    for pitch in pitches {
+        staff_positions.push(pitch_to_staff_position(pitch, clef));
+        accidentals.push(if annotations.unpitched {
+            None
+        } else {
+            resolve_and_track(pitch, key_sig, seen.as_deref_mut())
+        });
+    }
+    let staff_position = staff_positions[0];
+    let accidental = accidentals[0];
+    let mut annotations = annotations.clone();
+    if pitches.len() > 1 {
+        annotations.grouped_chord = Some(GroupedChordMember {
+            staff_positions,
+            accidentals,
+        });
+    }
+    NoteEvent {
+        staff_position,
+        duration_log2: duration_kind_to_log2(duration.kind()),
+        dots: duration.num_dots(),
+        accidental,
+        stem_direction: None,
+        annotations,
+    }
+}
+
 /// Convert a `ScoreEvent` into a `MeasureEvent` for the layout engine.
 ///
 /// When `seen` is `Some`, tracks accidentals within the measure: suppresses
@@ -268,11 +323,19 @@ pub(crate) fn convert_event(
     mut seen: Option<&mut AccidentalTracker>,
 ) -> MeasureEvent {
     match event {
-        ScoreEvent::Note { pitch, duration, annotations } => {
+        ScoreEvent::Note {
+            pitch,
+            duration,
+            annotations,
+        } => {
             let staff_pos = pitch_to_staff_position(pitch, clef);
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
-            let acc = resolve_and_track(pitch, key_sig, seen);
+            let acc = if annotations.unpitched {
+                None
+            } else {
+                resolve_and_track(pitch, key_sig, seen)
+            };
 
             MeasureEvent::Note(NoteEvent {
                 staff_position: staff_pos,
@@ -292,7 +355,11 @@ pub(crate) fn convert_event(
                 dots,
             })
         }
-        ScoreEvent::Chord { pitches, duration, annotations } => {
+        ScoreEvent::Chord {
+            pitches,
+            duration,
+            annotations,
+        } => {
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
             let staff_positions: Vec<i8> = pitches
@@ -301,7 +368,13 @@ pub(crate) fn convert_event(
                 .collect();
             let accidentals: Vec<Option<smufl::Glyph>> = pitches
                 .iter()
-                .map(|p| resolve_and_track(p, key_sig, seen.as_deref_mut()))
+                .map(|p| {
+                    if annotations.unpitched {
+                        None
+                    } else {
+                        resolve_and_track(p, key_sig, seen.as_deref_mut())
+                    }
+                })
                 .collect();
 
             MeasureEvent::Chord(ChordEvent {
@@ -325,7 +398,30 @@ pub(crate) fn convert_event(
                 stem_direction: None,
             })
         }
-        ScoreEvent::TupletGroup { notes, tuplet_number } => {
+        ScoreEvent::StyledBeamGroup { members } => {
+            let note_events = members
+                .iter()
+                .map(|(pitches, duration, annotations)| {
+                    pitches_to_styled_group_member(
+                        pitches,
+                        duration,
+                        annotations,
+                        clef,
+                        key_sig,
+                        seen.as_deref_mut(),
+                    )
+                })
+                .collect();
+            MeasureEvent::BeamGroup(BeamGroupEvent {
+                notes: note_events,
+                stem_direction: None,
+            })
+        }
+        ScoreEvent::TupletGroup {
+            notes,
+            tuplet_number,
+            in_time_of,
+        } => {
             let note_events: Vec<NoteEvent> = notes
                 .iter()
                 .map(|(pitch, duration)| {
@@ -338,6 +434,34 @@ pub(crate) fn convert_event(
                     stem_direction: None,
                 },
                 tuplet_number: *tuplet_number,
+                in_time_of: *in_time_of,
+            })
+        }
+        ScoreEvent::StyledTupletGroup {
+            members,
+            tuplet_number,
+            in_time_of,
+        } => {
+            let note_events = members
+                .iter()
+                .map(|(pitches, duration, annotations)| {
+                    pitches_to_styled_group_member(
+                        pitches,
+                        duration,
+                        annotations,
+                        clef,
+                        key_sig,
+                        seen.as_deref_mut(),
+                    )
+                })
+                .collect();
+            MeasureEvent::TupletGroup(TupletGroupEvent {
+                beam_group: BeamGroupEvent {
+                    notes: note_events,
+                    stem_direction: None,
+                },
+                tuplet_number: *tuplet_number,
+                in_time_of: *in_time_of,
             })
         }
         ScoreEvent::MultiMeasureRest { count, style } => MeasureEvent::MultiMeasureRest {

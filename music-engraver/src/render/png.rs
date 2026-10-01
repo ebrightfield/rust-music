@@ -95,8 +95,8 @@ impl PngRenderer {
             ..usvg::Options::default()
         };
 
-        let tree = usvg::Tree::from_str(svg, &options)
-            .map_err(|e| PngError::SvgParse(e.to_string()))?;
+        let tree =
+            usvg::Tree::from_str(svg, &options).map_err(|e| PngError::SvgParse(e.to_string()))?;
 
         let size = tree.size();
         let width = (size.width() * self.scale) as u32;
@@ -238,11 +238,7 @@ pub(crate) mod test_helpers {
     }
 
     /// Returns the number of pixels in row `y` whose alpha meets the threshold.
-    pub fn inked_pixels_in_row(
-        pixmap: &tiny_skia::Pixmap,
-        y: u32,
-        alpha_threshold: u8,
-    ) -> usize {
+    pub fn inked_pixels_in_row(pixmap: &tiny_skia::Pixmap, y: u32, alpha_threshold: u8) -> usize {
         (0..pixmap.width())
             .filter(|&x| {
                 pixmap
@@ -337,7 +333,10 @@ mod tests {
 
         let png_bytes = svg_to_png(&svg, 1.0).unwrap();
         assert_eq!(&png_bytes[0..4], &[0x89, b'P', b'N', b'G']);
-        assert!(png_bytes.len() > 100, "PNG should contain meaningful content");
+        assert!(
+            png_bytes.len() > 100,
+            "PNG should contain meaningful content"
+        );
     }
 
     #[test]
@@ -525,11 +524,7 @@ mod tests {
 
         let (hdr_w, hdr_h) = png_dimensions(&png);
         let pixmap = decode_pixmap(&png);
-        assert_eq!(
-            pixmap.width(),
-            hdr_w,
-            "decoded width must match IHDR width"
-        );
+        assert_eq!(pixmap.width(), hdr_w, "decoded width must match IHDR width");
         assert_eq!(
             pixmap.height(),
             hdr_h,
@@ -565,11 +560,7 @@ mod tests {
         let pixmap = decode_pixmap(&png);
 
         let total = (pixmap.width() * pixmap.height()) as usize;
-        let transparent = pixmap
-            .pixels()
-            .iter()
-            .filter(|p| p.alpha() == 0)
-            .count();
+        let transparent = pixmap.pixels().iter().filter(|p| p.alpha() == 0).count();
         let transparent_fraction = transparent as f64 / total as f64;
         assert!(
             transparent_fraction > 0.5,
@@ -703,8 +694,14 @@ mod tests {
         // markedly different note density.
         let svg_a = score_sparse_whole_rest();
         let svg_b = score_dense_four_notes();
-        let ink_a = count_inked_pixels(&decode_pixmap(&svg_to_png(&svg_a, 1.0).unwrap()), INK_ALPHA_THRESHOLD);
-        let ink_b = count_inked_pixels(&decode_pixmap(&svg_to_png(&svg_b, 1.0).unwrap()), INK_ALPHA_THRESHOLD);
+        let ink_a = count_inked_pixels(
+            &decode_pixmap(&svg_to_png(&svg_a, 1.0).unwrap()),
+            INK_ALPHA_THRESHOLD,
+        );
+        let ink_b = count_inked_pixels(
+            &decode_pixmap(&svg_to_png(&svg_b, 1.0).unwrap()),
+            INK_ALPHA_THRESHOLD,
+        );
 
         assert_ne!(
             ink_a, ink_b,

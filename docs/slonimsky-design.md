@@ -189,22 +189,34 @@ Enumerate voicings of a chord under constraints.
 
 ```
 slonimsky voicings <INPUT>...
-    [--range <LOW>..<HIGH>]           # (planned)
-    [--min-spacing <N>] [--max-spacing <N>]  # (planned)
-    [--strings <N>] [--tuning <TUNING>]      # (planned)
-    [--doubling <allow|forbid|require>]      # (planned)
+    [--range <LOW>..<HIGH>]
+    [--min-spacing <N>] [--max-spacing <N>]
+    [--strings <N>] [--tuning <TUNING>]
+    [--doubling <allow|forbid|require>]
     [--limit <N>]
-    [-o out.txt|out.json]
 ```
 
-**Current implementation:** `CanonicalVoicings` from `musical-combinatorics`
-for canonical (register-normalized) voicings. Only `--limit` is implemented.
-The `--range`, `--min-spacing`, `--max-spacing`, `--strings`, `--tuning`,
-and `--doubling` flags are planned but require register-placed voicing
-enumeration (not just canonical forms), which is a prerequisite BUILD task.
+**Canonical mode:** With no instrument controls, `CanonicalVoicings` from
+`musical-combinatorics` provides canonical families and inversions. Without
+`--range`, those voicings retain their established registers. With inclusive
+`LOW..HIGH` bounds such as `C3..C6`, each canonical voicing is shifted through
+every whole-octave placement fitting entirely inside the range.
 
-**Target implementation:** `Voicing` from `music::note_collections::voicing`
-for register-placed variants, filtered by range/spacing constraints.
+**Instrument mode:** Supplying `--strings`, `--tuning`, or a non-default
+doubling policy enumerates voicings playable with one pitch per sounded string
+between frets 0 and 35. `--strings` is the sounded-string count; unspecified
+strings remain muted. `--tuning` accepts the shared named tunings (`standard`,
+`drop-d`, `dadgad`, `open-g`, `7-string`, `bass-4`, `bass-5`), inline open
+pitches/MIDI values, or `@path`; it defaults to `standard`. Every input chord
+tone must occur. `forbid` (default) permits no repeated pitch class and
+therefore requires one string per chord tone. `allow` permits repeated chord
+tones when extra strings sound. `require` requires at least one repetition and
+therefore more sounded strings than chord tones. Equivalent pitch voicings
+reachable by multiple string/fret shapes are deduplicated.
+
+In both modes, `--min-spacing` and `--max-spacing` constrain every adjacent
+voice in semitones, `--range` constrains all sounding pitches, and `--limit`
+applies after generation and filtering.
 
 ### `voice-leading`
 
@@ -213,7 +225,8 @@ Enumerate voice-leadings between two voicings.
 ```
 slonimsky voice-leading --from <PITCH,PITCH,...> --to <NOTE,NOTE,...>
     [--no-crossings]
-    [--metric <l1|linf|weighted>]    # l1 and linf implemented; weighted planned
+    [--metric <l1|linf|weighted>]
+    [--weights <WEIGHT,WEIGHT,...>]
     [--limit <N>]
     [-o out.txt|out.svg|out.mid]
 ```
@@ -223,12 +236,13 @@ slonimsky voice-leading --from <PITCH,PITCH,...> --to <NOTE,NOTE,...>
 `--no-crossings`: apply `NoVoxCrossings` rule (no voice-part inversions).
 `--metric`: distance metric for sorting results. `l1` (default) = sum of
 absolute semitone motions across all voices. `linf` (also `l_inf`, `max`)
-= maximum single-voice absolute semitone motion. `weighted` (configurable
-per-voice weights) is planned.
+= maximum single-voice absolute semitone motion. `weighted` = weighted L1;
+`--weights` supplies one non-negative integer per source voice from lowest
+to highest, and at least one weight must be non-zero.
 
-Results sorted by the chosen metric (ascending). Verbose mode (`-v`)
-shows both L1 and L∞ values plus per-voice semitone paths (signed
-integers) for each result, regardless of which metric is used for sorting.
+Results are sorted by the chosen metric (ascending). Verbose mode (`-v`)
+shows L1 and L∞ values, the weighted value when active, and per-voice
+signed semitone paths for each result.
 
 Output: ranked table (text), or staff/tab diagram (SVG — planned), or
 MIDI realization of each candidate leading (planned).
@@ -240,7 +254,8 @@ Plan smoothest voice-leadings through a chord sequence.
 ```
 slonimsky progression <CHORD1> <CHORD2> [<CHORD3>...]
     [--no-crossings]
-    [--metric <L1|Linf|weighted>]    # L1 (default) and Linf implemented; weighted planned
+    [--metric <l1|linf|weighted>]
+    [--weights <WEIGHT,WEIGHT,...>]
     [--range <LOW>..<HIGH>]           # (planned)
     [-o out.mid|out.txt]              # MIDI requires `midi` feature; SVG/LilyPond planned
     [-o out.svg|out.ly]               # (planned)
@@ -260,16 +275,16 @@ a chord. All chords must have the same number of notes (equal voice count).
 the first chord as a close-position voicing in octave 4, then at each
 step picks the lowest-cost voice-leading to the next chord via
 `Voiceleading::find_all()`, scored by the chosen `--metric` (L1 default,
-L∞ available). Text output to stdout by default. MIDI output via `-o
-file.mid` (requires `midi` feature): writes an SMF file with block
-chords using `midly`, one chord per beat at 120 BPM. Output header shows
-the active metric. Verbose mode (`-v`) shows per-voice semitone paths,
-the complementary metric (L∞ when sorting by L1, and vice versa), and
+L∞, or weighted L1). Weighted mode uses one non-negative integer per
+voice, ordered lowest to highest. Text output to stdout by default. MIDI
+output via `-o file.mid` (requires `midi` feature): writes an SMF file
+with block chords using `midly`, one chord per beat at 120 BPM. Output
+header shows the active metric and weights. Verbose mode (`-v`) shows
+per-voice semitone paths, L1, L∞, the weighted value when active, and
 average cost per step.
 
 **Planned extensions:**
 - Global optimization (search across all steps simultaneously, not greedy).
-- Weighted metric (same as `voice-leading`).
 - Staff notation via LilyPond (feature-gated).
 - Fretboard sheet via `FretboardBuilder` grid.
 

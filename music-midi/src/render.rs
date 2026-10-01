@@ -89,8 +89,7 @@ impl AudioRenderer {
         bytes: &[u8],
         path: impl AsRef<Path>,
     ) -> Result<(), MidiConversionError> {
-        let smf = midly::Smf::parse(bytes)
-            .map_err(|e| MidiConversionError::Smf(e.to_string()))?;
+        let smf = midly::Smf::parse(bytes).map_err(|e| MidiConversionError::Smf(e.to_string()))?;
         self.render_to_wav(&smf, path)
     }
 }
@@ -108,10 +107,24 @@ struct AbsEvent {
 
 #[derive(Debug)]
 enum FlatKind {
-    Note { channel: u8, key: u8, vel: u8, on: bool },
-    ProgramChange { channel: u8, program: u8 },
-    ControlChange { channel: u8, ctrl: u8, value: u8 },
-    Tempo { micros_per_beat: u32 },
+    Note {
+        channel: u8,
+        key: u8,
+        vel: u8,
+        on: bool,
+    },
+    ProgramChange {
+        channel: u8,
+        program: u8,
+    },
+    ControlChange {
+        channel: u8,
+        ctrl: u8,
+        value: u8,
+    },
+    Tempo {
+        micros_per_beat: u32,
+    },
 }
 
 /// Collect absolute-tick events from all tracks, merge-sort by tick.
@@ -129,28 +142,41 @@ fn collect_events(smf: &midly::Smf) -> Vec<AbsEvent> {
                             let k = key.as_int();
                             let v = vel.as_int();
                             // Note-on with velocity 0 is treated as note-off per MIDI spec.
-                            Some(FlatKind::Note { channel: ch, key: k, vel: v, on: v > 0 })
+                            Some(FlatKind::Note {
+                                channel: ch,
+                                key: k,
+                                vel: v,
+                                on: v > 0,
+                            })
                         }
                         midly::MidiMessage::NoteOff { key, .. } => {
                             let k = key.as_int();
-                            Some(FlatKind::Note { channel: ch, key: k, vel: 0, on: false })
+                            Some(FlatKind::Note {
+                                channel: ch,
+                                key: k,
+                                vel: 0,
+                                on: false,
+                            })
                         }
-                        midly::MidiMessage::ProgramChange { program } => Some(
-                            FlatKind::ProgramChange { channel: ch, program: program.as_int() },
-                        ),
-                        midly::MidiMessage::Controller { controller, value } => Some(
-                            FlatKind::ControlChange {
+                        midly::MidiMessage::ProgramChange { program } => {
+                            Some(FlatKind::ProgramChange {
+                                channel: ch,
+                                program: program.as_int(),
+                            })
+                        }
+                        midly::MidiMessage::Controller { controller, value } => {
+                            Some(FlatKind::ControlChange {
                                 channel: ch,
                                 ctrl: controller.as_int(),
                                 value: value.as_int(),
-                            },
-                        ),
+                            })
+                        }
                         _ => None,
                     }
                 }
-                TrackEventKind::Meta(MetaMessage::Tempo(micros)) => {
-                    Some(FlatKind::Tempo { micros_per_beat: micros.as_int() })
-                }
+                TrackEventKind::Meta(MetaMessage::Tempo(micros)) => Some(FlatKind::Tempo {
+                    micros_per_beat: micros.as_int(),
+                }),
                 _ => None,
             };
             if let Some(k) = kind {
@@ -166,7 +192,10 @@ fn collect_events(smf: &midly::Smf) -> Vec<AbsEvent> {
 /// Build a `StaticTempoMap` from tempo events.
 /// The map begins at 120 BPM (MIDI default) from tick 0.
 fn build_tempo_map(events: &[AbsEvent], ppq: u16) -> StaticTempoMap {
-    let mut map = StaticTempoMap { entries: vec![(0, 120.0)], ppq };
+    let mut map = StaticTempoMap {
+        entries: vec![(0, 120.0)],
+        ppq,
+    };
     for ev in events {
         if let FlatKind::Tempo { micros_per_beat } = ev.kind {
             // Malformed SMFs may declare 0 µs/beat; clamp to 1 to avoid +inf BPM.
@@ -211,20 +240,37 @@ fn render_smf<S: Synthesizer, W: WavSink>(
             let t0 = tempo_map.ticks_to_seconds(current_tick);
             let t1 = tempo_map.ticks_to_seconds(next_tick);
             let frames_needed = ((t1 - t0) * sample_rate as f64).round() as usize;
-            render_frames(&mut synth, wav.as_mut(), &mut buf, frames_needed, BLOCK_FRAMES)?;
+            render_frames(
+                &mut synth,
+                wav.as_mut(),
+                &mut buf,
+                frames_needed,
+                BLOCK_FRAMES,
+            )?;
             current_tick = next_tick;
         }
 
         // Dispatch the event to the synthesizer.
         match &ev.kind {
-            FlatKind::Note { channel, key, vel, on } => {
+            FlatKind::Note {
+                channel,
+                key,
+                vel,
+                on,
+            } => {
                 synth.handle_event(crate::MidiEvent {
                     time: ev.tick,
                     channel: *channel,
                     message: if *on {
-                        crate::MidiMessage::NoteOn { key: *key, velocity: *vel }
+                        crate::MidiMessage::NoteOn {
+                            key: *key,
+                            velocity: *vel,
+                        }
                     } else {
-                        crate::MidiMessage::NoteOff { key: *key, velocity: 0 }
+                        crate::MidiMessage::NoteOff {
+                            key: *key,
+                            velocity: 0,
+                        }
                     },
                 });
             }
@@ -235,7 +281,11 @@ fn render_smf<S: Synthesizer, W: WavSink>(
                     message: crate::MidiMessage::ProgramChange(*program),
                 });
             }
-            FlatKind::ControlChange { channel, ctrl, value } => {
+            FlatKind::ControlChange {
+                channel,
+                ctrl,
+                value,
+            } => {
                 synth.handle_event(crate::MidiEvent {
                     time: ev.tick,
                     channel: *channel,
@@ -253,9 +303,19 @@ fn render_smf<S: Synthesizer, W: WavSink>(
 
     // Render a tail after the last event to let notes decay.
     // Clamp negative/NaN to zero — no error, just a hard stop.
-    let clamped = if tail_seconds.is_nan() || tail_seconds < 0.0 { 0.0 } else { tail_seconds as f64 };
+    let clamped = if tail_seconds.is_nan() || tail_seconds < 0.0 {
+        0.0
+    } else {
+        tail_seconds as f64
+    };
     let tail_frames = (clamped * sample_rate as f64).round() as usize;
-    render_frames(&mut synth, wav.as_mut(), &mut buf, tail_frames, BLOCK_FRAMES)?;
+    render_frames(
+        &mut synth,
+        wav.as_mut(),
+        &mut buf,
+        tail_frames,
+        BLOCK_FRAMES,
+    )?;
 
     wav.finalize()
 }
@@ -347,7 +407,10 @@ pub fn c_triad_smf_bytes() -> Result<Vec<u8>, MidiConversionError> {
             delta: 0.into(),
             kind: TrackEventKind::Midi {
                 channel: 0.into(),
-                message: MidiMessage::NoteOn { key: key.into(), vel: 80u8.into() },
+                message: MidiMessage::NoteOn {
+                    key: key.into(),
+                    vel: 80u8.into(),
+                },
             },
         });
     }
@@ -356,10 +419,17 @@ pub fn c_triad_smf_bytes() -> Result<Vec<u8>, MidiConversionError> {
     let mut first = true;
     for &key in &[60u8, 64, 67] {
         track.push(TrackEvent {
-            delta: if first { half_sec_ticks.into() } else { 0.into() },
+            delta: if first {
+                half_sec_ticks.into()
+            } else {
+                0.into()
+            },
             kind: TrackEventKind::Midi {
                 channel: 0.into(),
-                message: MidiMessage::NoteOff { key: key.into(), vel: 0u8.into() },
+                message: MidiMessage::NoteOff {
+                    key: key.into(),
+                    vel: 0u8.into(),
+                },
             },
         });
         first = false;

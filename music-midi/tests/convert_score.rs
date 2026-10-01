@@ -4,12 +4,14 @@
 use music::notation::lilypond::document::score::{LilypondScore, LilypondStaffGroup};
 use music::notation::lilypond::document::staff::LilypondStaff;
 use music::notation::lilypond::staff_elements::LilypondVoiceElement;
-use music::notation::rhythm::{RhythmicNotatedEvent, duration::{Duration, DurationKind}};
+use music::notation::rhythm::{
+    duration::{Duration, DurationKind},
+    RhythmicNotatedEvent,
+};
 use music::note::pitch::Pitch;
 use music_midi::{
-    ConvertCtx, MidiConversionError, MidiMessage, ToMidiEvents, VelocityPolicy,
-    tempo::StaticTempoMap,
-    smf::SmfBuilder,
+    smf::SmfBuilder, tempo::StaticTempoMap, ConvertCtx, MidiConversionError, MidiMessage,
+    ToMidiEvents, VelocityPolicy,
 };
 
 fn make_score_with_single_note(midi_note: u8) -> LilypondScore<'static> {
@@ -33,8 +35,14 @@ fn score_single_note_emits_note_on_and_off() {
     let mut out = Vec::new();
     score.append_midi(0, 0, &ctx, &mut out).unwrap();
     assert_eq!(out.len(), 2);
-    assert!(matches!(out[0].message, MidiMessage::NoteOn { key: 60, .. }));
-    assert!(matches!(out[1].message, MidiMessage::NoteOff { key: 60, .. }));
+    assert!(matches!(
+        out[0].message,
+        MidiMessage::NoteOn { key: 60, .. }
+    ));
+    assert!(matches!(
+        out[1].message,
+        MidiMessage::NoteOff { key: 60, .. }
+    ));
 }
 
 /// Score with 2 voices gets channels 0 and 1.

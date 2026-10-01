@@ -604,9 +604,7 @@ pub fn layout_trill_extension_multi_speed(
 /// X-coordinate of the rightmost edge of the last tile in a multi-speed
 /// trill extension layout. Returns `0.0` for an empty layout — same
 /// convention as [`trill_extension_right_edge`].
-pub fn multi_speed_trill_extension_right_edge(
-    layout: &MultiSpeedTrillExtensionLayout,
-) -> f64 {
+pub fn multi_speed_trill_extension_right_edge(layout: &MultiSpeedTrillExtensionLayout) -> f64 {
     match layout.tiles.last() {
         Some(last) => last.x + last.advance,
         None => 0.0,
@@ -709,10 +707,7 @@ impl TrillSpeedRamp {
     /// Comparison is done via [`TrillWiggleSpeed::index`] (a `const fn`)
     /// so this constructor is itself `const`-callable and can live in
     /// module-level `const` items via `match`-on-`Option` patterns.
-    pub const fn linear_validated(
-        start: TrillWiggleSpeed,
-        end: TrillWiggleSpeed,
-    ) -> Option<Self> {
+    pub const fn linear_validated(start: TrillWiggleSpeed, end: TrillWiggleSpeed) -> Option<Self> {
         // `TrillWiggleSpeed` does not implement `const PartialEq` (no
         // such trait exists on stable as of the current MSRV), so we
         // compare through the `index()` accessor — both `index()` calls
@@ -831,10 +826,7 @@ impl TrillSpeedRampSpec {
     /// canonical specs can live in module-level `const` items, mirroring
     /// [`TrillSpeedRamp::constant`] / [`TrillSpeedRamp::linear`].
     pub const fn new(ramp: TrillSpeedRamp, region_count: usize) -> Self {
-        Self {
-            ramp,
-            region_count,
-        }
+        Self { ramp, region_count }
     }
 
     /// Stricter counterpart to [`Self::new`]: rejects the degenerate
@@ -890,10 +882,7 @@ impl TrillSpeedRampSpec {
         if matches!(ramp, TrillSpeedRamp::Linear { .. }) && region_count < 2 {
             return None;
         }
-        Some(Self {
-            ramp,
-            region_count,
-        })
+        Some(Self { ramp, region_count })
     }
 }
 
@@ -1226,8 +1215,8 @@ mod tests {
     #[test]
     fn speed_options_with_extension_length_ss_sets_only_extension_length() {
         // Setting the new field must NOT disturb the speed or the ornament.
-        let opts = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
-            .with_extension_length_ss(2.75);
+        let opts =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow).with_extension_length_ss(2.75);
         assert_eq!(opts.extension_length_ss, Some(2.75));
         assert_eq!(opts.speed, TrillWiggleSpeed::Slow);
         assert_eq!(opts.ornament, None);
@@ -1293,10 +1282,10 @@ mod tests {
     fn speed_options_extension_length_distinct_values_compare_distinct() {
         // PartialEq must be sensitive to the new field — catches a future
         // derive forgetting to include it.
-        let a = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
-            .with_extension_length_ss(1.0);
-        let b = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
-            .with_extension_length_ss(2.0);
+        let a =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow).with_extension_length_ss(1.0);
+        let b =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow).with_extension_length_ss(2.0);
         assert_ne!(a, b);
     }
 
@@ -1306,8 +1295,8 @@ mod tests {
         // layer (zero suppresses wiggle; None lets the natural span flow).
         // PartialEq must keep them distinct.
         let none = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow);
-        let zero = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow)
-            .with_extension_length_ss(0.0);
+        let zero =
+            TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Slow).with_extension_length_ss(0.0);
         assert_ne!(none, zero);
     }
 
@@ -1367,7 +1356,10 @@ mod tests {
         // must produce field-by-field equal bundles. Catches a future
         // refactor that started normalizing accepted inputs (e.g. clearing
         // extension_length_ss when adopting a supported ornament).
-        for &ornament in Ornament::ALL.iter().filter(|o| o.supports_trill_extension()) {
+        for &ornament in Ornament::ALL
+            .iter()
+            .filter(|o| o.supports_trill_extension())
+        {
             let permissive = TrillExtensionSpeedOptions::new(TrillWiggleSpeed::Faster)
                 .with_extension_length_ss(2.5)
                 .with_ornament(ornament);
@@ -1375,7 +1367,10 @@ mod tests {
                 .with_extension_length_ss(2.5)
                 .with_ornament_validated(ornament)
                 .expect("supported ornament must accept");
-            assert_eq!(permissive, validated, "{ornament:?}: validated vs permissive byte-equal");
+            assert_eq!(
+                permissive, validated,
+                "{ornament:?}: validated vs permissive byte-equal"
+            );
         }
     }
 
@@ -1912,7 +1907,12 @@ mod tests {
         // A future regression that reordered ALL but forgot to update
         // index() (or vice-versa) would fire here.
         for (pos, v) in TrillWiggleSpeed::ALL.iter().enumerate() {
-            assert_eq!(v.index(), pos, "ALL[{pos}] = {v:?} but index() = {}", v.index());
+            assert_eq!(
+                v.index(),
+                pos,
+                "ALL[{pos}] = {v:?} but index() = {}",
+                v.index()
+            );
         }
     }
 
@@ -1929,8 +1929,14 @@ mod tests {
     fn from_index_saturating_clamps_high_values_to_slowest() {
         // Out-of-range indices saturate to Slowest, not panic. The
         // saturation point is exactly 8: anything ≥9 is Slowest.
-        assert_eq!(TrillWiggleSpeed::from_index_saturating(9), TrillWiggleSpeed::Slowest);
-        assert_eq!(TrillWiggleSpeed::from_index_saturating(100), TrillWiggleSpeed::Slowest);
+        assert_eq!(
+            TrillWiggleSpeed::from_index_saturating(9),
+            TrillWiggleSpeed::Slowest
+        );
+        assert_eq!(
+            TrillWiggleSpeed::from_index_saturating(100),
+            TrillWiggleSpeed::Slowest
+        );
         assert_eq!(
             TrillWiggleSpeed::from_index_saturating(usize::MAX),
             TrillWiggleSpeed::Slowest,
@@ -1940,7 +1946,10 @@ mod tests {
     #[test]
     fn from_index_saturating_zero_is_fastest() {
         // Pin down the lowest index → Fastest mapping at the boundary.
-        assert_eq!(TrillWiggleSpeed::from_index_saturating(0), TrillWiggleSpeed::Fastest);
+        assert_eq!(
+            TrillWiggleSpeed::from_index_saturating(0),
+            TrillWiggleSpeed::Fastest
+        );
     }
 
     #[allow(clippy::assertions_on_constants)]
@@ -1949,8 +1958,7 @@ mod tests {
         // Compile-fail canary: if a future refactor removed `const fn`
         // from either method, these const items would fail to compile.
         const FAST_INDEX: usize = TrillWiggleSpeed::Fast.index();
-        const STANDARD_FROM_IDX: TrillWiggleSpeed =
-            TrillWiggleSpeed::from_index_saturating(4);
+        const STANDARD_FROM_IDX: TrillWiggleSpeed = TrillWiggleSpeed::from_index_saturating(4);
         assert_eq!(FAST_INDEX, 3);
         assert!(matches!(STANDARD_FROM_IDX, TrillWiggleSpeed::Standard));
     }
@@ -1984,7 +1992,10 @@ mod tests {
         const C: TrillSpeedRamp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
         const L: TrillSpeedRamp =
             TrillSpeedRamp::linear(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast);
-        assert!(matches!(C, TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard)));
+        assert!(matches!(
+            C,
+            TrillSpeedRamp::Constant(TrillWiggleSpeed::Standard)
+        ));
         assert!(matches!(
             L,
             TrillSpeedRamp::Linear {
@@ -2061,8 +2072,8 @@ mod tests {
             (TrillWiggleSpeed::Faster, TrillWiggleSpeed::SlowerStill),
         ];
         for (s, e) in pairs {
-            let validated = TrillSpeedRamp::linear_validated(s, e)
-                .expect("distinct speeds must validate");
+            let validated =
+                TrillSpeedRamp::linear_validated(s, e).expect("distinct speeds must validate");
             let permissive = TrillSpeedRamp::linear(s, e);
             assert_eq!(validated, permissive);
         }
@@ -2131,9 +2142,8 @@ mod tests {
         // Catches a regression where the validated branch produces a
         // structurally-valid `Self::Linear` but with field values that
         // somehow trip a downstream check in the synthesizer.
-        let ramp =
-            TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast)
-                .expect("distinct speeds must validate");
+        let ramp = TrillSpeedRamp::linear_validated(TrillWiggleSpeed::Slow, TrillWiggleSpeed::Fast)
+            .expect("distinct speeds must validate");
         let regions = ramp
             .synthesize_regions(0.0, 240.0, 3, |_| 60.0)
             .expect("validated linear ramp with N>=2 must synthesize");
@@ -2209,8 +2219,12 @@ mod tests {
             start: TrillWiggleSpeed::Slow,
             end: TrillWiggleSpeed::Fast,
         };
-        assert!(constant.synthesize_regions(100.0, 100.0, 3, |_| 80.0).is_none());
-        assert!(linear.synthesize_regions(100.0, 100.0, 3, |_| 80.0).is_none());
+        assert!(constant
+            .synthesize_regions(100.0, 100.0, 3, |_| 80.0)
+            .is_none());
+        assert!(linear
+            .synthesize_regions(100.0, 100.0, 3, |_| 80.0)
+            .is_none());
     }
 
     #[test]
@@ -2303,7 +2317,9 @@ mod tests {
             start: TrillWiggleSpeed::Slow,
             end: TrillWiggleSpeed::Fast,
         };
-        let regions = r.synthesize_regions(0.0, 90.0, 3, |s| s.index() as f64 + 1.0).unwrap();
+        let regions = r
+            .synthesize_regions(0.0, 90.0, 3, |s| s.index() as f64 + 1.0)
+            .unwrap();
         assert_eq!(regions.len(), 3);
         assert_eq!(regions[0].glyph, Glyph::WiggleTrillSlow);
         assert_eq!(regions[2].glyph, Glyph::WiggleTrillFast);
@@ -2517,7 +2533,8 @@ mod tests {
         // explicitly permits region_count == 1 (a single tile-row run of
         // that speed across the span). This must be accepted.
         let ramp = TrillSpeedRamp::constant(TrillWiggleSpeed::Standard);
-        let spec = TrillSpeedRampSpec::new_validated(ramp, 1).expect("Constant + 1 region is valid");
+        let spec =
+            TrillSpeedRampSpec::new_validated(ramp, 1).expect("Constant + 1 region is valid");
         assert_eq!(spec.ramp, ramp);
         assert_eq!(spec.region_count, 1);
     }
@@ -2541,10 +2558,7 @@ mod tests {
         // any ramp, which would break the documented Constant carve-out).
         for &speed in &TrillWiggleSpeed::ALL {
             for &n in &[1usize, 2, 3, 7, 32] {
-                let spec = TrillSpeedRampSpec::new_validated(
-                    TrillSpeedRamp::constant(speed),
-                    n,
-                );
+                let spec = TrillSpeedRampSpec::new_validated(TrillSpeedRamp::constant(speed), n);
                 assert!(
                     spec.is_some(),
                     "Constant({speed:?}) + region_count={n} must be accepted"
@@ -2654,10 +2668,8 @@ mod tests {
         // belongs to `TrillSpeedRamp::linear_validated`. The two
         // validators compose orthogonally so callers wanting both layers
         // chain them.
-        let degenerate_linear = TrillSpeedRamp::linear(
-            TrillWiggleSpeed::Standard,
-            TrillWiggleSpeed::Standard,
-        );
+        let degenerate_linear =
+            TrillSpeedRamp::linear(TrillWiggleSpeed::Standard, TrillWiggleSpeed::Standard);
         // region_count >= 2 satisfies the spec's own rule for Linear, so
         // it MUST be accepted here — surfacing the equal-endpoint
         // degeneracy is `linear_validated`'s job.
@@ -2689,13 +2701,17 @@ mod tests {
 
         // region_count == 0 rejected by both for any ramp.
         assert_eq!(TrillSpeedRampSpec::new_validated(constant, 0), None);
-        assert!(constant.synthesize_regions(0.0, 100.0, 0, |_| 50.0).is_none());
+        assert!(constant
+            .synthesize_regions(0.0, 100.0, 0, |_| 50.0)
+            .is_none());
         assert_eq!(TrillSpeedRampSpec::new_validated(linear, 0), None);
         assert!(linear.synthesize_regions(0.0, 100.0, 0, |_| 50.0).is_none());
 
         // region_count == 1 rejected only for Linear by both layers.
         assert!(TrillSpeedRampSpec::new_validated(constant, 1).is_some());
-        assert!(constant.synthesize_regions(0.0, 100.0, 1, |_| 50.0).is_some());
+        assert!(constant
+            .synthesize_regions(0.0, 100.0, 1, |_| 50.0)
+            .is_some());
         assert_eq!(TrillSpeedRampSpec::new_validated(linear, 1), None);
         assert!(linear.synthesize_regions(0.0, 100.0, 1, |_| 50.0).is_none());
     }

@@ -6,12 +6,15 @@ mod cmd;
 /// Note shown in `--help` so the feature-gated subcommand isn't mistaken for
 /// missing when it is simply absent from a default build.
 #[cfg(not(feature = "midi"))]
-const FEATURE_HELP: &str = "Additional subcommands:\n  \
-    ear-training  Generate MIDI ear-training quizzes — requires the `midi` \
-    feature: cargo build -p slonimsky --features midi";
+const FEATURE_HELP: &str = "MIDI capabilities require `--features midi`:\n  \
+    ear-training              Generate MIDI ear-training quizzes\n  \
+    sequence --format midi    Write Standard MIDI Files\n  \
+    sequence --format wav     Render audio through an SF2 SoundFont\n  \
+    sequence --format play    Play through the default MIDI output";
 
 #[cfg(feature = "midi")]
-const FEATURE_HELP: &str = "Built with the `midi` feature: `ear-training` is available.";
+const FEATURE_HELP: &str =
+    "Built with `midi`: ear training plus sequence MIDI, WAV, and playback output are available.";
 
 #[derive(Parser)]
 #[command(
@@ -62,9 +65,21 @@ enum Commands {
         /// Fret notation string (e.g. x-3-2-0-1-0)
         frets: String,
 
-        /// Tuning: standard, drop-d, dadgad, open-g, 7-string, bass-4, bass-5
+        /// Tuning name, comma-separated pitches/MIDI values, or @path
         #[arg(long, default_value = "standard")]
         tuning: String,
+
+        /// Output format: svg, positions, or fret-spec (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
+
+        /// Include spelled notes in ASCII output
+        #[arg(long)]
+        notes: bool,
+
+        /// Render ASCII strings from highest to lowest
+        #[arg(long)]
+        high_to_low: bool,
 
         /// Orientation: vertical (default) or horizontal
         #[arg(long)]
@@ -78,15 +93,177 @@ enum Commands {
         #[arg(long)]
         num_frets: Option<u8>,
     },
-    /// Name a chord from pitch classes
+    /// Generate, rank, filter, and render melodic fretboard realizations
+    MelodicShapes {
+        /// Notes or pitch classes, individually or comma-separated (e.g. B,D#,F#,A#)
+        #[arg(required = true)]
+        input: Vec<String>,
+
+        /// Output format override: text, json, svg, png, or pdf (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
+
+        /// Shape categories, repeatable/comma-separated: all, open, simple, 2nps, 2-3nps, 3-2nps, 3nps, exhaustive
+        #[arg(long = "category", value_delimiter = ',')]
+        categories: Vec<String>,
+
+        /// Restrict starting notes, repeatable/comma-separated (default: every input note)
+        #[arg(long = "starting-note", value_delimiter = ',')]
+        starting_notes: Vec<String>,
+
+        /// Tuning name, comma-separated pitches/MIDI values, or @path
+        #[arg(long, default_value = "standard")]
+        tuning: String,
+
+        /// Root note to highlight (default: first input note)
+        #[arg(long)]
+        root: Option<String>,
+
+        /// Keep only shapes with this playability cost or lower
+        #[arg(long)]
+        max_score: Option<usize>,
+
+        /// Keep only shapes spanning at most this many frets
+        #[arg(long)]
+        max_span: Option<u8>,
+
+        /// Maximum total shapes after filtering and sorting
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Sort by category, score, span, or position
+        #[arg(long, default_value = "category")]
+        sort: String,
+
+        /// Remove identical fingerboard paths appearing in multiple categories
+        #[arg(long)]
+        deduplicate: bool,
+
+        /// Diagram orientation: horizontal or vertical
+        #[arg(long, default_value = "horizontal")]
+        orientation: String,
+
+        /// Number of diagram columns in rendered output
+        #[arg(long, default_value = "3")]
+        columns: usize,
+
+        /// Width of each rendered diagram tile
+        #[arg(long, default_value = "320")]
+        tile_width: u32,
+
+        /// Height of each rendered diagram tile
+        #[arg(long, default_value = "220")]
+        tile_height: u32,
+
+        /// Gap between rendered diagram tiles
+        #[arg(long, default_value = "20")]
+        gap: u32,
+
+        /// Force the first displayed fret instead of choosing it from each shape
+        #[arg(long)]
+        start_fret: Option<u8>,
+
+        /// Force the number of displayed frets instead of fitting each shape
+        #[arg(long)]
+        num_frets: Option<u8>,
+
+        /// Automatic fret-window padding
+        #[arg(long, default_value = "1")]
+        fret_padding: u8,
+
+        /// Omit per-shape titles from rendered output
+        #[arg(long)]
+        no_titles: bool,
+
+        /// Do not highlight occurrences of the root
+        #[arg(long)]
+        no_root_markers: bool,
+
+        /// Hide fret numbers
+        #[arg(long)]
+        no_fret_numbers: bool,
+
+        /// Hide open-string names
+        #[arg(long)]
+        no_string_names: bool,
+
+        /// PNG resolution in dots per inch
+        #[arg(long, default_value = "144")]
+        dpi: f32,
+
+        /// Document title for rendered output
+        #[arg(long)]
+        title: Option<String>,
+    },
+    /// Name a chord from pitch classes with configurable inference and display policies
     Name {
         /// Pitch classes (integer or note name)
         #[arg(required = true)]
         pcs: Vec<String>,
 
-        /// Root pitch class (default: first in input)
+        /// Explicit chord root; disables automatic root inference
         #[arg(long)]
         root: Option<String>,
+
+        /// Explicit bass note; enables bass-aware inversion inference
+        #[arg(long)]
+        bass: Option<String>,
+
+        /// Minimum distinct pitch classes required for inferred slash chords
+        #[arg(long)]
+        slash_threshold: Option<usize>,
+
+        /// Inference preset: default, strict, jazz, or pop
+        #[arg(long, default_value = "default")]
+        naming_style: String,
+
+        /// Prefer add9/add11/add13 over extension alterations
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        prefer_add: Option<bool>,
+
+        /// Include omitted tones such as no5
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        show_omissions: Option<bool>,
+
+        /// Distinguish sixth chords from thirteenth chords without a seventh
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        distinguish_sixth: Option<bool>,
+
+        /// Detect and report naming ambiguities
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        report_ambiguities: Option<bool>,
+
+        /// Extension rendering: none, strict, highest, or highest-unless-one
+        #[arg(long, default_value = "none")]
+        extension_style: String,
+
+        /// Major-quality symbol: delta, maj, capital-m, or lower-maj
+        #[arg(long, default_value = "maj")]
+        major_symbol: String,
+
+        /// Accidental rendering: unicode or ascii
+        #[arg(long, default_value = "unicode")]
+        accidentals: String,
+
+        /// Render suspended-fourth qualities explicitly as sus4
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        explicit_sus4: Option<bool>,
+
+        /// Spaces between the root and chord quality
+        #[arg(long, default_value = "0")]
+        root_spacing: usize,
+
+        /// Spaces between the chord quality and slash
+        #[arg(long, default_value = "0")]
+        quality_slash_spacing: usize,
+
+        /// Spaces after the slash
+        #[arg(long, default_value = "0")]
+        slash_spacing: usize,
+
+        /// Output format: text or json (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
     },
     /// Spell a chord symbol into notes
     Spell {
@@ -124,6 +301,30 @@ enum Commands {
         /// Show full 12-element vector instead of reduced 6-element
         #[arg(long)]
         full: bool,
+    },
+    /// Draw pitches on a line with arcs showing adjacent intervals
+    IntervalLinear {
+        /// Pitch classes, note names, or comma-separated list
+        #[arg(required = true)]
+        input: Vec<String>,
+
+        /// Diagram title
+        #[arg(long)]
+        title: Option<String>,
+    },
+    /// Query directed intervals between selected pitch-class pairs
+    IntervalPairs {
+        /// Pitch classes defining the query set
+        #[arg(required = true)]
+        input: Vec<String>,
+
+        /// Pair to query as FROM,TO; repeatable (default: every unordered pair)
+        #[arg(long = "pair")]
+        pairs: Vec<String>,
+
+        /// Output format: text or json (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
     },
     /// Find known chords/scales that contain a given PcSet
     Superchords {
@@ -203,23 +404,55 @@ enum Commands {
         #[arg(long, default_value = "20")]
         limit: usize,
     },
-    /// Enumerate chord shapes for a given chord across the fretboard
+    /// Search every chord-shape classification and filter the results
     ChordDictionary {
         /// Pitch classes, note names, or comma-separated list
         #[arg(required = true)]
         input: Vec<String>,
 
-        /// Tuning: standard, drop-d, dadgad, open-g, 7-string, bass-4, bass-5
+        /// Output format: text, json, or svg (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
+
+        /// Tuning name, comma-separated pitches/MIDI values, or @path
         #[arg(long, default_value = "standard")]
         tuning: String,
 
-        /// Maximum fret span for playable shapes (default: 4)
-        #[arg(long, default_value = "4")]
-        max_span: u8,
+        /// Classifications, repeatable/comma-separated: all, playable, wide, nontransposable, high-fret, unplayable
+        #[arg(long = "classification", value_delimiter = ',')]
+        classifications: Vec<String>,
 
-        /// Maximum number of results to show (default: 20)
+        /// Exact low-to-high pitch voicing, including octaves (for example C4,E4,G4)
+        #[arg(long)]
+        voicing: Option<String>,
+
+        /// Low-to-high pitch-class family, ignoring octaves (for example E,G,C)
+        #[arg(long)]
+        family: Option<String>,
+
+        /// Required bass note
+        #[arg(long)]
+        bass: Option<String>,
+
+        /// Open-string policy: any, required, or excluded
+        #[arg(long, default_value = "any")]
+        open_strings: String,
+
+        /// Lowest allowed fret, including open strings as fret 0
+        #[arg(long)]
+        min_fret: Option<u8>,
+
+        /// Highest allowed fret
+        #[arg(long)]
+        max_fret: Option<u8>,
+
+        /// Maximum fret span
+        #[arg(long, default_value = "4")]
+        max_span: Option<u8>,
+
+        /// Maximum number of results after filtering
         #[arg(long, default_value = "20")]
-        max_results: usize,
+        max_results: Option<usize>,
     },
     /// Find voice-leadings between two voicings
     VoiceLeading {
@@ -239,9 +472,100 @@ enum Commands {
         #[arg(long)]
         no_crossings: bool,
 
-        /// Distance metric: l1 (sum of absolute semitone motions, default) or linf (max single-voice motion)
+        /// Distance metric: l1, linf, or weighted
         #[arg(long, default_value = "l1")]
         metric: String,
+
+        /// Comma-separated lowest-to-highest voice weights for the weighted metric
+        #[arg(long)]
+        weights: Option<String>,
+    },
+    /// Generate a bounded melodic sequence from interval, harmony, and rhythm patterns
+    Sequence {
+        /// Harmonic contexts as comma-separated note groups (e.g. C,D,E,F,G,A,B or C,E,G)
+        #[arg(required = true)]
+        harmony: Vec<String>,
+
+        /// Duration of each harmony: one value for all or comma-separated values per harmony
+        #[arg(long, default_value = "w")]
+        chord_durations: String,
+
+        /// Nested interval levels; commas separate intervals and slashes separate levels
+        #[arg(long, default_value = "1")]
+        pattern: String,
+
+        /// Interval used after all pattern levels complete a cycle
+        #[arg(long, default_value = "1", allow_hyphen_values = true)]
+        master_step: i8,
+
+        /// Comma-separated rhythm cycle: w, h, q, 8, 16, 32, 64, 128; dots allowed
+        #[arg(long, default_value = "8")]
+        rhythm: String,
+
+        /// Starting pitch with octave
+        #[arg(long, default_value = "C4")]
+        start: String,
+
+        /// Lowest allowed pitch
+        #[arg(long, default_value = "C3")]
+        low: String,
+
+        /// Highest allowed pitch
+        #[arg(long, default_value = "C6")]
+        high: String,
+
+        /// Initial direction: up or down
+        #[arg(long, default_value = "up")]
+        direction: String,
+
+        /// Boundary behavior: reflect, ricochet, start-over, wrap, or stop
+        #[arg(long, default_value = "reflect")]
+        turnaround: String,
+
+        /// Number of events to generate
+        #[arg(long, default_value = "16")]
+        length: usize,
+
+        /// Output format override: text, json, midi, wav, or play (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
+
+        /// Tempo for MIDI, WAV, and playback output
+        #[arg(long, default_value = "120")]
+        bpm: f32,
+
+        /// Pulses per quarter note for MIDI output (non-zero multiple of 32)
+        #[arg(long, default_value = "480")]
+        ppq: u16,
+
+        /// SF2 SoundFont path for WAV rendering (default: cached/downloaded GeneralUser GS)
+        #[arg(long)]
+        soundfont: Option<String>,
+
+        /// Do not download the default SoundFont when it is absent
+        #[arg(long)]
+        offline: bool,
+
+        /// WAV sample rate in hertz
+        #[arg(long, default_value = "48000")]
+        sample_rate: u32,
+
+        /// WAV decay tail in seconds
+        #[arg(long, default_value = "1")]
+        tail: f32,
+    },
+    /// Validate and render a declarative music-ron document
+    Render {
+        /// Input .ron path, or - to read from stdin
+        input: String,
+
+        /// Output format override: text, json, svg, png, or pdf
+        #[arg(long)]
+        format: Option<String>,
+
+        /// PNG resolution in dots per inch
+        #[arg(long, default_value = "144")]
+        dpi: f32,
     },
     /// Plan smoothest voice-leadings through a chord sequence
     Progression {
@@ -253,15 +577,43 @@ enum Commands {
         #[arg(long)]
         no_crossings: bool,
 
-        /// Distance metric for greedy step selection: l1 (default) or linf
+        /// Distance metric for greedy step selection: l1, linf, or weighted
         #[arg(long, default_value = "l1")]
         metric: String,
+
+        /// Comma-separated lowest-to-highest voice weights for the weighted metric
+        #[arg(long)]
+        weights: Option<String>,
     },
     /// Enumerate canonical voicings of a 3- or 4-note chord
     Voicings {
         /// Pitch classes, note names, or comma-separated list
         #[arg(required = true)]
         input: Vec<String>,
+
+        /// Inclusive pitch range as LOW..HIGH (for example, C3..C6)
+        #[arg(long)]
+        range: Option<String>,
+
+        /// Minimum adjacent-voice spacing in semitones
+        #[arg(long)]
+        min_spacing: Option<u8>,
+
+        /// Maximum adjacent-voice spacing in semitones
+        #[arg(long)]
+        max_spacing: Option<u8>,
+
+        /// Number of tuning strings that must sound
+        #[arg(long)]
+        strings: Option<usize>,
+
+        /// Named tuning, comma-separated open pitches/MIDI values, or @path
+        #[arg(long)]
+        tuning: Option<String>,
+
+        /// Chord-tone doubling policy: allow, forbid, or require
+        #[arg(long, default_value = "forbid")]
+        doubling: String,
 
         /// Maximum number of voicings to show
         #[arg(long)]
@@ -273,7 +625,7 @@ enum Commands {
         #[arg(required = true)]
         input: Vec<String>,
 
-        /// Tuning: standard, drop-d, dadgad, open-g, 7-string, bass-4, bass-5
+        /// Tuning name, comma-separated pitches/MIDI values, or @path
         #[arg(long, default_value = "standard")]
         tuning: String,
 
@@ -291,12 +643,61 @@ enum Commands {
     },
     /// Generate a scale book: all modes of a parent scale across keys
     ScaleBook {
-        /// Parent scale: major, melodic-minor, harmonic-minor, harmonic-major
+        /// Seven-note family slug; run `scale-catalog` to list all 22
         scale: String,
 
         /// Keys to include: "all" (default) or comma-separated (e.g. C,G,D)
         #[arg(long)]
         keys: Option<String>,
+    },
+    /// List, expand, or identify the complete seven-note scale catalog
+    ScaleCatalog {
+        /// Scale family to inspect (default: all 22 families)
+        scale: Option<String>,
+
+        /// Identify a tonic-first seven-note scale from pitches or pitch classes
+        #[arg(long, num_args = 1.., conflicts_with = "scale")]
+        identify: Vec<String>,
+
+        /// Include all seven rotations of each selected family
+        #[arg(long, conflicts_with = "identify")]
+        modes: bool,
+
+        /// Output format: text or json (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
+    },
+    /// Analyze, transform, and compare melodic contours
+    Contour {
+        /// Pitches with octaves or MIDI values, separated by spaces or commas
+        #[arg(required = true)]
+        input: Vec<String>,
+
+        /// A second pitch sequence to compare against
+        #[arg(long, num_args = 1..)]
+        compare: Vec<String>,
+
+        /// Applied contour transformation: original, retrograde, inversion, or retrograde-inversion
+        #[arg(long, default_value = "original")]
+        transform: String,
+
+        /// Output format: text or json (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
+    },
+    /// Rotate a pitch-class scale directly to another modal tonic
+    ScaleRotate {
+        /// Scale pitch classes, note names, or comma-separated list
+        #[arg(required = true)]
+        input: Vec<String>,
+
+        /// Signed number of scale degrees to rotate forward
+        #[arg(long, default_value = "1", allow_hyphen_values = true)]
+        steps: isize,
+
+        /// Output format: text or json (otherwise inferred from --output)
+        #[arg(long)]
+        format: Option<String>,
     },
     /// Generate a practice sheet for a key and scale
     PracticeSheet {
@@ -459,6 +860,9 @@ fn main() -> Result<()> {
         Commands::Fretboard {
             frets,
             tuning,
+            format,
+            notes,
+            high_to_low,
             orientation,
             title,
             num_frets,
@@ -468,16 +872,111 @@ fn main() -> Result<()> {
                 output: cli.output,
                 theme: cli.theme,
                 tuning,
+                format,
+                notes,
+                high_to_low,
                 orientation,
                 title,
                 num_frets,
                 verbose: cli.verbose,
             })?;
         }
-        Commands::Name { pcs, root } => {
+        Commands::MelodicShapes {
+            input,
+            format,
+            categories,
+            starting_notes,
+            tuning,
+            root,
+            max_score,
+            max_span,
+            limit,
+            sort,
+            deduplicate,
+            orientation,
+            columns,
+            tile_width,
+            tile_height,
+            gap,
+            start_fret,
+            num_frets,
+            fret_padding,
+            no_titles,
+            no_root_markers,
+            no_fret_numbers,
+            no_string_names,
+            dpi,
+            title,
+        } => {
+            cmd::melodic_shapes::run(cmd::melodic_shapes::MelodicShapesArgs {
+                input,
+                output: cli.output,
+                format,
+                categories,
+                starting_notes,
+                tuning,
+                root,
+                max_score,
+                max_span,
+                limit,
+                sort,
+                deduplicate,
+                orientation,
+                columns,
+                tile_width,
+                tile_height,
+                gap,
+                start_fret,
+                num_frets,
+                fret_padding,
+                no_titles,
+                no_root_markers,
+                no_fret_numbers,
+                no_string_names,
+                dpi,
+                theme: cli.theme,
+                title,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::Name {
+            pcs,
+            root,
+            bass,
+            slash_threshold,
+            naming_style,
+            prefer_add,
+            show_omissions,
+            distinguish_sixth,
+            report_ambiguities,
+            extension_style,
+            major_symbol,
+            accidentals,
+            explicit_sus4,
+            root_spacing,
+            quality_slash_spacing,
+            slash_spacing,
+            format,
+        } => {
             cmd::name::run(cmd::name::NameArgs {
                 pcs,
                 root,
+                bass,
+                slash_threshold,
+                naming_style,
+                prefer_add,
+                show_omissions,
+                distinguish_sixth,
+                report_ambiguities,
+                extension_style,
+                major_symbol,
+                accidentals,
+                explicit_sus4,
+                root_spacing,
+                quality_slash_spacing,
+                slash_spacing,
+                format,
+                output: cli.output,
                 verbose: cli.verbose,
             })?;
         }
@@ -489,11 +988,7 @@ fn main() -> Result<()> {
                 verbose: cli.verbose,
             })?;
         }
-        Commands::IntervalMatrix {
-            input,
-            title,
-            full,
-        } => {
+        Commands::IntervalMatrix { input, title, full } => {
             cmd::interval_matrix::run(cmd::interval_matrix::IntervalMatrixArgs {
                 input,
                 output: cli.output,
@@ -503,11 +998,7 @@ fn main() -> Result<()> {
                 full,
             })?;
         }
-        Commands::IntervalVector {
-            input,
-            title,
-            full,
-        } => {
+        Commands::IntervalVector { input, title, full } => {
             cmd::interval_vector::run(cmd::interval_vector::IntervalVectorArgs {
                 input,
                 output: cli.output,
@@ -515,6 +1006,28 @@ fn main() -> Result<()> {
                 title,
                 verbose: cli.verbose,
                 full,
+            })?;
+        }
+        Commands::IntervalLinear { input, title } => {
+            cmd::intervals::run_linear(cmd::intervals::LinearIntervalArgs {
+                input,
+                output: cli.output,
+                theme: cli.theme,
+                title,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::IntervalPairs {
+            input,
+            pairs,
+            format,
+        } => {
+            cmd::intervals::run_pairs(cmd::intervals::IntervalPairsArgs {
+                input,
+                pairs,
+                output: cli.output,
+                format,
+                verbose: cli.verbose,
             })?;
         }
         Commands::Superchords {
@@ -593,15 +1106,31 @@ fn main() -> Result<()> {
         }
         Commands::ChordDictionary {
             input,
+            format,
             tuning,
+            classifications,
+            voicing,
+            family,
+            bass,
+            open_strings,
+            min_fret,
+            max_fret,
             max_span,
             max_results,
         } => {
             cmd::chord_dictionary::run(cmd::chord_dictionary::ChordDictionaryArgs {
                 input,
                 output: cli.output,
+                format,
                 theme: cli.theme,
                 tuning,
+                classifications,
+                voicing,
+                family,
+                bass,
+                open_strings,
+                min_fret,
+                max_fret,
                 max_span,
                 max_results,
                 verbose: cli.verbose,
@@ -613,6 +1142,7 @@ fn main() -> Result<()> {
             limit,
             no_crossings,
             metric,
+            weights,
         } => {
             cmd::voice_leading::run(cmd::voice_leading::VoiceLeadingArgs {
                 from,
@@ -620,6 +1150,59 @@ fn main() -> Result<()> {
                 limit,
                 no_crossings,
                 metric,
+                weights,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::Sequence {
+            harmony,
+            chord_durations,
+            pattern,
+            master_step,
+            rhythm,
+            start,
+            low,
+            high,
+            direction,
+            turnaround,
+            length,
+            format,
+            bpm,
+            ppq,
+            soundfont,
+            offline,
+            sample_rate,
+            tail,
+        } => {
+            cmd::sequence::run(cmd::sequence::SequenceArgs {
+                harmony,
+                chord_durations,
+                pattern,
+                master_step,
+                rhythm,
+                start,
+                low,
+                high,
+                direction,
+                turnaround,
+                length,
+                format,
+                output: cli.output,
+                verbose: cli.verbose,
+                bpm,
+                ppq,
+                soundfont,
+                offline,
+                sample_rate,
+                tail,
+            })?;
+        }
+        Commands::Render { input, format, dpi } => {
+            cmd::render::run(cmd::render::RenderArgs {
+                input,
+                format,
+                output: cli.output,
+                dpi,
                 verbose: cli.verbose,
             })?;
         }
@@ -627,19 +1210,36 @@ fn main() -> Result<()> {
             chords,
             no_crossings,
             metric,
+            weights,
         } => {
             cmd::progression::run(cmd::progression::ProgressionArgs {
                 chords,
                 no_crossings,
                 metric,
+                weights,
                 output: cli.output,
                 verbose: cli.verbose,
             })?;
         }
-        Commands::Voicings { input, limit } => {
+        Commands::Voicings {
+            input,
+            range,
+            min_spacing,
+            max_spacing,
+            strings,
+            tuning,
+            doubling,
+            limit,
+        } => {
             cmd::voicings::run(cmd::voicings::VoicingsArgs {
                 input,
                 limit,
+                range,
+                min_spacing,
+                max_spacing,
+                strings,
+                tuning,
+                doubling,
                 verbose: cli.verbose,
             })?;
         }
@@ -667,6 +1267,49 @@ fn main() -> Result<()> {
                 keys,
                 output: cli.output,
                 theme: cli.theme,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::ScaleCatalog {
+            scale,
+            identify,
+            modes,
+            format,
+        } => {
+            cmd::scale_catalog::run(cmd::scale_catalog::ScaleCatalogArgs {
+                scale,
+                identify,
+                modes,
+                format,
+                output: cli.output,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::Contour {
+            input,
+            compare,
+            transform,
+            format,
+        } => {
+            cmd::contour::run(cmd::contour::ContourArgs {
+                input,
+                compare,
+                transform,
+                output: cli.output,
+                format,
+                verbose: cli.verbose,
+            })?;
+        }
+        Commands::ScaleRotate {
+            input,
+            steps,
+            format,
+        } => {
+            cmd::scale_rotate::run(cmd::scale_rotate::ScaleRotateArgs {
+                input,
+                steps,
+                output: cli.output,
+                format,
                 verbose: cli.verbose,
             })?;
         }
@@ -766,7 +1409,12 @@ fn main() -> Result<()> {
                 verbose: cli.verbose,
             })?;
         }
-        Commands::Subchords { input, size, name, relative } => {
+        Commands::Subchords {
+            input,
+            size,
+            name,
+            relative,
+        } => {
             cmd::subchords::run(cmd::subchords::SubchordsArgs {
                 input,
                 size,

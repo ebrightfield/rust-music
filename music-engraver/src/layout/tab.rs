@@ -50,7 +50,13 @@ impl TabStaffLayout {
 
     /// 4-string tab staff (bass guitar, ukulele).
     pub fn four_string(x: f64, y_origin: f64, width: f64, config: &EngravingConfig) -> Self {
-        Self::new(x, y_origin, width, config.staff_space, TAB_4_STRING_LINE_COUNT)
+        Self::new(
+            x,
+            y_origin,
+            width,
+            config.staff_space,
+            TAB_4_STRING_LINE_COUNT,
+        )
     }
 
     /// Total height from top line to bottom line.
@@ -155,11 +161,7 @@ pub fn layout_fret_number(
 /// Reuses `FretNumberLayout` with text "x" — the rendering is identical
 /// to a fret number (white background rect + centered bold text) except
 /// the text content indicates the string is muted rather than fretted.
-pub fn layout_muted_string(
-    tab_staff: &TabStaffLayout,
-    string: u8,
-    x: f64,
-) -> FretNumberLayout {
+pub fn layout_muted_string(tab_staff: &TabStaffLayout, string: u8, x: f64) -> FretNumberLayout {
     let y = tab_staff.string_y(string);
     let font_size = tab_staff.staff_space * FRET_NUMBER_FONT_SIZE_RATIO;
 

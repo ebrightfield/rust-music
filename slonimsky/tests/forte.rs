@@ -249,10 +249,7 @@ fn forte_nonachord_is_9_12() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("9-12"),
-        "should be 9-12; got:\n{stdout}"
-    );
+    assert!(stdout.contains("9-12"), "should be 9-12; got:\n{stdout}");
 }
 
 #[test]
@@ -273,7 +270,9 @@ fn forte_decachord_is_10_1() {
 #[test]
 fn forte_chromatic_aggregate_is_12_1() {
     let out = slonimsky()
-        .args(["forte", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"])
+        .args([
+            "forte", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+        ])
         .output()
         .expect("command should run");
 
@@ -361,8 +360,14 @@ fn forte_enharmonic_equivalence() {
     let int_out = String::from_utf8_lossy(&integer.stdout);
 
     // Both should be 4-28
-    assert!(enh_out.contains("4-28"), "enharmonic dim7 should be 4-28; got:\n{enh_out}");
-    assert!(int_out.contains("4-28"), "integer dim7 should be 4-28; got:\n{int_out}");
+    assert!(
+        enh_out.contains("4-28"),
+        "enharmonic dim7 should be 4-28; got:\n{enh_out}"
+    );
+    assert!(
+        int_out.contains("4-28"),
+        "integer dim7 should be 4-28; got:\n{int_out}"
+    );
 }
 
 #[test]

@@ -9,31 +9,54 @@ fn main() {
     let svg = TabScoreBuilder::guitar()
         .system_width_fu(10000.0)
         // Measure 1: E minor arpeggio with quarter note rhythm
-        .quarter().fret(6, 0).next()   // open low E — quarter
-        .quarter().fret(5, 2).next()   // B on A string — quarter
-        .eighth().fret(4, 2).next()    // E on D string — eighth
-        .eighth().fret(3, 0)           // open G — eighth
+        .quarter()
+        .fret(6, 0)
+        .next() // open low E — quarter
+        .quarter()
+        .fret(5, 2)
+        .next() // B on A string — quarter
+        .eighth()
+        .fret(4, 2)
+        .next() // E on D string — eighth
+        .eighth()
+        .fret(3, 0) // open G — eighth
         .barline()
         // Measure 2: power chord + half note + whole note
         .half()
-        .fret(6, 3)   // G power chord (simultaneous)
+        .fret(6, 3) // G power chord (simultaneous)
         .fret(5, 5)
         .fret(4, 5)
         .next()
-        .half().fret(1, 3)             // G on high E — half
+        .half()
+        .fret(1, 3) // G on high E — half
         .barline()
         // Measure 3: ascending scale with sixteenth notes
-        .duration(4).fret(1, 0).next()   // sixteenth
-        .duration(4).fret(1, 1).next()   // sixteenth
-        .duration(4).fret(1, 2).next()   // sixteenth
-        .duration(4).fret(1, 3).next()   // sixteenth
-        .whole().fret(1, 5)              // whole note rest of bar
+        .duration(4)
+        .fret(1, 0)
+        .next() // sixteenth
+        .duration(4)
+        .fret(1, 1)
+        .next() // sixteenth
+        .duration(4)
+        .fret(1, 2)
+        .next() // sixteenth
+        .duration(4)
+        .fret(1, 3)
+        .next() // sixteenth
+        .whole()
+        .fret(1, 5) // whole note rest of bar
         .barline()
         // Measure 4: mixed — no duration on some events
-        .quarter().fret(3, 0).next()
-        .fret(3, 2).next()              // no duration — no stem
-        .eighth().fret(3, 4).next()
-        .quarter().rest()               // rest with quarter duration stem
+        .quarter()
+        .fret(3, 0)
+        .next()
+        .fret(3, 2)
+        .next() // no duration — no stem
+        .eighth()
+        .fret(3, 4)
+        .next()
+        .quarter()
+        .rest() // rest with quarter duration stem
         .end_barline()
         .render_svg();
 

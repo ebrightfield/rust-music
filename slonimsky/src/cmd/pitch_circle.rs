@@ -29,7 +29,10 @@ pub fn run(args: PitchCircleArgs) -> Result<()> {
     let theme = resolve_theme(args.theme.as_deref())?;
 
     if args.verbose {
-        eprintln!("pitch-circle: pcs={pc_set:?}, root={root:?}, theme={}", args.theme.as_deref().unwrap_or("default"));
+        eprintln!(
+            "pitch-circle: pcs={pc_set:?}, root={root:?}, theme={}",
+            args.theme.as_deref().unwrap_or("default")
+        );
     }
 
     let mut builder = PitchCircleBuilder::new()
@@ -55,8 +58,7 @@ pub fn run(args: PitchCircleArgs) -> Result<()> {
                 ext == "svg",
                 "pitch-circle only supports .svg output (got .{ext})"
             );
-            fs::write(p, &svg)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(p, &svg).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", svg.len());
             }
@@ -90,7 +92,9 @@ mod tests {
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(content.starts_with("<svg"), "output should be SVG");
         assert!(content.contains("</svg>"), "SVG should be closed");
-        assert!(content.contains("<circle") || content.contains("<text"),
-            "SVG should contain graphical elements");
+        assert!(
+            content.contains("<circle") || content.contains("<text"),
+            "SVG should contain graphical elements"
+        );
     }
 }

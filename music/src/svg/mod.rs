@@ -58,13 +58,16 @@ pub mod pitch_circle;
 pub mod theme;
 pub mod util;
 
-pub use fretboard::{Barre, Finger, FretboardBuilder, FretboardConfig, FretPosition, Orientation};
+pub use fretboard::{Barre, Finger, FretPosition, FretboardBuilder, FretboardConfig, Orientation};
 pub use interval::{IntervalBuilder, IntervalConfig};
 pub use pitch_circle::{NoteLabels, PitchCircleBuilder, PitchCircleConfig};
 pub use theme::SvgTheme;
 
 use crate::fretboard::fretboard_shape::FretboardShape;
-use crate::note_collections::{NoteSet, pc_set::{PcShape, PcContent}};
+use crate::note_collections::{
+    pc_set::{PcContent, PcShape},
+    NoteSet,
+};
 
 use std::io;
 use std::path::Path;
@@ -138,9 +141,7 @@ pub fn svg_to_data_uri(svg: &str) -> String {
             b'#' => "%23".to_string(),
             b' ' => "%20".to_string(),
             b'\n' => "%0A".to_string(),
-            _ if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) => {
-                (b as char).to_string()
-            }
+            _ if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) => (b as char).to_string(),
             _ => format!("%{:02X}", b),
         })
         .collect();
@@ -187,7 +188,13 @@ mod tests {
     #[test]
     fn test_integration_with_pc_set() {
         let c_major = PcShape::new(vec![
-            Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
         ]);
         let svg = PitchCircleBuilder::new()
             .from_pc_shape(&c_major)
@@ -202,7 +209,13 @@ mod tests {
     #[test]
     fn test_pc_set_to_pitch_circle_svg_trait() {
         let c_major = PcShape::new(vec![
-            Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
         ]);
 
         // Use the extension trait
@@ -266,10 +279,7 @@ mod tests {
         // A complete workflow: chord on fretboard + pitch circle
         let shape = FretboardShape::from_string("x-3-2-0-1-0", &STD_6STR_GTR).unwrap();
 
-        let fretboard_svg = shape
-            .to_fretboard_svg()
-            .title("C Major Chord")
-            .build();
+        let fretboard_svg = shape.to_fretboard_svg().title("C Major Chord").build();
 
         let c_major_triad = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
         let circle_svg = c_major_triad
@@ -299,10 +309,7 @@ mod tests {
 
     #[test]
     fn test_note_set_to_interval_svg_trait() {
-        let c_major = NoteSet::with_root(
-            vec![Note::C, Note::E, Note::G],
-            &Note::C,
-        );
+        let c_major = NoteSet::with_root(vec![Note::C, Note::E, Note::G], &Note::C);
 
         let svg = c_major
             .to_interval_svg()

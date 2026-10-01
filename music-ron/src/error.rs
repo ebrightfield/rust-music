@@ -86,7 +86,13 @@ impl std::error::Error for MusicRonError {
 impl fmt::Display for MusicRonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MusicRonError::SyntaxError { line, col, message, source_path, snippet } => {
+            MusicRonError::SyntaxError {
+                line,
+                col,
+                message,
+                source_path,
+                snippet,
+            } => {
                 if let Some(p) = source_path {
                     write!(f, "{}:{}:{}: {}", p, line, col, message)?;
                 } else {
@@ -98,7 +104,10 @@ impl fmt::Display for MusicRonError {
                 }
                 Ok(())
             }
-            MusicRonError::Io { source_path, source } => {
+            MusicRonError::Io {
+                source_path,
+                source,
+            } => {
                 write!(f, "I/O error in {}: {}", source_path.display(), source)
             }
             MusicRonError::OctaveOutOfRange { got, path } => {
@@ -128,15 +137,27 @@ impl fmt::Display for MusicRonError {
             MusicRonError::InvalidPitch { input, path } => {
                 write!(f, "invalid pitch {:?} at {}", input, path)
             }
-            MusicRonError::UnsupportedVersion { got, max_supported, source_path } => {
+            MusicRonError::UnsupportedVersion {
+                got,
+                max_supported,
+                source_path,
+            } => {
                 if let Some(p) = source_path {
-                    write!(f, "unsupported version {} (max: {}) in {}", got, max_supported, p)
+                    write!(
+                        f,
+                        "unsupported version {} (max: {}) in {}",
+                        got, max_supported, p
+                    )
                 } else {
                     write!(f, "unsupported version {} (max: {})", got, max_supported)
                 }
             }
             MusicRonError::AmbiguousIdentity { path, fields } => {
-                write!(f, "ambiguous identity at {}: conflicting fields {:?}", path, fields)
+                write!(
+                    f,
+                    "ambiguous identity at {}: conflicting fields {:?}",
+                    path, fields
+                )
             }
             MusicRonError::UnknownStyle { got, path } => {
                 write!(f, "unknown style {:?} at {}", got, path)
@@ -144,4 +165,3 @@ impl fmt::Display for MusicRonError {
         }
     }
 }
-

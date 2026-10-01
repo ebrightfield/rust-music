@@ -3,9 +3,7 @@ use music_engraver::font::bravura_font;
 use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
-use music_engraver::layout::system::{
-    layout_system, MeasureContent, MeasureEvent, SystemPrefix,
-};
+use music_engraver::layout::system::{layout_system, MeasureContent, MeasureEvent, SystemPrefix};
 use music_engraver::layout::time_signature::TimeSignatureKind;
 use music_engraver::render::system_renderer::draw_system;
 use music_engraver::render::SvgWriter;
@@ -34,7 +32,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -42,7 +40,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -50,7 +48,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 6, // D5
@@ -58,7 +56,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
             ],
             barline: BarlineStyle::Single,
@@ -74,7 +72,7 @@ fn main() {
                     dots: 1,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Rest(RestEvent {
                     duration_log2: 2,
@@ -94,7 +92,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 1, // F#4
@@ -102,7 +100,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 2, // G4
@@ -110,7 +108,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 3, // A4
@@ -118,7 +116,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
                 MeasureEvent::Note(NoteEvent {
                     staff_position: 4, // B4
@@ -126,7 +124,7 @@ fn main() {
                     dots: 0,
                     accidental: None,
                     stem_direction: None,
-                annotations: NoteAnnotations::default(),
+                    annotations: NoteAnnotations::default(),
                 }),
             ],
             barline: BarlineStyle::Final,

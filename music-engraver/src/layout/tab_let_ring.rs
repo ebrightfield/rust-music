@@ -31,10 +31,9 @@ pub struct TabLetRingDashLayout {
 
 /// Distance above the top staff line for "let ring" text, in staff spaces.
 ///
-/// Positioned at 4.5ss — above palm mute (3.5ss) and rhythm stems (~3.0ss)
-/// to avoid collisions. When both P.M. and "let ring" appear (rare), they
-/// stack cleanly.
-pub const LET_RING_ABOVE_STAFF_SS: f64 = 4.5;
+/// This lane sits above palm mute and above the TAB rhythm/tuplet lanes, so
+/// simultaneous spans remain distinct without crossing rhythmic geometry.
+pub const LET_RING_ABOVE_STAFF_SS: f64 = 7.4;
 
 /// Font size for "let ring" text relative to staff space.
 pub const LET_RING_FONT_SIZE_RATIO: f64 = 1.0;
@@ -47,10 +46,7 @@ pub const LET_RING_DASH_OFFSET_SS: f64 = 2.0;
 /// Compute layout for a "let ring" text annotation on a tab staff.
 ///
 /// `x` is the horizontal position of the fret event.
-pub fn layout_tab_let_ring(
-    tab_staff: &TabStaffLayout,
-    x: f64,
-) -> TabLetRingLayout {
+pub fn layout_tab_let_ring(tab_staff: &TabStaffLayout, x: f64) -> TabLetRingLayout {
     let y = tab_staff.y_origin - tab_staff.staff_space * LET_RING_ABOVE_STAFF_SS;
     let font_size = tab_staff.staff_space * LET_RING_FONT_SIZE_RATIO;
 
@@ -113,7 +109,8 @@ mod tests {
         assert!(
             layout.y < staff.y_origin,
             "let ring text should be above the top staff line: y={} < y_origin={}",
-            layout.y, staff.y_origin
+            layout.y,
+            staff.y_origin
         );
     }
 
@@ -139,10 +136,13 @@ mod tests {
         assert!(
             lr.y < pm.y,
             "let ring (y={}) should be above palm mute (y={}) since y decreases upward",
-            lr.y, pm.y
+            lr.y,
+            pm.y
         );
-        // Compile-time guarantee: let ring sits above palm mute
-        const _: () = assert!(LET_RING_ABOVE_STAFF_SS > 3.5); // 3.5 = PALM_MUTE_ABOVE_STAFF_SS
+        // Compile-time guarantee: let ring sits above palm mute.
+        const _: () = assert!(
+            LET_RING_ABOVE_STAFF_SS > crate::layout::tab_palm_mute::PALM_MUTE_ABOVE_STAFF_SS
+        );
     }
 
     #[test]

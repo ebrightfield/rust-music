@@ -100,11 +100,11 @@ impl IntervalPattern {
     /// * `pattern` - A vector of interval vectors, each representing a level
     /// * `master_step` - The interval to use when all levels complete a cycle
     pub fn new(pattern: Vec<Vec<i8>>, master_step: i8) -> Self {
-        let levels = pattern
-            .into_iter()
-            .map(PatternLevel::new)
-            .collect();
-        Self { levels, master_step }
+        let levels = pattern.into_iter().map(PatternLevel::new).collect();
+        Self {
+            levels,
+            master_step,
+        }
     }
 
     /// Create a simple single-level pattern.
@@ -213,10 +213,7 @@ mod tests {
     #[test]
     fn test_three_level_pattern() {
         // Pattern from Python docs: [[9, 8], [7, 6, 5], [4]]
-        let mut pattern = IntervalPattern::new(
-            vec![vec![9, 8], vec![7, 6, 5], vec![4]],
-            1,
-        );
+        let mut pattern = IntervalPattern::new(vec![vec![9, 8], vec![7, 6, 5], vec![4]], 1);
 
         // First full cycle
         assert_eq!(pattern.next_interval(), (9, 0));

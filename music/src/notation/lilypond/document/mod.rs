@@ -2,15 +2,15 @@ pub mod score;
 pub mod staff;
 pub mod tab_staff;
 
-use std::path::PathBuf;
-use itertools::Itertools;
-use once_cell::sync::Lazy;
-use tera::Context;
-use score::LilypondScore;
 use crate::notation::lilypond::document::score::LilypondLayout;
 use crate::notation::lilypond::error::LilypondError;
 use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 use crate::notation::lilypond::ToLilypondString;
+use itertools::Itertools;
+use once_cell::sync::Lazy;
+use score::LilypondScore;
+use std::path::PathBuf;
+use tera::Context;
 
 /// Either a pre-existing lilypond source file,
 /// or one defined in Rust code with a [LilypondBuilder].
@@ -47,6 +47,11 @@ impl<'a> LilypondBuilder<'a> {
         self
     }
 
+    pub fn header(mut self, header: Option<LilypondHeader>) -> Self {
+        self.header = header;
+        self
+    }
+
     pub fn path(mut self, path: Option<PathBuf>) -> Self {
         self.path = path;
         self
@@ -78,7 +83,9 @@ impl<'a> LilypondBuilder<'a> {
 
 impl<'a> ToLilypondString for LilypondBuilder<'a> {
     fn to_lilypond_string(&self) -> String {
-        let mut content = self.includes.iter()
+        let mut content = self
+            .includes
+            .iter()
             .map(|include| include.to_lilypond_string())
             .join("\n");
         if let Some(header) = &self.header {
@@ -113,7 +120,7 @@ impl LilypondHeader {
         Self {
             title: None,
             composer: None,
-            tagline: None
+            tagline: None,
         }
     }
 
@@ -174,9 +181,8 @@ impl<'a> TryInto<LilypondInclude> for &LilypondBuilder<'a> {
 }
 
 /// This allows for cropping of lilypond staff systems.
-pub static LILYPOND_BOOK_PREAMBLE: Lazy<LilypondInclude> = Lazy::new(|| {
-    LilypondInclude(PathBuf::from("lilypond-book-preamble.ly"))
-});
+pub static LILYPOND_BOOK_PREAMBLE: Lazy<LilypondInclude> =
+    Lazy::new(|| LilypondInclude(PathBuf::from("lilypond-book-preamble.ly")));
 
 /// Paper block configuration for controlling page layout and spacing.
 ///
@@ -275,10 +281,16 @@ impl ToLilypondString for LilypondPaper {
             statements.push(format!("  #(set-paper-size \"{}\")", size));
         }
         if let Some(font) = &self.music_font {
-            statements.push(format!("  #(define fonts (set-global-fonts #:music \"{}\"))", font));
+            statements.push(format!(
+                "  #(define fonts (set-global-fonts #:music \"{}\"))",
+                font
+            ));
         }
         if let Some(padding) = self.system_system_padding {
-            statements.push(format!("  system-system-spacing = #'((padding . {}))", padding));
+            statements.push(format!(
+                "  system-system-spacing = #'((padding . {}))",
+                padding
+            ));
         }
         if let Some(margin) = self.top_margin {
             statements.push(format!("  top-margin = {}\\mm", margin));

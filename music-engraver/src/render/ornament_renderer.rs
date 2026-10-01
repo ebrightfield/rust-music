@@ -47,7 +47,10 @@ mod tests {
         draw_ornament(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
         assert!(svg.contains("<path"), "should contain a path element");
-        assert!(svg.contains("translate("), "should have a translate transform");
+        assert!(
+            svg.contains("translate("),
+            "should have a translate transform"
+        );
     }
 
     #[test]
@@ -88,7 +91,10 @@ mod tests {
         draw_ornament(&mut w2, &font, &mordent).unwrap();
         let svg2 = w2.to_svg();
 
-        assert_ne!(svg1, svg2, "trill and mordent should produce different paths");
+        assert_ne!(
+            svg1, svg2,
+            "trill and mordent should produce different paths"
+        );
     }
 
     #[test]

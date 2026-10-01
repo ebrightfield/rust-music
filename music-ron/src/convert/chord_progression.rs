@@ -1,10 +1,10 @@
+use music::notation::rhythm::duration::DurationKind;
 use music::note::note::Note;
 use music::note_collections::chord_name::parsing::parse_chord_name;
 use music::note_collections::pc_set::PcShape;
-use music::notation::rhythm::duration::DurationKind;
 
-use crate::ast::OwnedChordProgression;
 use crate::ast::common::{OwnedDuration, OwnedKey, OwnedMeter};
+use crate::ast::OwnedChordProgression;
 use crate::error::MusicRonError;
 use crate::visitor::duration::parse_duration_shorthand;
 
@@ -28,12 +28,12 @@ pub struct ResolvedChordProgression {
 /// Resolve an OwnedDuration to (DurationKind, dots).
 fn resolve_duration(d: &OwnedDuration, path: &str) -> Result<(DurationKind, u8), MusicRonError> {
     match d {
-        OwnedDuration::Shorthand(s) => parse_duration_shorthand(s).map_err(|()| {
-            MusicRonError::InvalidDuration {
+        OwnedDuration::Shorthand(s) => {
+            parse_duration_shorthand(s).map_err(|()| MusicRonError::InvalidDuration {
                 input: s.clone(),
                 path: path.to_string(),
-            }
-        }),
+            })
+        }
         OwnedDuration::Long { kind, dots } => Ok((*kind, *dots)),
     }
 }
@@ -48,13 +48,12 @@ pub fn convert_chord_progression(
     let mut chords = Vec::with_capacity(owned.chords.len());
 
     for (i, entry) in owned.chords.iter().enumerate() {
-        let (root, shape) = parse_chord_name(&entry.symbol).map_err(|e| {
-            MusicRonError::UnknownChordSymbol {
+        let (root, shape) =
+            parse_chord_name(&entry.symbol).map_err(|e| MusicRonError::UnknownChordSymbol {
                 input: entry.symbol.clone(),
                 inner: e.to_string(),
                 path: format!("chords[{}].symbol", i),
-            }
-        })?;
+            })?;
 
         let duration = match &entry.duration {
             Some(d) => Some(resolve_duration(d, &format!("chords[{}].duration", i))?),

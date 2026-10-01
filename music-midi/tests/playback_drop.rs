@@ -45,18 +45,23 @@ impl Clock for FakeClock {
 fn drop_sends_all_notes_off_on_all_16_channels() {
     let cap = CapturingSink::default();
     {
-        let _player = MidiPlayer::from_sink(Box::new(cap.clone()), Box::new(FakeClock { now: Instant::now() }));
+        let _player = MidiPlayer::from_sink(
+            Box::new(cap.clone()),
+            Box::new(FakeClock {
+                now: Instant::now(),
+            }),
+        );
         // implicit drop here — AllNotesOff should fire for channels 0..=15
     }
     let sent = cap.0.lock().unwrap();
-    assert_eq!(sent.len(), 16, "expected 16 AllNotesOff messages, one per channel");
+    assert_eq!(
+        sent.len(),
+        16,
+        "expected 16 AllNotesOff messages, one per channel"
+    );
 
     for (i, bytes) in sent.iter().enumerate() {
-        assert_eq!(
-            bytes.len(),
-            3,
-            "channel {i} message should be 3 bytes"
-        );
+        assert_eq!(bytes.len(), 3, "channel {i} message should be 3 bytes");
         assert_eq!(
             bytes[0] & 0xF0,
             0xB0,
@@ -79,7 +84,12 @@ fn drop_sends_all_notes_off_on_all_16_channels() {
 fn drop_sends_all_notes_off_in_order_channel_0_first() {
     let cap = CapturingSink::default();
     {
-        let _p = MidiPlayer::from_sink(Box::new(cap.clone()), Box::new(FakeClock { now: Instant::now() }));
+        let _p = MidiPlayer::from_sink(
+            Box::new(cap.clone()),
+            Box::new(FakeClock {
+                now: Instant::now(),
+            }),
+        );
     }
     let sent = cap.0.lock().unwrap();
     // First message must be channel 0, last must be channel 15.

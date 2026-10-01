@@ -46,8 +46,8 @@ pub fn parse_input_to_pcs(tokens: &[String]) -> Result<Vec<Pc>> {
             if part.is_empty() {
                 continue;
             }
-            let pc = parse_pc(part)
-                .with_context(|| format!("unrecognized pitch class: '{part}'"))?;
+            let pc =
+                parse_pc(part).with_context(|| format!("unrecognized pitch class: '{part}'"))?;
             pcs.push(pc);
         }
     }
@@ -80,7 +80,9 @@ pub fn resolve_theme(name: Option<&str>) -> Result<SvgTheme> {
         Some("dark") => Ok(SvgTheme::dark()),
         Some("print") => Ok(SvgTheme::print()),
         Some("colorful") => Ok(SvgTheme::colorful()),
-        Some(other) => anyhow::bail!("unknown theme: '{other}' (options: default, dark, print, colorful)"),
+        Some(other) => {
+            anyhow::bail!("unknown theme: '{other}' (options: default, dark, print, colorful)")
+        }
     }
 }
 

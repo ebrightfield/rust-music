@@ -10,7 +10,9 @@ fn slonimsky() -> Command {
 #[test]
 fn closest_c_major_triad_finds_close_chords() {
     let out = slonimsky()
-        .args(["closest", "C", "E", "G", "--pool", "chords", "--limit", "10"])
+        .args([
+            "closest", "C", "E", "G", "--pool", "chords", "--limit", "10",
+        ])
         .output()
         .expect("command should run");
 
@@ -66,7 +68,9 @@ fn closest_total_line_present() {
 #[test]
 fn closest_excludes_distance_zero() {
     let out = slonimsky()
-        .args(["closest", "C", "E", "G", "--pool", "chords", "--limit", "100"])
+        .args([
+            "closest", "C", "E", "G", "--pool", "chords", "--limit", "100",
+        ])
         .output()
         .expect("command should run");
 
@@ -100,11 +104,23 @@ fn closest_limit_caps_results() {
     let unlimited = String::from_utf8_lossy(&out_unlimited.stdout);
 
     // Count numbered result lines (start with whitespace + digits + period)
-    let count_limited = limited.lines().filter(|l| l.trim_start().starts_with(|c: char| c.is_ascii_digit())).count();
-    let count_unlimited = unlimited.lines().filter(|l| l.trim_start().starts_with(|c: char| c.is_ascii_digit())).count();
+    let count_limited = limited
+        .lines()
+        .filter(|l| l.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+        .count();
+    let count_unlimited = unlimited
+        .lines()
+        .filter(|l| l.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+        .count();
 
-    assert_eq!(count_limited, 3, "limited should have exactly 3 results; got:\n{limited}");
-    assert!(count_unlimited > 3, "unlimited should have more than 3 results; got:\n{unlimited}");
+    assert_eq!(
+        count_limited, 3,
+        "limited should have exactly 3 results; got:\n{limited}"
+    );
+    assert!(
+        count_unlimited > 3,
+        "unlimited should have more than 3 results; got:\n{unlimited}"
+    );
 }
 
 // ==================== pool filter ====================
@@ -112,7 +128,9 @@ fn closest_limit_caps_results() {
 #[test]
 fn closest_pool_chords_excludes_scales() {
     let out = slonimsky()
-        .args(["closest", "C", "E", "G", "--pool", "chords", "--limit", "20"])
+        .args([
+            "closest", "C", "E", "G", "--pool", "chords", "--limit", "20",
+        ])
         .output()
         .expect("command should run");
 
@@ -170,7 +188,9 @@ fn closest_shows_common_tones_count() {
 #[test]
 fn closest_verbose_shows_detail_on_stderr() {
     let out = slonimsky()
-        .args(["-v", "closest", "C", "E", "G", "--pool", "chords", "--limit", "3"])
+        .args([
+            "-v", "closest", "C", "E", "G", "--pool", "chords", "--limit", "3",
+        ])
         .output()
         .expect("command should run");
 

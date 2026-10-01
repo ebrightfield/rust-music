@@ -9,8 +9,7 @@ use music_engraver::render::{draw_clef, draw_rest, draw_staff_lines, SvgWriter};
 fn main() {
     let font = bravura_font();
     let config = font.engraving_config();
-    let staff =
-        music_engraver::layout::staff::StaffLayout::from_config(0.0, 0.0, 11000.0, &config);
+    let staff = music_engraver::layout::staff::StaffLayout::from_config(0.0, 0.0, 11000.0, &config);
 
     let mut svg = SvgWriter::new(1300.0, 300.0, -100.0, -1500.0, 12000.0, 4000.0);
 
@@ -30,7 +29,11 @@ fn main() {
     for log2 in 0..=7u8 {
         let x = start_x + log2 as f64 * spacing;
         let advance = draw_rest(&mut svg, &staff, &font, x, log2).unwrap();
-        assert!(advance > 0.0, "{} rest advance should be positive", labels[log2 as usize]);
+        assert!(
+            advance > 0.0,
+            "{} rest advance should be positive",
+            labels[log2 as usize]
+        );
     }
 
     let output = svg.to_svg();

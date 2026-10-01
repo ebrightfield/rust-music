@@ -30,6 +30,13 @@ pub struct VoiceCollisionOffset {
     pub inner_note_index: Option<usize>,
 }
 
+fn grouped_member_positions(note: &crate::layout::measure::NoteEvent) -> &[StaffPosition] {
+    note.annotations.grouped_chord.as_ref().map_or_else(
+        || std::slice::from_ref(&note.staff_position),
+        |chord| chord.staff_positions.as_slice(),
+    )
+}
+
 /// Collect the staff positions of notes/chords at each positioned element
 /// in a measure layout. Returns `(x, Vec<staff_position>)` pairs.
 ///
@@ -45,15 +52,19 @@ fn collect_voice_positions(layout: &MeasureLayout) -> Vec<(f64, Vec<StaffPositio
                 let durations: Vec<u8> = bg.notes.iter().map(|n| n.duration_log2).collect();
                 let offsets = beam_group_note_x_offsets(&durations, elem.width);
                 for (i, note) in bg.notes.iter().enumerate() {
-                    result.push((elem.x + offsets[i], vec![note.staff_position]));
+                    result.push((elem.x + offsets[i], grouped_member_positions(note).to_vec()));
                 }
             }
             MeasureElement::TupletGroup(tg) => {
-                let durations: Vec<u8> =
-                    tg.beam_group.notes.iter().map(|n| n.duration_log2).collect();
+                let durations: Vec<u8> = tg
+                    .beam_group
+                    .notes
+                    .iter()
+                    .map(|n| n.duration_log2)
+                    .collect();
                 let offsets = beam_group_note_x_offsets(&durations, elem.width);
                 for (i, note) in tg.beam_group.notes.iter().enumerate() {
-                    result.push((elem.x + offsets[i], vec![note.staff_position]));
+                    result.push((elem.x + offsets[i], grouped_member_positions(note).to_vec()));
                 }
             }
             _ => {
@@ -72,8 +83,19 @@ fn element_staff_positions(element: &MeasureElement) -> Vec<StaffPosition> {
     match element {
         MeasureElement::Note(n) => vec![n.staff_position],
         MeasureElement::Chord(c) => c.staff_positions.clone(),
-        MeasureElement::BeamGroup(bg) => bg.notes.iter().map(|e| e.staff_position).collect(),
-        MeasureElement::TupletGroup(tg) => tg.beam_group.notes.iter().map(|e| e.staff_position).collect(),
+        MeasureElement::BeamGroup(bg) => bg
+            .notes
+            .iter()
+            .flat_map(grouped_member_positions)
+            .copied()
+            .collect(),
+        MeasureElement::TupletGroup(tg) => tg
+            .beam_group
+            .notes
+            .iter()
+            .flat_map(grouped_member_positions)
+            .copied()
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -97,16 +119,21 @@ fn element_staff_positions(element: &MeasureElement) -> Vec<StaffPosition> {
 /// element.
 fn resolved_element_stem_direction(element: &MeasureElement) -> Option<StemDirection> {
     match element {
-        MeasureElement::Note(n) => {
-            Some(n.stem_direction.unwrap_or_else(|| auto_stem_direction(n.staff_position)))
-        }
+        MeasureElement::Note(n) => Some(
+            n.stem_direction
+                .unwrap_or_else(|| auto_stem_direction(n.staff_position)),
+        ),
         MeasureElement::Chord(c) => Some(
             c.stem_direction
                 .unwrap_or_else(|| auto_stem_direction_chord(&c.staff_positions)),
         ),
         MeasureElement::BeamGroup(bg) => {
-            let positions: Vec<StaffPosition> =
-                bg.notes.iter().map(|n| n.staff_position).collect();
+            let positions: Vec<StaffPosition> = bg
+                .notes
+                .iter()
+                .flat_map(grouped_member_positions)
+                .copied()
+                .collect();
             Some(
                 bg.stem_direction
                     .unwrap_or_else(|| auto_stem_direction_chord(&positions)),
@@ -117,7 +144,8 @@ fn resolved_element_stem_direction(element: &MeasureElement) -> Option<StemDirec
                 .beam_group
                 .notes
                 .iter()
-                .map(|n| n.staff_position)
+                .flat_map(grouped_member_positions)
+                .copied()
                 .collect();
             Some(
                 tg.beam_group
@@ -171,7 +199,7 @@ pub fn compute_voice_collision_offsets(
                     let note_x = elem.x + local_offsets[note_idx];
                     if let Some(offset) = collision_at_x(
                         note_x,
-                        &[note.staff_position],
+                        grouped_member_positions(note),
                         &primary_positions,
                         X_MATCH_TOLERANCE,
                     ) {
@@ -184,15 +212,19 @@ pub fn compute_voice_collision_offsets(
                 }
             }
             MeasureElement::TupletGroup(tg) => {
-                let durations: Vec<u8> =
-                    tg.beam_group.notes.iter().map(|n| n.duration_log2).collect();
+                let durations: Vec<u8> = tg
+                    .beam_group
+                    .notes
+                    .iter()
+                    .map(|n| n.duration_log2)
+                    .collect();
                 let local_offsets = beam_group_note_x_offsets(&durations, elem.width);
                 let group_dir = resolved_element_stem_direction(&elem.element);
                 for (note_idx, note) in tg.beam_group.notes.iter().enumerate() {
                     let note_x = elem.x + local_offsets[note_idx];
                     if let Some(offset) = collision_at_x(
                         note_x,
-                        &[note.staff_position],
+                        grouped_member_positions(note),
                         &primary_positions,
                         X_MATCH_TOLERANCE,
                     ) {
@@ -269,10 +301,7 @@ fn offset_shift_direction(dir: Option<StemDirection>) -> f64 {
 ///   so always offset to be safe in multi-voice context).
 /// - Second (distance 1): `1.0` notehead widths.
 /// - No collision: `None`.
-fn detect_collision(
-    voice_a: &[StaffPosition],
-    voice_b: &[StaffPosition],
-) -> Option<f64> {
+fn detect_collision(voice_a: &[StaffPosition], voice_b: &[StaffPosition]) -> Option<f64> {
     for &pos_a in voice_a {
         for &pos_b in voice_b {
             let distance = (pos_a - pos_b).unsigned_abs();
@@ -300,7 +329,7 @@ fn detect_collision(
 mod tests {
     use super::*;
     use crate::layout::measure::{
-        MeasureLayout, NoteAnnotations, NoteEvent, ChordEvent, RestEvent, PositionedElement,
+        ChordEvent, MeasureLayout, NoteAnnotations, NoteEvent, PositionedElement, RestEvent,
     };
 
     fn note_element(pos: i8, dir: Option<StemDirection>) -> MeasureElement {
@@ -327,7 +356,10 @@ mod tests {
     }
 
     fn rest_element() -> MeasureElement {
-        MeasureElement::Rest(RestEvent { duration_log2: 2, dots: 0 })
+        MeasureElement::Rest(RestEvent {
+            duration_log2: 2,
+            dots: 0,
+        })
     }
 
     fn layout_with(elements: Vec<(f64, MeasureElement)>) -> MeasureLayout {
@@ -360,10 +392,7 @@ mod tests {
         }
     }
 
-    fn beam_group_element(
-        positions: Vec<i8>,
-        dir: Option<StemDirection>,
-    ) -> MeasureElement {
+    fn beam_group_element(positions: Vec<i8>, dir: Option<StemDirection>) -> MeasureElement {
         use crate::layout::measure::BeamGroupEvent;
         MeasureElement::BeamGroup(BeamGroupEvent {
             notes: positions.into_iter().map(beamed_eighth).collect(),
@@ -383,12 +412,11 @@ mod tests {
                 stem_direction: dir,
             },
             tuplet_number,
+            in_time_of: tuplet_number,
         })
     }
 
-    fn layout_with_widths(
-        elements: Vec<(f64, MeasureElement, f64)>,
-    ) -> MeasureLayout {
+    fn layout_with_widths(elements: Vec<(f64, MeasureElement, f64)>) -> MeasureLayout {
         let positioned: Vec<PositionedElement> = elements
             .into_iter()
             .map(|(x, element, width)| PositionedElement {
@@ -412,7 +440,10 @@ mod tests {
         let primary = layout_with(vec![(100.0, note_element(8, Some(StemDirection::Up)))]);
         let additional = layout_with(vec![(100.0, note_element(2, Some(StemDirection::Down)))]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
-        assert!(offsets.is_empty(), "notes 6 positions apart should not collide");
+        assert!(
+            offsets.is_empty(),
+            "notes 6 positions apart should not collide"
+        );
     }
 
     #[test]
@@ -443,7 +474,10 @@ mod tests {
         let primary = layout_with(vec![(100.0, note_element(6, Some(StemDirection::Up)))]);
         let additional = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Down)))]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
-        assert!(offsets.is_empty(), "notes a third apart (distance 2) should not collide");
+        assert!(
+            offsets.is_empty(),
+            "notes a third apart (distance 2) should not collide"
+        );
     }
 
     #[test]
@@ -451,7 +485,10 @@ mod tests {
         let primary = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Up)))]);
         let additional = layout_with(vec![(300.0, note_element(4, Some(StemDirection::Down)))]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
-        assert!(offsets.is_empty(), "notes at different x should not collide");
+        assert!(
+            offsets.is_empty(),
+            "notes at different x should not collide"
+        );
     }
 
     #[test]
@@ -464,18 +501,35 @@ mod tests {
 
     #[test]
     fn chord_collision_with_note() {
-        let primary = layout_with(vec![(100.0, chord_element(vec![4, 8], Some(StemDirection::Up)))]);
+        let primary = layout_with(vec![(
+            100.0,
+            chord_element(vec![4, 8], Some(StemDirection::Up)),
+        )]);
         let additional = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Down)))]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
-        assert_eq!(offsets.len(), 1, "note at pos 4 collides with chord containing pos 4");
+        assert_eq!(
+            offsets.len(),
+            1,
+            "note at pos 4 collides with chord containing pos 4"
+        );
     }
 
     #[test]
     fn chord_collision_with_chord_at_second() {
-        let primary = layout_with(vec![(100.0, chord_element(vec![4, 8], Some(StemDirection::Up)))]);
-        let additional = layout_with(vec![(100.0, chord_element(vec![3, 7], Some(StemDirection::Down)))]);
+        let primary = layout_with(vec![(
+            100.0,
+            chord_element(vec![4, 8], Some(StemDirection::Up)),
+        )]);
+        let additional = layout_with(vec![(
+            100.0,
+            chord_element(vec![3, 7], Some(StemDirection::Down)),
+        )]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
-        assert_eq!(offsets.len(), 1, "chord with pos 3 is a second from chord pos 4");
+        assert_eq!(
+            offsets.len(),
+            1,
+            "chord with pos 3 is a second from chord pos 4"
+        );
     }
 
     #[test]
@@ -485,8 +539,8 @@ mod tests {
             (500.0, note_element(8, Some(StemDirection::Up))),
         ]);
         let additional = layout_with(vec![
-            (100.0, note_element(4, Some(StemDirection::Down))),  // collides
-            (500.0, note_element(2, Some(StemDirection::Down))),  // no collision
+            (100.0, note_element(4, Some(StemDirection::Down))), // collides
+            (500.0, note_element(2, Some(StemDirection::Down))), // no collision
         ]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert_eq!(offsets.len(), 1);
@@ -499,7 +553,10 @@ mod tests {
         let additional = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Up)))]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert_eq!(offsets.len(), 1);
-        assert_eq!(offsets[0].x_offset_noteheads, -1.0, "up-stem additional voice shifts left");
+        assert_eq!(
+            offsets[0].x_offset_noteheads, -1.0,
+            "up-stem additional voice shifts left"
+        );
     }
 
     #[test]
@@ -657,11 +714,8 @@ mod tests {
         // applies at draw time, otherwise the shift would land on the
         // wrong side of the (still-to-be-drawn) stem.
         let primary = layout_with(vec![(100.0, note_element(4, Some(StemDirection::Up)))]);
-        let additional = layout_with_widths(vec![(
-            100.0,
-            beam_group_element(vec![4, 6], None),
-            400.0,
-        )]);
+        let additional =
+            layout_with_widths(vec![(100.0, beam_group_element(vec![4, 6], None), 400.0)]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert_eq!(offsets.len(), 1);
         assert_eq!(offsets[0].x_offset_noteheads, 1.0);
@@ -681,11 +735,8 @@ mod tests {
         // eighths → local offsets 0, 200 → absolute xs 100, 300. Note 1
         // (pos 0) lands at x=300, where the primary's pos 0 sits.
         let primary = layout_with(vec![(300.0, note_element(0, Some(StemDirection::Down)))]);
-        let additional = layout_with_widths(vec![(
-            100.0,
-            beam_group_element(vec![-2, 0], None),
-            400.0,
-        )]);
+        let additional =
+            layout_with_widths(vec![(100.0, beam_group_element(vec![-2, 0], None), 400.0)]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert_eq!(offsets.len(), 1);
         assert_eq!(offsets[0].inner_note_index, Some(1));
@@ -747,8 +798,10 @@ mod tests {
     fn chord_none_stem_direction_auto_resolves_low_shifts_left() {
         // Chord at positions [-1, 1] sits entirely below middle: max=1,
         // min=-1, dist_above = -3, dist_below = 5 → auto Up → shift LEFT.
-        let primary =
-            layout_with(vec![(100.0, chord_element(vec![-1, 1], Some(StemDirection::Down)))]);
+        let primary = layout_with(vec![(
+            100.0,
+            chord_element(vec![-1, 1], Some(StemDirection::Down)),
+        )]);
         let additional = layout_with(vec![(100.0, chord_element(vec![-1, 1], None))]);
         let offsets = compute_voice_collision_offsets(&primary, &additional);
         assert_eq!(offsets.len(), 1);
@@ -760,7 +813,10 @@ mod tests {
     #[test]
     fn resolved_direction_note_explicit_wins_over_auto() {
         let n = note_element(0, Some(StemDirection::Down)); // low pos, would auto-up
-        assert_eq!(resolved_element_stem_direction(&n), Some(StemDirection::Down));
+        assert_eq!(
+            resolved_element_stem_direction(&n),
+            Some(StemDirection::Down)
+        );
     }
 
     #[test]
@@ -773,7 +829,10 @@ mod tests {
     fn resolved_direction_note_auto_high_returns_down() {
         // Position 4 = middle line; auto_stem_direction picks Down at >=4.
         let n = note_element(4, None);
-        assert_eq!(resolved_element_stem_direction(&n), Some(StemDirection::Down));
+        assert_eq!(
+            resolved_element_stem_direction(&n),
+            Some(StemDirection::Down)
+        );
     }
 
     #[test]
@@ -788,19 +847,28 @@ mod tests {
         // Equidistant: [2, 6] → dist_above = 2, dist_below = 2 → Down by
         // the equidistant tiebreak.
         let c = chord_element(vec![2, 6], None);
-        assert_eq!(resolved_element_stem_direction(&c), Some(StemDirection::Down));
+        assert_eq!(
+            resolved_element_stem_direction(&c),
+            Some(StemDirection::Down)
+        );
     }
 
     #[test]
     fn resolved_direction_beam_group_auto_low_returns_up() {
         let bg = beam_group_element(vec![-2, 0, 2], None);
-        assert_eq!(resolved_element_stem_direction(&bg), Some(StemDirection::Up));
+        assert_eq!(
+            resolved_element_stem_direction(&bg),
+            Some(StemDirection::Up)
+        );
     }
 
     #[test]
     fn resolved_direction_beam_group_auto_high_returns_down() {
         let bg = beam_group_element(vec![4, 6, 8], None);
-        assert_eq!(resolved_element_stem_direction(&bg), Some(StemDirection::Down));
+        assert_eq!(
+            resolved_element_stem_direction(&bg),
+            Some(StemDirection::Down)
+        );
     }
 
     #[test]
@@ -808,7 +876,10 @@ mod tests {
         // Tuplet wrapping a low-sitting beam group must resolve to Up,
         // same as the bare beam group case.
         let tg = tuplet_group_element(vec![-2, 0, 2], None, 3);
-        assert_eq!(resolved_element_stem_direction(&tg), Some(StemDirection::Up));
+        assert_eq!(
+            resolved_element_stem_direction(&tg),
+            Some(StemDirection::Up)
+        );
     }
 
     #[test]

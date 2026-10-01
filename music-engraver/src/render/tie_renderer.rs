@@ -81,7 +81,10 @@ mod tests {
         let path = tie_path_data(&layout);
         // Should have exactly 2 'C' commands and end with 'Z'
         let c_count = path.matches(" C").count();
-        assert_eq!(c_count, 2, "expected 2 cubic Bézier commands, got {c_count}");
+        assert_eq!(
+            c_count, 2,
+            "expected 2 cubic Bézier commands, got {c_count}"
+        );
         assert!(path.ends_with('Z'));
     }
 

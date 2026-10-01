@@ -84,7 +84,10 @@ mod tests {
         let layout = make_slur(SlurDirection::Under);
         let path = slur_path_data(&layout);
         let c_count = path.matches(" C").count();
-        assert_eq!(c_count, 2, "expected 2 cubic Bézier commands, got {c_count}");
+        assert_eq!(
+            c_count, 2,
+            "expected 2 cubic Bézier commands, got {c_count}"
+        );
         assert!(path.ends_with('Z'));
     }
 

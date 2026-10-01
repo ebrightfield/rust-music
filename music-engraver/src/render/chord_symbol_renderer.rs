@@ -13,8 +13,7 @@ use smufl::Glyph;
 
 use crate::font::{FontError, MusicFont};
 use crate::layout::chord_symbol::{
-    ChordSymbolCompositeLayout, ChordSymbolLayout, ChordSymbolSegment,
-    ChordSymbolSegmentBox,
+    ChordSymbolCompositeLayout, ChordSymbolLayout, ChordSymbolSegment, ChordSymbolSegmentBox,
 };
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
@@ -230,14 +229,9 @@ mod tests {
     fn composite(text: &str) -> ChordSymbolCompositeLayout {
         let font = test_font();
         let upe = font.units_per_em();
-        layout_chord_symbol_composite(
-            text,
-            500.0,
-            &test_staff(),
-            250.0,
-            upe,
-            |g| font.glyph_advance(g).unwrap_or(0),
-        )
+        layout_chord_symbol_composite(text, 500.0, &test_staff(), 250.0, upe, |g| {
+            font.glyph_advance(g).unwrap_or(0)
+        })
     }
 
     #[test]
@@ -250,8 +244,16 @@ mod tests {
         let font = test_font();
         draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
         let output = svg.to_svg();
-        assert_eq!(output.matches("<text").count(), 1, "expected 1 text element");
-        assert_eq!(output.matches("<path").count(), 0, "expected 0 path elements");
+        assert_eq!(
+            output.matches("<text").count(),
+            1,
+            "expected 1 text element"
+        );
+        assert_eq!(
+            output.matches("<path").count(),
+            0,
+            "expected 0 path elements"
+        );
         assert!(output.contains(">Cmaj7<"), "text content should be 'Cmaj7'");
     }
 
@@ -287,8 +289,16 @@ mod tests {
         let font = test_font();
         draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
         let output = svg.to_svg();
-        assert_eq!(output.matches("<text").count(), 1, "expected 1 text run ('B')");
-        assert_eq!(output.matches("<path").count(), 1, "expected 1 flat glyph path");
+        assert_eq!(
+            output.matches("<text").count(),
+            1,
+            "expected 1 text run ('B')"
+        );
+        assert_eq!(
+            output.matches("<path").count(),
+            1,
+            "expected 1 flat glyph path"
+        );
         assert!(output.contains(">B<"));
         assert!(
             !output.contains(">Bb<") && !output.contains(">b<"),
@@ -354,7 +364,10 @@ mod tests {
         let font = test_font();
         draw_chord_symbol_composite(&mut svg, &font, &layout).unwrap();
         let output = svg.to_svg();
-        assert!(output.contains("translate("), "expected translate transform");
+        assert!(
+            output.contains("translate("),
+            "expected translate transform"
+        );
         assert!(output.contains(" scale("), "expected scale transform");
     }
 
@@ -381,7 +394,10 @@ mod tests {
         let d_sharp = first_path_d(&svg_sharp);
         let d_flat = first_path_d(&svg_flat);
         let d_natural = first_path_d(&svg_natural);
-        assert_ne!(d_sharp, d_flat, "sharp and flat glyphs should have different path data");
+        assert_ne!(
+            d_sharp, d_flat,
+            "sharp and flat glyphs should have different path data"
+        );
         assert_ne!(d_sharp, d_natural, "sharp and natural glyphs should differ");
         assert_ne!(d_flat, d_natural, "flat and natural glyphs should differ");
     }

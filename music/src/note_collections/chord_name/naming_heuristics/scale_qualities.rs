@@ -1,13 +1,14 @@
-use std::collections::HashSet;
-use once_cell::sync::Lazy;
-use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
-use crate::note_collections::chord_name::quality::scale::{Alt2nd, Alt2ndMinor, Alt4th, Alt4thMinor, Alt6thAugMaj7, Alt6thDom7, Alt6thMaj7, ScaleQuality};
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::scale::{
+    Alt2nd, Alt2ndMinor, Alt4th, Alt4thMinor, Alt6thAugMaj7, Alt6thDom7, Alt6thMaj7, ScaleQuality,
+};
+use once_cell::sync::Lazy;
+use std::collections::HashSet;
 
-static WT_SCALE_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc2, Pc4, Pc6, Pc8, Pc10])
-});
+static WT_SCALE_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc2, Pc4, Pc6, Pc8, Pc10]));
 #[derive(Debug)]
 pub struct WholetoneScale;
 impl NamingHeuristic for WholetoneScale {
@@ -22,9 +23,8 @@ impl NamingHeuristic for WholetoneScale {
     }
 }
 
-static AUG_AH_SCALE_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc3, Pc4, Pc7, Pc8, Pc11])
-});
+static AUG_AH_SCALE_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc3, Pc4, Pc7, Pc8, Pc11]));
 #[derive(Debug)]
 pub struct AugAHScale;
 impl NamingHeuristic for AugAHScale {
@@ -39,9 +39,8 @@ impl NamingHeuristic for AugAHScale {
     }
 }
 
-static AUG_HA_SCALE_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc1, Pc4, Pc5, Pc8, Pc9])
-});
+static AUG_HA_SCALE_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc1, Pc4, Pc5, Pc8, Pc9]));
 #[derive(Debug)]
 pub struct AugHAScale;
 impl NamingHeuristic for AugHAScale {
@@ -56,9 +55,8 @@ impl NamingHeuristic for AugHAScale {
     }
 }
 
-static DIM_HW_SCALE_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc1, Pc3, Pc4, Pc6, Pc7, Pc9, Pc10])
-});
+static DIM_HW_SCALE_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc1, Pc3, Pc4, Pc6, Pc7, Pc9, Pc10]));
 #[derive(Debug)]
 pub struct DimHWScale;
 impl NamingHeuristic for DimHWScale {
@@ -73,9 +71,8 @@ impl NamingHeuristic for DimHWScale {
     }
 }
 
-static DIM_WH_SCALE_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc2, Pc3, Pc5, Pc6, Pc8, Pc9, Pc11])
-});
+static DIM_WH_SCALE_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc2, Pc3, Pc5, Pc6, Pc8, Pc9, Pc11]));
 #[derive(Debug)]
 pub struct DimWHScale;
 impl NamingHeuristic for DimWHScale {
@@ -90,9 +87,8 @@ impl NamingHeuristic for DimWHScale {
     }
 }
 
-static HARMONIC_MINOR_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc2, Pc3, Pc5, Pc7, Pc8, Pc11])
-});
+static HARMONIC_MINOR_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc2, Pc3, Pc5, Pc7, Pc8, Pc11]));
 #[derive(Debug)]
 pub struct HarmonicMinor;
 impl NamingHeuristic for HarmonicMinor {
@@ -107,9 +103,8 @@ impl NamingHeuristic for HarmonicMinor {
     }
 }
 
-static HARMONIC_MAJOR_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc2, Pc4, Pc5, Pc7, Pc8, Pc11])
-});
+static HARMONIC_MAJOR_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc2, Pc4, Pc5, Pc7, Pc8, Pc11]));
 #[derive(Debug)]
 pub struct HarmonicMajor;
 impl NamingHeuristic for HarmonicMajor {
@@ -124,9 +119,8 @@ impl NamingHeuristic for HarmonicMajor {
     }
 }
 
-static ALTERED_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc1, Pc3, Pc4, Pc6, Pc8, Pc10])
-});
+static ALTERED_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc1, Pc3, Pc4, Pc6, Pc8, Pc10]));
 #[derive(Debug)]
 pub struct AlteredScale;
 impl NamingHeuristic for AlteredScale {
@@ -140,7 +134,6 @@ impl NamingHeuristic for AlteredScale {
         Some(ScaleQuality::Altered)
     }
 }
-
 
 #[derive(Debug)]
 pub struct MajorScale;
@@ -170,8 +163,9 @@ impl NamingHeuristic for IonianAug {
     type T = ScaleQuality;
 
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
-        [Pc4, Pc5, Pc8, Pc11].iter().all(|pc| pcs.contains(pc)) &&
-            !pcs.contains(&Pc7) && !pcs.contains(&Pc6)
+        [Pc4, Pc5, Pc8, Pc11].iter().all(|pc| pcs.contains(pc))
+            && !pcs.contains(&Pc7)
+            && !pcs.contains(&Pc6)
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
@@ -249,8 +243,9 @@ impl NamingHeuristic for LydianAug {
     type T = ScaleQuality;
 
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
-        [Pc4, Pc6, Pc8, Pc11].iter().all(|pc| pcs.contains(pc)) &&
-            !pcs.contains(&Pc7) && !pcs.contains(&Pc6)
+        [Pc4, Pc6, Pc8, Pc11].iter().all(|pc| pcs.contains(pc))
+            && !pcs.contains(&Pc7)
+            && !pcs.contains(&Pc6)
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
@@ -259,7 +254,6 @@ impl NamingHeuristic for LydianAug {
         Some(ScaleQuality::LydianAug(seconds, sixths))
     }
 }
-
 
 #[derive(Debug)]
 pub struct Mixolydian;
@@ -284,8 +278,9 @@ impl NamingHeuristic for MixolydianAug {
     type T = ScaleQuality;
 
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
-        [Pc4, Pc8, Pc10].iter().all(|pc| pcs.contains(pc)) &&
-            !pcs.contains(&Pc7) && !pcs.contains(&Pc11)
+        [Pc4, Pc8, Pc10].iter().all(|pc| pcs.contains(pc))
+            && !pcs.contains(&Pc7)
+            && !pcs.contains(&Pc11)
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
@@ -332,8 +327,10 @@ impl NamingHeuristic for Locrian {
     type T = ScaleQuality;
 
     fn validate(&self, pcs: &HashSet<Pc>) -> bool {
-        [Pc3, Pc6, Pc10].iter().all(|pc| pcs.contains(pc)) &&
-            !pcs.contains(&Pc7) && !pcs.contains(&Pc9) && !pcs.contains(&Pc11)
+        [Pc3, Pc6, Pc10].iter().all(|pc| pcs.contains(pc))
+            && !pcs.contains(&Pc7)
+            && !pcs.contains(&Pc9)
+            && !pcs.contains(&Pc11)
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ScaleQuality> {
@@ -353,9 +350,8 @@ impl NamingHeuristic for Locrian {
 // Pentatonic scales - 5 notes
 
 /// Major pentatonic: 1 2 3 5 6 (without root: Pc2, Pc4, Pc7, Pc9)
-static MAJOR_PENTATONIC_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc2, Pc4, Pc7, Pc9])
-});
+static MAJOR_PENTATONIC_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc2, Pc4, Pc7, Pc9]));
 #[derive(Debug)]
 pub struct MajorPentatonic;
 impl NamingHeuristic for MajorPentatonic {
@@ -371,9 +367,8 @@ impl NamingHeuristic for MajorPentatonic {
 }
 
 /// Minor pentatonic: 1 b3 4 5 b7 (without root: Pc3, Pc5, Pc7, Pc10)
-static MINOR_PENTATONIC_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc3, Pc5, Pc7, Pc10])
-});
+static MINOR_PENTATONIC_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc3, Pc5, Pc7, Pc10]));
 #[derive(Debug)]
 pub struct MinorPentatonic;
 impl NamingHeuristic for MinorPentatonic {
@@ -390,9 +385,8 @@ impl NamingHeuristic for MinorPentatonic {
 
 /// Blues major scale: 1 2 b3 3 5 6 (without root: Pc2, Pc3, Pc4, Pc7, Pc9)
 /// This is major pentatonic with added b3 (blue note)
-static BLUES_MAJOR_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc2, Pc3, Pc4, Pc7, Pc9])
-});
+static BLUES_MAJOR_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc2, Pc3, Pc4, Pc7, Pc9]));
 #[derive(Debug)]
 pub struct BluesMajor;
 impl NamingHeuristic for BluesMajor {
@@ -409,9 +403,8 @@ impl NamingHeuristic for BluesMajor {
 
 /// Blues minor scale: 1 b3 4 b5 5 b7 (without root: Pc3, Pc5, Pc6, Pc7, Pc10)
 /// This is minor pentatonic with added b5 (blue note)
-static BLUES_MINOR_NO_ROOT: Lazy<HashSet<Pc>> = Lazy::new(|| {
-    HashSet::from([Pc3, Pc5, Pc6, Pc7, Pc10])
-});
+static BLUES_MINOR_NO_ROOT: Lazy<HashSet<Pc>> =
+    Lazy::new(|| HashSet::from([Pc3, Pc5, Pc6, Pc7, Pc10]));
 #[derive(Debug)]
 pub struct BluesMinor;
 impl NamingHeuristic for BluesMinor {

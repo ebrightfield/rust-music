@@ -44,10 +44,7 @@ fn main() {
             (Pitch::new(Note::B, 4), Duration::SIXTEENTH),
             (Pitch::new(Note::C, 5), Duration::SIXTEENTH),
         ])
-        .note(
-            Pitch::new(Note::D, 5),
-            Duration::new(DurationKind::Half, 1),
-        )
+        .note(Pitch::new(Note::D, 5), Duration::new(DurationKind::Half, 1))
         .barline()
         // Measure 4: mixed beam group (eighth + two sixteenths) + quarter + quarter
         .beam_group(vec![

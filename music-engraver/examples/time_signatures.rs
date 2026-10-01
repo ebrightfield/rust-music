@@ -10,8 +10,7 @@ use music_engraver::render::{draw_clef, draw_staff_lines, draw_time_signature, S
 fn main() {
     let font = bravura_font();
     let config = font.engraving_config();
-    let staff =
-        music_engraver::layout::staff::StaffLayout::from_config(0.0, 0.0, 12000.0, &config);
+    let staff = music_engraver::layout::staff::StaffLayout::from_config(0.0, 0.0, 12000.0, &config);
 
     let mut svg = SvgWriter::new(1400.0, 300.0, -100.0, -1500.0, 13000.0, 4000.0);
 

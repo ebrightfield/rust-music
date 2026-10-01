@@ -55,8 +55,7 @@ mod tests {
     fn sharp_accidental_produces_path() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -200.0, 6000.0, 1500.0);
-        let result =
-            draw_accidental(&mut svg, &staff, &font, 500.0, 4, Accidental::Sharp, false);
+        let result = draw_accidental(&mut svg, &staff, &font, 500.0, 4, Accidental::Sharp, false);
         let acc_x = result.unwrap().expect("sharp should be drawn");
         let output = svg.to_svg();
 
@@ -68,8 +67,7 @@ mod tests {
     fn flat_accidental_at_bottom_line() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -200.0, 6000.0, 1500.0);
-        let result =
-            draw_accidental(&mut svg, &staff, &font, 500.0, 0, Accidental::Flat, false);
+        let result = draw_accidental(&mut svg, &staff, &font, 500.0, 0, Accidental::Flat, false);
         let acc_x = result.unwrap().expect("flat should be drawn");
         let output = svg.to_svg();
 
@@ -85,8 +83,15 @@ mod tests {
     fn natural_not_drawn_by_default() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -200.0, 6000.0, 1500.0);
-        let result =
-            draw_accidental(&mut svg, &staff, &font, 500.0, 4, Accidental::Natural, false);
+        let result = draw_accidental(
+            &mut svg,
+            &staff,
+            &font,
+            500.0,
+            4,
+            Accidental::Natural,
+            false,
+        );
         assert!(result.unwrap().is_none());
         assert_eq!(svg.to_svg().matches("<path ").count(), 0);
     }
@@ -95,8 +100,7 @@ mod tests {
     fn natural_drawn_when_show_natural_true() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -200.0, 6000.0, 1500.0);
-        let result =
-            draw_accidental(&mut svg, &staff, &font, 500.0, 4, Accidental::Natural, true);
+        let result = draw_accidental(&mut svg, &staff, &font, 500.0, 4, Accidental::Natural, true);
         assert!(result.unwrap().is_some());
         assert_eq!(svg.to_svg().matches("<path ").count(), 1);
     }

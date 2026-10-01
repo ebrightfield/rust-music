@@ -57,10 +57,16 @@ fn main() {
 
     assert_eq!(line_count, 6, "6 staff lines");
     assert_eq!(path_count, 1, "1 TAB clef path");
-    assert_eq!(text_count, 16, "6 chord + 7 scale + 3 power chord = 16 fret numbers");
+    assert_eq!(
+        text_count, 16,
+        "6 chord + 7 scale + 3 power chord = 16 fret numbers"
+    );
     assert_eq!(rect_count, 16, "each fret number has a white bg rect");
 
     std::fs::create_dir_all("examples/output").unwrap();
     std::fs::write("examples/output/tab_staff.svg", &output).unwrap();
-    println!("Wrote examples/output/tab_staff.svg ({} bytes)", output.len());
+    println!(
+        "Wrote examples/output/tab_staff.svg ({} bytes)",
+        output.len()
+    );
 }

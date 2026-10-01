@@ -7,13 +7,13 @@
 //! - Rhythm patterns
 //! - Pitch boundaries with configurable turnaround behavior
 
-use super::{Direction, TurnaroundMode, PitchBounds};
-use super::pattern::IntervalPattern;
 use super::context::ChordProgression;
+use super::pattern::IntervalPattern;
+use super::{Direction, PitchBounds, TurnaroundMode};
 use crate::error::MusicSemanticsError;
+use crate::notation::rhythm::duration::Duration;
 use crate::note::pitch::Pitch;
 use crate::note_collections::NoteSet;
-use crate::notation::rhythm::duration::Duration;
 
 /// A single melodic event with pitch and duration.
 #[derive(Debug, Clone)]
@@ -138,10 +138,7 @@ impl MelodicSequencer {
 
         // First note
         let first_rhythm = self.next_rhythm();
-        melody.push(MelodicEvent::new(
-            self.config.starting_pitch,
-            first_rhythm,
-        ));
+        melody.push(MelodicEvent::new(self.config.starting_pitch, first_rhythm));
 
         // Generate remaining events
         while melody.len() < self.config.max_length {
@@ -164,8 +161,7 @@ impl MelodicSequencer {
     /// Get the next rhythm duration from the pattern.
     fn next_rhythm(&mut self) -> Duration {
         let rhythm = self.config.rhythm_pattern[self.rhythm_position];
-        self.rhythm_position = (self.rhythm_position + 1)
-            % self.config.rhythm_pattern.len();
+        self.rhythm_position = (self.rhythm_position + 1) % self.config.rhythm_pattern.len();
         rhythm
     }
 
@@ -192,11 +188,8 @@ impl MelodicSequencer {
         let previous_pitch = self.level_notes[level_for_pitch];
 
         // Calculate next pitch
-        let next_pitch = self.calculate_next_pitch(
-            &previous_pitch,
-            directed_interval,
-            &chord_notes,
-        )?;
+        let next_pitch =
+            self.calculate_next_pitch(&previous_pitch, directed_interval, &chord_notes)?;
 
         // Apply boundary logic
         let final_pitch = self.apply_boundary_logic(
@@ -253,9 +246,7 @@ impl MelodicSequencer {
                 }
             }
 
-            TurnaroundMode::StartOver => {
-                Ok(self.config.starting_pitch)
-            }
+            TurnaroundMode::StartOver => Ok(self.config.starting_pitch),
 
             TurnaroundMode::Reflect => {
                 self.direction = self.direction.flip();
@@ -274,9 +265,7 @@ impl MelodicSequencer {
                 }
             }
 
-            TurnaroundMode::Ricochet => {
-                self.apply_ricochet(previous, &next, chord)
-            }
+            TurnaroundMode::Ricochet => self.apply_ricochet(previous, &next, chord),
 
             TurnaroundMode::Wrap => {
                 // Move to opposite boundary
@@ -376,7 +365,15 @@ mod tests {
     use crate::note::note::Note;
 
     fn c_major_scale() -> NoteSet {
-        NoteSet::new(vec![Note::C, Note::D, Note::E, Note::F, Note::G, Note::A, Note::B])
+        NoteSet::new(vec![
+            Note::C,
+            Note::D,
+            Note::E,
+            Note::F,
+            Note::G,
+            Note::A,
+            Note::B,
+        ])
     }
 
     fn simple_config() -> MelodicSequencerConfig {
@@ -384,10 +381,7 @@ mod tests {
             chord_progression: ChordProgression::static_chord(c_major_scale()),
             interval_pattern: IntervalPattern::simple(vec![1], 1),
             rhythm_pattern: vec![Duration::EIGHTH],
-            bounds: PitchBounds::try_new(
-                Pitch::new(Note::C, 3),
-                Pitch::new(Note::C, 6),
-            ).unwrap(),
+            bounds: PitchBounds::try_new(Pitch::new(Note::C, 3), Pitch::new(Note::C, 6)).unwrap(),
             starting_pitch: Pitch::new(Note::C, 4),
             direction: Direction::Up,
             turnaround_mode: TurnaroundMode::Reflect,
@@ -438,10 +432,7 @@ mod tests {
         let mut config = simple_config();
         // Pattern: [[1, 1], [2]] - level 0 steps, level 1 skips
         // Multi-level patterns track each level independently
-        config.interval_pattern = IntervalPattern::new(
-            vec![vec![1, 1], vec![2]],
-            1,
-        );
+        config.interval_pattern = IntervalPattern::new(vec![vec![1, 1], vec![2]], 1);
         config.max_length = 6;
 
         let mut sequencer = MelodicSequencer::new(config);
@@ -464,10 +455,8 @@ mod tests {
     #[test]
     fn test_boundary_stop() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::try_new(
-            Pitch::new(Note::C, 4),
-            Pitch::new(Note::E, 4),
-        ).unwrap();
+        config.bounds =
+            PitchBounds::try_new(Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)).unwrap();
         config.turnaround_mode = TurnaroundMode::Stop;
         config.max_length = 6;
 
@@ -486,10 +475,8 @@ mod tests {
     #[test]
     fn test_boundary_reflect() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::try_new(
-            Pitch::new(Note::C, 4),
-            Pitch::new(Note::E, 4),
-        ).unwrap();
+        config.bounds =
+            PitchBounds::try_new(Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)).unwrap();
         config.turnaround_mode = TurnaroundMode::Reflect;
         config.max_length = 8;
 
@@ -508,10 +495,8 @@ mod tests {
     #[test]
     fn test_boundary_wrap() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::try_new(
-            Pitch::new(Note::C, 4),
-            Pitch::new(Note::E, 4),
-        ).unwrap();
+        config.bounds =
+            PitchBounds::try_new(Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)).unwrap();
         config.turnaround_mode = TurnaroundMode::Wrap;
         config.max_length = 5;
 
@@ -530,10 +515,8 @@ mod tests {
     #[test]
     fn test_boundary_start_over() {
         let mut config = simple_config();
-        config.bounds = PitchBounds::try_new(
-            Pitch::new(Note::C, 4),
-            Pitch::new(Note::E, 4),
-        ).unwrap();
+        config.bounds =
+            PitchBounds::try_new(Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)).unwrap();
         config.turnaround_mode = TurnaroundMode::StartOver;
         config.max_length = 5;
 
@@ -552,11 +535,7 @@ mod tests {
     #[test]
     fn test_rhythm_pattern_cycling() {
         let mut config = simple_config();
-        config.rhythm_pattern = vec![
-            Duration::QTR,
-            Duration::EIGHTH,
-            Duration::EIGHTH,
-        ];
+        config.rhythm_pattern = vec![Duration::QTR, Duration::EIGHTH, Duration::EIGHTH];
         config.max_length = 6;
 
         let mut sequencer = MelodicSequencer::new(config);
@@ -609,10 +588,7 @@ mod tests {
             chord_progression: ChordProgression::static_chord(triad),
             interval_pattern: IntervalPattern::simple(vec![1], 1),
             rhythm_pattern: vec![Duration::EIGHTH],
-            bounds: PitchBounds::try_new(
-                Pitch::new(Note::C, 3),
-                Pitch::new(Note::C, 6),
-            ).unwrap(),
+            bounds: PitchBounds::try_new(Pitch::new(Note::C, 3), Pitch::new(Note::C, 6)).unwrap(),
             starting_pitch: Pitch::new(Note::C, 4),
             direction: Direction::Up,
             turnaround_mode: TurnaroundMode::Reflect,

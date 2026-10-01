@@ -71,36 +71,66 @@ fn corpus() -> Vec<Case> {
         {
             // C-major scale: 8 straight quarters.
             let (durations, dots, accidentals) = n(vec![2; 8]);
-            Case { name: "scale-8-quarters", durations, dots, accidentals }
+            Case {
+                name: "scale-8-quarters",
+                durations,
+                dots,
+                accidentals,
+            }
         },
         {
             // Twinkle: quarters ending in a half.
             let (durations, dots, accidentals) = n(vec![2, 2, 2, 2, 2, 2, 1]);
-            Case { name: "twinkle-phrase", durations, dots, accidentals }
+            Case {
+                name: "twinkle-phrase",
+                durations,
+                dots,
+                accidentals,
+            }
         },
         {
             // Dotted rhythms: dotted-quarter + eighth pairs.
             let durations = vec![2, 3, 2, 3];
             let dots = vec![1, 0, 1, 0];
             let accidentals = vec![false; 4];
-            Case { name: "dotted-quarter-eighth", durations, dots, accidentals }
+            Case {
+                name: "dotted-quarter-eighth",
+                durations,
+                dots,
+                accidentals,
+            }
         },
         {
             // Dense 16ths — the case the old model could crush.
             let (durations, dots, accidentals) = n(vec![4; 16]);
-            Case { name: "dense-16ths", durations, dots, accidentals }
+            Case {
+                name: "dense-16ths",
+                durations,
+                dots,
+                accidentals,
+            }
         },
         {
             // Mixed whole + eighths: the widest duration ratio in one measure.
             let (durations, dots, accidentals) = n(vec![0, 3, 3, 3, 3]);
-            Case { name: "mixed-whole-eighth", durations, dots, accidentals }
+            Case {
+                name: "mixed-whole-eighth",
+                durations,
+                dots,
+                accidentals,
+            }
         },
         {
             // Chromatic run: every note carries an accidental (rod-heavy).
             let durations = vec![3; 8];
             let dots = vec![0; 8];
             let accidentals = vec![true; 8];
-            Case { name: "chromatic-accidentals", durations, dots, accidentals }
+            Case {
+                name: "chromatic-accidentals",
+                durations,
+                dots,
+                accidentals,
+            }
         },
     ]
 }
@@ -116,7 +146,11 @@ fn build_elements(case: &Case) -> Vec<MeasureElement> {
                 staff_position: (i % 8) as i8,
                 duration_log2,
                 dots,
-                accidental: if acc { Some(smufl::Glyph::AccidentalSharp) } else { None },
+                accidental: if acc {
+                    Some(smufl::Glyph::AccidentalSharp)
+                } else {
+                    None
+                },
                 stem_direction: None,
                 annotations: NoteAnnotations::default(),
             })
@@ -291,7 +325,11 @@ fn main() {
             legacy / SS,
             layout.total_rod / SS,
             implied_k,
-            if uniform { "" } else { "  (mixed rhythm: approximate)" }
+            if uniform {
+                ""
+            } else {
+                "  (mixed rhythm: approximate)"
+            }
         );
     }
 

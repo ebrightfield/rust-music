@@ -1,8 +1,11 @@
 // REQ-O3, O4, O17: RhythmicNotatedEvent incl. ties + tuplets + Fretted/FrettedMany/Rest coverage
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
-use music::notation::rhythm::{RhythmicNotatedEvent, NotatedEvent, SingleEvent, Tuplet};
+use crate::{
+    error::MidiConversionError,
+    event::{AbsoluteTicks, MidiEvent, MidiMessage},
+};
 use music::notation::rhythm::duration::Duration;
+use music::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent, SingleEvent, Tuplet};
 
 fn single_event_pitches<'a>(s: &'a SingleEvent<'a>) -> Vec<u8> {
     match s {
@@ -35,27 +38,46 @@ fn emit_single(
         return Ok(base_tick + dt);
     }
     for k in &keys {
-        if *k > 127 { return Err(MidiConversionError::PitchOutOfRange(*k)); }
+        if *k > 127 {
+            return Err(MidiConversionError::PitchOutOfRange(*k));
+        }
     }
     let vel = ctx.velocity.velocity_for(rne);
     for k in &keys {
-        out.push(MidiEvent { time: base_tick, channel,
-            message: MidiMessage::NoteOn { key: *k, velocity: vel } });
+        out.push(MidiEvent {
+            time: base_tick,
+            channel,
+            message: MidiMessage::NoteOn {
+                key: *k,
+                velocity: vel,
+            },
+        });
     }
     for k in &keys {
-        out.push(MidiEvent { time: base_tick + dt, channel,
-            message: MidiMessage::NoteOff { key: *k, velocity: 64 } });
+        out.push(MidiEvent {
+            time: base_tick + dt,
+            channel,
+            message: MidiMessage::NoteOff {
+                key: *k,
+                velocity: 64,
+            },
+        });
     }
     Ok(base_tick + dt)
 }
 
 impl<'a> ToMidiEvents for RhythmicNotatedEvent<'a> {
     fn append_midi(
-        &self, base_tick: AbsoluteTicks, channel: u8,
-        ctx: &ConvertCtx<'_>, out: &mut Vec<MidiEvent>,
+        &self,
+        base_tick: AbsoluteTicks,
+        channel: u8,
+        ctx: &ConvertCtx<'_>,
+        out: &mut Vec<MidiEvent>,
     ) -> Result<AbsoluteTicks, MidiConversionError> {
         match &self.event {
-            NotatedEvent::SingleEvent(_, dur) => emit_single(self, dur, base_tick, channel, ctx, out),
+            NotatedEvent::SingleEvent(_, dur) => {
+                emit_single(self, dur, base_tick, channel, ctx, out)
+            }
             NotatedEvent::Tuplet(t) => emit_tuplet(t, base_tick, channel, ctx, out),
         }
     }
@@ -66,8 +88,11 @@ impl<'a> ToMidiEvents for RhythmicNotatedEvent<'a> {
 // We flatten via an explicit recursion that carries the accumulated (num_acc, den_acc) ratio,
 // instead of recursing into a fresh `emit_tuplet` that only sees the inner ratio.
 fn emit_tuplet<'a>(
-    t: &Tuplet<'a>, base_tick: AbsoluteTicks, channel: u8,
-    ctx: &ConvertCtx<'_>, out: &mut Vec<MidiEvent>,
+    t: &Tuplet<'a>,
+    base_tick: AbsoluteTicks,
+    channel: u8,
+    ctx: &ConvertCtx<'_>,
+    out: &mut Vec<MidiEvent>,
 ) -> Result<AbsoluteTicks, MidiConversionError> {
     emit_tuplet_scaled(t, base_tick, channel, ctx, out, 1, 1)
 }
@@ -77,13 +102,21 @@ fn emit_tuplet<'a>(
 /// inverted (i.e., we shrink the child by the ratio). Concretely the per-child MIDI
 /// duration is computed by `tuplet_child_ticks_compound`.
 fn emit_tuplet_scaled<'a>(
-    t: &Tuplet<'a>, base_tick: AbsoluteTicks, channel: u8,
-    ctx: &ConvertCtx<'_>, out: &mut Vec<MidiEvent>,
-    num_acc: usize, den_acc: usize,
+    t: &Tuplet<'a>,
+    base_tick: AbsoluteTicks,
+    channel: u8,
+    ctx: &ConvertCtx<'_>,
+    out: &mut Vec<MidiEvent>,
+    num_acc: usize,
+    den_acc: usize,
 ) -> Result<AbsoluteTicks, MidiConversionError> {
     let mut tick = base_tick;
-    let cum_num = num_acc.checked_mul(t.numerator).ok_or_else(|| arith_overflow(t))?;
-    let cum_den = den_acc.checked_mul(t.denominator).ok_or_else(|| arith_overflow(t))?;
+    let cum_num = num_acc
+        .checked_mul(t.numerator)
+        .ok_or_else(|| arith_overflow(t))?;
+    let cum_den = den_acc
+        .checked_mul(t.denominator)
+        .ok_or_else(|| arith_overflow(t))?;
     for child in &t.events {
         let child_music_ticks: u32 = match &child.event {
             NotatedEvent::SingleEvent(_, dur) => dur.ticks() as u32,
@@ -95,10 +128,26 @@ fn emit_tuplet_scaled<'a>(
                 let keys = single_event_pitches(s);
                 if !keys.is_empty() {
                     let vel = ctx.velocity.velocity_for(child);
-                    for k in &keys { out.push(MidiEvent { time: tick, channel,
-                        message: MidiMessage::NoteOn { key: *k, velocity: vel } }); }
-                    for k in &keys { out.push(MidiEvent { time: tick + scaled, channel,
-                        message: MidiMessage::NoteOff { key: *k, velocity: 64 } }); }
+                    for k in &keys {
+                        out.push(MidiEvent {
+                            time: tick,
+                            channel,
+                            message: MidiMessage::NoteOn {
+                                key: *k,
+                                velocity: vel,
+                            },
+                        });
+                    }
+                    for k in &keys {
+                        out.push(MidiEvent {
+                            time: tick + scaled,
+                            channel,
+                            message: MidiMessage::NoteOff {
+                                key: *k,
+                                velocity: 64,
+                            },
+                        });
+                    }
                 }
             }
             NotatedEvent::Tuplet(nested) => {
@@ -113,21 +162,30 @@ fn emit_tuplet_scaled<'a>(
 }
 
 fn arith_overflow<'a>(t: &Tuplet<'a>) -> MidiConversionError {
-    MidiConversionError::TupletInexact { num: t.numerator as u32, den: t.denominator as u32, ppq: 0 }
+    MidiConversionError::TupletInexact {
+        num: t.numerator as u32,
+        den: t.denominator as u32,
+        ppq: 0,
+    }
 }
 
 /// [AMEND-W3] compound-ratio variant of `tuplet_child_ticks`. Replaces the per-call
 /// (num, den) with an accumulated (cum_num, cum_den) so nested tuplets are correct.
-fn tuplet_child_ticks_compound(base_music_ticks: u32, cum_num: usize, cum_den: usize, ppq: u16)
-    -> Result<u64, MidiConversionError>
-{
+fn tuplet_child_ticks_compound(
+    base_music_ticks: u32,
+    cum_num: usize,
+    cum_den: usize,
+    ppq: u16,
+) -> Result<u64, MidiConversionError> {
     let n = cum_num as u128;
     let d = cum_den as u128;
     let midi = (base_music_ticks as u128) * (ppq as u128) * d / (32 * n);
     let remainder = ((base_music_ticks as u128) * (ppq as u128) * d) % (32 * n);
     if remainder != 0 {
         return Err(MidiConversionError::TupletInexact {
-            num: cum_num as u32, den: cum_den as u32, ppq,
+            num: cum_num as u32,
+            den: cum_den as u32,
+            ppq,
         });
     }
     Ok(midi as u64)
@@ -135,8 +193,11 @@ fn tuplet_child_ticks_compound(base_music_ticks: u32, cum_num: usize, cum_den: u
 
 impl<'a> ToMidiEvents for [RhythmicNotatedEvent<'a>] {
     fn append_midi(
-        &self, mut base_tick: AbsoluteTicks, channel: u8,
-        ctx: &ConvertCtx<'_>, out: &mut Vec<MidiEvent>,
+        &self,
+        mut base_tick: AbsoluteTicks,
+        channel: u8,
+        ctx: &ConvertCtx<'_>,
+        out: &mut Vec<MidiEvent>,
     ) -> Result<AbsoluteTicks, MidiConversionError> {
         // REQ-O4, X8: merge tied events by suppressing NoteOn and extending NoteOff
         let mut i = 0;
@@ -170,13 +231,29 @@ impl<'a> ToMidiEvents for [RhythmicNotatedEvent<'a>] {
             };
             if !keys.is_empty() {
                 let vel = ctx.velocity.velocity_for(&self[i]);
-                for k in &keys { out.push(MidiEvent { time: base_tick, channel,
-                    message: MidiMessage::NoteOn { key: *k, velocity: vel } }); }
-                for k in &keys { out.push(MidiEvent { time: base_tick + merged_ticks, channel,
-                    message: MidiMessage::NoteOff { key: *k, velocity: 64 } }); }
+                for k in &keys {
+                    out.push(MidiEvent {
+                        time: base_tick,
+                        channel,
+                        message: MidiMessage::NoteOn {
+                            key: *k,
+                            velocity: vel,
+                        },
+                    });
+                }
+                for k in &keys {
+                    out.push(MidiEvent {
+                        time: base_tick + merged_ticks,
+                        channel,
+                        message: MidiMessage::NoteOff {
+                            key: *k,
+                            velocity: 64,
+                        },
+                    });
+                }
             }
             base_tick += merged_ticks;
-            let _ = start;  // retained for future debug assertions
+            let _ = start; // retained for future debug assertions
             i = j;
         }
         Ok(base_tick)
@@ -185,6 +262,8 @@ impl<'a> ToMidiEvents for [RhythmicNotatedEvent<'a>] {
 
 fn same_pitches(a: &RhythmicNotatedEvent<'_>, b: &RhythmicNotatedEvent<'_>) -> bool {
     let (NotatedEvent::SingleEvent(sa, _), NotatedEvent::SingleEvent(sb, _)) = (&a.event, &b.event)
-        else { return false };
+    else {
+        return false;
+    };
     single_event_pitches(sa) == single_event_pitches(sb)
 }

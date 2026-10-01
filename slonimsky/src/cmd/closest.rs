@@ -22,9 +22,7 @@ impl Metric {
     pub fn from_str_opt(s: Option<&str>) -> Result<Self> {
         match s {
             None | Some("symmetric-diff") => Ok(Metric::SymmetricDiff),
-            Some(other) => anyhow::bail!(
-                "unknown metric: {other} (expected symmetric-diff)"
-            ),
+            Some(other) => anyhow::bail!("unknown metric: {other} (expected symmetric-diff)"),
         }
     }
 }
@@ -42,9 +40,9 @@ impl Pool {
             None | Some("both") => Ok(Pool::Both),
             Some("chords") => Ok(Pool::Chords),
             Some("scales") => Ok(Pool::Scales),
-            Some(other) => anyhow::bail!(
-                "unknown pool: {other} (expected chords, scales, or both)"
-            ),
+            Some(other) => {
+                anyhow::bail!("unknown pool: {other} (expected chords, scales, or both)")
+            }
         }
     }
 
@@ -76,7 +74,10 @@ pub fn run(args: ClosestArgs) -> Result<()> {
         let metric_name = match args.metric {
             Metric::SymmetricDiff => "symmetric-diff",
         };
-        eprintln!("closest: input={pc_ints:?}, metric={metric_name}, limit={}", args.limit);
+        eprintln!(
+            "closest: input={pc_ints:?}, metric={metric_name}, limit={}",
+            args.limit
+        );
     }
 
     let catalog = known_types();
@@ -91,18 +92,9 @@ pub fn run(args: ClosestArgs) -> Result<()> {
         for t in 0u8..12 {
             let transposed = transpose(entry.pcs, t);
 
-            let common: Vec<Pc> = input_set
-                .intersection(&transposed)
-                .copied()
-                .collect();
-            let only_in_input: Vec<Pc> = input_set
-                .difference(&transposed)
-                .copied()
-                .collect();
-            let only_in_match: Vec<Pc> = transposed
-                .difference(&input_set)
-                .copied()
-                .collect();
+            let common: Vec<Pc> = input_set.intersection(&transposed).copied().collect();
+            let only_in_input: Vec<Pc> = input_set.difference(&transposed).copied().collect();
+            let only_in_match: Vec<Pc> = transposed.difference(&input_set).copied().collect();
 
             let distance = only_in_input.len() + only_in_match.len();
 
@@ -170,11 +162,9 @@ pub fn run(args: ClosestArgs) -> Result<()> {
             );
 
             if args.verbose {
-                let mut only_input: Vec<u8> =
-                    m.only_in_input.iter().map(u8::from).collect();
+                let mut only_input: Vec<u8> = m.only_in_input.iter().map(u8::from).collect();
                 only_input.sort();
-                let mut only_match: Vec<u8> =
-                    m.only_in_match.iter().map(u8::from).collect();
+                let mut only_match: Vec<u8> = m.only_in_match.iter().map(u8::from).collect();
                 only_match.sort();
                 eprintln!(
                     "       only in input: {{{}}}, only in match: {{{}}}",
@@ -223,7 +213,10 @@ mod tests {
     fn closest_excludes_exact_matches() {
         // C major triad is in the catalog — it should not appear at distance 0
         let pcs = parse_input_to_pcs(
-            &["C", "E", "G"].iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &["C", "E", "G"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
         )
         .unwrap();
         let input_set: HashSet<Pc> = pcs.iter().copied().collect();
@@ -249,7 +242,10 @@ mod tests {
     #[test]
     fn closest_sorts_by_distance() {
         let pcs = parse_input_to_pcs(
-            &["C", "E", "G"].iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &["C", "E", "G"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
         )
         .unwrap();
         let input_set: HashSet<Pc> = pcs.iter().copied().collect();
@@ -275,7 +271,10 @@ mod tests {
         distances.sort();
         // The minimum distance should be 1 (adding one note to a triad → 4-note chord)
         assert!(!distances.is_empty());
-        assert_eq!(distances[0], 1, "closest to C major should be dist 1 (e.g. Cmaj7)");
+        assert_eq!(
+            distances[0], 1,
+            "closest to C major should be dist 1 (e.g. Cmaj7)"
+        );
     }
 
     #[test]

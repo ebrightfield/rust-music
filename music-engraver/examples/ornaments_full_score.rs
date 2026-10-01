@@ -21,10 +21,21 @@ fn main() {
     // monotonic — variation in the visual output should come from the
     // ornament glyph, not the notehead position.
     let pitches: [(Note, i8); 15] = [
-        (Note::C, 4), (Note::D, 4), (Note::E, 4), (Note::F, 4),
-        (Note::G, 4), (Note::A, 4), (Note::B, 4), (Note::C, 5),
-        (Note::D, 5), (Note::E, 5), (Note::F, 5), (Note::G, 5),
-        (Note::A, 5), (Note::B, 5), (Note::C, 6),
+        (Note::C, 4),
+        (Note::D, 4),
+        (Note::E, 4),
+        (Note::F, 4),
+        (Note::G, 4),
+        (Note::A, 4),
+        (Note::B, 4),
+        (Note::C, 5),
+        (Note::D, 5),
+        (Note::E, 5),
+        (Note::F, 5),
+        (Note::G, 5),
+        (Note::A, 5),
+        (Note::B, 5),
+        (Note::C, 6),
     ];
 
     let mut b = ScoreBuilder::new()

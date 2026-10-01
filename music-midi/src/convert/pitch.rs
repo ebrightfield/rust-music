@@ -1,15 +1,18 @@
 // REQ-O1: Pitch -> one NoteOn/NoteOff pair
 
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
-use music::note::pitch::Pitch;
+use crate::{
+    error::MidiConversionError,
+    event::{AbsoluteTicks, MidiEvent, MidiMessage},
+};
 use music::fretboard::fretted_note::SoundedNote;
+use music::note::pitch::Pitch;
 
 /// Duration in MIDI ticks to apply when a Pitch is emitted without a
 /// wrapping rhythm event. Spec does not mandate a default; we pick a
 /// quarter at the ctx's PPQ.
 fn default_gate_ticks(ctx: &ConvertCtx<'_>) -> u64 {
-    ctx.ppq as u64     // one quarter note
+    ctx.ppq as u64 // one quarter note
 }
 
 impl ToMidiEvents for Pitch {
@@ -28,10 +31,16 @@ impl ToMidiEvents for Pitch {
         let key = self.midi_note;
         let vel = ctx.velocity.velocity_no_event();
         let gate = default_gate_ticks(ctx);
-        out.push(MidiEvent { time: base_tick, channel,
-            message: MidiMessage::NoteOn { key, velocity: vel } });
-        out.push(MidiEvent { time: base_tick + gate, channel,
-            message: MidiMessage::NoteOff { key, velocity: 64 } });
+        out.push(MidiEvent {
+            time: base_tick,
+            channel,
+            message: MidiMessage::NoteOn { key, velocity: vel },
+        });
+        out.push(MidiEvent {
+            time: base_tick + gate,
+            channel,
+            message: MidiMessage::NoteOff { key, velocity: 64 },
+        });
         Ok(base_tick + gate)
     }
 }

@@ -50,7 +50,8 @@ fn main() {
     let mut x = clef_advance;
     let mut total_treble_paths = 0u32;
     for key in &treble_keys {
-        let width = draw_key_signature(&mut svg, &treble_staff, &font, x, key, &Clef::Treble).unwrap();
+        let width =
+            draw_key_signature(&mut svg, &treble_staff, &font, x, key, &Clef::Treble).unwrap();
         assert!(width > 0.0, "key sig should have positive width");
         let count = match key {
             KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as u32,
@@ -75,11 +76,7 @@ fn main() {
 
     let output = svg.to_svg();
     std::fs::create_dir_all("music-engraver/examples/output").unwrap();
-    std::fs::write(
-        "music-engraver/examples/output/key_signatures.svg",
-        &output,
-    )
-    .unwrap();
+    std::fs::write("music-engraver/examples/output/key_signatures.svg", &output).unwrap();
     println!("Wrote music-engraver/examples/output/key_signatures.svg");
 
     let path_count = output.matches("<path ").count();

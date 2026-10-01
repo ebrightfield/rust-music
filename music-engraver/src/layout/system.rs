@@ -4,8 +4,8 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
-    layout_measure, BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout,
-    MeasureLayoutConfig, NoteEvent, RestEvent, TupletGroupEvent,
+    layout_measure, BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, MeasureLayoutConfig,
+    NoteEvent, RestEvent, TupletGroupEvent,
 };
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::volta::VoltaAnnotation;
@@ -94,7 +94,11 @@ impl ClefKind {
 
 impl SystemPrefix {
     /// Create a prefix from a `Clef`, resolving the layout automatically.
-    pub fn new(clef: &Clef, key_signature: KeySignature, time_signature: Option<TimeSignatureKind>) -> Self {
+    pub fn new(
+        clef: &Clef,
+        key_signature: KeySignature,
+        time_signature: Option<TimeSignatureKind>,
+    ) -> Self {
         Self {
             clef_layout: ClefLayout::from_clef_ref(clef),
             clef_kind: ClefKind::from_clef(clef),
@@ -192,8 +196,7 @@ pub fn layout_system(
     // Lay out additional voices for each measure. Each additional voice is
     // laid out independently, then scaled to match the primary voice's width
     // so that temporal positions align visually.
-    let mut additional_voice_layouts: Vec<Vec<MeasureLayout>> =
-        Vec::with_capacity(measures.len());
+    let mut additional_voice_layouts: Vec<Vec<MeasureLayout>> = Vec::with_capacity(measures.len());
     for (i, measure) in measures.iter().enumerate() {
         let mut voice_layouts = Vec::new();
         for voice_events in &measure.additional_voices {
@@ -202,6 +205,29 @@ pub fn layout_system(
             // Additional voices share the barline with the primary voice
             elems.push(MeasureElement::Barline(measure.barline));
             let mut voice_layout = layout_measure(&elems, config);
+            if i == 0 {
+                let leading_prefix_width = layouts[0]
+                    .elements
+                    .iter()
+                    .find(|element| {
+                        matches!(
+                            element.element,
+                            MeasureElement::Note(_)
+                                | MeasureElement::Rest(_)
+                                | MeasureElement::Chord(_)
+                                | MeasureElement::BeamGroup(_)
+                                | MeasureElement::TupletGroup(_)
+                                | MeasureElement::MultiMeasureRest { .. }
+                        )
+                    })
+                    .map(|element| element.x)
+                    .unwrap_or(0.0);
+                for element in &mut voice_layout.elements {
+                    element.x += leading_prefix_width;
+                }
+                voice_layout.total_rod += leading_prefix_width;
+                voice_layout.total_width += leading_prefix_width;
+            }
             // Spring-only scale to match the primary voice's width, so temporal
             // positions align at measure ends without compressing this voice's
             // rods (Gourlay). (True max-spring-per-tick cross-voice merging is
@@ -365,7 +391,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         })
     }
 
@@ -558,10 +584,18 @@ mod tests {
         let prefix = SystemPrefix::new(
             &Clef::Treble,
             KeySignature::Sharps(2),
-            Some(TimeSignatureKind::Numeric { numerator: 4, denominator: 4 }),
+            Some(TimeSignatureKind::Numeric {
+                numerator: 4,
+                denominator: 4,
+            }),
         );
         let measures = vec![MeasureContent {
-            events: vec![quarter_note(4), quarter_note(6), quarter_note(8), quarter_note(4)],
+            events: vec![
+                quarter_note(4),
+                quarter_note(6),
+                quarter_note(8),
+                quarter_note(4),
+            ],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
@@ -754,5 +788,28 @@ mod tests {
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
         assert!((layout.staff_width - layout.total_width).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn first_measure_additional_voice_starts_after_system_prefix() {
+        let cfg = test_config();
+        let measures = vec![MeasureContent {
+            events: vec![quarter_note(4)],
+            barline: BarlineStyle::Single,
+            volta: None,
+            additional_voices: vec![vec![quarter_note(0)]],
+        }];
+
+        let layout = layout_system(&test_prefix(), &measures, &cfg, Some(8000.0));
+        let primary_x = layout.measures[0]
+            .layout
+            .elements
+            .iter()
+            .find(|element| matches!(element.element, MeasureElement::Note(_)))
+            .unwrap()
+            .x;
+        let secondary_x = layout.measures[0].additional_voice_layouts[0].elements[0].x;
+
+        assert_eq!(secondary_x, primary_x);
     }
 }

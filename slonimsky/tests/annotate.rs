@@ -84,10 +84,7 @@ fn annotate_summary_section() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("Summary:"),
-        "should have a summary section"
-    );
+    assert!(stdout.contains("Summary:"), "should have a summary section");
     assert!(
         stdout.contains("Total L1 cost:"),
         "summary should show total L1"
@@ -189,8 +186,7 @@ fn annotate_json_step_fields() {
 
     assert!(out.status.success());
     let parsed: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&out.stdout))
-            .expect("valid JSON");
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).expect("valid JSON");
 
     let step0 = &parsed["steps"][0];
     assert!(step0["from"].is_array(), "step should have 'from' array");
@@ -206,16 +202,14 @@ fn annotate_json_step_fields() {
 fn annotate_json_summary() {
     let out = slonimsky()
         .args([
-            "annotate", "--format", "json",
-            "C4,E4,G4", "C4,F4,A4", "D4,F4,A4",
+            "annotate", "--format", "json", "C4,E4,G4", "C4,F4,A4", "D4,F4,A4",
         ])
         .output()
         .expect("command should run");
 
     assert!(out.status.success());
     let parsed: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&out.stdout))
-            .expect("valid JSON");
+        serde_json::from_str(&String::from_utf8_lossy(&out.stdout)).expect("valid JSON");
 
     assert!(parsed["summary"]["total_l1"].is_number());
     assert!(parsed["summary"]["average_l1"].is_number());

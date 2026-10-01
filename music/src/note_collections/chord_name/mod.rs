@@ -1,17 +1,19 @@
-pub mod quality;
 pub mod naming_heuristics;
 pub mod parsing;
+pub mod quality;
 
-use crate::note_collections::pc_set::{PcShape, PcContent};
+use crate::error::MusicSemanticsError;
 use crate::note::note::Note;
 use crate::note::pitch_class::Pc;
+use crate::note_collections::pc_set::{PcContent, PcShape};
+use std::collections::HashSet;
 
+pub use naming_heuristics::{infer_chord_quality, infer_scale_quality};
 pub use parsing::parse_chord_name;
 pub use quality::chord::{
-    AltChoice, Alt, AugSubtype, ChordQuality, DimSubtype, Extension,
-    MajorSubtype, MinorSubtype, QualityAmbiguity, SusSubtype,
+    Alt, AltChoice, AugSubtype, ChordQuality, DimSubtype, Extension, MajorSubtype, MinorSubtype,
+    QualityAmbiguity, SusSubtype,
 };
-pub use naming_heuristics::{infer_chord_quality, infer_scale_quality};
 
 /// The means by which to stylize the text that denotes
 /// a chord's extensions. There are a number of mutually incompatible
@@ -97,7 +99,95 @@ pub struct ChordName {
 impl ChordName {
     /// Construct a [`ChordName`] directly from its parts.
     pub fn new(tonality: TonalSpecification, quality: ChordQuality, pc_shape: PcShape) -> Self {
-        Self { tonality, quality, pc_shape }
+        Self {
+            tonality,
+            quality,
+            pc_shape,
+        }
+    }
+
+    /// Infer a rooted chord name from spelled chord members and an explicit bass.
+    ///
+    /// The bass must be one of `notes`. Below
+    /// [`NamingConfig::slash_chord_threshold`], the bass is the only root
+    /// candidate. At or above the threshold, every distinct pitch class is
+    /// tried as a root. Candidates are ranked by conventional tertian evidence;
+    /// ties prefer the bass, then the lowest pitch class, avoiding unstable or
+    /// speculative slash chords. A winning root different from the bass
+    /// produces [`TonalSpecification::SlashChord`].
+    ///
+    /// The supplied spellings are retained for both root and bass. Duplicate
+    /// enharmonic pitch classes do not increase the threshold cardinality.
+    pub fn infer(
+        notes: &[Note],
+        bass: Note,
+        cfg: &NamingConfig,
+    ) -> Result<Self, MusicSemanticsError> {
+        if notes.is_empty() {
+            return Err(MusicSemanticsError::EmptySetOfNotes);
+        }
+
+        let bass_pc = Pc::from(&bass);
+        let content: HashSet<Pc> = notes.iter().map(Pc::from).collect();
+        if !content.contains(&bass_pc) {
+            return Err(MusicSemanticsError::InvalidChordBass(bass));
+        }
+
+        let candidates: Vec<Note> = if content.len() < cfg.slash_chord_threshold {
+            vec![bass]
+        } else {
+            let mut seen = HashSet::new();
+            notes
+                .iter()
+                .copied()
+                .filter(|note| seen.insert(Pc::from(note)))
+                .collect()
+        };
+
+        let mut best = None;
+        for root in candidates {
+            let root_pc = Pc::from(&root);
+            let relative: HashSet<Pc> = content
+                .iter()
+                .map(|pc| Pc::from(i32::from(pc) - i32::from(root_pc)))
+                .collect();
+            let Some((_, Some(quality))) =
+                naming_heuristics::infer_chord_quality_with(&relative, cfg)
+            else {
+                continue;
+            };
+            let score = root_candidate_score(&relative);
+            let is_bass = root_pc == bass_pc;
+            let replaces_best =
+                best.as_ref()
+                    .is_none_or(|(best_root, _, best_score, best_is_bass)| {
+                        score > *best_score
+                            || (score == *best_score
+                                && ((is_bass && !best_is_bass)
+                                    || (is_bass == *best_is_bass
+                                        && u8::from(&root_pc) < u8::from(&Pc::from(best_root)))))
+                    });
+            if replaces_best {
+                best = Some((root, quality, score, is_bass));
+            }
+        }
+
+        let (root, quality, _, root_is_bass) =
+            best.ok_or_else(|| MusicSemanticsError::InvalidChordQuality(format!("{notes:?}")))?;
+        let root_pc = Pc::from(&root);
+        let pc_shape = PcShape::new(
+            content
+                .iter()
+                .map(|pc| Pc::from(i32::from(pc) - i32::from(root_pc)))
+                .collect(),
+        );
+        let tonality = if root_is_bass {
+            TonalSpecification::RootPosition(root)
+        } else {
+            TonalSpecification::SlashChord { bass, root }
+        };
+
+        Ok(Self::new(tonality, quality, pc_shape))
     }
 
     /// Parse a chord symbol string (e.g. `"Cmaj7"`, `"F#m7b5"`) into a
@@ -119,9 +209,9 @@ impl ChordName {
         let pcs_hashset: std::collections::HashSet<Pc> = pc_shape.iter().copied().collect();
         let quality = naming_heuristics::infer_chord_quality(&pcs_hashset)
             .and_then(|(_, q)| q)
-            .ok_or_else(|| crate::error::MusicSemanticsError::InvalidChordQuality(
-                symbol.to_string(),
-            ))?;
+            .ok_or_else(|| {
+                crate::error::MusicSemanticsError::InvalidChordQuality(symbol.to_string())
+            })?;
         Ok(Self {
             tonality: TonalSpecification::RootPosition(root),
             quality,
@@ -154,14 +244,35 @@ impl ChordName {
     /// ```
     // REQ-O27
     pub fn sounding_content(&self) -> Option<PcContent> {
-        self.tonality.root_pc().map(|root| self.pc_shape.at_root(root))
+        self.tonality
+            .root_pc()
+            .map(|root| self.pc_shape.at_root(root))
     }
 
     pub fn to_string(&self, cfg: Option<&ChordNameDisplayConfig>) -> String {
-        let cfg = cfg.cloned()
-            .unwrap_or_default();
+        let cfg = cfg.cloned().unwrap_or_default();
         self.quality.to_string(&cfg)
     }
+}
+
+/// Score how strongly a root candidate resembles a conventional tertian chord.
+///
+/// Thirds and the perfect fifth are the strongest root evidence, sevenths are
+/// supporting evidence, and chromatic root-adjacent tones or a tritone count
+/// against the candidate. Extensions remain mostly neutral so altered and
+/// suspended qualities can still win through their underlying chord tones.
+fn root_candidate_score(shape: &HashSet<Pc>) -> i16 {
+    shape
+        .iter()
+        .map(|pc| match u8::from(pc) {
+            3 | 4 => 8,
+            7 => 6,
+            10 | 11 => 4,
+            9 => 1,
+            1 | 6 | 8 => -2,
+            _ => 0,
+        })
+        .sum()
 }
 
 /// Whether or not something is a slash chord.
@@ -169,15 +280,12 @@ impl ChordName {
 #[derive(Debug, Clone)]
 pub enum TonalSpecification {
     /// If it's a slash chord, the bass note will be supplied here.
-    SlashChord {
-        bass: Note,
-        root: Note,
-    },
+    SlashChord { bass: Note, root: Note },
     /// Root note relative to the defined chord quality.
     RootPosition(Note),
     /// No tonal specification. The `Option<Pc>` specifies any possible bass note.
     /// The relevant bass note must be an element in the `Vec<Pc>` being named.
-    None(Option<Pc>)
+    None(Option<Pc>),
 }
 
 impl TonalSpecification {
@@ -216,9 +324,10 @@ pub struct NamingConfig {
     pub prefer_add_notation: bool,
     /// Whether to show omitted notes in the chord name (e.g., "no5").
     pub show_omissions: bool,
-    /// Minimum number of notes to trigger slash chord detection.
-    /// Default is 4 (don't analyze triads for inversions as slash chords).
-    /// Currently a stub: slash-chord inference is deferred to a follow-up plan.
+    /// Minimum number of distinct pitch classes at which bass-aware inference
+    /// tries every chord member as a possible root. Below this threshold, the
+    /// explicit bass is the root. At or above it, a non-bass winning candidate
+    /// is represented as a slash chord.
     pub slash_chord_threshold: usize,
     /// Whether to analyze for 6th chord vs 13th chord ambiguity.
     /// When true, chords with a 6th but no 7th are labeled as 6th chords,
@@ -328,7 +437,10 @@ mod tests {
     fn chord_name_from_symbol_major7() {
         let cmaj7 = ChordName::from_symbol("Cmaj7").unwrap();
         assert_eq!(cmaj7.pc_shape, PcShape::new(vec![Pc0, Pc4, Pc7, Pc11]));
-        assert!(matches!(cmaj7.tonality, TonalSpecification::RootPosition(Note::C)));
+        assert!(matches!(
+            cmaj7.tonality,
+            TonalSpecification::RootPosition(Note::C)
+        ));
         // Quality inference should find a Major-family quality, not fall back to SingleNote.
         assert!(matches!(cmaj7.quality, ChordQuality::Major(_)));
     }
@@ -340,7 +452,10 @@ mod tests {
         // (minor third, diminished fifth, minor seventh).
         // REQ-O23: parser emits interval template, not zeroed-absolute sounding pcs.
         assert_eq!(fsm7b5.pc_shape, PcShape::new(vec![Pc0, Pc3, Pc6, Pc10]));
-        assert!(matches!(fsm7b5.tonality, TonalSpecification::RootPosition(Note::Fis)));
+        assert!(matches!(
+            fsm7b5.tonality,
+            TonalSpecification::RootPosition(Note::Fis)
+        ));
     }
 
     #[test]
@@ -357,7 +472,10 @@ mod tests {
         let chord = ChordName::new(tonality.clone(), quality.clone(), pc_shape.clone());
         assert_eq!(chord.pc_shape, pc_shape);
         assert_eq!(chord.quality, quality);
-        assert!(matches!(chord.tonality, TonalSpecification::RootPosition(Note::D)));
+        assert!(matches!(
+            chord.tonality,
+            TonalSpecification::RootPosition(Note::D)
+        ));
     }
 
     #[test]
@@ -368,8 +486,11 @@ mod tests {
 
     #[test]
     fn root_pc_of_slash_chord_is_root_not_bass() {
-        let t = TonalSpecification::SlashChord { bass: Note::C, root: Note::Fis };
-        assert_eq!(t.root_pc(), Some(Pc::Pc6));  // NOT Pc0
+        let t = TonalSpecification::SlashChord {
+            bass: Note::C,
+            root: Note::Fis,
+        };
+        assert_eq!(t.root_pc(), Some(Pc::Pc6)); // NOT Pc0
     }
 
     #[test]
@@ -403,13 +524,19 @@ mod tests {
     fn fsm7b5_sounding_content() {
         let c = ChordName::from_symbol("F#m7b5").unwrap();
         // F# root (Pc6) + shape [0,3,6,10] = [6,9,0,4] sorted = [0,4,6,9]
-        assert_eq!(c.sounding_content(), Some(PcContent::new(vec![Pc0, Pc4, Pc6, Pc9])));
+        assert_eq!(
+            c.sounding_content(),
+            Some(PcContent::new(vec![Pc0, Pc4, Pc6, Pc9]))
+        );
     }
 
     #[test]
     fn cmaj7_sounding_content() {
         let c = ChordName::from_symbol("Cmaj7").unwrap();
-        assert_eq!(c.sounding_content(), Some(PcContent::new(vec![Pc0, Pc4, Pc7, Pc11])));
+        assert_eq!(
+            c.sounding_content(),
+            Some(PcContent::new(vec![Pc0, Pc4, Pc7, Pc11]))
+        );
     }
 
     #[test]
@@ -420,6 +547,89 @@ mod tests {
             PcShape::new(vec![Pc0, Pc4, Pc7]),
         );
         assert_eq!(c.sounding_content(), None);
+    }
+
+    #[test]
+    fn infer_keeps_root_position_when_bass_wins() {
+        let chord = ChordName::infer(
+            &[Note::C, Note::E, Note::G, Note::B],
+            Note::C,
+            &NamingConfig::default(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            chord.tonality,
+            TonalSpecification::RootPosition(Note::C)
+        ));
+        assert_eq!(chord.pc_shape, PcShape::new(vec![Pc0, Pc4, Pc7, Pc11]));
+    }
+
+    #[test]
+    fn infer_emits_slash_chord_when_non_bass_root_wins() {
+        let chord = ChordName::infer(
+            &[Note::E, Note::G, Note::B, Note::C],
+            Note::E,
+            &NamingConfig::default(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            chord.tonality,
+            TonalSpecification::SlashChord {
+                bass: Note::E,
+                root: Note::C
+            }
+        ));
+        assert_eq!(chord.pc_shape, PcShape::new(vec![Pc0, Pc4, Pc7, Pc11]));
+    }
+
+    #[test]
+    fn infer_threshold_controls_triadic_inversion_detection() {
+        let notes = [Note::E, Note::G, Note::C];
+        let default = ChordName::infer(&notes, Note::E, &NamingConfig::default());
+        let jazz = ChordName::infer(&notes, Note::E, &NamingConfig::jazz()).unwrap();
+
+        assert!(matches!(
+            default,
+            Err(MusicSemanticsError::InvalidChordQuality(_))
+        ));
+        assert!(matches!(
+            jazz.tonality,
+            TonalSpecification::SlashChord {
+                bass: Note::E,
+                root: Note::C
+            }
+        ));
+    }
+
+    #[test]
+    fn infer_prefers_complete_seventh_chord_over_slash_reinterpretation() {
+        let chord = ChordName::infer(
+            &[Note::E, Note::G, Note::A, Note::C],
+            Note::E,
+            &NamingConfig::default(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            chord.tonality,
+            TonalSpecification::SlashChord {
+                bass: Note::E,
+                root: Note::A
+            }
+        ));
+        assert_eq!(chord.pc_shape, PcShape::new(vec![Pc0, Pc3, Pc7, Pc10]));
+    }
+
+    #[test]
+    fn infer_rejects_bass_outside_chord() {
+        let error = ChordName::infer(&[Note::C, Note::E, Note::G], Note::D, &NamingConfig::jazz())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            MusicSemanticsError::InvalidChordBass(Note::D)
+        ));
     }
 
     #[test]

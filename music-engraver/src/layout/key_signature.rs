@@ -159,7 +159,7 @@ mod tests {
         assert_eq!(layout.accidentals.len(), 2);
         assert_eq!(layout.accidentals[0].staff_position, 8); // F#
         assert_eq!(layout.accidentals[1].staff_position, 5); // C#
-        // Second accidental offset = 1 * spacing = 250
+                                                             // Second accidental offset = 1 * spacing = 250
         assert!((layout.accidentals[1].x_offset - 250.0).abs() < f64::EPSILON);
         // Width = 1 * 250 + 200 = 450
         assert!((layout.width - 450.0).abs() < f64::EPSILON);
@@ -170,7 +170,11 @@ mod tests {
         let layout =
             key_signature_layout(&KeySignature::Sharps(7), &Clef::Treble, fixed_advance, SS);
         assert_eq!(layout.accidentals.len(), 7);
-        let positions: Vec<i8> = layout.accidentals.iter().map(|a| a.staff_position).collect();
+        let positions: Vec<i8> = layout
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect();
         assert_eq!(positions, vec![8, 5, 9, 6, 3, 7, 4]);
     }
 
@@ -188,23 +192,33 @@ mod tests {
         let layout =
             key_signature_layout(&KeySignature::Flats(7), &Clef::Treble, fixed_advance, SS);
         assert_eq!(layout.accidentals.len(), 7);
-        let positions: Vec<i8> = layout.accidentals.iter().map(|a| a.staff_position).collect();
+        let positions: Vec<i8> = layout
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect();
         assert_eq!(positions, vec![4, 7, 3, 6, 2, 5, 1]);
     }
 
     #[test]
     fn bass_clef_sharps() {
-        let layout =
-            key_signature_layout(&KeySignature::Sharps(7), &Clef::Bass, fixed_advance, SS);
-        let positions: Vec<i8> = layout.accidentals.iter().map(|a| a.staff_position).collect();
+        let layout = key_signature_layout(&KeySignature::Sharps(7), &Clef::Bass, fixed_advance, SS);
+        let positions: Vec<i8> = layout
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect();
         assert_eq!(positions, vec![6, 3, 7, 4, 1, 5, 2]);
     }
 
     #[test]
     fn bass_clef_flats() {
-        let layout =
-            key_signature_layout(&KeySignature::Flats(7), &Clef::Bass, fixed_advance, SS);
-        let positions: Vec<i8> = layout.accidentals.iter().map(|a| a.staff_position).collect();
+        let layout = key_signature_layout(&KeySignature::Flats(7), &Clef::Bass, fixed_advance, SS);
+        let positions: Vec<i8> = layout
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect();
         assert_eq!(positions, vec![2, 5, 1, 4, 0, 3, -1]);
     }
 
@@ -212,10 +226,22 @@ mod tests {
     fn treble_8va_same_positions_as_treble() {
         let layout_treble =
             key_signature_layout(&KeySignature::Sharps(7), &Clef::Treble, fixed_advance, SS);
-        let layout_8va =
-            key_signature_layout(&KeySignature::Sharps(7), &Clef::Treble8va, fixed_advance, SS);
-        let pos_treble: Vec<i8> = layout_treble.accidentals.iter().map(|a| a.staff_position).collect();
-        let pos_8va: Vec<i8> = layout_8va.accidentals.iter().map(|a| a.staff_position).collect();
+        let layout_8va = key_signature_layout(
+            &KeySignature::Sharps(7),
+            &Clef::Treble8va,
+            fixed_advance,
+            SS,
+        );
+        let pos_treble: Vec<i8> = layout_treble
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect();
+        let pos_8va: Vec<i8> = layout_8va
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect();
         assert_eq!(pos_treble, pos_8va);
     }
 

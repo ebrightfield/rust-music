@@ -1,8 +1,8 @@
+use crate::notation::lilypond::document::staff::LilypondStaff;
+use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
+use crate::notation::lilypond::ToLilypondString;
 use itertools::Itertools;
 use tera::Context;
-use crate::notation::lilypond::document::staff::LilypondStaff;
-use crate::notation::lilypond::ToLilypondString;
-use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 
 pub struct LilypondScore<'a> {
     staff_groups: Vec<LilypondStaffGroup<'a>>,
@@ -54,7 +54,10 @@ impl ToLilypondString for LilypondMidi {
             content.push_str(&format!("    \\tempo 4 = {}\n", tempo));
         }
         if let Some(instrument) = &self.instrument {
-            content.push_str(&format!("    \\set Staff.midiInstrument = #\"{}\"\n", instrument));
+            content.push_str(&format!(
+                "    \\set Staff.midiInstrument = #\"{}\"\n",
+                instrument
+            ));
         }
         format!("  \\midi {{\n{}}}\n", content)
     }
@@ -94,7 +97,9 @@ impl<'a> LilypondScore<'a> {
 
 impl<'a> ToLilypondString for LilypondScore<'a> {
     fn to_lilypond_string(&self) -> String {
-        let mut score_block = self.staff_groups.iter()
+        let mut score_block = self
+            .staff_groups
+            .iter()
             .map(|group| group.to_lilypond_string())
             .join("\n");
         if let Some(layout) = &self.layout {
@@ -178,7 +183,9 @@ mod tests {
 
 impl<'a> ToLilypondString for LilypondStaffGroup<'a> {
     fn to_lilypond_string(&self) -> String {
-        let staves = self.staves.iter()
+        let staves = self
+            .staves
+            .iter()
             .map(|staff| staff.to_lilypond_string())
             .join("\n");
         if self.bracketed {
@@ -220,7 +227,8 @@ impl ToLilypondString for LilypondLayout {
             "ragged-right = ##t"
         } else {
             "ragged-right = ##f"
-        }.to_string();
+        }
+        .to_string();
         statements.push(ragged_right);
         self.contexts.iter().for_each(|ctx| {
             statements.push(ctx.to_lilypond_string());
@@ -257,7 +265,8 @@ impl ToLilypondString for LayoutContextTy {
             LayoutContextTy::TabStaff => "\\TabStaff\n",
             LayoutContextTy::StaffGroup => "\\StaffGroup\n",
             LayoutContextTy::Score => "\\Score\n",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -284,7 +293,6 @@ impl LilypondLayoutContext {
         self
     }
 }
-
 
 impl ToLilypondString for LilypondLayoutContext {
     fn to_lilypond_string(&self) -> String {

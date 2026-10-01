@@ -32,7 +32,7 @@ pub struct MidiEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MidiMessage {
     /// Note on (key = MIDI note 0–127, velocity = 0–127).
-    NoteOn  { key: u8, velocity: u8 },
+    NoteOn { key: u8, velocity: u8 },
     /// Note off (key = MIDI note 0–127, velocity = release velocity).
     NoteOff { key: u8, velocity: u8 },
     /// Program / instrument change (0–127).

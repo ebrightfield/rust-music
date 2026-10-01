@@ -73,7 +73,11 @@ pub fn layout_arpeggio(
 
     let ss = staff.staff_space;
     let min_span = MIN_SPAN_SS * ss;
-    let span = if raw_span < min_span { min_span } else { raw_span };
+    let span = if raw_span < min_span {
+        min_span
+    } else {
+        raw_span
+    };
 
     // The ArpeggiatoUp/Down glyphs in SMuFL are designed to span approximately
     // 1 staff space in their default size. We scale to cover the full chord span.
@@ -141,8 +145,14 @@ mod tests {
         let y_bottom_note = staff.y_of(0);
         let y_top_note = staff.y_of(8);
         // The layout should span at least from the top note to the bottom note
-        assert!(layout.y_top <= y_top_note, "top should be at or above highest note");
-        assert!(layout.y_bottom >= y_bottom_note, "bottom should be at or below lowest note");
+        assert!(
+            layout.y_top <= y_top_note,
+            "top should be at or above highest note"
+        );
+        assert!(
+            layout.y_bottom >= y_bottom_note,
+            "bottom should be at or below lowest note"
+        );
     }
 
     #[test]
@@ -151,7 +161,10 @@ mod tests {
         let layout = layout_arpeggio(ArpeggioDirection::Up, &[4], 500.0, &staff).unwrap();
         let span = layout.y_bottom - layout.y_top;
         let min = MIN_SPAN_SS * staff.staff_space;
-        assert!(span >= min - 0.01, "single note should get at least minimum span");
+        assert!(
+            span >= min - 0.01,
+            "single note should get at least minimum span"
+        );
     }
 
     #[test]
@@ -188,7 +201,10 @@ mod tests {
         let layout = layout_arpeggio(ArpeggioDirection::Up, &[0, 4, 8], 500.0, &staff).unwrap();
         let y_mid = staff.y_of(4);
         assert!(layout.y_top < y_mid, "top should be above middle note");
-        assert!(layout.y_bottom > y_mid, "bottom should be below middle note");
+        assert!(
+            layout.y_bottom > y_mid,
+            "bottom should be below middle note"
+        );
     }
 
     #[test]

@@ -4,8 +4,8 @@
 //! [`Fretboard`] references. Returns pointer-identical values on
 //! repeated calls for the same name.
 
-use music::fretboard::{Fretboard, STD_6STR_GTR, DROP_D};
 use crate::error::MusicRonError;
+use music::fretboard::{Fretboard, DROP_D, STD_6STR_GTR};
 
 /// Resolve a named tuning string to its canonical `&'static Fretboard` instance.
 ///

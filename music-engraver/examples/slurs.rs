@@ -30,9 +30,7 @@ fn main() {
     draw_clef(&mut svg, &staff, &clef_layout, &font).unwrap();
     let base_x = 900.0;
 
-    let notehead_width = font
-        .glyph_advance(smufl::Glyph::NoteheadBlack)
-        .unwrap_or(0) as f64;
+    let notehead_width = font.glyph_advance(smufl::Glyph::NoteheadBlack).unwrap_or(0) as f64;
 
     // Slur pairs: (start_pitch, end_pitch, direction, x_offset)
     let pairs: Vec<(Pitch, Pitch, SlurDirection, f64)> = vec![
@@ -77,25 +75,32 @@ fn main() {
         let dir2 = auto_stem_direction(pos2);
 
         draw_stemmed_note(
-            &mut svg, &staff, &font, &config, x1, pos1,
-            NoteheadKind::Filled, Some(dir1),
-        ).unwrap();
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            x1,
+            pos1,
+            NoteheadKind::Filled,
+            Some(dir1),
+        )
+        .unwrap();
         draw_stemmed_note(
-            &mut svg, &staff, &font, &config, x2, pos2,
-            NoteheadKind::Filled, Some(dir2),
-        ).unwrap();
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            x2,
+            pos2,
+            NoteheadKind::Filled,
+            Some(dir2),
+        )
+        .unwrap();
 
         let y1 = staff.y_of(pos1);
         let y2 = staff.y_of(pos2);
 
-        let slur = layout_slur(
-            x1 + notehead_width,
-            x2,
-            y1,
-            y2,
-            *direction,
-            &config,
-        );
+        let slur = layout_slur(x1 + notehead_width, x2, y1, y2, *direction, &config);
         draw_slur(&mut svg, &slur);
     }
 
@@ -108,8 +113,17 @@ fn main() {
     assert!(output.starts_with("<svg"));
     let path_count = output.matches("<path ").count();
     let line_count = output.matches("<line ").count();
-    println!("slurs.svg: {path_count} paths, {line_count} lines, {} bytes", output.len());
+    println!(
+        "slurs.svg: {path_count} paths, {line_count} lines, {} bytes",
+        output.len()
+    );
     // 1 clef + 8 noteheads + 4 slurs = 13 paths; 5 staff lines + 8 stems + ledger lines
-    assert!(path_count >= 13, "expected at least 13 paths, got {path_count}");
-    assert!(line_count >= 13, "expected at least 13 lines, got {line_count}");
+    assert!(
+        path_count >= 13,
+        "expected at least 13 paths, got {path_count}"
+    );
+    assert!(
+        line_count >= 13,
+        "expected at least 13 lines, got {line_count}"
+    );
 }

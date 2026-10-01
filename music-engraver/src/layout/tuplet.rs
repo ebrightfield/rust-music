@@ -44,15 +44,8 @@ pub fn tuplet_number_glyphs(n: u32) -> Vec<Glyph> {
     if n == 0 {
         return vec![];
     }
-    let digits: Vec<u8> = n
-        .to_string()
-        .bytes()
-        .map(|b| b - b'0')
-        .collect();
-    digits
-        .into_iter()
-        .filter_map(tuplet_digit_glyph)
-        .collect()
+    let digits: Vec<u8> = n.to_string().bytes().map(|b| b - b'0').collect();
+    digits.into_iter().filter_map(tuplet_digit_glyph).collect()
 }
 
 /// Distance from the outermost note to the bracket line, in staff spaces.
@@ -236,33 +229,59 @@ mod tests {
     fn bracket_above_is_above_highest_note() {
         // Notes at positions 4, 6, 8 (middle line to top line)
         let layout = layout_tuplet_bracket(
-            0.0, 1000.0, &[4, 6, 8], TupletPlacement::Above,
-            3, SS, 0.16, 100.0,
+            0.0,
+            1000.0,
+            &[4, 6, 8],
+            TupletPlacement::Above,
+            3,
+            SS,
+            0.16,
+            100.0,
         );
         // Top line (pos 8) → y=0; bracket should be above that
         let top_y = (8 - 8) as f64 * HS; // 0.0
-        assert!(layout.bracket_y < top_y,
-            "bracket_y {} should be above top note y {}", layout.bracket_y, top_y);
+        assert!(
+            layout.bracket_y < top_y,
+            "bracket_y {} should be above top note y {}",
+            layout.bracket_y,
+            top_y
+        );
     }
 
     #[test]
     fn bracket_below_is_below_lowest_note() {
         // Notes at positions 0, 2, 4
         let layout = layout_tuplet_bracket(
-            0.0, 1000.0, &[0, 2, 4], TupletPlacement::Below,
-            3, SS, 0.16, 100.0,
+            0.0,
+            1000.0,
+            &[0, 2, 4],
+            TupletPlacement::Below,
+            3,
+            SS,
+            0.16,
+            100.0,
         );
         // Bottom line (pos 0) → y=1000
         let bottom_y = 8.0 * HS;
-        assert!(layout.bracket_y > bottom_y,
-            "bracket_y {} should be below bottom note y {}", layout.bracket_y, bottom_y);
+        assert!(
+            layout.bracket_y > bottom_y,
+            "bracket_y {} should be below bottom note y {}",
+            layout.bracket_y,
+            bottom_y
+        );
     }
 
     #[test]
     fn number_centered_horizontally() {
         let layout = layout_tuplet_bracket(
-            100.0, 900.0, &[4], TupletPlacement::Above,
-            3, SS, 0.16, 200.0,
+            100.0,
+            900.0,
+            &[4],
+            TupletPlacement::Above,
+            3,
+            SS,
+            0.16,
+            200.0,
         );
         // Center of bracket = (100+900)/2 = 500; number_x = 500 - 200/2 = 400
         assert!((layout.number_x - 400.0).abs() < f64::EPSILON);
@@ -270,10 +289,8 @@ mod tests {
 
     #[test]
     fn hook_height_is_half_staff_space() {
-        let layout = layout_tuplet_bracket(
-            0.0, 500.0, &[4], TupletPlacement::Above,
-            3, SS, 0.16, 0.0,
-        );
+        let layout =
+            layout_tuplet_bracket(0.0, 500.0, &[4], TupletPlacement::Above, 3, SS, 0.16, 0.0);
         assert!((layout.hook_height - BRACKET_HOOK_SS * SS).abs() < f64::EPSILON);
     }
 
@@ -281,79 +298,71 @@ mod tests {
     fn bracket_thickness_from_config() {
         let thickness_ss = 0.16;
         let layout = layout_tuplet_bracket(
-            0.0, 500.0, &[4], TupletPlacement::Above,
-            3, SS, thickness_ss, 0.0,
+            0.0,
+            500.0,
+            &[4],
+            TupletPlacement::Above,
+            3,
+            SS,
+            thickness_ss,
+            0.0,
         );
         assert!((layout.bracket_thickness - thickness_ss * SS).abs() < f64::EPSILON);
     }
 
     #[test]
     fn empty_positions_uses_default() {
-        let layout_above = layout_tuplet_bracket(
-            0.0, 500.0, &[], TupletPlacement::Above,
-            3, SS, 0.16, 0.0,
-        );
+        let layout_above =
+            layout_tuplet_bracket(0.0, 500.0, &[], TupletPlacement::Above, 3, SS, 0.16, 0.0);
         // Should be above the staff (y < 0)
         assert!(layout_above.bracket_y < 0.0);
 
-        let layout_below = layout_tuplet_bracket(
-            0.0, 500.0, &[], TupletPlacement::Below,
-            3, SS, 0.16, 0.0,
-        );
+        let layout_below =
+            layout_tuplet_bracket(0.0, 500.0, &[], TupletPlacement::Below, 3, SS, 0.16, 0.0);
         // Should be below the staff (y > staff height = 4*SS = 1000)
         assert!(layout_below.bracket_y > 4.0 * SS);
     }
 
     #[test]
     fn placement_preserved() {
-        let layout = layout_tuplet_bracket(
-            0.0, 500.0, &[4], TupletPlacement::Below,
-            5, SS, 0.16, 0.0,
-        );
+        let layout =
+            layout_tuplet_bracket(0.0, 500.0, &[4], TupletPlacement::Below, 5, SS, 0.16, 0.0);
         assert_eq!(layout.placement, TupletPlacement::Below);
     }
 
     #[test]
     fn number_y_equals_bracket_y() {
-        let layout = layout_tuplet_bracket(
-            0.0, 500.0, &[4], TupletPlacement::Above,
-            3, SS, 0.16, 0.0,
-        );
+        let layout =
+            layout_tuplet_bracket(0.0, 500.0, &[4], TupletPlacement::Above, 3, SS, 0.16, 0.0);
         assert!((layout.number_y - layout.bracket_y).abs() < f64::EPSILON);
     }
 
     #[test]
     fn quintuplet_number_glyphs() {
-        let layout = layout_tuplet_bracket(
-            0.0, 500.0, &[4], TupletPlacement::Above,
-            5, SS, 0.16, 0.0,
-        );
+        let layout =
+            layout_tuplet_bracket(0.0, 500.0, &[4], TupletPlacement::Above, 5, SS, 0.16, 0.0);
         assert_eq!(layout.number_glyphs, vec![Glyph::Tuplet5]);
     }
 
     #[test]
     fn x_bounds_preserved() {
-        let layout = layout_tuplet_bracket(
-            123.0, 789.0, &[4], TupletPlacement::Above,
-            3, SS, 0.16, 0.0,
-        );
+        let layout =
+            layout_tuplet_bracket(123.0, 789.0, &[4], TupletPlacement::Above, 3, SS, 0.16, 0.0);
         assert!((layout.x_left - 123.0).abs() < f64::EPSILON);
         assert!((layout.x_right - 789.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn above_bracket_moves_higher_for_higher_notes() {
-        let low = layout_tuplet_bracket(
-            0.0, 500.0, &[2], TupletPlacement::Above,
-            3, SS, 0.16, 0.0,
-        );
-        let high = layout_tuplet_bracket(
-            0.0, 500.0, &[10], TupletPlacement::Above,
-            3, SS, 0.16, 0.0,
-        );
+        let low = layout_tuplet_bracket(0.0, 500.0, &[2], TupletPlacement::Above, 3, SS, 0.16, 0.0);
+        let high =
+            layout_tuplet_bracket(0.0, 500.0, &[10], TupletPlacement::Above, 3, SS, 0.16, 0.0);
         // Higher note (pos 10) → lower y → bracket_y should be lower (more negative)
-        assert!(high.bracket_y < low.bracket_y,
+        assert!(
+            high.bracket_y < low.bracket_y,
             "high note bracket_y {} should be < low note bracket_y {}",
-            high.bracket_y, low.bracket_y);
+            high.bracket_y,
+            low.bracket_y
+        );
     }
 }

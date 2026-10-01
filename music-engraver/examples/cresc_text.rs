@@ -44,7 +44,12 @@ fn main() {
 
     // Each row's y_origin slides down by ROW_SPACING_FU. The page viewBox
     // height is set so the bottom row's dashed text fits comfortably.
-    let row_ys: [f64; 4] = [0.0, ROW_SPACING_FU, 2.0 * ROW_SPACING_FU, 3.0 * ROW_SPACING_FU];
+    let row_ys: [f64; 4] = [
+        0.0,
+        ROW_SPACING_FU,
+        2.0 * ROW_SPACING_FU,
+        3.0 * ROW_SPACING_FU,
+    ];
 
     let clef = Clef::Treble;
     let clef_layout = ClefLayout::from_clef(Clef::Treble);
@@ -95,7 +100,14 @@ fn main() {
             let pos = pitch_to_staff_position(pitch, &clef);
             let dir = auto_stem_direction(pos);
             let advance = draw_stemmed_note(
-                &mut svg, &staff, &font, &config, x, pos, NoteheadKind::Filled, Some(dir),
+                &mut svg,
+                &staff,
+                &font,
+                &config,
+                x,
+                pos,
+                NoteheadKind::Filled,
+                Some(dir),
             )
             .unwrap();
             note_xs.push(x);

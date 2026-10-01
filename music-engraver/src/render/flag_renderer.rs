@@ -78,11 +78,7 @@ mod tests {
         let result = draw_flag(&mut svg, &font, 780.0, 125.0, 0, StemDirection::Up).unwrap();
         assert!(!result, "should return false for 0 flags");
         let output = svg.to_svg();
-        assert_eq!(
-            output.matches("<path ").count(),
-            0,
-            "no path for 0 flags"
-        );
+        assert_eq!(output.matches("<path ").count(), 0, "no path for 0 flags");
     }
 
     #[test]

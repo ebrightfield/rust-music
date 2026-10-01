@@ -22,7 +22,11 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for BoundedVecVisitor<T> {
     type Value = Vec<T>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "a sequence with at most {} elements", MAX_VEC_LEN)
+        write!(
+            formatter,
+            "a sequence with at most {} elements",
+            MAX_VEC_LEN
+        )
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -98,7 +102,11 @@ mod tests {
         input.push(']');
 
         let result = deser_bounded(&input);
-        assert!(result.is_err(), "should reject vec with {} elements", MAX_VEC_LEN + 1);
+        assert!(
+            result.is_err(),
+            "should reject vec with {} elements",
+            MAX_VEC_LEN + 1
+        );
         let err_msg = result.unwrap_err();
         assert!(
             err_msg.contains("exceeds maximum"),

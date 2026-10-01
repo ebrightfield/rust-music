@@ -77,7 +77,11 @@ fn resolve_key(key_str: Option<&str>) -> Result<Pc> {
         None | Some("C") | Some("c") => Ok(Pc::Pc0),
         Some(s) => {
             let pcs = parse_input_to_pcs(&[s.to_string()])?;
-            anyhow::ensure!(pcs.len() == 1, "key must be a single note, got {}", pcs.len());
+            anyhow::ensure!(
+                pcs.len() == 1,
+                "key must be a single note, got {}",
+                pcs.len()
+            );
             Ok(pcs[0])
         }
     }
@@ -233,8 +237,7 @@ pub fn run(args: PracticeSheetArgs) -> Result<()> {
                 "practice-sheet only supports .svg output (got .{ext})"
             );
             let svg = build_svg(&data, &theme);
-            fs::write(p, &svg)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(p, &svg).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", svg.len());
             }
@@ -263,8 +266,15 @@ fn print_text_report(data: &SheetData) -> Result<()> {
     writeln!(out, "  Notes: {}", note_labels.join(" "))?;
     let pc_ints: Vec<String> = rooted.iter().map(|&pc| u8::from(pc).to_string()).collect();
     writeln!(out, "  PCs:   {{{}}}", pc_ints.join(", "))?;
-    writeln!(out, "  Interval Vector: <{}>",
-        data.iv.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "))?;
+    writeln!(
+        out,
+        "  Interval Vector: <{}>",
+        data.iv
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )?;
 
     // Section 2: Modes
     writeln!(out)?;
@@ -301,16 +311,24 @@ fn print_text_report(data: &SheetData) -> Result<()> {
     writeln!(out)?;
     writeln!(out, "PRACTICE SUGGESTIONS")?;
     writeln!(out, "--------------------")?;
-    writeln!(out, "  1. Play the scale ascending and descending across all strings")?;
+    writeln!(
+        out,
+        "  1. Play the scale ascending and descending across all strings"
+    )?;
     writeln!(out, "  2. Play each mode starting from its root degree")?;
     writeln!(out, "  3. Arpeggiate each diatonic triad through the scale")?;
-    writeln!(out, "  4. Arpeggiate each diatonic seventh chord through the scale")?;
+    writeln!(
+        out,
+        "  4. Arpeggiate each diatonic seventh chord through the scale"
+    )?;
     writeln!(out, "  5. Play the ii-V-I progression in this key:")?;
 
     // Compute ii-V-I suggestion
     let degree_2 = (u8::from(data.key) + 2) % 12; // whole step up
     let degree_5 = (u8::from(data.key) + 7) % 12; // perfect 5th up
-    writeln!(out, "     ii:  {} minor  →  V:  {} dom7  →  I:  {} major",
+    writeln!(
+        out,
+        "     ii:  {} minor  →  V:  {} dom7  →  I:  {} major",
         pc_label(Pc::from(degree_2)),
         pc_label(Pc::from(degree_5)),
         key_label,
@@ -336,7 +354,11 @@ fn build_svg(data: &SheetData, theme: &music::svg::SvgTheme) -> String {
 </style>
 <rect width="{width}" height="{height}" fill="{}"/>
 "#,
-        if theme.background_color == "#FFFFFF" { "#FAFAFA" } else { &theme.background_color },
+        if theme.background_color == "#FFFFFF" {
+            "#FAFAFA"
+        } else {
+            &theme.background_color
+        },
     );
 
     let text_color = &theme.text_color;
@@ -380,7 +402,12 @@ fn build_svg(data: &SheetData, theme: &music::svg::SvgTheme) -> String {
     y += 20;
 
     // Interval vector
-    let iv_str = data.iv.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", ");
+    let iv_str = data
+        .iv
+        .iter()
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     svg.push_str(&format!(
         r#"<text x="{rx}" y="{y}" class="body" fill="{text_color}">Interval Vector: &lt;{iv_str}&gt;</text>
 "#,
@@ -400,7 +427,9 @@ fn build_svg(data: &SheetData, theme: &music::svg::SvgTheme) -> String {
         svg.push_str(&format!(
             r#"<text x="{rx}" y="{y}" class="small" fill="{text_color}">{}. {} — {}</text>
 "#,
-            i + 1, name, labels.join(" "),
+            i + 1,
+            name,
+            labels.join(" "),
         ));
         y += 16;
     }
@@ -509,10 +538,19 @@ mod tests {
         assert!(content.starts_with("<svg"), "output should be SVG");
         assert!(content.contains("</svg>"), "SVG should be closed");
         assert!(content.contains("Practice Sheet"), "should contain title");
-        assert!(content.contains("Scale Notes"), "should contain scale section");
+        assert!(
+            content.contains("Scale Notes"),
+            "should contain scale section"
+        );
         assert!(content.contains("Modes"), "should contain modes section");
-        assert!(content.contains("3-Note Subchords"), "should contain triads");
-        assert!(content.contains("4-Note Subchords"), "should contain sevenths");
+        assert!(
+            content.contains("3-Note Subchords"),
+            "should contain triads"
+        );
+        assert!(
+            content.contains("4-Note Subchords"),
+            "should contain sevenths"
+        );
     }
 
     #[test]
@@ -546,17 +584,44 @@ mod tests {
 
     #[test]
     fn rotate_to_root_works() {
-        let pcs = vec![Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11];
+        let pcs = vec![
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
+        ];
         // G major should start from G (Pc7)
         let rotated = rotate_to_root(&pcs, Pc::Pc7);
         assert_eq!(rotated[0], Pc::Pc7, "should start from G");
         assert_eq!(rotated.len(), 7);
-        assert_eq!(rotated, vec![Pc::Pc7, Pc::Pc9, Pc::Pc11, Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5]);
+        assert_eq!(
+            rotated,
+            vec![
+                Pc::Pc7,
+                Pc::Pc9,
+                Pc::Pc11,
+                Pc::Pc0,
+                Pc::Pc2,
+                Pc::Pc4,
+                Pc::Pc5
+            ]
+        );
     }
 
     #[test]
     fn rotate_to_root_c_unchanged() {
-        let pcs = vec![Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11];
+        let pcs = vec![
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
+        ];
         let rotated = rotate_to_root(&pcs, Pc::Pc0);
         assert_eq!(rotated, pcs, "C root should be unchanged");
     }

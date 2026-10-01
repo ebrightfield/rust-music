@@ -12,9 +12,12 @@ pub fn draw_tab_legato(svg: &mut SvgWriter, layout: &TabLegatoLayout) {
     // Quadratic Bézier: M x_start,y_string Q x_mid,y_apex x_end,y_string
     let path_data = format!(
         "M{},{} Q{},{} {},{}",
-        layout.x_start, layout.y_string,
-        layout.x_text, layout.y_apex,
-        layout.x_end, layout.y_string,
+        layout.x_start,
+        layout.y_string,
+        layout.x_text,
+        layout.y_apex,
+        layout.x_end,
+        layout.y_string,
     );
 
     svg.add_raw(&format!(
@@ -52,19 +55,29 @@ mod tests {
     #[test]
     fn draw_legato_adds_path_and_text() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_legato(&mut svg, &layout);
         let output = svg.to_svg();
 
-        assert_eq!(output.matches("<path ").count(), 1, "should have 1 arc path");
-        assert_eq!(output.matches("<text ").count(), 1, "should have 1 text label");
+        assert_eq!(
+            output.matches("<path ").count(),
+            1,
+            "should have 1 arc path"
+        );
+        assert_eq!(
+            output.matches("<text ").count(),
+            1,
+            "should have 1 text label"
+        );
     }
 
     #[test]
     fn hammer_on_shows_h_label() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_legato(&mut svg, &layout);
         let output = svg.to_svg();
@@ -84,12 +97,16 @@ mod tests {
     #[test]
     fn arc_is_unfilled_stroke() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_legato(&mut svg, &layout);
         let output = svg.to_svg();
         assert!(output.contains("fill=\"none\""), "arc should be unfilled");
-        assert!(output.contains("stroke=\"black\""), "arc should have black stroke");
+        assert!(
+            output.contains("stroke=\"black\""),
+            "arc should have black stroke"
+        );
     }
 
     #[test]
@@ -103,28 +120,43 @@ mod tests {
         let mut svg_p = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_legato(&mut svg_p, &p);
 
-        assert_ne!(svg_h.to_svg(), svg_p.to_svg(), "H and P should produce different SVG");
+        assert_ne!(
+            svg_h.to_svg(),
+            svg_p.to_svg(),
+            "H and P should produce different SVG"
+        );
     }
 
     #[test]
     fn arc_contains_quadratic_bezier() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_legato(&mut svg, &layout);
         let output = svg.to_svg();
         // Quadratic Bézier uses Q command in path data
-        assert!(output.contains(" Q"), "path should use quadratic Bézier (Q command)");
+        assert!(
+            output.contains(" Q"),
+            "path should use quadratic Bézier (Q command)"
+        );
     }
 
     #[test]
     fn text_is_bold_sans_serif() {
         let staff = test_staff();
-        let layout = layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
+        let layout =
+            layout_tab_legato(&staff, 1, 500.0, 1000.0, LegatoKind::HammerOn, 5.0).unwrap();
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 100.0, 100.0);
         draw_tab_legato(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains("font-weight=\"bold\""), "label should be bold");
-        assert!(output.contains("font-family=\"sans-serif\""), "label should be sans-serif");
+        assert!(
+            output.contains("font-weight=\"bold\""),
+            "label should be bold"
+        );
+        assert!(
+            output.contains("font-family=\"sans-serif\""),
+            "label should be sans-serif"
+        );
     }
 }

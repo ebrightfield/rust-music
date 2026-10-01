@@ -3,9 +3,9 @@ use music::note::pitch_class::Pc;
 use music::note_collections::chord_name::parsing::parse_chord_name;
 use music::note_collections::pc_set::PcShape;
 
+use super::xor_identity;
 use crate::ast::OwnedIntervalMatrix;
 use crate::error::MusicRonError;
-use super::xor_identity;
 
 /// Known interval visualization styles, mapping 1:1 to
 /// `IntervalBuilder::build_*` methods.
@@ -20,7 +20,11 @@ pub enum IntervalStyle {
 /// Identity source resolved from exactly one of chord/pcs/scale.
 #[derive(Debug)]
 pub enum IntervalMatrixIdentity {
-    Chord { root: Note, shape: PcShape, symbol: String },
+    Chord {
+        root: Note,
+        shape: PcShape,
+        symbol: String,
+    },
     Pcs(Vec<Pc>),
     Scale(String),
 }
@@ -60,19 +64,26 @@ pub fn convert_interval_matrix(
     let style = parse_style(&owned.style)?;
 
     let _winner = xor_identity(
-        &[("chord", owned.chord.is_some()), ("pcs", owned.pcs.is_some()), ("scale", owned.scale.is_some())],
+        &[
+            ("chord", owned.chord.is_some()),
+            ("pcs", owned.pcs.is_some()),
+            ("scale", owned.scale.is_some()),
+        ],
         "IntervalMatrix",
     )?;
 
     let identity = if let Some(chord) = &owned.chord {
-        let (root, shape) = parse_chord_name(chord).map_err(|e| {
-            MusicRonError::UnknownChordSymbol {
+        let (root, shape) =
+            parse_chord_name(chord).map_err(|e| MusicRonError::UnknownChordSymbol {
                 input: chord.clone(),
                 inner: e.to_string(),
                 path: "IntervalMatrix.chord".into(),
-            }
-        })?;
-        IntervalMatrixIdentity::Chord { root, shape, symbol: chord.clone() }
+            })?;
+        IntervalMatrixIdentity::Chord {
+            root,
+            shape,
+            symbol: chord.clone(),
+        }
     } else if let Some(pcs) = &owned.pcs {
         let mut validated = Vec::with_capacity(pcs.len());
         for (i, &val) in pcs.iter().enumerate() {
@@ -108,35 +119,49 @@ mod tests {
 
     fn make_with_chord(symbol: &str, style: &str) -> OwnedIntervalMatrix {
         OwnedIntervalMatrix {
-            meta: None, version: None,
+            meta: None,
+            version: None,
             chord: Some(symbol.to_string()),
-            pcs: None, scale: None,
-            root: None, style: style.to_string(),
-            title: None, theme: None,
-            bar_size: None, cell_size: None,
+            pcs: None,
+            scale: None,
+            root: None,
+            style: style.to_string(),
+            title: None,
+            theme: None,
+            bar_size: None,
+            cell_size: None,
         }
     }
 
     fn make_with_pcs(pcs: Vec<u8>, style: &str) -> OwnedIntervalMatrix {
         OwnedIntervalMatrix {
-            meta: None, version: None,
+            meta: None,
+            version: None,
             chord: None,
             pcs: Some(pcs),
             scale: None,
-            root: None, style: style.to_string(),
-            title: None, theme: None,
-            bar_size: None, cell_size: None,
+            root: None,
+            style: style.to_string(),
+            title: None,
+            theme: None,
+            bar_size: None,
+            cell_size: None,
         }
     }
 
     fn make_with_scale(name: &str, style: &str) -> OwnedIntervalMatrix {
         OwnedIntervalMatrix {
-            meta: None, version: None,
-            chord: None, pcs: None,
+            meta: None,
+            version: None,
+            chord: None,
+            pcs: None,
             scale: Some(name.to_string()),
-            root: None, style: style.to_string(),
-            title: None, theme: None,
-            bar_size: None, cell_size: None,
+            root: None,
+            style: style.to_string(),
+            title: None,
+            theme: None,
+            bar_size: None,
+            cell_size: None,
         }
     }
 
@@ -198,13 +223,17 @@ mod tests {
     #[test]
     fn ambiguous_identity_errors() {
         let owned = OwnedIntervalMatrix {
-            meta: None, version: None,
+            meta: None,
+            version: None,
             chord: Some("C".to_string()),
             pcs: Some(vec![0, 4, 7]),
             scale: None,
-            root: None, style: "vector".to_string(),
-            title: None, theme: None,
-            bar_size: None, cell_size: None,
+            root: None,
+            style: "vector".to_string(),
+            title: None,
+            theme: None,
+            bar_size: None,
+            cell_size: None,
         };
         let err = convert_interval_matrix(&owned).unwrap_err();
         match err {
@@ -218,11 +247,17 @@ mod tests {
     #[test]
     fn no_identity_errors() {
         let owned = OwnedIntervalMatrix {
-            meta: None, version: None,
-            chord: None, pcs: None, scale: None,
-            root: None, style: "vector".to_string(),
-            title: None, theme: None,
-            bar_size: None, cell_size: None,
+            meta: None,
+            version: None,
+            chord: None,
+            pcs: None,
+            scale: None,
+            root: None,
+            style: "vector".to_string(),
+            title: None,
+            theme: None,
+            bar_size: None,
+            cell_size: None,
         };
         let err = convert_interval_matrix(&owned).unwrap_err();
         match err {

@@ -1,9 +1,9 @@
-use std::fmt::{Display, Formatter};
 use crate::error::MusicSemanticsError;
 use crate::fretboard::{Fretboard, StringConvention};
 use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 use crate::note_collections::NoteSet;
+use std::fmt::{Display, Formatter};
 
 /// This enum is useful for times when you need to be able to mark a string as muted,
 /// for example when creating guitar chord diagrams.
@@ -33,7 +33,7 @@ pub struct SoundedNote<'a> {
 
 impl<'a> Display for SoundedNote<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}({})", self.string+1, self.fret, self.pitch.note)
+        write!(f, "{}:{}({})", self.string + 1, self.fret, self.pitch.note)
     }
 }
 
@@ -52,7 +52,11 @@ impl<'a> SoundedNote<'a> {
 
     /// Preferred constructor for a fretted string. Validates using
     /// the methods on the [Fretboard] passed in.
-    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
+    pub fn fretted(
+        string: u8,
+        fret: u8,
+        fretboard: &'a Fretboard,
+    ) -> Result<Self, MusicSemanticsError> {
         fretboard.sounded_note(string, fret)
     }
 
@@ -113,9 +117,8 @@ impl<'a> SoundedNote<'a> {
         if next_string.midi_note > pitch.midi_note {
             return Err(MusicSemanticsError::FretBelowZero(pitch, *next_string));
         }
-        self.fretboard.sounded_note(
-            self.string + 1, pitch.midi_note - next_string.midi_note
-        )
+        self.fretboard
+            .sounded_note(self.string + 1, pitch.midi_note - next_string.midi_note)
     }
 
     /// Move to the same pitch class on the next higher (numerically larger) string.
@@ -126,7 +129,7 @@ impl<'a> SoundedNote<'a> {
         if target_string >= self.fretboard.num_strings() {
             return Err(MusicSemanticsError::StringTooHighForFretboard(
                 target_string,
-                self.fretboard.clone()
+                self.fretboard.clone(),
             ));
         }
 
@@ -136,7 +139,7 @@ impl<'a> SoundedNote<'a> {
         if self.pitch.midi_note < higher_string_pitch.midi_note {
             return Err(MusicSemanticsError::FretBelowZero(
                 self.pitch,
-                *higher_string_pitch
+                *higher_string_pitch,
             ));
         }
 
@@ -156,10 +159,7 @@ impl<'a> SoundedNote<'a> {
             // Already on lowest string, can't go lower
             // Return a fret-below-zero error with the current pitch and lowest string
             let lowest = self.fretboard.get_string(0)?;
-            return Err(MusicSemanticsError::FretBelowZero(
-                self.pitch,
-                *lowest
-            ));
+            return Err(MusicSemanticsError::FretBelowZero(self.pitch, *lowest));
         }
 
         let target_string = self.string - 1;
@@ -169,7 +169,7 @@ impl<'a> SoundedNote<'a> {
         if self.pitch.midi_note < lower_string_pitch.midi_note {
             return Err(MusicSemanticsError::FretBelowZero(
                 self.pitch,
-                *lower_string_pitch
+                *lower_string_pitch,
             ));
         }
 
@@ -271,14 +271,10 @@ impl<'a> SoundedNote<'a> {
 }
 
 impl<'a> FrettedNote<'a> {
-
     /// Constructor for a [FrettedNote::Muted] variant.
     pub fn muted(string: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
         let _ = fretboard.get_string(string)?;
-        Ok(Self::Muted {
-            string,
-            fretboard,
-        })
+        Ok(Self::Muted { string, fretboard })
     }
 
     /// Constructor for a [FrettedNote::Sounded] variant of an open string.
@@ -293,7 +289,11 @@ impl<'a> FrettedNote<'a> {
     }
 
     /// Construct a [FrettedNote::Sounded] variant that is fretted.
-    pub fn fretted(string: u8, fret: u8, fretboard: &'a Fretboard) -> Result<Self, MusicSemanticsError> {
+    pub fn fretted(
+        string: u8,
+        fret: u8,
+        fretboard: &'a Fretboard,
+    ) -> Result<Self, MusicSemanticsError> {
         Ok(Self::Sounded(fretboard.sounded_note(string, fret)?))
     }
 
@@ -303,9 +303,9 @@ impl<'a> FrettedNote<'a> {
     /// over `self.pitch`.
     pub fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
         Ok(match &self {
-            FrettedNote::Sounded(sounded_note) => FrettedNote::Sounded(
-                sounded_note.spelled_as_in(notes)?
-            ),
+            FrettedNote::Sounded(sounded_note) => {
+                FrettedNote::Sounded(sounded_note.spelled_as_in(notes)?)
+            }
             FrettedNote::Muted { .. } => self.clone(),
         })
     }
@@ -313,7 +313,7 @@ impl<'a> FrettedNote<'a> {
     /// Returns the string value of either variant.
     pub fn string(&self) -> u8 {
         match &self {
-            FrettedNote::Sounded(SoundedNote { string, ..}) => *string,
+            FrettedNote::Sounded(SoundedNote { string, .. }) => *string,
             FrettedNote::Muted { string, .. } => *string,
         }
     }
@@ -321,16 +321,16 @@ impl<'a> FrettedNote<'a> {
     /// Returns the fret, unless it's a [FrettedNote::Muted] variant.
     pub fn fret(&self) -> Option<u8> {
         match &self {
-            FrettedNote::Sounded(SoundedNote { fret, ..}) => Some(*fret),
-            FrettedNote::Muted { .. } => None
+            FrettedNote::Sounded(SoundedNote { fret, .. }) => Some(*fret),
+            FrettedNote::Muted { .. } => None,
         }
     }
 
     /// Returns the pitch, unless it's a [FrettedNote::Muted] variant.
     pub fn pitch(&self) -> Option<Pitch> {
         match &self {
-            FrettedNote::Sounded(SoundedNote { pitch, ..}) => Some(*pitch),
-            FrettedNote::Muted { .. } => None
+            FrettedNote::Sounded(SoundedNote { pitch, .. }) => Some(*pitch),
+            FrettedNote::Muted { .. } => None,
         }
     }
 
@@ -346,7 +346,9 @@ impl<'a> FrettedNote<'a> {
     /// See [`SoundedNote::string_number`] for more details on conventions.
     pub fn string_number(&self, convention: StringConvention) -> u8 {
         let (string, fretboard) = match self {
-            FrettedNote::Sounded(SoundedNote { string, fretboard, .. }) => (*string, *fretboard),
+            FrettedNote::Sounded(SoundedNote {
+                string, fretboard, ..
+            }) => (*string, *fretboard),
             FrettedNote::Muted { string, fretboard } => (*string, *fretboard),
         };
         let num_strings = fretboard.num_strings();
@@ -423,7 +425,7 @@ mod tests {
         // - String 2 (D): fret 5
         // - String 1 (A): fret 10
         // - String 0 (E): fret 15
-        assert!(positions.len() >= 3);  // At least on G, D, and A strings
+        assert!(positions.len() >= 3); // At least on G, D, and A strings
 
         // All positions should have the same MIDI note
         for pos in &positions {
@@ -439,7 +441,7 @@ mod tests {
 
         // E should be playable at many positions across all octaves
         // Each string should have E at 0, 12, 24 (if within range)
-        assert!(positions.len() >= 6);  // At least one per string
+        assert!(positions.len() >= 6); // At least one per string
 
         // All positions should be E (pitch class 4 from C=0, but note is E)
         for pos in &positions {
@@ -450,7 +452,7 @@ mod tests {
     #[test]
     fn test_same_note_higher_string_boundary() {
         // Test from the highest string - should fail
-        let e_high = STD_6STR_GTR.sounded_note(5, 5).unwrap();  // A on high E string
+        let e_high = STD_6STR_GTR.sounded_note(5, 5).unwrap(); // A on high E string
         assert!(e_high.same_note_higher_string().is_err());
     }
 
@@ -462,7 +464,10 @@ mod tests {
 
         // String 5 in our system is the high E (thinnest)
         let high_e = STD_6STR_GTR.sounded_note(5, 0).unwrap();
-        assert_eq!(high_e.string_number(StringConvention::ZeroIndexedFromLow), 5);
+        assert_eq!(
+            high_e.string_number(StringConvention::ZeroIndexedFromLow),
+            5
+        );
     }
 
     #[test]
@@ -473,7 +478,10 @@ mod tests {
 
         // String 5 in our system (high E) is the 1st string in Lilypond/TAB
         let high_e = STD_6STR_GTR.sounded_note(5, 0).unwrap();
-        assert_eq!(high_e.string_number(StringConvention::OneIndexedFromHigh), 1);
+        assert_eq!(
+            high_e.string_number(StringConvention::OneIndexedFromHigh),
+            1
+        );
 
         // Also test the lilypond_string_number convenience method
         assert_eq!(low_e.lilypond_string_number(), 6);
@@ -495,9 +503,18 @@ mod tests {
     fn test_string_convention_fretted_note() {
         // Test StringConvention with FrettedNote enum
         let sounded = FrettedNote::fretted(2, 3, &STD_6STR_GTR).unwrap();
-        assert_eq!(sounded.string_number(StringConvention::ZeroIndexedFromLow), 2);
-        assert_eq!(sounded.string_number(StringConvention::OneIndexedFromHigh), 4);
-        assert_eq!(sounded.string_number(StringConvention::OneIndexedFromLow), 3);
+        assert_eq!(
+            sounded.string_number(StringConvention::ZeroIndexedFromLow),
+            2
+        );
+        assert_eq!(
+            sounded.string_number(StringConvention::OneIndexedFromHigh),
+            4
+        );
+        assert_eq!(
+            sounded.string_number(StringConvention::OneIndexedFromLow),
+            3
+        );
 
         let muted = FrettedNote::muted(0, &STD_6STR_GTR).unwrap();
         assert_eq!(muted.string_number(StringConvention::ZeroIndexedFromLow), 0);

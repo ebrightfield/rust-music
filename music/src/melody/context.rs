@@ -4,8 +4,8 @@
 //! allowing melodies to be generated with awareness of the current
 //! harmonic context.
 
-use crate::note_collections::NoteSet;
 use crate::notation::rhythm::duration::Duration;
+use crate::note_collections::NoteSet;
 
 /// A chord with its duration in the progression.
 #[derive(Debug, Clone)]
@@ -135,8 +135,8 @@ impl ChordProgression {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::note::note::Note;
     use crate::notation::rhythm::duration::DurationKind;
+    use crate::note::note::Note;
 
     fn c_major() -> NoteSet {
         NoteSet::new(vec![Note::C, Note::E, Note::G])
@@ -192,9 +192,9 @@ mod tests {
     #[test]
     fn test_progression_longer_duration() {
         let mut prog = ChordProgression::new(vec![
-            TimedChord::new(c_major(), Duration::QTR),  // 32 ticks
-            TimedChord::new(g_major(), Duration::QTR),  // 32 ticks
-            TimedChord::new(a_minor(), Duration::QTR),  // 32 ticks
+            TimedChord::new(c_major(), Duration::QTR), // 32 ticks
+            TimedChord::new(g_major(), Duration::QTR), // 32 ticks
+            TimedChord::new(a_minor(), Duration::QTR), // 32 ticks
         ]);
 
         // Advance by whole note (128 ticks) - should wrap around
@@ -224,9 +224,9 @@ mod tests {
     #[test]
     fn test_total_ticks() {
         let prog = ChordProgression::new(vec![
-            TimedChord::new(c_major(), Duration::HALF),  // 64 ticks
-            TimedChord::new(g_major(), Duration::QTR),   // 32 ticks
-            TimedChord::new(a_minor(), Duration::QTR),   // 32 ticks
+            TimedChord::new(c_major(), Duration::HALF), // 64 ticks
+            TimedChord::new(g_major(), Duration::QTR),  // 32 ticks
+            TimedChord::new(a_minor(), Duration::QTR),  // 32 ticks
         ]);
 
         assert_eq!(prog.total_ticks(), 128);

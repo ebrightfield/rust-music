@@ -102,12 +102,7 @@ fn fretboard_write_to_file() {
     let out_path = dir.path().join("chord.svg");
 
     slonimsky()
-        .args([
-            "fretboard",
-            "x-3-2-0-1-0",
-            "-o",
-            out_path.to_str().unwrap(),
-        ])
+        .args(["fretboard", "x-3-2-0-1-0", "-o", out_path.to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::is_empty());
@@ -216,7 +211,10 @@ fn fretboard_all_themes_valid() {
             String::from_utf8_lossy(&out.stderr)
         );
         let svg = String::from_utf8_lossy(&out.stdout);
-        assert!(svg.starts_with("<svg"), "theme '{theme}' should produce SVG");
+        assert!(
+            svg.starts_with("<svg"),
+            "theme '{theme}' should produce SVG"
+        );
     }
 }
 
@@ -246,7 +244,7 @@ fn fretboard_unknown_tuning_fails() {
         .args(["fretboard", "x-3-2-0-1-0", "--tuning", "ukulele"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown tuning"));
+        .stderr(predicate::str::contains("invalid tuning"));
 }
 
 #[test]
@@ -264,13 +262,49 @@ fn fretboard_non_svg_extension_fails() {
     let out_path = dir.path().join("chord.pdf");
 
     slonimsky()
+        .args(["fretboard", "x-3-2-0-1-0", "-o", out_path.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unsupported fretboard output format",
+        ));
+}
+
+#[test]
+fn fretboard_accepts_inline_spelled_tuning() {
+    slonimsky()
+        .args(["fretboard", "0-2-2-0", "--tuning", "E2,A2,D3,G3"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("<svg"));
+}
+
+#[test]
+fn fretboard_positions_ascii_includes_notes() {
+    slonimsky()
         .args([
             "fretboard",
             "x-3-2-0-1-0",
-            "-o",
-            out_path.to_str().unwrap(),
+            "--format",
+            "positions",
+            "--notes",
         ])
         .assert()
-        .failure()
-        .stderr(predicate::str::contains("only supports .svg"));
+        .success()
+        .stdout("A:3(C) D:2(E) G:0(G) B:1(C) E2:0(E)\n");
+}
+
+#[test]
+fn fretboard_fret_spec_can_reverse_string_order() {
+    slonimsky()
+        .args([
+            "fretboard",
+            "x-3-2-0-1-0",
+            "--format",
+            "fret-spec",
+            "--high-to-low",
+        ])
+        .assert()
+        .success()
+        .stdout("0-1-0-2-3-x\n");
 }

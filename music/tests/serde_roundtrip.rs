@@ -1,11 +1,11 @@
 #![cfg(feature = "serde")]
 
+use music::fretboard::StringConvention;
+use music::notation::clef::Clef;
+use music::notation::rhythm::duration::DurationKind;
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
 use music::note::spelling::{Accidental, Spelling};
-use music::notation::clef::Clef;
-use music::notation::rhythm::duration::DurationKind;
-use music::fretboard::StringConvention;
 
 #[test]
 fn note_roundtrips_each_spelling() {
@@ -38,7 +38,11 @@ fn spelling_roundtrips() {
 
 #[test]
 fn duration_kind_roundtrips() {
-    for dk in [DurationKind::Whole, DurationKind::Qtr, DurationKind::OneTwentyEighth] {
+    for dk in [
+        DurationKind::Whole,
+        DurationKind::Qtr,
+        DurationKind::OneTwentyEighth,
+    ] {
         let s = serde_json::to_string(&dk).unwrap();
         let back: DurationKind = serde_json::from_str(&s).unwrap();
         assert_eq!(dk, back);

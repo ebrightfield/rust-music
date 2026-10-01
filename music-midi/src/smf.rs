@@ -22,15 +22,14 @@ use crate::{
     convert::{ConvertCtx, ToMidiEvents},
     dynamics::VelocityPolicy,
     error::MidiConversionError,
-    event::{AbsoluteTicks, DEFAULT_PPQ, MidiEvent, MidiMessage},
+    event::{AbsoluteTicks, MidiEvent, MidiMessage, DEFAULT_PPQ},
     tempo::{StaticTempoMap, TempoSource},
 };
-use music::notation::rhythm::meter::{Meter, MeterDenominator};
 use midly::{
-    Format, Header, MetaMessage, Smf, Timing, Track, TrackEvent, TrackEventKind,
-    MidiMessage as MM,
-    num::{u4, u7, u15, u24, u28},
+    num::{u15, u24, u28, u4, u7},
+    Format, Header, MetaMessage, MidiMessage as MM, Smf, Timing, Track, TrackEvent, TrackEventKind,
 };
+use music::notation::rhythm::meter::{Meter, MeterDenominator};
 
 /// Owning, leak-free wrapper produced by [`SmfBuilder::build`].
 ///
@@ -56,15 +55,30 @@ pub struct OwnedSmf {
 /// Every variant uses copy-only data; no borrows.
 #[derive(Clone, Debug)]
 enum OwnedTrackEvent {
-    TempoMeta { delta: u32, usec_per_qn: u32 },
-    TimeSignatureMeta { delta: u32, num: u8, denom_log2: u8, cpc: u8, tpq: u8 },
-    EndOfTrack { delta: u32 },
-    MidiMsg { delta: u32, channel: u8, msg: OwnedMidiMsg },
+    TempoMeta {
+        delta: u32,
+        usec_per_qn: u32,
+    },
+    TimeSignatureMeta {
+        delta: u32,
+        num: u8,
+        denom_log2: u8,
+        cpc: u8,
+        tpq: u8,
+    },
+    EndOfTrack {
+        delta: u32,
+    },
+    MidiMsg {
+        delta: u32,
+        channel: u8,
+        msg: OwnedMidiMsg,
+    },
 }
 
 #[derive(Clone, Debug)]
 enum OwnedMidiMsg {
-    NoteOn  { key: u8, vel: u8 },
+    NoteOn { key: u8, vel: u8 },
     NoteOff { key: u8, vel: u8 },
     ProgramChange(u8),
     Controller { controller: u8, value: u8 },
@@ -78,7 +92,13 @@ impl OwnedTrackEvent {
                 delta: u28::from(delta),
                 kind: TrackEventKind::Meta(MetaMessage::Tempo(u24::new(usec_per_qn))),
             },
-            OwnedTrackEvent::TimeSignatureMeta { delta, num, denom_log2, cpc, tpq } => TrackEvent {
+            OwnedTrackEvent::TimeSignatureMeta {
+                delta,
+                num,
+                denom_log2,
+                cpc,
+                tpq,
+            } => TrackEvent {
                 delta: u28::from(delta),
                 kind: TrackEventKind::Meta(MetaMessage::TimeSignature(num, denom_log2, cpc, tpq)),
             },
@@ -86,18 +106,34 @@ impl OwnedTrackEvent {
                 delta: u28::from(delta),
                 kind: TrackEventKind::Meta(MetaMessage::EndOfTrack),
             },
-            OwnedTrackEvent::MidiMsg { delta, channel, ref msg } => {
+            OwnedTrackEvent::MidiMsg {
+                delta,
+                channel,
+                ref msg,
+            } => {
                 let message = match *msg {
-                    OwnedMidiMsg::NoteOn  { key, vel } => MM::NoteOn  { key: u7::new(key), vel: u7::new(vel) },
-                    OwnedMidiMsg::NoteOff { key, vel } => MM::NoteOff { key: u7::new(key), vel: u7::new(vel) },
-                    OwnedMidiMsg::ProgramChange(p)     => MM::ProgramChange { program: u7::new(p) },
+                    OwnedMidiMsg::NoteOn { key, vel } => MM::NoteOn {
+                        key: u7::new(key),
+                        vel: u7::new(vel),
+                    },
+                    OwnedMidiMsg::NoteOff { key, vel } => MM::NoteOff {
+                        key: u7::new(key),
+                        vel: u7::new(vel),
+                    },
+                    OwnedMidiMsg::ProgramChange(p) => MM::ProgramChange {
+                        program: u7::new(p),
+                    },
                     OwnedMidiMsg::Controller { controller, value } => MM::Controller {
-                        controller: u7::new(controller), value: u7::new(value),
+                        controller: u7::new(controller),
+                        value: u7::new(value),
                     },
                 };
                 TrackEvent {
                     delta: u28::from(delta),
-                    kind: TrackEventKind::Midi { channel: u4::from(channel), message },
+                    kind: TrackEventKind::Midi {
+                        channel: u4::from(channel),
+                        message,
+                    },
                 }
             }
         }
@@ -114,8 +150,11 @@ impl OwnedSmf {
         let mut tracks: Vec<Track<'a>> = Vec::with_capacity(self.instrument_events.len() + 1);
 
         // Conductor track (index 0) — no TrackName spliced.
-        let conductor: Vec<TrackEvent<'a>> = self.conductor_events.iter()
-            .map(OwnedTrackEvent::as_track_event).collect();
+        let conductor: Vec<TrackEvent<'a>> = self
+            .conductor_events
+            .iter()
+            .map(OwnedTrackEvent::as_track_event)
+            .collect();
         tracks.push(conductor);
 
         // Instrument tracks — prepend a TrackName meta that borrows from self.
@@ -125,20 +164,29 @@ impl OwnedSmf {
                 delta: u28::from(0u32),
                 kind: TrackEventKind::Meta(MetaMessage::TrackName(&self.track_names[i])),
             });
-            for ev in body { track.push(ev.as_track_event()); }
+            for ev in body {
+                track.push(ev.as_track_event());
+            }
             tracks.push(track);
         }
 
-        Smf { header: self.header, tracks }
+        Smf {
+            header: self.header,
+            tracks,
+        }
     }
 
     /// Number of owned track-name buffers. Used only by the leak-regression test.
     #[doc(hidden)]
-    pub fn track_name_count(&self) -> usize { self.track_names.len() }
+    pub fn track_name_count(&self) -> usize {
+        self.track_names.len()
+    }
 
     /// Serialize the SMF to `out`. REQ-O1: no leaks, no 'static slices.
     pub fn write(&self, out: &mut Vec<u8>) -> Result<(), MidiConversionError> {
-        self.as_smf().write(out).map_err(|e| MidiConversionError::Smf(e.to_string()))
+        self.as_smf()
+            .write(out)
+            .map_err(|e| MidiConversionError::Smf(e.to_string()))
     }
 
     /// Convenience: serialize to a fresh `Vec<u8>`.
@@ -251,7 +299,13 @@ impl SmfBuilder {
         // previously validated `self.ppq`. Propagate any `InvalidPpq` via `?` rather
         // than panicking, so a future regression in that calculation cannot turn into
         // a release-build panic.
-        let ctx = ConvertCtx::new(effective_ppq, tempo_ref, VelocityPolicy::Fixed(80), None, &instr)?;
+        let ctx = ConvertCtx::new(
+            effective_ppq,
+            tempo_ref,
+            VelocityPolicy::Fixed(80),
+            None,
+            &instr,
+        )?;
         let mut events = Vec::new();
         src.append_midi(0, channel, &ctx, &mut events)?;
         self.tracks.push(PendingTrack {
@@ -322,7 +376,8 @@ impl SmfBuilder {
                 delta: 0,
                 num: m.num_beats as u8,
                 denom_log2: meter_denom_to_log2(m.denominator),
-                cpc: 24, tpq: 8,
+                cpc: 24,
+                tpq: 8,
             });
         }
         conductor_events.push(OwnedTrackEvent::EndOfTrack { delta: 0 });
@@ -337,12 +392,19 @@ impl SmfBuilder {
             instrument_events.push(build_instrument_blueprint(pt.channel, pt.events)?);
         }
 
-        Ok(OwnedSmf { header, track_names, conductor_events, instrument_events })
+        Ok(OwnedSmf {
+            header,
+            track_names,
+            conductor_events,
+            instrument_events,
+        })
     }
 }
 
 impl Default for SmfBuilder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Translate a `MidiEvent` stream into an `OwnedTrackEvent` blueprint body.
@@ -381,18 +443,23 @@ fn build_instrument_blueprint(
             .as_int();
         last = e.time;
         let msg = match e.message {
-            MidiMessage::NoteOn  { key, velocity } => OwnedMidiMsg::NoteOn  { key, vel: velocity },
+            MidiMessage::NoteOn { key, velocity } => OwnedMidiMsg::NoteOn { key, vel: velocity },
             MidiMessage::NoteOff { key, velocity } => OwnedMidiMsg::NoteOff { key, vel: velocity },
-            MidiMessage::ProgramChange(p)          => OwnedMidiMsg::ProgramChange(p),
-            MidiMessage::ControlChange { controller, value } =>
-                OwnedMidiMsg::Controller { controller, value },
+            MidiMessage::ProgramChange(p) => OwnedMidiMsg::ProgramChange(p),
+            MidiMessage::ControlChange { controller, value } => {
+                OwnedMidiMsg::Controller { controller, value }
+            }
             // Meta variants belong in the conductor track only.
             MidiMessage::TimeSignature { .. }
             | MidiMessage::TrackName(_)
             | MidiMessage::TempoBpm(_)
             | MidiMessage::EndOfTrack => continue,
         };
-        out.push(OwnedTrackEvent::MidiMsg { delta, channel, msg });
+        out.push(OwnedTrackEvent::MidiMsg {
+            delta,
+            channel,
+            msg,
+        });
     }
     out.push(OwnedTrackEvent::EndOfTrack { delta: 0 });
     Ok(out)
@@ -404,10 +471,10 @@ fn build_instrument_blueprint(
 /// Valid denominators are powers of two: 1, 2, 4, 8, 16 → 0, 1, 2, 3, 4.
 fn meter_denom_to_log2(d: MeterDenominator) -> u8 {
     match d {
-        MeterDenominator::One     => 0,
-        MeterDenominator::Two     => 1,
-        MeterDenominator::Four    => 2,
-        MeterDenominator::Eight   => 3,
+        MeterDenominator::One => 0,
+        MeterDenominator::Two => 1,
+        MeterDenominator::Four => 2,
+        MeterDenominator::Eight => 3,
         MeterDenominator::Sixteen => 4,
     }
 }

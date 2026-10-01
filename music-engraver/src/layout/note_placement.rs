@@ -188,8 +188,12 @@ mod tests {
     #[test]
     fn transposing_clefs_match_treble_placement_across_the_range() {
         let pitches = [
-            p(Note::C, 4), p(Note::Bes, 4), p(Note::D, 5),
-            p(Note::F, 5), p(Note::G, 5), p(Note::C, 6),
+            p(Note::C, 4),
+            p(Note::Bes, 4),
+            p(Note::D, 5),
+            p(Note::F, 5),
+            p(Note::G, 5),
+            p(Note::C, 6),
         ];
         for pitch in pitches {
             let base = pitch_to_staff_position(&pitch, &Clef::Treble);

@@ -8,19 +8,80 @@ use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::{HairpinType, NientePlacement};
-use crate::layout::lyric::LyricSyllable;
 use crate::layout::key_signature::KeySignature;
+use crate::layout::lyric::LyricSyllable;
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
+use crate::layout::staff::StaffPosition;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
+use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
 use crate::layout::trill_extension::{TrillSpeedRampSpec, TrillWiggleSpeed};
-use crate::layout::time_signature::TimeSignatureKind;
+
+/// Semantic shape of a notehead, resolved to a duration-specific SMuFL glyph.
+///
+/// `Normal` is the default. The other styles are reusable notation semantics:
+/// they are not guitar-renderer overlays, so they retain ordinary stems, beams,
+/// tuplets, dots, accidentals, and span attachment geometry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NoteheadStyle {
+    /// Conventional oval notehead.
+    #[default]
+    Normal,
+    /// Diamond harmonic notehead.
+    Diamond,
+    /// X notehead for dead or string-percussion attacks.
+    X,
+    /// Circled-X notehead for body percussion.
+    CircleX,
+    /// Rhythmic slash notehead.
+    Slash,
+    /// Square notehead for fretboard percussion.
+    Square,
+}
+
+impl NoteheadStyle {
+    /// Resolve this shape for `duration_log2` (`0` whole, `1` half, `2+` filled).
+    pub fn glyph(self, duration_log2: u8) -> smufl::Glyph {
+        use smufl::Glyph;
+        match (self, duration_log2) {
+            (Self::Normal, 0) => Glyph::NoteheadWhole,
+            (Self::Normal, 1) => Glyph::NoteheadHalf,
+            (Self::Normal, _) => Glyph::NoteheadBlack,
+            (Self::Diamond, 0) => Glyph::NoteheadDiamondWhole,
+            (Self::Diamond, 1) => Glyph::NoteheadDiamondHalf,
+            (Self::Diamond, _) => Glyph::NoteheadDiamondBlack,
+            (Self::X, 0) => Glyph::NoteheadXWhole,
+            (Self::X, 1) => Glyph::NoteheadXHalf,
+            (Self::X, _) => Glyph::NoteheadXBlack,
+            (Self::CircleX, 0) => Glyph::NoteheadCircleXWhole,
+            (Self::CircleX, 1) => Glyph::NoteheadCircleXHalf,
+            (Self::CircleX, _) => Glyph::NoteheadCircleX,
+            (Self::Slash, 0) => Glyph::NoteheadSlashWhiteWhole,
+            (Self::Slash, 1) => Glyph::NoteheadSlashWhiteHalf,
+            (Self::Slash, _) => Glyph::NoteheadSlashVerticalEnds,
+            (Self::Square, 0 | 1) => Glyph::NoteheadSquareWhite,
+            (Self::Square, _) => Glyph::NoteheadSquareBlack,
+        }
+    }
+}
+
+/// Additional tones carried by one rhythmic member of a beam or tuplet.
+///
+/// The enclosing [`NoteEvent`] supplies duration and shared annotations; this
+/// payload lets the grouped renderer engrave the member as a real chord.
+#[derive(Clone, Debug)]
+pub struct GroupedChordMember {
+    /// Staff positions in the same order as notehead style vectors.
+    pub staff_positions: Vec<StaffPosition>,
+    /// Resolved accidentals parallel to `staff_positions`.
+    pub accidentals: Vec<Option<smufl::Glyph>>,
+}
 
 /// Articulation and expression annotations attached to a note or chord event.
 ///
@@ -29,6 +90,20 @@ use crate::layout::time_signature::TimeSignatureKind;
 /// All fields default to "no annotation" (`false` / `None`).
 #[derive(Clone, Debug, Default)]
 pub struct NoteAnnotations {
+    /// Notehead styles parallel to the note/chord's pitches. An empty vector
+    /// means [`NoteheadStyle::Normal`] for every pitch.
+    pub notehead_styles: Vec<NoteheadStyle>,
+    /// Whether each resolved notehead is enclosed by real SMuFL notehead
+    /// parentheses. Entries are parallel to pitches; missing entries are false.
+    pub parenthesized_noteheads: Vec<bool>,
+    /// Chord geometry when this annotation belongs to a grouped chord member.
+    /// `None` identifies an ordinary single-note member.
+    pub grouped_chord: Option<GroupedChordMember>,
+    /// Whether this event is a fixed-position, unpitched semantic head.
+    ///
+    /// Unpitched heads bypass key-signature accidental resolution entirely:
+    /// they neither display accidentals nor mutate the measure tracker.
+    pub unpitched: bool,
     /// Whether this note/chord is tied forward to the next note at the same
     /// staff position. The tie curve is drawn by the system renderer after
     /// all measures are laid out.
@@ -268,6 +343,8 @@ pub struct TupletGroupEvent {
     pub beam_group: BeamGroupEvent,
     /// The tuplet number to display (e.g. 3 for triplet, 5 for quintuplet).
     pub tuplet_number: u32,
+    /// The written-time denominator of the ratio (e.g. 2 for a 3:2 triplet).
+    pub in_time_of: u32,
 }
 
 /// A chord (multiple simultaneous notes) to be laid out within a measure.
@@ -461,11 +538,10 @@ impl MeasureLayoutConfig {
 
 /// Compute the Gourlay spring rest length for a note of the given duration.
 ///
-/// The shortest note in the measure (`duration_log2 == shortest_log2`) has
-/// duration `1.0`; a note twice as long has duration `2.0`, etc. The rest
-/// length is `spring_constant · duration^spacing_exponent`.
-/// `duration_log2`: 0=whole, 1=half, 2=quarter, 3=eighth, etc.
-/// `shortest_log2`: the largest log2 value (shortest note) in the measure.
+/// The shortest written note in the measure has duration `1.0`; a note twice
+/// as long has duration `2.0`, etc. Tuplet time scaling is applied by the
+/// caller so an explicit ratio changes the group's advance relative to
+/// ordinary events without changing its internal proportions.
 fn spring_rest_length(
     duration_log2: u8,
     shortest_log2: u8,
@@ -477,16 +553,32 @@ fn spring_rest_length(
     spring_constant * duration.powf(spacing_exponent)
 }
 
+fn tuplet_time_scale(tuplet: &TupletGroupEvent) -> f64 {
+    if tuplet.tuplet_number == 0 || tuplet.in_time_of == 0 {
+        1.0
+    } else {
+        tuplet.in_time_of as f64 / tuplet.tuplet_number as f64
+    }
+}
+
 /// Compute the incompressible rod width for a rhythmic event.
-fn event_rod(
-    has_accidental: bool,
-    dots: u8,
-    config: &MeasureLayoutConfig,
-) -> f64 {
+fn event_rod(has_accidental: bool, dots: u8, config: &MeasureLayoutConfig) -> f64 {
     config.min_rod_padding
         + config.notehead_rod
-        + if has_accidental { config.accidental_rod } else { 0.0 }
+        + if has_accidental {
+            config.accidental_rod
+        } else {
+            0.0
+        }
         + dots as f64 * config.dot_rod
+}
+
+fn grouped_member_has_accidental(note: &NoteEvent) -> bool {
+    note.annotations
+        .grouped_chord
+        .as_ref()
+        .is_some_and(|chord| chord.accidentals.iter().any(Option::is_some))
+        || note.accidental.is_some()
 }
 
 /// Lay out a sequence of measure elements with horizontal positions.
@@ -500,27 +592,36 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     let mut positioned = Vec::with_capacity(elements.len());
     let mut x = 0.0;
 
-    // Find the shortest duration; springs scale relative to it.
+    // Find the shortest written duration. Tuplet ratios scale their springs
+    // below, preserving both the established Gourlay baseline and performed
+    // n:in-the-time-of duration relative to ordinary events.
     let shortest_log2 = elements
         .iter()
-        .filter_map(|e| match e {
-            MeasureElement::Note(n) => Some(n.duration_log2),
-            MeasureElement::Rest(r) => Some(r.duration_log2),
-            MeasureElement::Chord(c) => Some(c.duration_log2),
-            MeasureElement::BeamGroup(bg) => bg.notes.iter().map(|n| n.duration_log2).max(),
-            MeasureElement::TupletGroup(tg) => tg.beam_group.notes.iter().map(|n| n.duration_log2).max(),
+        .filter_map(|element| match element {
+            MeasureElement::Note(note) => Some(note.duration_log2),
+            MeasureElement::Rest(rest) => Some(rest.duration_log2),
+            MeasureElement::Chord(chord) => Some(chord.duration_log2),
+            MeasureElement::BeamGroup(group) => {
+                group.notes.iter().map(|note| note.duration_log2).max()
+            }
+            MeasureElement::TupletGroup(tuplet) => tuplet
+                .beam_group
+                .notes
+                .iter()
+                .map(|note| note.duration_log2)
+                .max(),
             _ => None,
         })
         .max()
-        .unwrap_or(2); // default to quarter note if no rhythmic content
+        .unwrap_or(2);
 
-    let spring = |duration_log2: u8| {
+    let spring = |duration_log2: u8, time_scale: f64| {
         spring_rest_length(
             duration_log2,
             shortest_log2,
             config.spring_constant,
             config.spacing_exponent,
-        )
+        ) * time_scale.powf(config.spacing_exponent)
     };
 
     for elem in elements {
@@ -541,33 +642,50 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             MeasureElement::TimeSignature(_) => {
                 (config.time_sig_width, 0.0, config.time_sig_padding)
             }
-            MeasureElement::Note(n) => {
-                (event_rod(n.accidental.is_some(), n.dots, config), spring(n.duration_log2), 0.0)
-            }
+            MeasureElement::Note(n) => (
+                event_rod(n.accidental.is_some(), n.dots, config),
+                spring(n.duration_log2, 1.0),
+                0.0,
+            ),
             MeasureElement::Rest(r) => {
                 // A rest has no notehead/accidental, but reuse the notehead rod
                 // as the glyph-extent estimate; dots still apply.
-                (event_rod(false, r.dots, config), spring(r.duration_log2), 0.0)
+                (
+                    event_rod(false, r.dots, config),
+                    spring(r.duration_log2, 1.0),
+                    0.0,
+                )
             }
             MeasureElement::Chord(c) => {
                 // A chord shares one stem column (one notehead rod). Accidentals
                 // stack leftward; estimate the cluster as one accidental rod when
                 // any note carries one.
                 let has_acc = c.accidentals.iter().any(|a| a.is_some());
-                (event_rod(has_acc, c.dots, config), spring(c.duration_log2), 0.0)
+                (
+                    event_rod(has_acc, c.dots, config),
+                    spring(c.duration_log2, 1.0),
+                    0.0,
+                )
             }
             MeasureElement::BeamGroup(bg) => {
                 // Each inner note contributes its own rod + spring; the group's
                 // rod/spring are the sums (inner x-offsets come from
                 // `beam_group_note_x_offsets` fed the group's total width).
                 let (rod, spr) = bg.notes.iter().fold((0.0, 0.0), |(r, s), n| {
-                    (r + event_rod(n.accidental.is_some(), n.dots, config), s + spring(n.duration_log2))
+                    (
+                        r + event_rod(grouped_member_has_accidental(n), n.dots, config),
+                        s + spring(n.duration_log2, 1.0),
+                    )
                 });
                 (rod, spr, 0.0)
             }
             MeasureElement::TupletGroup(tg) => {
+                let time_scale = tuplet_time_scale(tg);
                 let (rod, spr) = tg.beam_group.notes.iter().fold((0.0, 0.0), |(r, s), n| {
-                    (r + event_rod(n.accidental.is_some(), n.dots, config), s + spring(n.duration_log2))
+                    (
+                        r + event_rod(grouped_member_has_accidental(n), n.dots, config),
+                        s + spring(n.duration_log2, time_scale),
+                    )
                 });
                 (rod, spr, 0.0)
             }
@@ -577,7 +695,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                 // church-rest cluster) spanning to the barline. Use whole-note
                 // (longest) spring length as the block allocation, but treat it
                 // as rod so it neither compresses nor stretches.
-                (event_rod(false, 0, config) + spring(0), 0.0, 0.0)
+                (event_rod(false, 0, config) + spring(0, 1.0), 0.0, 0.0)
             }
             MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
         };
@@ -655,7 +773,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         })];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
@@ -684,7 +802,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -715,7 +833,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -746,7 +864,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -754,7 +872,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -777,7 +895,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 6,
@@ -785,7 +903,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -813,7 +931,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 4,
@@ -821,7 +939,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Note(NoteEvent {
                 staff_position: 8,
@@ -829,16 +947,14 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
         assert!((layout.elements[0].width - layout.elements[1].width).abs() < f64::EPSILON);
         assert!((layout.elements[1].width - layout.elements[2].width).abs() < f64::EPSILON);
         // Second note starts at first note's x + width
-        assert!(
-            (layout.elements[1].x - layout.elements[0].width).abs() < f64::EPSILON,
-        );
+        assert!((layout.elements[1].x - layout.elements[0].width).abs() < f64::EPSILON,);
     }
 
     #[test]
@@ -852,7 +968,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -874,7 +990,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -896,7 +1012,7 @@ mod tests {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-            annotations: NoteAnnotations::default(),
+                annotations: NoteAnnotations::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -972,7 +1088,10 @@ mod tests {
                 stem_direction: None,
                 annotations: NoteAnnotations::default(),
             }),
-            MeasureElement::Rest(RestEvent { duration_log2: 3, dots: 0 }),
+            MeasureElement::Rest(RestEvent {
+                duration_log2: 3,
+                dots: 0,
+            }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -1045,7 +1164,8 @@ mod tests {
         // Accidental + 2 dots widen the rod by exactly accidental_rod + 2·dot_rod.
         let expected_delta = cfg.accidental_rod + 2.0 * cfg.dot_rod;
         assert!(
-            ((adorned.elements[0].rod - plain.elements[0].rod) - expected_delta).abs() < f64::EPSILON,
+            ((adorned.elements[0].rod - plain.elements[0].rod) - expected_delta).abs()
+                < f64::EPSILON,
         );
     }
 
@@ -1144,5 +1264,59 @@ mod tests {
             ratio > 1.0 && ratio < 2.5,
             "half:eighth advance ratio {ratio} outside the engraving-practice band"
         );
+    }
+
+    #[test]
+    fn semantic_notehead_styles_resolve_to_exact_duration_glyphs() {
+        use smufl::Glyph;
+
+        let cases = [
+            (
+                NoteheadStyle::Diamond,
+                [
+                    Glyph::NoteheadDiamondWhole,
+                    Glyph::NoteheadDiamondHalf,
+                    Glyph::NoteheadDiamondBlack,
+                ],
+            ),
+            (
+                NoteheadStyle::X,
+                [
+                    Glyph::NoteheadXWhole,
+                    Glyph::NoteheadXHalf,
+                    Glyph::NoteheadXBlack,
+                ],
+            ),
+            (
+                NoteheadStyle::CircleX,
+                [
+                    Glyph::NoteheadCircleXWhole,
+                    Glyph::NoteheadCircleXHalf,
+                    Glyph::NoteheadCircleX,
+                ],
+            ),
+            (
+                NoteheadStyle::Slash,
+                [
+                    Glyph::NoteheadSlashWhiteWhole,
+                    Glyph::NoteheadSlashWhiteHalf,
+                    Glyph::NoteheadSlashVerticalEnds,
+                ],
+            ),
+            (
+                NoteheadStyle::Square,
+                [
+                    Glyph::NoteheadSquareWhite,
+                    Glyph::NoteheadSquareWhite,
+                    Glyph::NoteheadSquareBlack,
+                ],
+            ),
+        ];
+        for (style, [whole, half, filled]) in cases {
+            assert_eq!(style.glyph(0), whole);
+            assert_eq!(style.glyph(1), half);
+            assert_eq!(style.glyph(2), filled);
+            assert_eq!(style.glyph(7), filled);
+        }
     }
 }

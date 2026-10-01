@@ -1,6 +1,6 @@
+use super::common::OwnedMeta;
 use music::note::note::Note;
 use serde::{Deserialize, Serialize};
-use super::common::OwnedMeta;
 
 /// Interval vector/matrix visualization (REQ-O28).
 #[derive(Debug, Clone, Serialize, Deserialize)]

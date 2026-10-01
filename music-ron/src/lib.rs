@@ -28,8 +28,10 @@ pub fn parse(input: &str) -> Result<Document, MusicRonError> {
 /// Parse a RON file; attaches source path to any error.
 /// REQ-O5 (R2), G8 (BOM strip handled centrally in `parse_internal`)
 pub fn parse_path(path: &Path) -> Result<Document, MusicRonError> {
-    let raw = std::fs::read_to_string(path)
-        .map_err(|source| MusicRonError::Io { source_path: path.to_path_buf(), source })?;
+    let raw = std::fs::read_to_string(path).map_err(|source| MusicRonError::Io {
+        source_path: path.to_path_buf(),
+        source,
+    })?;
     parse::parse_internal(&raw, Some(path.to_path_buf()))
 }
 

@@ -9,7 +9,7 @@ pub trait CanonicalVoicings {
     const N: usize;
     /// Set of voicing families. Each of these can be rotated to obtain
     /// N distinct inversions for each family.
-    const FAMILIES: &'static [&'static[usize]];
+    const FAMILIES: &'static [&'static [usize]];
 
     /// Returns the canonical voicings for an N-note chord, well-ordered and grouped.
     ///
@@ -25,15 +25,17 @@ pub trait CanonicalVoicings {
                 let mut pitches: Vec<Pitch> = vec![];
                 for idx_from_family in *family {
                     let idx = (idx_from_family + inversion_num).rem_euclid(Self::N);
-                    pitches.push(pitches
-                        .last()
-                        .map(|p| p.up_to_note(&notes[idx]).unwrap())
-                        .unwrap_or(Pitch::new(notes[inversion_num], 4))
+                    pitches.push(
+                        pitches
+                            .last()
+                            .map(|p| p.up_to_note(&notes[idx]).unwrap())
+                            .unwrap_or(Pitch::new(notes[inversion_num], 4)),
                     );
                 }
                 voicing_family.push(
                     Voicing::new(pitches)
-                        .normalize_register_to_clef(Clef::Treble).unwrap()
+                        .normalize_register_to_clef(Clef::Treble)
+                        .unwrap(),
                 );
             }
             voicings.push(voicing_family);

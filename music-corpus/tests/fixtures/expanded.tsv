@@ -1,0 +1,3 @@
+corpus	piece	i	mc	mn	quarterbeats	label	globalkey	localkey	numeral	chord_type	figbass	changes	root	bass_note	cadence	phraseend
+fixture	movement	1	1	1	0	I	C	I	I	M			0	0		{
+fixture	movement	2	2	2	4	V7|PAC}	C	I	V	Mm7	7		1	2	PAC	}

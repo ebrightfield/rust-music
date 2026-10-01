@@ -33,12 +33,12 @@ impl Dynamic {
         // REQ-O12: mapping pp=16, p=33, mp=49, mf=64, f=80, ff=96, fff=112
         match self {
             Dynamic::Ppp => 8,
-            Dynamic::Pp  => 16,
-            Dynamic::P   => 33,
-            Dynamic::Mp  => 49,
-            Dynamic::Mf  => 64,
-            Dynamic::F   => 80,
-            Dynamic::Ff  => 96,
+            Dynamic::Pp => 16,
+            Dynamic::P => 33,
+            Dynamic::Mp => 49,
+            Dynamic::Mf => 64,
+            Dynamic::F => 80,
+            Dynamic::Ff => 96,
             Dynamic::Fff => 112,
         }
     }

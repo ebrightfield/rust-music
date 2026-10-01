@@ -1,9 +1,9 @@
-use std::hash::{Hash, Hasher};
-use std::collections::{HashMap, HashSet};
 use crate::error::MusicSemanticsError;
-use crate::note::{Note, Pitch};
 use crate::note::pitch_class::Pc;
-use crate::note_collections::{NoteSet, Voicing, pc_set::PcShape};
+use crate::note::{Note, Pitch};
+use crate::note_collections::{pc_set::PcShape, NoteSet, Voicing};
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 /// A type that can be transposed. Any type that has modes is necessarily
 /// transposable, but not every transposable type has modes, because only
@@ -32,10 +32,7 @@ impl Transpose for Pc {
 /// We therefore put the [Transpose] trait on `Vec<Pc>` instead.
 impl Transpose for Vec<Pc> {
     fn transpose(&self, semitones: i8) -> Self {
-        self
-            .iter()
-            .map(|pc| pc.transpose(semitones))
-            .collect()
+        self.iter().map(|pc| pc.transpose(semitones)).collect()
     }
 }
 
@@ -57,20 +54,17 @@ impl TryTranspose for Pitch {
 
 impl TryTranspose for Voicing {
     fn try_transpose(&self, semitones: i8) -> Result<Self, MusicSemanticsError> {
-        Ok(Voicing::new(self
-            .iter()
-            .flat_map(|p| p.try_transpose(semitones))
-            .collect()
+        Ok(Voicing::new(
+            self.iter()
+                .flat_map(|p| p.try_transpose(semitones))
+                .collect(),
         ))
     }
 }
 
 impl Transpose for NoteSet {
     fn transpose(&self, semitones: i8) -> Self {
-        Self::starting_from_first_note(self
-            .iter()
-            .map(|note| note.transpose(semitones))
-            .collect())
+        Self::starting_from_first_note(self.iter().map(|note| note.transpose(semitones)).collect())
     }
 }
 
@@ -95,7 +89,6 @@ impl Modes for PcShape {
     }
 }
 
-
 /// Type alias for the [HashMap] that stores the results of a search
 /// for transpositional symmetries.
 pub type TranspositionalSymmetryMap = HashMap<Pc, HashSet<TranspositionalSymmetry>>;
@@ -114,45 +107,71 @@ pub type TranspositionalSymmetryMap = HashMap<Pc, HashSet<TranspositionalSymmetr
 pub fn find_transpositional_symmetries(pcs: &Vec<Pc>) -> TranspositionalSymmetryMap {
     let mut symmetries = HashMap::new();
     // Closure for the complicated process of adding entries to our symmetries HashMap.
-    let add_entries = |
-        hash_map: HashMap<Pc, HashSet<TranspositionalSymmetry>>,
-        symmetries: &mut HashMap<Pc, HashSet<TranspositionalSymmetry>>,
-    | {
-        hash_map
-            .iter()
-            .for_each(|(pc, sub_list)|{
+    let add_entries =
+        |hash_map: HashMap<Pc, HashSet<TranspositionalSymmetry>>,
+         symmetries: &mut HashMap<Pc, HashSet<TranspositionalSymmetry>>| {
+            hash_map.iter().for_each(|(pc, sub_list)| {
                 // Get the main HashMap at Pc(n).
-                let entry: &mut HashSet<TranspositionalSymmetry> = symmetries
-                    .entry(*pc)
-                    .or_default();
+                let entry: &mut HashSet<TranspositionalSymmetry> =
+                    symmetries.entry(*pc).or_default();
                 for symmetry in sub_list {
                     if !entry.contains(symmetry) {
                         entry.insert(symmetry.clone());
                     }
                 }
             });
-    };
+        };
     // The size of the chord determines the possible symmetries associated with it.
     // For example, it is impossible for a two-note chord to have a [TranspositionalSymmetry::T3].
     match pcs.len() {
         2 | 10 => {
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T6), &mut symmetries);
-        },
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T6),
+                &mut symmetries,
+            );
+        }
         3 | 9 => {
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T6), &mut symmetries);
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T4), &mut symmetries);
-        },
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T6),
+                &mut symmetries,
+            );
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T4),
+                &mut symmetries,
+            );
+        }
         4 | 8 => {
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T6), &mut symmetries);
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T4), &mut symmetries);
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T3), &mut symmetries);
-        },
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T6),
+                &mut symmetries,
+            );
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T4),
+                &mut symmetries,
+            );
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T3),
+                &mut symmetries,
+            );
+        }
         6 => {
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T6), &mut symmetries);
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T4), &mut symmetries);
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T3), &mut symmetries);
-            add_entries(check_for_symmetry(pcs, TranspositionalSymmetry::T2), &mut symmetries);
-        },
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T6),
+                &mut symmetries,
+            );
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T4),
+                &mut symmetries,
+            );
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T3),
+                &mut symmetries,
+            );
+            add_entries(
+                check_for_symmetry(pcs, TranspositionalSymmetry::T2),
+                &mut symmetries,
+            );
+        }
         _ => {}
     }
     symmetries
@@ -161,8 +180,7 @@ pub fn find_transpositional_symmetries(pcs: &Vec<Pc>) -> TranspositionalSymmetry
 /// Move up (i.e. rotate clockwise around the "circle of [Pc]s") some
 /// non-zero number of semitones.
 pub fn transpose(pcs: &Vec<Pc>, semitones: u8) -> Vec<Pc> {
-    pcs
-        .iter()
+    pcs.iter()
         .map(|pc| Pc::from(&(u8::from(pc) + 12 - semitones.rem_euclid(12))))
         .collect()
 }
@@ -239,7 +257,10 @@ impl Into<i8> for &TranspositionalSymmetry {
 /// The input of this function assumes a well-ordered, deduped [Vec],
 /// but does not have to be normalized to [Pc::Pc0]
 /// (i.e. does not need to contain [Pc::Pc0].
-pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> HashMap<Pc, HashSet<TranspositionalSymmetry>> {
+pub fn check_for_symmetry(
+    pcs: &Vec<Pc>,
+    symmetry: TranspositionalSymmetry,
+) -> HashMap<Pc, HashSet<TranspositionalSymmetry>> {
     let symmetry_u8: u8 = symmetry.clone().into();
     let mut symmetries = HashMap::new();
     // Performing this check ahead of time prevents both unnecessary computation and
@@ -261,15 +282,12 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
         maybe_same.sort();
         if rotated == maybe_same {
             let pt_of_symmetry = u8::from(pc);
-            let related_points_of_symmetry: Vec<Pc> = (0u8..(12/symmetry_u8))
+            let related_points_of_symmetry: Vec<Pc> = (0u8..(12 / symmetry_u8))
                 .map(|i| pt_of_symmetry + symmetry_u8 * i)
                 .map(|i| Pc::from(&i))
                 .collect();
             for pc in related_points_of_symmetry {
-                let entry = symmetries.entry(pc)
-                    .or_insert_with(|| {
-                        HashSet::new()
-                    });
+                let entry = symmetries.entry(pc).or_insert_with(|| HashSet::new());
                 if !entry.contains(&symmetry) {
                     entry.insert(symmetry.clone());
                 }
@@ -284,8 +302,8 @@ pub fn check_for_symmetry(pcs: &Vec<Pc>, symmetry: TranspositionalSymmetry) -> H
 
 #[cfg(test)]
 mod tests {
-    use crate::note::pitch_class::Pc::*;
     use super::*;
+    use crate::note::pitch_class::Pc::*;
 
     #[test]
     fn test_symmetry() {
@@ -302,10 +320,22 @@ mod tests {
 
         let mut should_be: HashMap<Pc, HashSet<TranspositionalSymmetry>> = HashMap::new();
         let pc_set = vec![Pc1, Pc4, Pc7, Pc10];
-        should_be.insert(Pc1, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc4, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc7, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc10, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
+        should_be.insert(
+            Pc1,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc4,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc7,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc10,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
         assert_eq!(find_transpositional_symmetries(&pc_set), should_be);
 
         // Augmented AH, every note should have a symmetry at T4.
@@ -322,14 +352,38 @@ mod tests {
         // Dim HW scale should be transpositionally symmetrical at every note on T6 and T3.
         let mut should_be: HashMap<Pc, HashSet<TranspositionalSymmetry>> = HashMap::new();
         let pc_set = vec![Pc0, Pc1, Pc3, Pc4, Pc6, Pc7, Pc9, Pc10];
-        should_be.insert(Pc0, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc1, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc3, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc4, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc6, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc7, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc9, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
-        should_be.insert(Pc10, HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]));
+        should_be.insert(
+            Pc0,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc1,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc3,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc4,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc6,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc7,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc9,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
+        should_be.insert(
+            Pc10,
+            HashSet::from([TranspositionalSymmetry::T3, TranspositionalSymmetry::T6]),
+        );
         assert_eq!(find_transpositional_symmetries(&pc_set), should_be);
     }
 }

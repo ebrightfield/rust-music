@@ -87,10 +87,8 @@ fn convert_events(
                 let next_path = format!("{path_prefix}[{i}]");
                 match &evs[i] {
                     OwnedEvent::Note { pitch, duration } => {
-                        let p = crate::convert::pitch::resolve(
-                            pitch,
-                            &format!("{next_path}.pitch"),
-                        )?;
+                        let p =
+                            crate::convert::pitch::resolve(pitch, &format!("{next_path}.pitch"))?;
                         let d = crate::convert::duration::resolve(
                             duration,
                             &format!("{next_path}.duration"),
@@ -126,10 +124,12 @@ fn convert_events(
                     *denominator as usize,
                     *base,
                 );
-                tuplet.validate().map_err(|e| MusicRonError::InvalidTuplet {
-                    path: path.clone(),
-                    reason: format!("{e}"),
-                })?;
+                tuplet
+                    .validate()
+                    .map_err(|e| MusicRonError::InvalidTuplet {
+                        path: path.clone(),
+                        reason: format!("{e}"),
+                    })?;
                 out.push(tuplet.into());
             }
         }

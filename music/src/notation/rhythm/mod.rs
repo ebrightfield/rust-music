@@ -1,14 +1,14 @@
-use duration::Duration;
 use crate::error::MusicSemanticsError;
 use crate::notation::rhythm::duration::{DurationKind, DurationTicks};
 use crate::note::pitch::Pitch;
 use crate::note_collections::voicing::Voicing;
 use crate::SoundedNote;
+use duration::Duration;
 
 pub mod beat_grid;
 pub mod duration;
-pub mod meter;
 pub mod flatten;
+pub mod meter;
 
 /// A pitch or voicing with a rhythmic duration.
 pub struct RhythmicNotatedEvent<'a> {
@@ -23,63 +23,63 @@ impl<'a> RhythmicNotatedEvent<'a> {
     pub fn pitch(pitch: Pitch, duration: Duration) -> Self {
         Self {
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch), duration),
         }
     }
 
     pub fn pitch_tied(pitch: Pitch, duration: Duration) -> Self {
         Self {
             tied: true,
-            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Pitch(pitch), duration),
         }
     }
 
     pub fn voicing(voicing: Voicing, duration: Duration) -> Self {
         Self {
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing), duration),
         }
     }
 
     pub fn voicing_tied(voicing: Voicing, duration: Duration) -> Self {
         Self {
             tied: true,
-            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Voicing(voicing), duration),
         }
     }
 
     pub fn rest(duration: Duration) -> Self {
         Self {
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Rest, duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Rest, duration),
         }
     }
 
     pub fn fretted(sounded_note: SoundedNote<'a>, duration: Duration) -> Self {
         Self {
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::Fretted(sounded_note), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Fretted(sounded_note), duration),
         }
     }
 
     pub fn fretted_tied(sounded_note: SoundedNote<'a>, duration: Duration) -> Self {
         Self {
             tied: true,
-            event: NotatedEvent::SingleEvent(SingleEvent::Fretted(sounded_note), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::Fretted(sounded_note), duration),
         }
     }
 
     pub fn fretted_many(notes: Vec<SoundedNote<'a>>, duration: Duration) -> Self {
         Self {
             tied: false,
-            event: NotatedEvent::SingleEvent(SingleEvent::FrettedMany(notes), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::FrettedMany(notes), duration),
         }
     }
 
     pub fn fretted_many_tied(notes: Vec<SoundedNote<'a>>, duration: Duration) -> Self {
         Self {
             tied: true,
-            event: NotatedEvent::SingleEvent(SingleEvent::FrettedMany(notes), duration)
+            event: NotatedEvent::SingleEvent(SingleEvent::FrettedMany(notes), duration),
         }
     }
 
@@ -146,7 +146,7 @@ impl<'a> Tuplet<'a> {
             events: vec![],
             numerator,
             denominator,
-            base_unit
+            base_unit,
         }
     }
 
@@ -155,13 +155,13 @@ impl<'a> Tuplet<'a> {
         events: Vec<RhythmicNotatedEvent<'a>>,
         numerator: usize,
         denominator: usize,
-        base_unit: DurationKind
+        base_unit: DurationKind,
     ) -> Self {
         Self {
             events,
             numerator,
             denominator,
-            base_unit
+            base_unit,
         }
     }
 
@@ -216,9 +216,10 @@ impl<'a> Tuplet<'a> {
         base_unit: DurationKind,
     ) -> Result<Self, MusicSemanticsError> {
         if events.len() != 3 {
-            return Err(MusicSemanticsError::InvalidTuplet(
-                format!("Triplet must have exactly 3 events, got {}", events.len())
-            ));
+            return Err(MusicSemanticsError::InvalidTuplet(format!(
+                "Triplet must have exactly 3 events, got {}",
+                events.len()
+            )));
         }
         Ok(Self::new(events, 3, 2, base_unit))
     }
@@ -234,9 +235,10 @@ impl<'a> Tuplet<'a> {
         base_unit: DurationKind,
     ) -> Result<Self, MusicSemanticsError> {
         if events.len() != 2 {
-            return Err(MusicSemanticsError::InvalidTuplet(
-                format!("Duplet must have exactly 2 events, got {}", events.len())
-            ));
+            return Err(MusicSemanticsError::InvalidTuplet(format!(
+                "Duplet must have exactly 2 events, got {}",
+                events.len()
+            )));
         }
         Ok(Self::new(events, 2, 3, base_unit))
     }
@@ -251,9 +253,10 @@ impl<'a> Tuplet<'a> {
         base_unit: DurationKind,
     ) -> Result<Self, MusicSemanticsError> {
         if events.len() != 5 {
-            return Err(MusicSemanticsError::InvalidTuplet(
-                format!("Quintuplet must have exactly 5 events, got {}", events.len())
-            ));
+            return Err(MusicSemanticsError::InvalidTuplet(format!(
+                "Quintuplet must have exactly 5 events, got {}",
+                events.len()
+            )));
         }
         Ok(Self::new(events, 5, 4, base_unit))
     }
@@ -268,9 +271,10 @@ impl<'a> Tuplet<'a> {
         base_unit: DurationKind,
     ) -> Result<Self, MusicSemanticsError> {
         if events.len() != 6 {
-            return Err(MusicSemanticsError::InvalidTuplet(
-                format!("Sextuplet must have exactly 6 events, got {}", events.len())
-            ));
+            return Err(MusicSemanticsError::InvalidTuplet(format!(
+                "Sextuplet must have exactly 6 events, got {}",
+                events.len()
+            )));
         }
         Ok(Self::new(events, 6, 4, base_unit))
     }
@@ -285,9 +289,10 @@ impl<'a> Tuplet<'a> {
         base_unit: DurationKind,
     ) -> Result<Self, MusicSemanticsError> {
         if events.len() != 7 {
-            return Err(MusicSemanticsError::InvalidTuplet(
-                format!("Septuplet must have exactly 7 events, got {}", events.len())
-            ));
+            return Err(MusicSemanticsError::InvalidTuplet(format!(
+                "Septuplet must have exactly 7 events, got {}",
+                events.len()
+            )));
         }
         Ok(Self::new(events, 7, 4, base_unit))
     }
@@ -298,12 +303,10 @@ impl<'a> Tuplet<'a> {
         let events_dur = self.events_duration();
         let expected_dur = self.virtual_duration();
         if events_dur != expected_dur {
-            return Err(MusicSemanticsError::InvalidTuplet(
-                format!(
-                    "Tuplet events sum to {} ticks, expected {} ticks",
-                    events_dur, expected_dur
-                )
-            ));
+            return Err(MusicSemanticsError::InvalidTuplet(format!(
+                "Tuplet events sum to {} ticks, expected {} ticks",
+                events_dur, expected_dur
+            )));
         }
         Ok(())
     }
@@ -313,7 +316,7 @@ impl<'a> From<Tuplet<'a>> for RhythmicNotatedEvent<'a> {
     fn from(tuplet: Tuplet<'a>) -> Self {
         RhythmicNotatedEvent {
             tied: false,
-            event: NotatedEvent::Tuplet(tuplet)
+            event: NotatedEvent::Tuplet(tuplet),
         }
     }
 }

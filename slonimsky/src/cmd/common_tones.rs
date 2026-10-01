@@ -12,8 +12,8 @@ pub struct CommonTonesArgs {
 
 /// Parse a single comma-or-space-separated token group into a BTreeSet<Pc>.
 fn parse_set(token: &str) -> Result<BTreeSet<Pc>> {
-    let pcs = parse_input_to_pcs(&[token.to_string()])
-        .with_context(|| format!("in set '{token}'"))?;
+    let pcs =
+        parse_input_to_pcs(&[token.to_string()]).with_context(|| format!("in set '{token}'"))?;
     Ok(pcs.into_iter().collect())
 }
 
@@ -53,7 +53,12 @@ pub fn run(args: CommonTonesArgs) -> Result<()> {
 
     // Print input sets
     for (i, set) in parsed.iter().enumerate() {
-        println!("Set {}: {} = {}", i + 1, format_pc_integers(set), format_pc_set(set));
+        println!(
+            "Set {}: {} = {}",
+            i + 1,
+            format_pc_integers(set),
+            format_pc_set(set)
+        );
     }
     println!();
 
@@ -76,8 +81,7 @@ pub fn run(args: CommonTonesArgs) -> Result<()> {
         eprintln!("Pairwise intersections:");
         for i in 0..parsed.len() {
             for j in (i + 1)..parsed.len() {
-                let pair: BTreeSet<Pc> =
-                    parsed[i].intersection(&parsed[j]).copied().collect();
+                let pair: BTreeSet<Pc> = parsed[i].intersection(&parsed[j]).copied().collect();
                 eprintln!(
                     "  Set {} ∩ Set {}: {} = {} ({})",
                     i + 1,

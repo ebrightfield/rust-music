@@ -119,36 +119,20 @@ impl Articulation {
             (Self::Accent, ArticulationPlacement::Below) => Glyph::ArticAccentBelow,
             (Self::Marcato, ArticulationPlacement::Above) => Glyph::ArticMarcatoAbove,
             (Self::Marcato, ArticulationPlacement::Below) => Glyph::ArticMarcatoBelow,
-            (Self::Staccatissimo, ArticulationPlacement::Above) => {
-                Glyph::ArticStaccatissimoAbove
-            }
-            (Self::Staccatissimo, ArticulationPlacement::Below) => {
-                Glyph::ArticStaccatissimoBelow
-            }
+            (Self::Staccatissimo, ArticulationPlacement::Above) => Glyph::ArticStaccatissimoAbove,
+            (Self::Staccatissimo, ArticulationPlacement::Below) => Glyph::ArticStaccatissimoBelow,
             (Self::Fermata, ArticulationPlacement::Above) => Glyph::FermataAbove,
             (Self::Fermata, ArticulationPlacement::Below) => Glyph::FermataBelow,
             (Self::FermataLong, ArticulationPlacement::Above) => Glyph::FermataLongAbove,
             (Self::FermataLong, ArticulationPlacement::Below) => Glyph::FermataLongBelow,
             (Self::FermataShort, ArticulationPlacement::Above) => Glyph::FermataShortAbove,
             (Self::FermataShort, ArticulationPlacement::Below) => Glyph::FermataShortBelow,
-            (Self::FermataVeryLong, ArticulationPlacement::Above) => {
-                Glyph::FermataVeryLongAbove
-            }
-            (Self::FermataVeryLong, ArticulationPlacement::Below) => {
-                Glyph::FermataVeryLongBelow
-            }
-            (Self::FermataVeryShort, ArticulationPlacement::Above) => {
-                Glyph::FermataVeryShortAbove
-            }
-            (Self::FermataVeryShort, ArticulationPlacement::Below) => {
-                Glyph::FermataVeryShortBelow
-            }
-            (Self::FermataHenzeLong, ArticulationPlacement::Above) => {
-                Glyph::FermataLongHenzeAbove
-            }
-            (Self::FermataHenzeLong, ArticulationPlacement::Below) => {
-                Glyph::FermataLongHenzeBelow
-            }
+            (Self::FermataVeryLong, ArticulationPlacement::Above) => Glyph::FermataVeryLongAbove,
+            (Self::FermataVeryLong, ArticulationPlacement::Below) => Glyph::FermataVeryLongBelow,
+            (Self::FermataVeryShort, ArticulationPlacement::Above) => Glyph::FermataVeryShortAbove,
+            (Self::FermataVeryShort, ArticulationPlacement::Below) => Glyph::FermataVeryShortBelow,
+            (Self::FermataHenzeLong, ArticulationPlacement::Above) => Glyph::FermataLongHenzeAbove,
+            (Self::FermataHenzeLong, ArticulationPlacement::Below) => Glyph::FermataLongHenzeBelow,
             (Self::FermataHenzeShort, ArticulationPlacement::Above) => {
                 Glyph::FermataShortHenzeAbove
             }
@@ -161,46 +145,26 @@ impl Articulation {
             // change the glyph.
             (Self::UpBow, _) => Glyph::StringsUpBow,
             (Self::DownBow, _) => Glyph::StringsDownBow,
-            (Self::AccentStaccato, ArticulationPlacement::Above) => {
-                Glyph::ArticAccentStaccatoAbove
-            }
-            (Self::AccentStaccato, ArticulationPlacement::Below) => {
-                Glyph::ArticAccentStaccatoBelow
-            }
+            (Self::AccentStaccato, ArticulationPlacement::Above) => Glyph::ArticAccentStaccatoAbove,
+            (Self::AccentStaccato, ArticulationPlacement::Below) => Glyph::ArticAccentStaccatoBelow,
             (Self::MarcatoStaccato, ArticulationPlacement::Above) => {
                 Glyph::ArticMarcatoStaccatoAbove
             }
             (Self::MarcatoStaccato, ArticulationPlacement::Below) => {
                 Glyph::ArticMarcatoStaccatoBelow
             }
-            (Self::TenutoStaccato, ArticulationPlacement::Above) => {
-                Glyph::ArticTenutoStaccatoAbove
-            }
-            (Self::TenutoStaccato, ArticulationPlacement::Below) => {
-                Glyph::ArticTenutoStaccatoBelow
-            }
-            (Self::TenutoAccent, ArticulationPlacement::Above) => {
-                Glyph::ArticTenutoAccentAbove
-            }
-            (Self::TenutoAccent, ArticulationPlacement::Below) => {
-                Glyph::ArticTenutoAccentBelow
-            }
-            (Self::SoftAccent, ArticulationPlacement::Above) => {
-                Glyph::ArticSoftAccentAbove
-            }
-            (Self::SoftAccent, ArticulationPlacement::Below) => {
-                Glyph::ArticSoftAccentBelow
-            }
+            (Self::TenutoStaccato, ArticulationPlacement::Above) => Glyph::ArticTenutoStaccatoAbove,
+            (Self::TenutoStaccato, ArticulationPlacement::Below) => Glyph::ArticTenutoStaccatoBelow,
+            (Self::TenutoAccent, ArticulationPlacement::Above) => Glyph::ArticTenutoAccentAbove,
+            (Self::TenutoAccent, ArticulationPlacement::Below) => Glyph::ArticTenutoAccentBelow,
+            (Self::SoftAccent, ArticulationPlacement::Above) => Glyph::ArticSoftAccentAbove,
+            (Self::SoftAccent, ArticulationPlacement::Below) => Glyph::ArticSoftAccentBelow,
             (Self::Stress, ArticulationPlacement::Above) => Glyph::ArticStressAbove,
             (Self::Stress, ArticulationPlacement::Below) => Glyph::ArticStressBelow,
             (Self::Unstress, ArticulationPlacement::Above) => Glyph::ArticUnstressAbove,
             (Self::Unstress, ArticulationPlacement::Below) => Glyph::ArticUnstressBelow,
-            (Self::LaissezVibrer, ArticulationPlacement::Above) => {
-                Glyph::ArticLaissezVibrerAbove
-            }
-            (Self::LaissezVibrer, ArticulationPlacement::Below) => {
-                Glyph::ArticLaissezVibrerBelow
-            }
+            (Self::LaissezVibrer, ArticulationPlacement::Above) => Glyph::ArticLaissezVibrerAbove,
+            (Self::LaissezVibrer, ArticulationPlacement::Below) => Glyph::ArticLaissezVibrerBelow,
         }
     }
 
@@ -709,10 +673,7 @@ mod tests {
         for (i, g1) in glyphs.iter().enumerate() {
             for (j, g2) in glyphs.iter().enumerate() {
                 if i != j {
-                    assert_ne!(
-                        g1, g2,
-                        "fermata variants {i} and {j} share glyph: {g1:?}",
-                    );
+                    assert_ne!(g1, g2, "fermata variants {i} and {j} share glyph: {g1:?}",);
                 }
             }
         }
@@ -727,10 +688,7 @@ mod tests {
         for (i, g1) in glyphs.iter().enumerate() {
             for (j, g2) in glyphs.iter().enumerate() {
                 if i != j {
-                    assert_ne!(
-                        g1, g2,
-                        "fermata variants {i} and {j} share below-glyph",
-                    );
+                    assert_ne!(g1, g2, "fermata variants {i} and {j} share below-glyph",);
                 }
             }
         }
@@ -916,8 +874,7 @@ mod tests {
     #[test]
     fn stack_empty_returns_empty() {
         let staff = test_staff();
-        let result =
-            layout_articulation_stack(&[], 100.0, 4, StemDirection::Up, &staff);
+        let result = layout_articulation_stack(&[], 100.0, 4, StemDirection::Up, &staff);
         assert!(result.is_empty());
     }
 
@@ -1025,7 +982,11 @@ mod tests {
     fn stack_three_articulations_all_spaced_apart() {
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::Accent, Articulation::Tenuto],
+            &[
+                Articulation::Staccato,
+                Articulation::Accent,
+                Articulation::Tenuto,
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -1050,7 +1011,11 @@ mod tests {
     fn stack_all_share_same_x() {
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::Accent, Articulation::Fermata],
+            &[
+                Articulation::Staccato,
+                Articulation::Accent,
+                Articulation::Fermata,
+            ],
             250.0,
             4,
             StemDirection::Up,
@@ -1133,7 +1098,10 @@ mod tests {
             Articulation::Fermata,
             Articulation::FermataLong,
         ] {
-            assert!(!a.is_bow_stroke(), "{a:?} should not be flagged as bow stroke");
+            assert!(
+                !a.is_bow_stroke(),
+                "{a:?} should not be flagged as bow stroke"
+            );
         }
     }
 
@@ -1165,13 +1133,7 @@ mod tests {
         let staff = test_staff();
         // Stem-up, middle-line note: a normal articulation would go below.
         // A bow stroke must go above instead.
-        let up_bow = layout_articulation(
-            Articulation::UpBow,
-            100.0,
-            4,
-            StemDirection::Up,
-            &staff,
-        );
+        let up_bow = layout_articulation(Articulation::UpBow, 100.0, 4, StemDirection::Up, &staff);
         assert_eq!(up_bow.placement, ArticulationPlacement::Above);
         assert_eq!(up_bow.glyph, Glyph::StringsUpBow);
         let note_y = staff.y_of(4);
@@ -1440,10 +1402,7 @@ mod tests {
         for (i, g1) in glyphs.iter().enumerate() {
             for (j, g2) in glyphs.iter().enumerate() {
                 if i != j {
-                    assert_ne!(
-                        g1, g2,
-                        "combined variants {i} and {j} share below-glyph",
-                    );
+                    assert_ne!(g1, g2, "combined variants {i} and {j} share below-glyph",);
                 }
             }
         }
@@ -1480,10 +1439,7 @@ mod tests {
         for &c in &COMBINED_VARIANTS {
             let g = c.glyph(ArticulationPlacement::Above);
             for s in &simple_above {
-                assert_ne!(
-                    &g, s,
-                    "{c:?} above glyph {g:?} must not alias simple {s:?}",
-                );
+                assert_ne!(&g, s, "{c:?} above glyph {g:?} must not alias simple {s:?}",);
             }
         }
     }
@@ -1689,13 +1645,8 @@ mod tests {
             StemDirection::Down,
             &staff,
         );
-        let direct = layout_articulation(
-            Articulation::UpBow,
-            150.0,
-            4,
-            StemDirection::Down,
-            &staff,
-        );
+        let direct =
+            layout_articulation(Articulation::UpBow, 150.0, 4, StemDirection::Down, &staff);
         assert_eq!(stack.len(), 1);
         assert_eq!(stack[0].x, direct.x);
         assert!((stack[0].y - direct.y).abs() < 1e-9);
@@ -1892,13 +1843,8 @@ mod tests {
     fn stress_alone_lays_out_opposite_stem_down() {
         let staff = test_staff();
         // Stem-down, middle-line note: Stress should land above.
-        let layout = layout_articulation(
-            Articulation::Stress,
-            150.0,
-            4,
-            StemDirection::Down,
-            &staff,
-        );
+        let layout =
+            layout_articulation(Articulation::Stress, 150.0, 4, StemDirection::Down, &staff);
         assert_eq!(layout.placement, ArticulationPlacement::Above);
         assert_eq!(layout.glyph, Glyph::ArticStressAbove);
         let note_y = staff.y_of(4);

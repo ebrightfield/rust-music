@@ -56,7 +56,10 @@ mod tests {
         let mut svg = SvgWriter::new(200.0, 200.0, 0.0, -200.0, 1000.0, 1200.0);
         draw_arpeggio(&mut svg, &font, &layout).unwrap();
         let output = svg.to_svg();
-        assert!(output.contains("translate("), "should have translate transform");
+        assert!(
+            output.contains("translate("),
+            "should have translate transform"
+        );
         assert!(output.contains("scale(1,"), "should have vertical scale");
     }
 
@@ -88,7 +91,11 @@ mod tests {
         let result = draw_arpeggio(&mut svg, &font, &layout);
         assert!(result.is_ok());
         let output = svg.to_svg();
-        assert_eq!(output.matches("<path").count(), 1, "one path for the arpeggio");
+        assert_eq!(
+            output.matches("<path").count(),
+            1,
+            "one path for the arpeggio"
+        );
     }
 
     #[test]

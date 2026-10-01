@@ -25,7 +25,13 @@ fn interval_matrix_text_contains_interval_vector() {
         .lines()
         .find(|l| l.contains("Interval vector:"))
         .unwrap();
-    let inner = iv_line.split('<').nth(1).unwrap().split('>').next().unwrap();
+    let inner = iv_line
+        .split('<')
+        .nth(1)
+        .unwrap()
+        .split('>')
+        .next()
+        .unwrap();
     let vals: Vec<u32> = inner
         .split(',')
         .map(|s| s.trim().parse().unwrap())
@@ -68,7 +74,13 @@ fn interval_matrix_full_flag() {
         .lines()
         .find(|l| l.contains("Full interval vector:"))
         .unwrap();
-    let inner = fv_line.split('[').nth(1).unwrap().split(']').next().unwrap();
+    let inner = fv_line
+        .split('[')
+        .nth(1)
+        .unwrap()
+        .split(']')
+        .next()
+        .unwrap();
     let vals: Vec<u32> = inner
         .split(',')
         .map(|s| s.trim().parse().unwrap())
@@ -276,7 +288,18 @@ fn interval_vector_no_input_fails() {
 #[test]
 fn subchords_major_scale_size_3_has_35_subsets() {
     let out = slonimsky()
-        .args(["subchords", "C", "D", "E", "F", "G", "A", "B", "--size", "3"])
+        .args([
+            "subchords",
+            "C",
+            "D",
+            "E",
+            "F",
+            "G",
+            "A",
+            "B",
+            "--size",
+            "3",
+        ])
         .output()
         .expect("command should run");
 
@@ -327,7 +350,22 @@ fn subchords_name_flag_labels_subsets() {
         let trimmed = after_brace.trim();
         !trimmed.is_empty() && trimmed != "?"
     });
-    assert!(has_real_name, "at least one subset should be named; lines: {named_lines:?}");
+    assert!(
+        has_real_name,
+        "at least one subset should be named; lines: {named_lines:?}"
+    );
+}
+
+#[test]
+fn subchords_name_flag_uses_set_analysis_instead_of_question_marks() {
+    slonimsky()
+        .args(["subchords", "0,1,2,3", "--size", "3", "--name"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "{0,1,2}  set 3-1 pf=[0,1,2] iv=<2,1,0,0,0,0>",
+        ))
+        .stdout(predicate::str::contains("  ?").not());
 }
 
 #[test]
@@ -429,15 +467,21 @@ fn subchords_bb_major_labels_are_bb_rooted() {
 #[test]
 fn subchords_relative_flag_restores_prime_form() {
     let out = slonimsky()
-        .args(["subchords", "G,A,B,C,D,E,F#", "--size", "3", "--name", "--relative"])
+        .args([
+            "subchords",
+            "G,A,B,C,D,E,F#",
+            "--size",
+            "3",
+            "--name",
+            "--relative",
+        ])
         .output()
         .expect("command should run");
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("Subchords of {0,2,4,6,7,9,11}")
-            && stdout.contains("prime-form relative"),
+        stdout.contains("Subchords of {0,2,4,6,7,9,11}") && stdout.contains("prime-form relative"),
         "--relative should report prime form and say so; got:\n{stdout}"
     );
 }

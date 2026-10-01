@@ -3,7 +3,7 @@
 #![cfg(feature = "lilypond")]
 
 use crate::notation::lilypond::document::score::LilypondScore;
-use crate::notation::rhythm::{RhythmicNotatedEvent, NotatedEvent};
+use crate::notation::rhythm::{NotatedEvent, RhythmicNotatedEvent};
 
 pub type AbsoluteTicks = u64;
 pub type StaffIdx = usize;
@@ -45,13 +45,20 @@ pub fn iter_events<'a>(score: &'a LilypondScore<'a>) -> impl Iterator<Item = Fla
                     // [AMEND-C] `as_rhythmic_event` returns `Option<&_>` so non-Common
                     // voice elements (clef changes, articulations) are skipped without
                     // advancing tick (their duration is encoded in the surrounding event).
-                    let Some(e) = elem.as_rhythmic_event() else { continue };
+                    let Some(e) = elem.as_rhythmic_event() else {
+                        continue;
+                    };
                     // [AMEND-E] explicit `as u32` cast on usize-typed DurationTicks value.
                     let dt: u32 = match &e.event {
                         NotatedEvent::SingleEvent(_, d) => d.ticks() as u32,
                         NotatedEvent::Tuplet(t) => t.real_duration() as u32,
                     };
-                    out.push(FlatEvent { tick, event: e, staff: staff_idx, voice: voice_idx });
+                    out.push(FlatEvent {
+                        tick,
+                        event: e,
+                        staff: staff_idx,
+                        voice: voice_idx,
+                    });
                     tick += dt as u64;
                 }
             }
@@ -110,7 +117,9 @@ mod tests {
     fn flatten_other_elements_skipped_tick_unchanged() {
         struct DummyLy;
         impl crate::notation::lilypond::ToLilypondString for DummyLy {
-            fn to_lilypond_string(&self) -> String { "".to_string() }
+            fn to_lilypond_string(&self) -> String {
+                "".to_string()
+            }
         }
         let pitch = Pitch::from_midi(60).unwrap();
         let e1 = RhythmicNotatedEvent::pitch(pitch, Duration::new(DurationKind::Qtr, 0));

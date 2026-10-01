@@ -23,7 +23,14 @@ pub fn draw_tab_beam_group(svg: &mut SvgWriter, layout: &TabBeamGroupLayout) {
 
     // Draw stems
     for stem in &layout.stems {
-        svg.add_line(stem.x, stem.y_base, stem.x, stem.y_tip, "black", stem.stem_width);
+        svg.add_line(
+            stem.x,
+            stem.y_base,
+            stem.x,
+            stem.y_tip,
+            "black",
+            stem.stem_width,
+        );
     }
 
     // Draw beam lines at each level
@@ -37,13 +44,7 @@ pub fn draw_tab_beam_group(svg: &mut SvgWriter, layout: &TabBeamGroupLayout) {
         let beam_y_bottom = beam_y_top + layout.beam_thickness;
         let level1 = level + 1; // 1-based for comparison with beam counts
 
-        draw_tab_beam_level(
-            svg,
-            layout,
-            level1,
-            beam_y_top,
-            beam_y_bottom,
-        );
+        draw_tab_beam_level(svg, layout, level1, beam_y_top, beam_y_bottom);
     }
 }
 
@@ -64,8 +65,7 @@ fn draw_tab_beam_level(
             // Start of a connected segment
             let start_x = layout.stems[i].x;
             let mut j = i;
-            while j + 1 < n && layout.beams_right[j] >= level && layout.beams_left[j + 1] >= level
-            {
+            while j + 1 < n && layout.beams_right[j] >= level && layout.beams_left[j + 1] >= level {
                 j += 1;
             }
             let end_x = layout.stems[j].x;
@@ -83,7 +83,13 @@ fn draw_tab_beam_level(
 
             i = j + 1;
         } else if layout.beams_left.get(i).copied().unwrap_or(0) >= level
-            && (i == 0 || layout.beams_right.get(i.wrapping_sub(1)).copied().unwrap_or(0) < level)
+            && (i == 0
+                || layout
+                    .beams_right
+                    .get(i.wrapping_sub(1))
+                    .copied()
+                    .unwrap_or(0)
+                    < level)
         {
             // Fractional stub pointing left
             let x = layout.stems[i].x;

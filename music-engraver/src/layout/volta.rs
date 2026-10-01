@@ -203,7 +203,12 @@ mod tests {
         // Top of staff is y_of(8) = 0 - 4*250 = -1000
         // y_top should be above that (more negative)
         let staff_top = staff.y_of(8);
-        assert!(layout.y_top < staff_top, "y_top {} should be above staff top {}", layout.y_top, staff_top);
+        assert!(
+            layout.y_top < staff_top,
+            "y_top {} should be above staff top {}",
+            layout.y_top,
+            staff_top
+        );
     }
 
     #[test]

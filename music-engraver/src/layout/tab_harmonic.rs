@@ -33,11 +33,7 @@ pub const HARMONIC_GLYPH_SCALE: f64 = 0.6;
 ///
 /// `string` is 1-based (1 = highest pitch = bottom line).
 /// `x` is the horizontal position of the fret event.
-pub fn layout_tab_harmonic(
-    tab_staff: &TabStaffLayout,
-    string: u8,
-    x: f64,
-) -> TabHarmonicLayout {
+pub fn layout_tab_harmonic(tab_staff: &TabStaffLayout, string: u8, x: f64) -> TabHarmonicLayout {
     let string_y = tab_staff.string_y(string);
     let offset = tab_staff.staff_space * HARMONIC_ABOVE_FRET_SS;
     // Place above the string line (negative y direction in SVG)
@@ -86,7 +82,8 @@ mod tests {
         assert!(
             layout.y < string_y,
             "harmonic indicator should be above the string line: y={} < string_y={}",
-            layout.y, string_y
+            layout.y,
+            string_y
         );
     }
 
@@ -130,7 +127,11 @@ mod tests {
         let staff = TabStaffLayout::guitar(0.0, 500.0, 5000.0, &config);
         let layout = layout_tab_harmonic(&staff, 1, 100.0);
         // String 1 is at bottom: y_origin + height, so harmonic y should be offset from there
-        assert!(layout.y > 400.0, "y should be shifted by nonzero origin, got {}", layout.y);
+        assert!(
+            layout.y > 400.0,
+            "y should be shifted by nonzero origin, got {}",
+            layout.y
+        );
     }
 
     #[test]
@@ -139,6 +140,9 @@ mod tests {
         let l1 = layout_tab_harmonic(&staff, 1, 500.0);
         let l6 = layout_tab_harmonic(&staff, 6, 500.0);
         // String 1 is bottom (highest y), string 6 is top (lowest y)
-        assert!(l1.y > l6.y, "string 1 harmonic should be below string 6 harmonic");
+        assert!(
+            l1.y > l6.y,
+            "string 1 harmonic should be below string 6 harmonic"
+        );
     }
 }

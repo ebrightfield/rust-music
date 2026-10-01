@@ -8,12 +8,12 @@ use crate::visitor::duration::parse_duration_shorthand;
 /// `music::notation::rhythm::duration::Duration`.
 pub(crate) fn resolve(owned: &OwnedDuration, path: &str) -> Result<Duration, MusicRonError> {
     let (kind, dots) = match owned {
-        OwnedDuration::Shorthand(s) => parse_duration_shorthand(s).map_err(|()| {
-            MusicRonError::InvalidDuration {
+        OwnedDuration::Shorthand(s) => {
+            parse_duration_shorthand(s).map_err(|()| MusicRonError::InvalidDuration {
                 input: s.clone(),
                 path: path.into(),
-            }
-        })?,
+            })?
+        }
         OwnedDuration::Long { kind, dots } => (*kind, *dots),
     };
     Ok(Duration::new(kind, dots))

@@ -1,10 +1,10 @@
-use thiserror::Error;
 use crate::fretboard::Fretboard;
 use crate::note::note::Note;
 use crate::note::pitch::Pitch;
 use crate::note::spelling::{Accidental, Letter};
 use crate::note_collections::interval_class::IntervalClass;
 use crate::note_collections::pc_set::PcShape;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
 pub enum MusicSemanticsError {
@@ -18,6 +18,8 @@ pub enum MusicSemanticsError {
     EmptySetOfNotes,
     #[error("The note {0} is not a member of the collection {1:?}")]
     NotAMember(Note, Vec<Note>),
+    #[error("The bass note {0} is not a member of the chord")]
+    InvalidChordBass(Note),
     #[error("The pitch {0} is lower than the next string {1}")]
     FretBelowZero(Pitch, Pitch),
     #[error("The current fretted note's fret is less than {0}")]

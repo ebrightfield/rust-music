@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::process::Stdio;
 use crate::notation::lilypond::document::{LilypondBuilder, LilypondFile};
 use crate::notation::lilypond::error::LilypondError;
+use std::path::PathBuf;
+use std::process::Stdio;
 
 #[derive(Debug, PartialEq)]
 pub enum LilypondOutput {
@@ -51,10 +51,10 @@ impl<'a> LilypondCmdBuilder<'a> {
                 LilypondFile::Preexisting(path) => {
                     if !path.exists() {
                         return Err(LilypondError::DocumentDoesNotExist(
-                            path.to_str().unwrap_or("").to_string())
-                        );
+                            path.to_str().unwrap_or("").to_string(),
+                        ));
                     }
-                },
+                }
                 LilypondFile::Virtual(builder) => {
                     builder.write_to_file()?;
                 }
@@ -92,9 +92,11 @@ impl<'a> LilypondCmdBuilder<'a> {
                 }
             }
         }
-        let mut child_process = cmd.spawn().map_err(|e|
-            LilypondError::CompilationFailure(e))?;
-        let _ = child_process.wait()
+        let mut child_process = cmd
+            .spawn()
+            .map_err(|e| LilypondError::CompilationFailure(e))?;
+        let _ = child_process
+            .wait()
             .map_err(|e| LilypondError::CompilationFailure(e))?;
         Ok(())
     }

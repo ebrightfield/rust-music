@@ -58,7 +58,10 @@ fn main() {
     let line_count = svg.matches("<line ").count();
     println!("{path_count} paths, {line_count} lines");
     assert!(path_count >= 10, "should have noteheads+clef: {path_count}");
-    assert!(line_count >= 15, "should have staff+stems+glissando lines: {line_count}");
+    assert!(
+        line_count >= 15,
+        "should have staff+stems+glissando lines: {line_count}"
+    );
 
     // Glissando lines should be present (diagonal lines beyond staff lines + stems)
     // The "gliss." text should appear for LineWithText style

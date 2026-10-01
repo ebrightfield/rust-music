@@ -35,9 +35,9 @@ pub fn auto_stem_direction_chord(positions: &[StaffPosition]) -> StemDirection {
         return StemDirection::Up;
     };
 
-    let (min, max) = rest.iter().fold((first, first), |(lo, hi), &p| {
-        (lo.min(p), hi.max(p))
-    });
+    let (min, max) = rest
+        .iter()
+        .fold((first, first), |(lo, hi), &p| (lo.min(p), hi.max(p)));
 
     // Distance from middle line (position 4)
     let dist_above = max - 4; // positive if above
@@ -68,14 +68,14 @@ pub fn stem_length_staff_spaces(position: StaffPosition, direction: StemDirectio
 
     // If the stem tip already reaches past the middle line, use default length
     let needs_extension = match direction {
-        StemDirection::Up => tip_position < 4,   // tip should reach at least middle line
-        StemDirection::Down => tip_position > 4,  // tip should reach at least middle line
+        StemDirection::Up => tip_position < 4, // tip should reach at least middle line
+        StemDirection::Down => tip_position > 4, // tip should reach at least middle line
     };
 
     if needs_extension {
         // Extend so tip lands on the middle line (position 4)
         let half_spaces_needed = match direction {
-            StemDirection::Up => 4 - position,    // distance from note to middle line
+            StemDirection::Up => 4 - position, // distance from note to middle line
             StemDirection::Down => position - 4,
         };
         let length = half_spaces_needed as f64 / 2.0;

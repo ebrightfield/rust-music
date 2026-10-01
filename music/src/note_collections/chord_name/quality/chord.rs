@@ -1,8 +1,8 @@
-use std::fmt::{Display, Formatter};
-use std::ops::{Deref, DerefMut};
 use crate::error::MusicSemanticsError;
 use crate::note_collections::chord_name::{ChordNameDisplayConfig, ExtensionStyle, MajNotation};
 use crate::note_collections::interval_class::IntervalClass;
+use std::fmt::{Display, Formatter};
+use std::ops::{Deref, DerefMut};
 
 /// The "ninth", "eleventh", etc in Maj9th or min11th chords, etc.
 ///
@@ -85,7 +85,7 @@ impl TryFrom<usize> for AltChoice {
             8 => Ok(AltChoice::FlatThirteenth),
             9 => Ok(AltChoice::Thirteenth),
             10 => Ok(AltChoice::SharpThirteenth),
-            _ => Err(MusicSemanticsError::PcNotAnAlteration(value))
+            _ => Err(MusicSemanticsError::PcNotAnAlteration(value)),
         }
     }
 }
@@ -225,14 +225,11 @@ fn pick_strict_extension(ext: &[Extension]) -> (Extension, Vec<Extension>) {
         remainder.retain(|e| *e != Extension::Thirteenth);
         return (Extension::Thirteenth, remainder);
     }
-    if ext.contains(&Extension::Eleventh)
-        && ext.contains(&Extension::Ninth)
-    {
+    if ext.contains(&Extension::Eleventh) && ext.contains(&Extension::Ninth) {
         remainder.retain(|e| *e != Extension::Eleventh);
         return (Extension::Eleventh, remainder);
     }
-    if ext.contains(&Extension::Ninth)
-    {
+    if ext.contains(&Extension::Ninth) {
         remainder.retain(|e| *e != Extension::Ninth);
         return (Extension::Ninth, remainder);
     }
@@ -259,19 +256,14 @@ fn pick_highest_extension(ext: &[Extension]) -> (Extension, Vec<Extension>) {
     (Extension::Seventh, vec![])
 }
 
-pub fn resolve_extension(
-    ext: &[Extension],
-    style: ExtensionStyle,
-) -> (Extension, Vec<AltChoice>) {
+pub fn resolve_extension(ext: &[Extension], style: ExtensionStyle) -> (Extension, Vec<AltChoice>) {
     let to_alts = |exts: &[Extension]| {
         exts.iter()
             .filter_map(|e| e.to_alt_choice())
             .collect::<Vec<AltChoice>>()
     };
     match style {
-        ExtensionStyle::None => {
-            (Extension::Seventh, to_alts(ext))
-        }
+        ExtensionStyle::None => (Extension::Seventh, to_alts(ext)),
         ExtensionStyle::Strict => {
             let (ext, remainder) = pick_strict_extension(ext);
             (ext, to_alts(&remainder))
@@ -403,9 +395,7 @@ pub enum QualityAmbiguity {
     MultipleInterpretations(Vec<String>),
     /// A 6th chord that might be confused with a 13th chord.
     /// Records whether a 7th is present (which would make it a true extended chord).
-    SixthVsThirteenth {
-        has_seventh: bool,
-    },
+    SixthVsThirteenth { has_seventh: bool },
 }
 
 impl QualityAmbiguity {
@@ -499,115 +489,103 @@ impl ChordQuality {
             (ext, Alt::from(alts))
         };
         match &self {
-            ChordQuality::Major(subtype) => {
-                match subtype {
-                    MajorSubtype::Maj(alt) => {
-                        format!("Maj{}", alt_px(alt))
-                    }
-                    MajorSubtype::Maj6(alt) => {
-                        format!("Maj6{}", alt_px(alt))
-                    }
-                    MajorSubtype::MajN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{}{}", maj, ext, alt_px(&alt))
-                    }
-                    MajorSubtype::N(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{}", ext, alt_px(&alt))
-                    }
-                    MajorSubtype::Add(adds, alt) => {
-                        format_add(None, adds, alt, cfg)
-                    }
-                    MajorSubtype::DomAlt => "7alt".to_string(),
-                    MajorSubtype::NoThird(alt) => {
-                        format!("Maj (no3){}", alt_px(alt))
-                    }
-                    MajorSubtype::NoFifth(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{} (no5){}", maj, ext, alt_px(&alt))
-                    }
-                    MajorSubtype::DomNoFifth(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{} (no5){}", ext, alt_px(&alt))
-                    }
+            ChordQuality::Major(subtype) => match subtype {
+                MajorSubtype::Maj(alt) => {
+                    format!("Maj{}", alt_px(alt))
+                }
+                MajorSubtype::Maj6(alt) => {
+                    format!("Maj6{}", alt_px(alt))
+                }
+                MajorSubtype::MajN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{}{}{}", maj, ext, alt_px(&alt))
+                }
+                MajorSubtype::N(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{}{}", ext, alt_px(&alt))
+                }
+                MajorSubtype::Add(adds, alt) => format_add(None, adds, alt, cfg),
+                MajorSubtype::DomAlt => "7alt".to_string(),
+                MajorSubtype::NoThird(alt) => {
+                    format!("Maj (no3){}", alt_px(alt))
+                }
+                MajorSubtype::NoFifth(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{}{} (no5){}", maj, ext, alt_px(&alt))
+                }
+                MajorSubtype::DomNoFifth(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{} (no5){}", ext, alt_px(&alt))
                 }
             },
-            ChordQuality::Minor(subtype) => {
-                match subtype {
-                    MinorSubtype::Min(alt) => {
-                        format!("{}{}", min, alt_px(alt))
-                    }
-                    MinorSubtype::Min6(alt) => {
-                        format!("{}6{}", min, alt_px(alt))
-                    }
-                    MinorSubtype::MinMajN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{}{}{}", min, maj, ext, alt_px(&alt))
-                    }
-                    MinorSubtype::MinN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{}{}", min, ext, alt_px(&alt))
-                    }
-                    MinorSubtype::Add(adds, alt) => {
-                        format_add(Some(min), adds, alt, cfg)
-                    }
-                    MinorSubtype::NoFifth(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{} (no5){}", min, ext, alt_px(&alt))
-                    }
+            ChordQuality::Minor(subtype) => match subtype {
+                MinorSubtype::Min(alt) => {
+                    format!("{}{}", min, alt_px(alt))
+                }
+                MinorSubtype::Min6(alt) => {
+                    format!("{}6{}", min, alt_px(alt))
+                }
+                MinorSubtype::MinMajN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{}{}{}{}", min, maj, ext, alt_px(&alt))
+                }
+                MinorSubtype::MinN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{}{}{}", min, ext, alt_px(&alt))
+                }
+                MinorSubtype::Add(adds, alt) => format_add(Some(min), adds, alt, cfg),
+                MinorSubtype::NoFifth(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("{}{} (no5){}", min, ext, alt_px(&alt))
                 }
             },
-            ChordQuality::Aug(subtype) => {
-                match subtype {
-                    AugSubtype::Aug(alt) => {
-                        format!("Aug{}", alt_px(alt))
-                    }
-                    AugSubtype::AugMajN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("+{}{}{}", maj, ext, alt_px(&alt))
-                    }
-                    AugSubtype::AugN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("+{}{}", ext, alt_px(&alt))
-                    }
+            ChordQuality::Aug(subtype) => match subtype {
+                AugSubtype::Aug(alt) => {
+                    format!("Aug{}", alt_px(alt))
+                }
+                AugSubtype::AugMajN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("+{}{}{}", maj, ext, alt_px(&alt))
+                }
+                AugSubtype::AugN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("+{}{}", ext, alt_px(&alt))
                 }
             },
-            ChordQuality::Dim(subtype) => {
-                match subtype {
-                    DimSubtype::Dim(alt) => {
-                        format!("dim{}", alt_px(alt))
-                    }
-                    DimSubtype::MinNb5(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        let b5 = if cfg.utf8_accidentals { "♭5" } else { "b5" };
-                        format!("{}{}{}{}", min, ext, b5, alt_px(&alt))
-                    }
-                    DimSubtype::DimN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("dim{}{}", ext, alt_px(&alt))
-                    }
-                    DimSubtype::DimMajN(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("dim{}{}{}", maj, ext, alt_px(&alt))
-                    }
+            ChordQuality::Dim(subtype) => match subtype {
+                DimSubtype::Dim(alt) => {
+                    format!("dim{}", alt_px(alt))
+                }
+                DimSubtype::MinNb5(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    let b5 = if cfg.utf8_accidentals { "♭5" } else { "b5" };
+                    format!("{}{}{}{}", min, ext, b5, alt_px(&alt))
+                }
+                DimSubtype::DimN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("dim{}{}", ext, alt_px(&alt))
+                }
+                DimSubtype::DimMajN(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    format!("dim{}{}{}", maj, ext, alt_px(&alt))
                 }
             },
-            ChordQuality::Sus(subtype) => {
-                match subtype {
-                    SusSubtype::Sus2(alt) => {
-                        format!("sus2{}", alt_px(alt))
-                    }
-                    SusSubtype::Sus4(alt) => {
-                        format!("sus4{}", alt_px(alt))
-                    }
-                    SusSubtype::DomNSus(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}sus{}", ext, alt_px(&alt))
-                    }
-                    SusSubtype::MajNSus(ext, alt) => {
-                        let (ext, alt) = ext_and_alts(alt, ext, style);
-                        format!("{}{}sus{}", maj, ext, alt_px(&alt))
-                    }
+            ChordQuality::Sus(subtype) => match subtype {
+                SusSubtype::Sus2(alt) => {
+                    format!("sus2{}", alt_px(alt))
+                }
+                SusSubtype::Sus4(alt) => {
+                    format!("sus4{}", alt_px(alt))
+                }
+                SusSubtype::DomNSus(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    let sus = if cfg.explicit_sus4 { "sus4" } else { "sus" };
+                    format!("{}{}{}", ext, sus, alt_px(&alt))
+                }
+                SusSubtype::MajNSus(ext, alt) => {
+                    let (ext, alt) = ext_and_alts(alt, ext, style);
+                    let sus = if cfg.explicit_sus4 { "sus4" } else { "sus" };
+                    format!("{}{}{}{}", maj, ext, sus, alt_px(&alt))
                 }
             },
             ChordQuality::Interval(ic) => ic.to_string(),
@@ -628,10 +606,7 @@ fn format_add(
     let head = prefix.unwrap_or("");
     let alt_str = alt.to_string_with(cfg);
     // Special shorthand: adds == [Add6, Add9] renders as "6/9".
-    if adds.len() == 2
-        && adds.contains(&AddMember::Add6)
-        && adds.contains(&AddMember::Add9)
-    {
+    if adds.len() == 2 && adds.contains(&AddMember::Add6) && adds.contains(&AddMember::Add9) {
         return if alt.is_empty() {
             format!("{}6/9", head)
         } else {
@@ -717,15 +692,16 @@ mod tests {
         let ambiguities = QualityAmbiguity::find_duplicate_degrees(&intervals);
         assert_eq!(ambiguities.len(), 2);
 
-        let degrees: Vec<u8> = ambiguities.iter().map(|a| {
-            match a {
+        let degrees: Vec<u8> = ambiguities
+            .iter()
+            .map(|a| match a {
                 QualityAmbiguity::DuplicateScaleDegree { degree, .. } => *degree,
                 _ => panic!("Expected DuplicateScaleDegree"),
-            }
-        }).collect();
+            })
+            .collect();
 
-        assert!(degrees.contains(&3));  // Duplicate third
-        assert!(degrees.contains(&7));  // Duplicate seventh
+        assert!(degrees.contains(&3)); // Duplicate third
+        assert!(degrees.contains(&7)); // Duplicate seventh
     }
 
     #[test]
@@ -752,10 +728,8 @@ mod tests {
     #[test]
     fn test_multiple_interpretations() {
         // Test the MultipleInterpretations variant
-        let ambiguity = QualityAmbiguity::MultipleInterpretations(vec![
-            "Am7".to_string(),
-            "C6/A".to_string(),
-        ]);
+        let ambiguity =
+            QualityAmbiguity::MultipleInterpretations(vec!["Am7".to_string(), "C6/A".to_string()]);
 
         match ambiguity {
             QualityAmbiguity::MultipleInterpretations(interpretations) => {

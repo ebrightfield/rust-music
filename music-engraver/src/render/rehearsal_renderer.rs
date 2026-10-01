@@ -16,12 +16,7 @@ pub fn draw_rehearsal_mark(svg: &mut SvgWriter, layout: &RehearsalMarkLayout) {
         anchor: "middle",
         ..TextStyle::bold(layout.font_size)
     };
-    svg.add_text(
-        layout.x_center,
-        layout.y_baseline,
-        &layout.text,
-        &style,
-    );
+    svg.add_text(layout.x_center, layout.y_baseline, &layout.text, &style);
 }
 
 #[cfg(test)]
@@ -42,8 +37,7 @@ mod tests {
     #[test]
     fn boxed_rehearsal_produces_rect_and_text() {
         let mut svg = make_svg();
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         draw_rehearsal_mark(&mut svg, &layout);
         let out = svg.to_svg();
         assert!(out.contains("<rect "), "should have a box rect");
@@ -54,8 +48,7 @@ mod tests {
     #[test]
     fn plain_rehearsal_has_text_but_no_rect() {
         let mut svg = make_svg();
-        let layout =
-            layout_rehearsal_mark("B", 500.0, &test_staff(), 250.0, RehearsalStyle::Plain);
+        let layout = layout_rehearsal_mark("B", 500.0, &test_staff(), 250.0, RehearsalStyle::Plain);
         draw_rehearsal_mark(&mut svg, &layout);
         let out = svg.to_svg();
         assert!(!out.contains("<rect "), "plain style should have no rect");
@@ -66,8 +59,7 @@ mod tests {
     #[test]
     fn boxed_rect_has_stroke() {
         let mut svg = make_svg();
-        let layout =
-            layout_rehearsal_mark("C", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("C", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         draw_rehearsal_mark(&mut svg, &layout);
         let out = svg.to_svg();
         assert!(out.contains(r#"stroke="black""#));
@@ -92,8 +84,7 @@ mod tests {
     #[test]
     fn text_centered_with_middle_anchor() {
         let mut svg = make_svg();
-        let layout =
-            layout_rehearsal_mark("E", 750.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("E", 750.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         draw_rehearsal_mark(&mut svg, &layout);
         let out = svg.to_svg();
         assert!(out.contains(r#"text-anchor="middle""#));
@@ -124,8 +115,7 @@ mod tests {
     #[test]
     fn font_size_embedded_in_text_element() {
         let mut svg = make_svg();
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         draw_rehearsal_mark(&mut svg, &layout);
         let out = svg.to_svg();
         // font_size = 1.8 * 250 = 450
@@ -135,8 +125,7 @@ mod tests {
     #[test]
     fn serif_font_family_used() {
         let mut svg = make_svg();
-        let layout =
-            layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
+        let layout = layout_rehearsal_mark("A", 500.0, &test_staff(), 250.0, RehearsalStyle::Boxed);
         draw_rehearsal_mark(&mut svg, &layout);
         let out = svg.to_svg();
         assert!(out.contains(r#"font-family="serif""#));

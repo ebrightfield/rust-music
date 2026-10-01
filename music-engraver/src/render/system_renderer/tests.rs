@@ -4,11 +4,9 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
-use crate::layout::system::{
-    layout_system, MeasureContent, MeasureEvent, SystemPrefix,
-};
-use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::ottava::OttavaKind;
+use crate::layout::system::{layout_system, MeasureContent, MeasureEvent, SystemPrefix};
+use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use music::notation::clef::Clef;
 
@@ -41,7 +39,7 @@ fn quarter_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })
 }
 
@@ -60,8 +58,11 @@ fn system_renders_staff_lines() {
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
 
-    assert_eq!(output.matches("<line ").count(), 5 + 1 + 1,
-        "5 staff lines + 1 stem + 1 barline = 7");
+    assert_eq!(
+        output.matches("<line ").count(),
+        5 + 1 + 1,
+        "5 staff lines + 1 stem + 1 barline = 7"
+    );
 }
 
 #[test]
@@ -188,7 +189,10 @@ fn target_width_produces_wider_staff() {
 
     // Wide system SVG should contain x2="10000" (or close) for staff lines
     let output_w = svg_w.to_svg();
-    assert!(output_w.contains("x2=\"10000\""), "staff lines should span target width");
+    assert!(
+        output_w.contains("x2=\"10000\""),
+        "staff lines should span target width"
+    );
 }
 
 #[test]
@@ -247,7 +251,11 @@ fn tied_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { tie_forward: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            tie_forward: true,
+            ..Default::default()
+        },
+    })
 }
 
 #[test]
@@ -312,10 +320,16 @@ fn tie_across_barline_draws_filled_path() {
 
     // Should contain a tie path (filled, with Bézier curves)
     let tie_paths = output.matches(r#"stroke="none""#).count();
-    assert!(tie_paths >= 1, "expected at least 1 tie path, got {tie_paths}");
+    assert!(
+        tie_paths >= 1,
+        "expected at least 1 tie path, got {tie_paths}"
+    );
 
     // The tie path should contain Bézier curve commands
-    assert!(output.contains(" C"), "tie should contain cubic Bézier curves");
+    assert!(
+        output.contains(" C"),
+        "tie should contain cubic Bézier curves"
+    );
 }
 
 #[test]
@@ -370,12 +384,7 @@ fn multiple_ties_in_system() {
     let (font, config, mcfg) = setup();
     // Two tied pairs: pos 4→4 and pos 6→6
     let measures = vec![MeasureContent {
-        events: vec![
-            tied_note(4),
-            tied_note(6),
-            quarter_note(4),
-            quarter_note(6),
-        ],
+        events: vec![tied_note(4), tied_note(6), quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
@@ -396,7 +405,10 @@ fn collect_note_positions_skips_non_notes() {
     let measures = vec![MeasureContent {
         events: vec![
             quarter_note(2),
-            MeasureEvent::Rest(RestEvent { duration_log2: 2, dots: 0 }),
+            MeasureEvent::Rest(RestEvent {
+                duration_log2: 2,
+                dots: 0,
+            }),
             quarter_note(4),
         ],
         barline: BarlineStyle::Single,
@@ -419,7 +431,11 @@ fn tied_chord(positions: Vec<i8>) -> MeasureEvent {
         dots: 0,
         accidentals: vec![None, None],
         stem_direction: None,
-        annotations: NoteAnnotations { tie_forward: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            tie_forward: true,
+            ..Default::default()
+        },
+    })
 }
 
 fn untied_chord(positions: Vec<i8>) -> MeasureEvent {
@@ -438,10 +454,7 @@ fn untied_chord(positions: Vec<i8>) -> MeasureEvent {
 fn collect_note_positions_includes_chord_notes() {
     let (_, _, mcfg) = setup();
     let measures = vec![MeasureContent {
-        events: vec![
-            untied_chord(vec![0, 4]),
-            quarter_note(2),
-        ],
+        events: vec![untied_chord(vec![0, 4]), quarter_note(2)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
@@ -449,7 +462,11 @@ fn collect_note_positions_includes_chord_notes() {
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
     // Chord expands to 2 entries + 1 single note = 3
-    assert_eq!(positions.len(), 3, "chord (2 notes) + single note = 3 entries");
+    assert_eq!(
+        positions.len(),
+        3,
+        "chord (2 notes) + single note = 3 entries"
+    );
 }
 
 #[test]
@@ -470,7 +487,10 @@ fn chord_tie_draws_ties_for_all_notes() {
 
     // Two ties: one for pos 0 and one for pos 4
     let tie_count = output.matches(r#"stroke="none""#).count();
-    assert_eq!(tie_count, 2, "expected 2 ties (one per chord note), got {tie_count}");
+    assert_eq!(
+        tie_count, 2,
+        "expected 2 ties (one per chord note), got {tie_count}"
+    );
 }
 
 #[test]
@@ -492,7 +512,10 @@ fn chord_tie_to_single_note_at_matching_position() {
 
     // Only 1 tie: pos 4 matches, pos 0 has no target
     let tie_count = output.matches(r#"stroke="none""#).count();
-    assert_eq!(tie_count, 1, "expected 1 tie (only pos 4 matches), got {tie_count}");
+    assert_eq!(
+        tie_count, 1,
+        "expected 1 tie (only pos 4 matches), got {tie_count}"
+    );
 }
 
 #[test]
@@ -550,7 +573,11 @@ fn slur_start_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { slur_start: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            slur_start: true,
+            ..Default::default()
+        },
+    })
 }
 
 fn slur_end_note(pos: i8) -> MeasureEvent {
@@ -560,7 +587,11 @@ fn slur_end_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { slur_end: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            slur_end: true,
+            ..Default::default()
+        },
+    })
 }
 
 #[test]
@@ -582,7 +613,10 @@ fn slur_within_measure_draws_filled_path() {
     let filled = output.matches(r#"stroke="none""#).count();
     assert_eq!(filled, 1, "expected 1 slur curve, got {filled}");
     // Slur should contain Bézier curves
-    assert!(output.contains(" C"), "slur should contain cubic Bézier commands");
+    assert!(
+        output.contains(" C"),
+        "slur should contain cubic Bézier commands"
+    );
 }
 
 #[test]
@@ -655,7 +689,11 @@ fn slur_differs_from_no_slur() {
     let mut svg_n = make_svg();
     draw_system(&mut svg_n, &font, &config, &sys_n, 0.0, 0.0).unwrap();
 
-    assert_ne!(svg_s.to_svg(), svg_n.to_svg(), "slurred vs un-slurred should differ");
+    assert_ne!(
+        svg_s.to_svg(),
+        svg_n.to_svg(),
+        "slurred vs un-slurred should differ"
+    );
 }
 
 #[test]
@@ -688,7 +726,11 @@ fn cresc_start_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Crescendo), ..Default::default() },})
+        annotations: NoteAnnotations {
+            hairpin_start: Some(HairpinType::Crescendo),
+            ..Default::default()
+        },
+    })
 }
 
 fn hairpin_end_note(pos: i8) -> MeasureEvent {
@@ -698,7 +740,11 @@ fn hairpin_end_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { hairpin_end: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            hairpin_end: true,
+            ..Default::default()
+        },
+    })
 }
 
 #[test]
@@ -798,7 +844,11 @@ fn decrescendo_differs_from_crescendo() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-                annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Decrescendo), ..Default::default() },}),
+                annotations: NoteAnnotations {
+                    hairpin_start: Some(HairpinType::Decrescendo),
+                    ..Default::default()
+                },
+            }),
             hairpin_end_note(6),
         ],
         barline: BarlineStyle::Single,
@@ -814,7 +864,11 @@ fn decrescendo_differs_from_crescendo() {
     let mut svg_d = make_svg();
     draw_system(&mut svg_d, &font, &config, &sys_d, 0.0, 0.0).unwrap();
 
-    assert_ne!(svg_c.to_svg(), svg_d.to_svg(), "cresc and decresc should differ");
+    assert_ne!(
+        svg_c.to_svg(),
+        svg_d.to_svg(),
+        "cresc and decresc should differ"
+    );
 }
 
 #[test]
@@ -951,8 +1005,14 @@ fn cresc_text_within_measure_emits_label_and_dashed_line() {
 
     // Label content present, anchored to start, italic, non-bold.
     assert!(out_m.contains(">dim.</text>"), "label 'dim.' must appear");
-    assert!(out_m.contains("font-style=\"italic\""), "label must be italic");
-    assert!(out_m.contains("text-anchor=\"start\""), "label must be left-anchored");
+    assert!(
+        out_m.contains("font-style=\"italic\""),
+        "label must be italic"
+    );
+    assert!(
+        out_m.contains("text-anchor=\"start\""),
+        "label must be left-anchored"
+    );
 
     // Exactly one dashed line more than the baseline.
     assert_eq!(
@@ -1063,18 +1123,36 @@ fn cresc_text_kinds_differ_in_label_content() {
     let decresc = &renders[1].1;
     let dim = &renders[2].1;
 
-    assert!(cresc.contains(">cresc.</text>"), "Crescendo render missing 'cresc.' label");
-    assert!(decresc.contains(">decresc.</text>"), "Decrescendo render missing 'decresc.' label");
-    assert!(dim.contains(">dim.</text>"), "Diminuendo render missing 'dim.' label");
+    assert!(
+        cresc.contains(">cresc.</text>"),
+        "Crescendo render missing 'cresc.' label"
+    );
+    assert!(
+        decresc.contains(">decresc.</text>"),
+        "Decrescendo render missing 'decresc.' label"
+    );
+    assert!(
+        dim.contains(">dim.</text>"),
+        "Diminuendo render missing 'dim.' label"
+    );
 
     // Cross-contamination guards: the cresc. render must not contain the
     // dim. or decresc. literal strings, etc.
-    assert!(!cresc.contains("decresc."), "Crescendo render must not contain 'decresc.'");
-    assert!(!cresc.contains("dim."), "Crescendo render must not contain 'dim.'");
+    assert!(
+        !cresc.contains("decresc."),
+        "Crescendo render must not contain 'decresc.'"
+    );
+    assert!(
+        !cresc.contains("dim."),
+        "Crescendo render must not contain 'dim.'"
+    );
     assert!(!dim.contains("cresc."), "Diminuendo render must not contain 'cresc.' (catches accidental fallthrough on label dispatch)");
     // decresc. *contains* "cresc." as a substring, so we only guard the
     // reverse direction here.
-    assert!(!decresc.contains(">dim.</text>"), "Decrescendo render must not contain 'dim.' label");
+    assert!(
+        !decresc.contains(">dim.</text>"),
+        "Decrescendo render must not contain 'dim.' label"
+    );
 
     // Each pairing produces visually distinct SVG.
     assert_ne!(cresc, decresc, "Crescendo and Decrescendo SVG must differ");
@@ -1540,7 +1618,10 @@ fn volta_bracket_text_appears_in_svg() {
     let mut svg = make_svg();
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
-    assert!(output.contains(">2.</text>"), "should contain volta text '2.'");
+    assert!(
+        output.contains(">2.</text>"),
+        "should contain volta text '2.'"
+    );
 }
 
 #[test]
@@ -1588,8 +1669,7 @@ fn volta_left_only_adds_two_lines() {
     let mut svg_no = make_svg();
     draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
 
-    let diff = svg.to_svg().matches("<line ").count()
-        - svg_no.to_svg().matches("<line ").count();
+    let diff = svg.to_svg().matches("<line ").count() - svg_no.to_svg().matches("<line ").count();
     assert_eq!(diff, 2, "left-only volta adds 2 lines (top + left hook)");
 }
 
@@ -1643,9 +1723,11 @@ fn volta_multi_measure_two_brackets() {
     let mut svg_no = make_svg();
     draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
 
-    let diff = svg.to_svg().matches("<line ").count()
-        - svg_no.to_svg().matches("<line ").count();
-    assert_eq!(diff, 4, "two-measure volta adds 4 lines (2 tops + left + right hooks)");
+    let diff = svg.to_svg().matches("<line ").count() - svg_no.to_svg().matches("<line ").count();
+    assert_eq!(
+        diff, 4,
+        "two-measure volta adds 4 lines (2 tops + left + right hooks)"
+    );
 }
 
 // ── Ottava bracket tests ──
@@ -1696,7 +1778,10 @@ fn ottava_bracket_adds_dashed_line_and_text() {
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
     assert!(output.contains(">8va</text>"), "should contain '8va' label");
-    assert!(output.contains("stroke-dasharray"), "should have dashed line");
+    assert!(
+        output.contains("stroke-dasharray"),
+        "should have dashed line"
+    );
 }
 
 #[test]
@@ -1718,7 +1803,10 @@ fn ottava_bracket_has_end_hook() {
     // Dashed line = 1 <line> with dasharray, hook = 1 <line> without dasharray
     // Total should be at least 7 (5 staff lines + dashed + hook)
     let line_count = output.matches("<line ").count();
-    assert!(line_count >= 7, "expected ≥7 lines (5 staff + dashed + hook), got {line_count}");
+    assert!(
+        line_count >= 7,
+        "expected ≥7 lines (5 staff + dashed + hook), got {line_count}"
+    );
 }
 
 #[test]
@@ -1735,7 +1823,10 @@ fn no_ottava_without_flags() {
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
     assert!(!output.contains("8va"), "should have no ottava label");
-    assert!(!output.contains("stroke-dasharray"), "should have no dashed line");
+    assert!(
+        !output.contains("stroke-dasharray"),
+        "should have no dashed line"
+    );
 }
 
 #[test]
@@ -1773,7 +1864,10 @@ fn ottava_start_without_end_draws_nothing() {
     let mut svg = make_svg();
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
-    assert!(!output.contains("8va"), "start without end should draw no ottava bracket");
+    assert!(
+        !output.contains("8va"),
+        "start without end should draw no ottava bracket"
+    );
 }
 
 // --- glissando ---
@@ -1857,9 +1951,12 @@ fn glissando_within_measure_adds_line() {
 
     let gliss_lines = output.matches("<line").count();
     let no_gliss_lines = output_no.matches("<line").count();
-    assert!(gliss_lines > no_gliss_lines,
+    assert!(
+        gliss_lines > no_gliss_lines,
         "glissando should add at least one line: {} vs {}",
-        gliss_lines, no_gliss_lines);
+        gliss_lines,
+        no_gliss_lines
+    );
 }
 
 #[test]
@@ -1875,7 +1972,10 @@ fn no_glissando_without_flag() {
     let mut svg = make_svg();
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
-    assert!(!output.contains("gliss."), "no glissando flag means no gliss text");
+    assert!(
+        !output.contains("gliss."),
+        "no glissando flag means no gliss text"
+    );
 }
 
 #[test]
@@ -1919,7 +2019,10 @@ fn glissando_cross_barline() {
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, Some(8000.0));
     draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
     let output_no = svg_no.to_svg();
-    assert_ne!(output, output_no, "cross-barline glissando should differ from no glissando");
+    assert_ne!(
+        output, output_no,
+        "cross-barline glissando should differ from no glissando"
+    );
 }
 
 #[test]
@@ -1939,7 +2042,10 @@ fn glissando_with_text_shows_label() {
     let mut svg = make_svg();
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
     let output = svg.to_svg();
-    assert!(output.contains("gliss."), "LineWithText should show 'gliss.' label");
+    assert!(
+        output.contains("gliss."),
+        "LineWithText should show 'gliss.' label"
+    );
 }
 
 #[test]
@@ -1966,8 +2072,11 @@ fn glissando_start_without_target_draws_nothing() {
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
     let output_no = svg_no.to_svg();
-    assert_eq!(output.matches("<line").count(), output_no.matches("<line").count(),
-        "glissando with no target note should not add any lines");
+    assert_eq!(
+        output.matches("<line").count(),
+        output_no.matches("<line").count(),
+        "glissando with no target note should not add any lines"
+    );
 }
 
 // --- additional voice span rendering ---
@@ -1990,7 +2099,10 @@ fn voice_tied_note(pos: i8, dir: StemDirection) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: Some(dir),
-        annotations: NoteAnnotations { tie_forward: true, ..Default::default() },
+        annotations: NoteAnnotations {
+            tie_forward: true,
+            ..Default::default()
+        },
     })
 }
 
@@ -2052,7 +2164,10 @@ fn slur_in_additional_voice_draws_filled_path() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Down),
-        annotations: NoteAnnotations { slur_start: true, ..Default::default() },
+        annotations: NoteAnnotations {
+            slur_start: true,
+            ..Default::default()
+        },
     });
     let slur_end_note = MeasureEvent::Note(NoteEvent {
         staff_position: 4,
@@ -2060,7 +2175,10 @@ fn slur_in_additional_voice_draws_filled_path() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Down),
-        annotations: NoteAnnotations { slur_end: true, ..Default::default() },
+        annotations: NoteAnnotations {
+            slur_end: true,
+            ..Default::default()
+        },
     });
     let measures = vec![MeasureContent {
         events: vec![
@@ -2124,7 +2242,10 @@ fn hairpin_in_additional_voice_draws_lines() {
         dots: 0,
         accidental: None,
         stem_direction: Some(StemDirection::Down),
-        annotations: NoteAnnotations { hairpin_end: true, ..Default::default() },
+        annotations: NoteAnnotations {
+            hairpin_end: true,
+            ..Default::default()
+        },
     });
     let measures = vec![MeasureContent {
         events: vec![
@@ -2179,16 +2300,26 @@ fn collect_note_positions_includes_additional_voices() {
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
     // Should have 2 notes: 1 primary + 1 additional
-    assert_eq!(positions.len(), 2, "collect should include notes from additional voices");
+    assert_eq!(
+        positions.len(),
+        2,
+        "collect should include notes from additional voices"
+    );
     assert_eq!(positions[0].1, 8, "first note is primary voice at pos 8");
-    assert_eq!(positions[1].1, 0, "second note is additional voice at pos 0");
+    assert_eq!(
+        positions[1].1, 0,
+        "second note is additional voice at pos 0"
+    );
 }
 
 #[test]
 fn collect_note_positions_without_additional_voices_unchanged() {
     let (_font, _config, mcfg) = setup();
     let measures = vec![MeasureContent {
-        events: vec![voice_note(4, StemDirection::Up), voice_note(6, StemDirection::Up)],
+        events: vec![
+            voice_note(4, StemDirection::Up),
+            voice_note(6, StemDirection::Up),
+        ],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
@@ -2248,11 +2379,7 @@ fn count_paths_with_translate_y(svg: &str, y_needle: f64) -> usize {
 fn trill_extension_collector_flags_only_marked_notes() {
     let (_font, _config, mcfg) = setup();
     let measures = vec![MeasureContent {
-        events: vec![
-            trill_ext_note(4),
-            trill_no_ext_note(6),
-            quarter_note(8),
-        ],
+        events: vec![trill_ext_note(4), trill_no_ext_note(6), quarter_note(8)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
@@ -2261,7 +2388,10 @@ fn trill_extension_collector_flags_only_marked_notes() {
     let info = collect_trill_extension_note_info(&system);
     assert_eq!(info.len(), 3, "should collect one entry per note");
     assert!(info[0].has_trill_extension, "first note has extension");
-    assert!(!info[1].has_trill_extension, "second has trill but no extension");
+    assert!(
+        !info[1].has_trill_extension,
+        "second has trill but no extension"
+    );
     assert!(!info[2].has_trill_extension, "third has no trill");
 }
 
@@ -2353,7 +2483,10 @@ fn trill_extension_wiggle_shares_trill_glyph_y() {
     // Recompute the ornament y the same way draw_system_trill_extensions does
     let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
     let info = collect_trill_extension_note_info(&system);
-    let first = info.iter().find(|n| n.has_trill_extension).expect("trill present");
+    let first = info
+        .iter()
+        .find(|n| n.has_trill_extension)
+        .expect("trill present");
     let layout = layout_ornament(Ornament::Trill, first.x, first.staff_position, &staff);
 
     // At least one path must translate to the computed wiggle y. The exact
@@ -2467,8 +2600,12 @@ fn last_note_trill_extension_wiggle_stays_inside_system_edge() {
 
     let trill_advance = font.glyph_advance(smufl::Glyph::OrnamentTrill).unwrap() as f64;
     let wiggle_advance = font.glyph_advance(smufl::Glyph::WiggleTrill).unwrap() as f64;
-    let ornament =
-        crate::layout::ornament::layout_ornament(Ornament::Trill, note.x, note.staff_position, &staff);
+    let ornament = crate::layout::ornament::layout_ornament(
+        Ornament::Trill,
+        note.x,
+        note.staff_position,
+        &staff,
+    );
 
     let staff_space = staff.staff_space;
     let start_x = ornament.x + trill_advance + 0.15 * staff_space;
@@ -2512,7 +2649,10 @@ fn last_note_trill_extension_wiggle_shares_trill_glyph_y() {
     use crate::layout::staff::StaffLayout;
     let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
     let info = collect_trill_extension_note_info(&system);
-    let first = info.iter().find(|n| n.has_trill_extension).expect("trill present");
+    let first = info
+        .iter()
+        .find(|n| n.has_trill_extension)
+        .expect("trill present");
     let layout = layout_ornament(Ornament::Trill, first.x, first.staff_position, &staff);
 
     let hits = count_paths_with_translate_y(&output, layout.y);
@@ -2554,8 +2694,12 @@ fn last_note_trill_extension_silently_skips_when_no_room() {
     let staff = StaffLayout::new(0.0, 0.0, system.staff_width, config.staff_space);
     let info = collect_trill_extension_note_info(&system);
     let note = info.iter().find(|n| n.has_trill_extension).unwrap();
-    let ornament =
-        crate::layout::ornament::layout_ornament(Ornament::Trill, note.x, note.staff_position, &staff);
+    let ornament = crate::layout::ornament::layout_ornament(
+        Ornament::Trill,
+        note.x,
+        note.staff_position,
+        &staff,
+    );
     let start_x = ornament.x + trill_advance + 0.15 * staff.staff_space;
     // Set end_x equal to start_x so no segment fits.
     let bad_end = start_x;
@@ -3576,9 +3720,7 @@ fn trill_with_mordent_extension_uses_wider_glyph_advance() {
     // the advance lookup, the compound and plain versions would have
     // identical segment counts.
     let font = bravura_font();
-    let trill_advance = font
-        .glyph_advance(smufl::Glyph::OrnamentTrill)
-        .unwrap() as f64;
+    let trill_advance = font.glyph_advance(smufl::Glyph::OrnamentTrill).unwrap() as f64;
     let compound_advance = font
         .glyph_advance(smufl::Glyph::OrnamentPrecompTrillWithMordent)
         .unwrap() as f64;
@@ -4133,11 +4275,7 @@ fn to_note_offset_overshoot_falls_back_to_system_edge() {
     mcfg.spring_constant = 12.0 * config.staff_space;
 
     let overshoot = vec![MeasureContent {
-        events: vec![
-            trill_ext_to_note(4, 99),
-            quarter_note(6),
-            quarter_note(8),
-        ],
+        events: vec![trill_ext_to_note(4, 99), quarter_note(6), quarter_note(8)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],

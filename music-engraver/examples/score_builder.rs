@@ -22,10 +22,7 @@ fn main() {
         .note(Pitch::new(Note::G, 4), Duration::QTR)
         .barline()
         // Measure 2: A4 dotted half + eighth rest
-        .note(
-            Pitch::new(Note::A, 4),
-            Duration::new(DurationKind::Half, 1),
-        )
+        .note(Pitch::new(Note::A, 4), Duration::new(DurationKind::Half, 1))
         .rest(Duration::QTR)
         .barline()
         // Measure 3: B4 A4 G4 F#4 (eighth notes)

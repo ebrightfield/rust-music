@@ -1,19 +1,19 @@
-use std::collections::HashSet;
-use crate::note_collections::chord_name::NamingConfig;
-use crate::note_collections::chord_name::quality::chord::ChordQuality;
-use crate::note_collections::chord_name::quality::scale::ScaleQuality;
-use crate::note_collections::interval_class::IntervalClass;
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use crate::note_collections::chord_name::quality::chord::ChordQuality;
+use crate::note_collections::chord_name::quality::scale::ScaleQuality;
+use crate::note_collections::chord_name::NamingConfig;
+use crate::note_collections::interval_class::IntervalClass;
+use std::collections::HashSet;
 
-pub mod maj_and_min_qualities;
-pub mod alts_and_extensions;
 pub mod altered_dom;
+pub mod alts_and_extensions;
 pub mod aug_qualities;
 pub mod dim_qualities;
-pub mod sus_qualities;
 pub mod inferred_third_qualities;
+pub mod maj_and_min_qualities;
 pub mod scale_qualities;
+pub mod sus_qualities;
 
 /// A Chord Naming Heuristic contains two sets:
 /// - Required Pcs -- Vec of subsets of Pcs, the input must contain only one element in each subset.
@@ -34,10 +34,14 @@ pub trait NamingHeuristic: std::fmt::Debug {
 
     /// We want to our chord in question to have only _one_ element in common with each `HashSet`.
     /// This property must hold true for each element.
-    fn required(&self) -> Vec<HashSet<Pc>> { vec! [] }
+    fn required(&self) -> Vec<HashSet<Pc>> {
+        vec![]
+    }
     /// We want to our chord in question to have only _one_ element in common with each `HashSet`.
     /// These properties are optional, all or none of them could match.
-    fn optional(&self) -> Vec<HashSet<Pc>> { vec! [] }
+    fn optional(&self) -> Vec<HashSet<Pc>> {
+        vec![]
+    }
 
     /// One-shot execution of an attempt at applying this heuristic to naming a chord.
     /// If the heuristic simply doesn't apply, it returns `None`.
@@ -75,9 +79,7 @@ pub trait NamingHeuristic: std::fmt::Debug {
         pcs.remove(&Pc0);
         let mut matched = vec![];
         for subset in self.required().iter() {
-            let intersection: Vec<Pc> = subset
-                .intersection(&pcs).copied()
-                .collect();
+            let intersection: Vec<Pc> = subset.intersection(&pcs).copied().collect();
             if intersection.len() == 1 {
                 matched.extend(intersection);
             } else {
@@ -86,9 +88,7 @@ pub trait NamingHeuristic: std::fmt::Debug {
             }
         }
         for subset in self.optional().iter() {
-            let intersection: Vec<Pc> = subset
-                .intersection(&pcs).copied()
-                .collect();
+            let intersection: Vec<Pc> = subset.intersection(&pcs).copied().collect();
             if intersection.len() == 1 {
                 matched.extend(intersection);
             }
@@ -98,7 +98,7 @@ pub trait NamingHeuristic: std::fmt::Debug {
 }
 
 /// A naming heuristic that produces a [ChordQuality].
-type ChordHeuristic = Box<dyn NamingHeuristic<T=ChordQuality>>;
+type ChordHeuristic = Box<dyn NamingHeuristic<T = ChordQuality>>;
 
 /// Identifier for which chord naming heuristic matched an input.
 ///
@@ -221,17 +221,31 @@ impl ChordHeuristicKind {
             ChordHeuristicKind::MajNSharpNine => Box::new(maj_and_min_qualities::MajNSharpNine),
             ChordHeuristicKind::MajChordShell => Box::new(maj_and_min_qualities::MajChordShell),
             ChordHeuristicKind::MinChordShell => Box::new(maj_and_min_qualities::MinChordShell),
-            ChordHeuristicKind::RootToThirdCluster => Box::new(maj_and_min_qualities::RootToThirdCluster),
+            ChordHeuristicKind::RootToThirdCluster => {
+                Box::new(maj_and_min_qualities::RootToThirdCluster)
+            }
             ChordHeuristicKind::ThirdAndFourth => Box::new(maj_and_min_qualities::ThirdAndFourth),
-            ChordHeuristicKind::ThirdAndSharpFourth => Box::new(maj_and_min_qualities::ThirdAndSharpFourth),
-            ChordHeuristicKind::FifthAndUpperNotes => Box::new(inferred_third_qualities::FifthAndUpperNotes),
-            ChordHeuristicKind::NinthAndSixthNoThird => Box::new(inferred_third_qualities::NinthAndSixthNoThird),
-            ChordHeuristicKind::TritoneAndSeventh => Box::new(inferred_third_qualities::TritoneAndSeventh),
-            ChordHeuristicKind::NinthAndSeventh => Box::new(inferred_third_qualities::NinthAndSeventh),
+            ChordHeuristicKind::ThirdAndSharpFourth => {
+                Box::new(maj_and_min_qualities::ThirdAndSharpFourth)
+            }
+            ChordHeuristicKind::FifthAndUpperNotes => {
+                Box::new(inferred_third_qualities::FifthAndUpperNotes)
+            }
+            ChordHeuristicKind::NinthAndSixthNoThird => {
+                Box::new(inferred_third_qualities::NinthAndSixthNoThird)
+            }
+            ChordHeuristicKind::TritoneAndSeventh => {
+                Box::new(inferred_third_qualities::TritoneAndSeventh)
+            }
+            ChordHeuristicKind::NinthAndSeventh => {
+                Box::new(inferred_third_qualities::NinthAndSeventh)
+            }
             ChordHeuristicKind::AugChordQualities => Box::new(aug_qualities::AugChordQualities),
             ChordHeuristicKind::DimNChords => Box::new(dim_qualities::DimNChords),
             ChordHeuristicKind::NotMin6Chord => Box::new(dim_qualities::NotMin6Chord),
-            ChordHeuristicKind::TritoneAndDimSeventh => Box::new(dim_qualities::TritoneAndDimSeventh),
+            ChordHeuristicKind::TritoneAndDimSeventh => {
+                Box::new(dim_qualities::TritoneAndDimSeventh)
+            }
             ChordHeuristicKind::SusNChords => Box::new(sus_qualities::SusNChords),
             ChordHeuristicKind::BothSecondAndFourth => Box::new(sus_qualities::BothSecondAndFourth),
             ChordHeuristicKind::Altered13Sus => Box::new(sus_qualities::Altered13Sus),
@@ -334,12 +348,18 @@ pub fn infer_chord_quality_kind(
     pcs.insert(Pc0);
 
     if pcs.len() == 1 {
-        return Some((ChordHeuristicKind::DegenerateSingleton, Some(ChordQuality::SingleNote)));
+        return Some((
+            ChordHeuristicKind::DegenerateSingleton,
+            Some(ChordQuality::SingleNote),
+        ));
     }
     if pcs.len() == 2 {
         let other = pcs.iter().find(|pc| **pc != Pc0).copied().unwrap();
         let ic = IntervalClass::from(&u8::from(&other));
-        return Some((ChordHeuristicKind::DegenerateInterval, Some(ChordQuality::Interval(ic))));
+        return Some((
+            ChordHeuristicKind::DegenerateInterval,
+            Some(ChordQuality::Interval(ic)),
+        ));
     }
 
     for kind in ChordHeuristicKind::ORDERED {
@@ -363,7 +383,10 @@ pub fn infer_chord_quality_kind(
 pub fn infer_chord_quality_detailed(
     pcs: &HashSet<Pc>,
     cfg: &NamingConfig,
-) -> (Option<ChordQuality>, Vec<crate::note_collections::chord_name::quality::chord::QualityAmbiguity>) {
+) -> (
+    Option<ChordQuality>,
+    Vec<crate::note_collections::chord_name::quality::chord::QualityAmbiguity>,
+) {
     let quality = infer_chord_quality_with(pcs, cfg).and_then(|(_, q)| q);
     if !cfg.report_ambiguities {
         return (quality, vec![]);
@@ -390,7 +413,9 @@ pub fn infer_chord_quality_detailed(
 pub struct DegenerateSingleton;
 impl NamingHeuristic for DegenerateSingleton {
     type T = ChordQuality;
-    fn validate(&self, _pcs: &HashSet<Pc>) -> bool { false }
+    fn validate(&self, _pcs: &HashSet<Pc>) -> bool {
+        false
+    }
     fn generate_name(&self, _pcs: &HashSet<Pc>) -> Option<ChordQuality> {
         Some(ChordQuality::SingleNote)
     }
@@ -403,7 +428,9 @@ impl NamingHeuristic for DegenerateSingleton {
 pub struct DegenerateInterval;
 impl NamingHeuristic for DegenerateInterval {
     type T = ChordQuality;
-    fn validate(&self, _pcs: &HashSet<Pc>) -> bool { false }
+    fn validate(&self, _pcs: &HashSet<Pc>) -> bool {
+        false
+    }
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
         let other = pcs.iter().find(|pc| **pc != Pc0).copied()?;
         let ic = IntervalClass::from(&u8::from(&other));
@@ -412,7 +439,7 @@ impl NamingHeuristic for DegenerateInterval {
 }
 
 /// A naming heuristic that produces a [ScaleQuality].
-type ScaleHeuristic = Box<dyn NamingHeuristic<T=ScaleQuality>>;
+type ScaleHeuristic = Box<dyn NamingHeuristic<T = ScaleQuality>>;
 
 pub fn scale_heuristics() -> Vec<ScaleHeuristic> {
     // Order matters here! The first match will be dispatched to name generation.
@@ -472,8 +499,8 @@ pub fn infer_scale_quality(pcs: &HashSet<Pc>) -> Option<(ScaleHeuristic, Option<
 
 #[cfg(test)]
 mod tests {
-    use crate::note_collections::chord_name::quality::chord::{Alt, Extension, MajorSubtype};
     use super::*;
+    use crate::note_collections::chord_name::quality::chord::{Alt, Extension, MajorSubtype};
 
     /// Lock the enum-dispatch order to the trait-object list. If
     /// `chord_heuristics()` and `ChordHeuristicKind::ORDERED` ever drift out
@@ -487,13 +514,20 @@ mod tests {
             ChordHeuristicKind::ORDERED.len(),
             "chord_heuristics() and ChordHeuristicKind::ORDERED must agree on length"
         );
-        for (i, (k, h)) in ChordHeuristicKind::ORDERED.iter().zip(heuristics.iter()).enumerate() {
+        for (i, (k, h)) in ChordHeuristicKind::ORDERED
+            .iter()
+            .zip(heuristics.iter())
+            .enumerate()
+        {
             // Debug format of the struct always starts with its type name.
             let debug_label = format!("{:?}", h);
             assert!(
                 debug_label.starts_with(k.label()),
                 "position {}: ORDERED has {:?} ({:?}) but chord_heuristics() produced {:?}",
-                i, k, k.label(), debug_label,
+                i,
+                k,
+                k.label(),
+                debug_label,
             );
         }
     }
@@ -508,17 +542,17 @@ mod tests {
         assert_eq!(quality.to_string(&Default::default()), "Δ7 (11)");
         assert_eq!(
             quality,
-             ChordQuality::Major(MajorSubtype::MajN(
-                vec![Extension::Seventh, Extension::Eleventh], Alt(vec![])
+            ChordQuality::Major(MajorSubtype::MajN(
+                vec![Extension::Seventh, Extension::Eleventh],
+                Alt(vec![])
             ))
         );
         let notes = vec![Pc0, Pc2, Pc4, Pc5, Pc7, Pc9, Pc11];
         let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
-        assert_eq!(quality.unwrap().1,
-            Some(
-             ScaleQuality::Major(vec![], vec![])
-            )
+        assert_eq!(
+            quality.unwrap().1,
+            Some(ScaleQuality::Major(vec![], vec![]))
         );
         // Lydian scale with b2 (0,1,4,5,7,9,11)
         let notes = vec![Pc0, Pc1, Pc4, Pc5, Pc7, Pc9, Pc11];
@@ -530,7 +564,10 @@ mod tests {
         let notes = vec![Pc0, Pc1, Pc4, Pc6, Pc7, Pc8, Pc10];
         let notes: HashSet<Pc> = notes.into_iter().collect();
         let quality = infer_scale_quality(&notes);
-        assert!(quality.is_some(), "Should identify altered/superlocrian variant");
+        assert!(
+            quality.is_some(),
+            "Should identify altered/superlocrian variant"
+        );
 
         // Locrian scale (0,1,3,5,6,8,10)
         let notes = vec![Pc0, Pc1, Pc3, Pc5, Pc6, Pc8, Pc10];
@@ -576,4 +613,3 @@ mod tests {
         assert_eq!(quality.unwrap().1, Some(ScaleQuality::BluesMinor));
     }
 }
-

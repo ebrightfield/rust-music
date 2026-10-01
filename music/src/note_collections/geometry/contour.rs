@@ -227,10 +227,10 @@ mod tests {
     fn test_contour_from_pitches() {
         let pitches = vec![
             Pitch::new(Note::C, 4),
-            Pitch::new(Note::E, 4),  // up
-            Pitch::new(Note::D, 4),  // down
-            Pitch::new(Note::D, 4),  // repeat
-            Pitch::new(Note::G, 4),  // up
+            Pitch::new(Note::E, 4), // up
+            Pitch::new(Note::D, 4), // down
+            Pitch::new(Note::D, 4), // repeat
+            Pitch::new(Note::G, 4), // up
         ];
 
         let contour = ContourSequence::from_pitches(&pitches);
@@ -305,8 +305,8 @@ mod tests {
         let contour2 = ContourSequence::new(vec![
             Contour::Movement(Movement::Ascending),
             Contour::Movement(Movement::Descending),
-            Contour::Movement(Movement::Descending),  // Different
-            Contour::Movement(Movement::Ascending),   // Different
+            Contour::Movement(Movement::Descending), // Different
+            Contour::Movement(Movement::Ascending),  // Different
         ]);
 
         assert_eq!(contour1.similarity(&contour2), 0.5); // 2 out of 4 match

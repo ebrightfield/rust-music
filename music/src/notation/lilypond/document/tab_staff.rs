@@ -1,7 +1,9 @@
-use tera::Context;
 use crate::notation::lilypond::staff_elements::LilypondVoiceElement;
-use crate::notation::lilypond::templates::{NO_AUTOMATIC_BAR_LINES, OMIT_BAR_NUMBER, OMIT_STRING_NUMBER, TEMPLATE_ENGINE};
+use crate::notation::lilypond::templates::{
+    NO_AUTOMATIC_BAR_LINES, OMIT_BAR_NUMBER, OMIT_STRING_NUMBER, TEMPLATE_ENGINE,
+};
 use crate::notation::lilypond::ToLilypondString;
+use tera::Context;
 
 /// For engraving tablature. This is meant to be populated with
 /// `SoundedNote`s, but Lilypond is technically capable of inferring fretboard
@@ -24,7 +26,7 @@ impl<'a> LilypondTabStaff<'a> {
             show_bar_numbers: false,
             show_string_numbers: false,
             automatic_bar_lines: true,
-            voices: vec![]
+            voices: vec![],
         }
     }
 
@@ -77,7 +79,9 @@ impl<'a> ToLilypondString for LilypondTabStaff<'a> {
             statements.push(NO_AUTOMATIC_BAR_LINES)
         }
         ctx.insert("statements", &statements);
-        let voices = self.voices.iter()
+        let voices = self
+            .voices
+            .iter()
             .map(|voice| voice.to_lilypond_string().replace("Voice", "TabVoice"))
             .collect::<Vec<String>>();
         ctx.insert("voices", &voices);

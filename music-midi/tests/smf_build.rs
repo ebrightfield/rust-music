@@ -5,20 +5,13 @@
 #![cfg(feature = "smf")]
 
 use music::note::pitch::Pitch;
-use music_midi::{
-    MidiConversionError,
-    smf::SmfBuilder,
-    tempo::StaticTempoMap,
-};
+use music_midi::{smf::SmfBuilder, tempo::StaticTempoMap, MidiConversionError};
 
 /// REQ-O15: build without a tempo source returns TempoSourceEmpty.
 #[test]
 fn requires_tempo() {
     let p = Pitch::from_midi(60).unwrap();
-    let result = SmfBuilder::new()
-        .add_track("m", 0, &p)
-        .unwrap()
-        .build();
+    let result = SmfBuilder::new().add_track("m", 0, &p).unwrap().build();
     assert!(
         matches!(result, Err(MidiConversionError::TempoSourceEmpty)),
         "expected TempoSourceEmpty, got: {:?}",
@@ -83,8 +76,8 @@ fn more_than_16_tracks_errors() {
 /// conductor track that survives the midly round-trip.
 #[test]
 fn time_signature_meta_reaches_conductor() {
-    use music::notation::rhythm::meter::{Meter, MeterDenominator};
     use midly::{MetaMessage, TrackEvent, TrackEventKind};
+    use music::notation::rhythm::meter::{Meter, MeterDenominator};
     // 7/8 time signature via builder
     let p = Pitch::from_midi(60).unwrap();
     let meter = Meter::new(7, MeterDenominator::Eight, None);
@@ -99,17 +92,23 @@ fn time_signature_meta_reaches_conductor() {
     let mut bytes = Vec::new();
     owned.write(&mut bytes).unwrap();
     let parsed = midly::Smf::parse(&bytes).unwrap();
-    let ts = parsed.tracks[0].iter().find(|e| matches!(
-        e.kind, TrackEventKind::Meta(MetaMessage::TimeSignature(..))
-    ));
+    let ts = parsed.tracks[0]
+        .iter()
+        .find(|e| matches!(e.kind, TrackEventKind::Meta(MetaMessage::TimeSignature(..))));
     match ts {
-        Some(TrackEvent { kind: TrackEventKind::Meta(MetaMessage::TimeSignature(n, d, c, s)), .. }) => {
+        Some(TrackEvent {
+            kind: TrackEventKind::Meta(MetaMessage::TimeSignature(n, d, c, s)),
+            ..
+        }) => {
             assert_eq!(*n, 7);
-            assert_eq!(*d, 3);  // log2(8) = 3
+            assert_eq!(*d, 3); // log2(8) = 3
             assert_eq!(*c, 24);
             assert_eq!(*s, 8);
         }
-        _ => panic!("expected TimeSignature meta in conductor track, got {:?}", ts),
+        _ => panic!(
+            "expected TimeSignature meta in conductor track, got {:?}",
+            ts
+        ),
     }
 }
 
@@ -123,16 +122,23 @@ fn builder_meter_emits_time_signature() {
         .ppq(480)
         .tempo(StaticTempoMap::constant(120.0))
         .meter(Meter::new(4, MeterDenominator::Four, None))
-        .add_track("piano", 0, &c4).unwrap()
-        .build().unwrap();
+        .add_track("piano", 0, &c4)
+        .unwrap()
+        .build()
+        .unwrap();
 
     let smf = owned.as_smf();
     let conductor = &smf.tracks[0];
-    let found = conductor.iter().any(|ev| matches!(
-        &ev.kind,
-        midly::TrackEventKind::Meta(midly::MetaMessage::TimeSignature(4, 2, 24, 8))
-    ));
-    assert!(found, "conductor must contain TimeSignature(4, 2, 24, 8) when meter() is called");
+    let found = conductor.iter().any(|ev| {
+        matches!(
+            &ev.kind,
+            midly::TrackEventKind::Meta(midly::MetaMessage::TimeSignature(4, 2, 24, 8))
+        )
+    });
+    assert!(
+        found,
+        "conductor must contain TimeSignature(4, 2, 24, 8) when meter() is called"
+    );
 }
 
 /// REQ-O15 negative: no TimeSignature meta when meter() is not called.
@@ -142,14 +148,21 @@ fn builder_no_meter_omits_time_signature() {
     let owned = SmfBuilder::new()
         .ppq(480)
         .tempo(StaticTempoMap::constant(120.0))
-        .add_track("piano", 0, &c4).unwrap()
-        .build().unwrap();
+        .add_track("piano", 0, &c4)
+        .unwrap()
+        .build()
+        .unwrap();
     let smf = owned.as_smf();
-    let has_ts = smf.tracks[0].iter().any(|ev| matches!(
-        &ev.kind,
-        midly::TrackEventKind::Meta(midly::MetaMessage::TimeSignature(..))
-    ));
-    assert!(!has_ts, "no TimeSignature should appear when meter() is not called");
+    let has_ts = smf.tracks[0].iter().any(|ev| {
+        matches!(
+            &ev.kind,
+            midly::TrackEventKind::Meta(midly::MetaMessage::TimeSignature(..))
+        )
+    });
+    assert!(
+        !has_ts,
+        "no TimeSignature should appear when meter() is not called"
+    );
 }
 
 /// W8: tempo change points whose tick delta exceeds the SMF u28 maximum
@@ -202,7 +215,12 @@ fn multi_tempo_conductor_track() {
     let conductor = &parsed.tracks[0];
     let tempo_events: Vec<_> = conductor
         .iter()
-        .filter(|e| matches!(e.kind, midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(_))))
+        .filter(|e| {
+            matches!(
+                e.kind,
+                midly::TrackEventKind::Meta(midly::MetaMessage::Tempo(_))
+            )
+        })
         .collect();
     assert_eq!(tempo_events.len(), 2, "expected 2 tempo meta events");
 }

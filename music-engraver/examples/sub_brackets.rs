@@ -29,8 +29,14 @@ fn main() {
     // The main section bracket spans all 6 staves; each sub-bracket marks
     // an instrument family within it.
     let section = StaffGroup::section(6).with_sub_brackets(vec![
-        SubBracket { start_index: 0, staff_count: 2 },
-        SubBracket { start_index: 3, staff_count: 3 },
+        SubBracket {
+            start_index: 0,
+            staff_count: 2,
+        },
+        SubBracket {
+            start_index: 3,
+            staff_count: 3,
+        },
     ]);
     let layout = layout_multi_staff(&section, 100.0, ss, staff_width);
     let staves = staff_layouts_from_multi(&layout, 100.0, staff_width);

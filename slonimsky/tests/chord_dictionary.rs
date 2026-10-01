@@ -32,10 +32,7 @@ fn text_output_has_total_line() {
         .unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains("Total:"),
-        "should have total line"
-    );
+    assert!(stdout.contains("Total:"), "should have total line");
     // C major triad should have many shapes on standard guitar
     assert!(
         stdout.contains("Total: ") && !stdout.contains("Total: 0"),
@@ -121,10 +118,7 @@ fn max_results_caps_output() {
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     let total = extract_total(&stdout);
-    assert!(
-        total <= 3,
-        "max-results=3 should cap to <=3, got {total}"
-    );
+    assert!(total <= 3, "max-results=3 should cap to <=3, got {total}");
 }
 
 #[test]
@@ -237,7 +231,7 @@ fn bad_tuning_fails() {
         .args(["chord-dictionary", "C", "E", "G", "--tuning", "banjo"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown tuning"));
+        .stderr(predicate::str::contains("invalid tuning"));
 }
 
 #[test]
@@ -255,7 +249,7 @@ fn bad_extension_fails() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains(".svg or .txt"));
+        .stderr(predicate::str::contains("supports text, json, or svg"));
 }
 
 // --- Helper ---
@@ -273,4 +267,141 @@ fn extract_total(text: &str) -> usize {
         }
     }
     0
+}
+
+#[test]
+fn chord_dictionary_accepts_midi_tuning() {
+    slonimsky()
+        .args([
+            "chord-dictionary",
+            "C,E,G",
+            "--tuning",
+            "40,45,50,55,59,64",
+            "--max-results",
+            "1",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn json_exposes_all_shape_metadata() {
+    let out = slonimsky()
+        .args([
+            "chord-dictionary",
+            "C,E,G",
+            "--classification",
+            "playable",
+            "--max-results",
+            "1",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let shape = &value["shapes"][0];
+    assert_eq!(shape["classification"], "playable");
+    assert!(shape["frets"].is_array());
+    assert!(shape["family"].is_array());
+    assert!(shape["voicing"].is_array());
+    assert!(shape["bass"].is_string());
+    assert!(shape["contains_open_strings"].is_boolean());
+}
+
+#[test]
+fn classification_and_open_string_filters_compose() {
+    slonimsky()
+        .args([
+            "chord-dictionary",
+            "D,F#,A",
+            "--classification",
+            "nontransposable",
+            "--open-strings",
+            "required",
+            "--max-span",
+            "12",
+            "--max-results",
+            "2",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("nontransposable"));
+}
+
+#[test]
+fn fret_range_filter_bounds_every_result() {
+    let out = slonimsky()
+        .args([
+            "chord-dictionary",
+            "C,E,G",
+            "--min-fret",
+            "5",
+            "--max-fret",
+            "8",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    for shape in value["shapes"].as_array().unwrap() {
+        assert!(shape["min_fret"].as_u64().unwrap() >= 5);
+        assert!(shape["max_fret"].as_u64().unwrap() <= 8);
+    }
+}
+
+#[test]
+fn family_and_bass_filters_select_an_inversion() {
+    slonimsky()
+        .args([
+            "chord-dictionary",
+            "C,E,G",
+            "--family",
+            "E,G,C",
+            "--bass",
+            "E",
+            "--max-results",
+            "1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("bass E, family E,G,C"));
+}
+
+#[test]
+fn exact_voicing_filter_matches_register() {
+    slonimsky()
+        .args([
+            "chord-dictionary",
+            "C,E,G",
+            "--voicing",
+            "G4,C5,E5",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            r#""voicing": [
+        "G4",
+        "C5",
+        "E5""#,
+        ));
+}
+
+#[test]
+fn unknown_classification_is_rejected() {
+    slonimsky()
+        .args([
+            "chord-dictionary",
+            "C,E,G",
+            "--classification",
+            "comfortable",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown classification"));
 }

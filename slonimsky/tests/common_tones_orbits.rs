@@ -19,7 +19,10 @@ fn common_tones_c_major_a_minor_shares_c_e() {
     // Should find C and E as common tones
     assert!(stdout.contains("C"), "should contain C; got:\n{stdout}");
     assert!(stdout.contains("E"), "should contain E; got:\n{stdout}");
-    assert!(stdout.contains("Count: 2"), "should have 2 common tones; got:\n{stdout}");
+    assert!(
+        stdout.contains("Count: 2"),
+        "should have 2 common tones; got:\n{stdout}"
+    );
 }
 
 #[test]
@@ -35,7 +38,10 @@ fn common_tones_c_major_d_minor_empty() {
         stdout.contains("(empty)"),
         "C major and D minor share no tones; got:\n{stdout}"
     );
-    assert!(stdout.contains("Count: 0"), "count should be 0; got:\n{stdout}");
+    assert!(
+        stdout.contains("Count: 0"),
+        "count should be 0; got:\n{stdout}"
+    );
 }
 
 #[test]
@@ -49,11 +55,23 @@ fn common_tones_three_sets_intersection() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Count: 2"), "three-way intersection should have 2; got:\n{stdout}");
+    assert!(
+        stdout.contains("Count: 2"),
+        "three-way intersection should have 2; got:\n{stdout}"
+    );
     // Should label all three input sets
-    assert!(stdout.contains("Set 1:"), "should show Set 1; got:\n{stdout}");
-    assert!(stdout.contains("Set 2:"), "should show Set 2; got:\n{stdout}");
-    assert!(stdout.contains("Set 3:"), "should show Set 3; got:\n{stdout}");
+    assert!(
+        stdout.contains("Set 1:"),
+        "should show Set 1; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Set 2:"),
+        "should show Set 2; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Set 3:"),
+        "should show Set 3; got:\n{stdout}"
+    );
 }
 
 #[test]
@@ -66,7 +84,10 @@ fn common_tones_integer_input() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Count: 2"), "should have 2 common tones; got:\n{stdout}");
+    assert!(
+        stdout.contains("Count: 2"),
+        "should have 2 common tones; got:\n{stdout}"
+    );
 }
 
 #[test]
@@ -98,7 +119,10 @@ fn common_tones_identical_sets_full_overlap() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Count: 3"), "identical sets should share all 3; got:\n{stdout}");
+    assert!(
+        stdout.contains("Count: 3"),
+        "identical sets should share all 3; got:\n{stdout}"
+    );
 }
 
 #[test]
@@ -130,8 +154,14 @@ fn orbits_dim7_shows_t3_t6() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("T3"), "dim7 should have T3 symmetry; got:\n{stdout}");
-    assert!(stdout.contains("T6"), "dim7 should have T6 symmetry; got:\n{stdout}");
+    assert!(
+        stdout.contains("T3"),
+        "dim7 should have T3 symmetry; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("T6"),
+        "dim7 should have T6 symmetry; got:\n{stdout}"
+    );
     assert!(
         stdout.contains("Inversionally symmetric: yes"),
         "dim7 should be inversionally symmetric; got:\n{stdout}"
@@ -171,7 +201,10 @@ fn orbits_augmented_triad_t4() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("T4"), "augmented triad should have T4 symmetry; got:\n{stdout}");
+    assert!(
+        stdout.contains("T4"),
+        "augmented triad should have T4 symmetry; got:\n{stdout}"
+    );
     assert!(
         stdout.contains("Inversionally symmetric: yes"),
         "augmented triad should be I-symmetric; got:\n{stdout}"
@@ -187,9 +220,18 @@ fn orbits_whole_tone_t2_t4_t6() {
 
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("T2"), "whole-tone should have T2; got:\n{stdout}");
-    assert!(stdout.contains("T4"), "whole-tone should have T4; got:\n{stdout}");
-    assert!(stdout.contains("T6"), "whole-tone should have T6; got:\n{stdout}");
+    assert!(
+        stdout.contains("T2"),
+        "whole-tone should have T2; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("T4"),
+        "whole-tone should have T4; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("T6"),
+        "whole-tone should have T6; got:\n{stdout}"
+    );
 }
 
 #[test]
@@ -240,8 +282,14 @@ fn orbits_verbose_per_pc_detail() {
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     // Verbose should show per-PC detail lines like "  Pc0: {T3, T6}"
-    assert!(stdout.contains("Pc0:"), "verbose should show per-PC detail; got:\n{stdout}");
-    assert!(stdout.contains("Pc3:"), "verbose should show Pc3; got:\n{stdout}");
+    assert!(
+        stdout.contains("Pc0:"),
+        "verbose should show per-PC detail; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Pc3:"),
+        "verbose should show Pc3; got:\n{stdout}"
+    );
 }
 
 #[test]

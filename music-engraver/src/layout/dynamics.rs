@@ -208,7 +208,11 @@ mod tests {
         for (i, g1) in glyphs.iter().enumerate() {
             for (j, g2) in glyphs.iter().enumerate() {
                 if i != j {
-                    assert_ne!(g1, g2, "{:?} and {:?} share glyph", dynamics[i], dynamics[j]);
+                    assert_ne!(
+                        g1, g2,
+                        "{:?} and {:?} share glyph",
+                        dynamics[i], dynamics[j]
+                    );
                 }
             }
         }
@@ -299,10 +303,7 @@ mod tests {
         // Both spell "sfp" but use a different 's' letterform: `Sfp`
         // is the sforzando-prefix glyph; `SforzatoPiano` is the
         // sforzato-prefix glyph (matching the Sf/Sff letterform family).
-        assert_eq!(
-            Dynamic::SforzatoPiano.glyph(),
-            Glyph::DynamicSforzatoPiano
-        );
+        assert_eq!(Dynamic::SforzatoPiano.glyph(), Glyph::DynamicSforzatoPiano);
         assert_eq!(Dynamic::Sfp.glyph(), Glyph::DynamicSforzandoPiano);
         assert_ne!(Dynamic::SforzatoPiano.glyph(), Dynamic::Sfp.glyph());
         // Also distinct from the bare sforzato (Sf) and Sfpp variants.
@@ -312,8 +313,14 @@ mod tests {
 
     #[test]
     fn all_constant_contains_each_new_variant_exactly_once() {
-        let count_mezzo = Dynamic::ALL.iter().filter(|d| matches!(d, Dynamic::Mezzo)).count();
-        let count_z = Dynamic::ALL.iter().filter(|d| matches!(d, Dynamic::Z)).count();
+        let count_mezzo = Dynamic::ALL
+            .iter()
+            .filter(|d| matches!(d, Dynamic::Mezzo))
+            .count();
+        let count_z = Dynamic::ALL
+            .iter()
+            .filter(|d| matches!(d, Dynamic::Z))
+            .count();
         let count_sfp_alt = Dynamic::ALL
             .iter()
             .filter(|d| matches!(d, Dynamic::SforzatoPiano))
@@ -383,13 +390,7 @@ mod tests {
     fn layout_places_below_staff() {
         let staff_bottom_y = 1000.0;
         let staff_space = 250.0;
-        let layout = layout_dynamic(
-            Dynamic::Piano,
-            500.0,
-            200.0,
-            staff_bottom_y,
-            staff_space,
-        );
+        let layout = layout_dynamic(Dynamic::Piano, 500.0, 200.0, staff_bottom_y, staff_space);
         // y = 1000 + 2.5 * 250 = 1625
         let expected_y = staff_bottom_y + DYNAMICS_BELOW_STAFF_SS * staff_space;
         assert!((layout.y - expected_y).abs() < 1e-6, "got {}", layout.y);
@@ -419,6 +420,9 @@ mod tests {
     fn layout_different_staff_space_scales_y() {
         let small = layout_dynamic(Dynamic::Forte, 500.0, 200.0, 1000.0, 200.0);
         let large = layout_dynamic(Dynamic::Forte, 500.0, 200.0, 1000.0, 400.0);
-        assert!(large.y > small.y, "larger staff space → further below staff");
+        assert!(
+            large.y > small.y,
+            "larger staff space → further below staff"
+        );
     }
 }

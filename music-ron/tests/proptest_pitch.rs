@@ -48,9 +48,7 @@ fn arb_pitch_shorthand() -> impl Strategy<Value = String> {
     let combo_strategy = prop::sample::select(valid_combos);
     let octave_strategy = 0u8..=8u8;
 
-    (combo_strategy, octave_strategy).prop_map(|((letter, acc), oct)| {
-        format!("{letter}{acc}{oct}")
-    })
+    (combo_strategy, octave_strategy).prop_map(|((letter, acc), oct)| format!("{letter}{acc}{oct}"))
 }
 
 proptest! {

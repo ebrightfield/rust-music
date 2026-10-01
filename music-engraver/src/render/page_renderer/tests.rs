@@ -23,7 +23,7 @@ fn quarter_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })
 }
 
@@ -68,7 +68,13 @@ fn single_system_page() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0);
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..3).map(|i| make_measure(i as i8 * 2)).collect();
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -85,7 +91,13 @@ fn two_system_page_has_two_sets_of_staff_lines() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0);
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..6).map(|i| make_measure((i % 8) as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(3));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(3),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -105,7 +117,13 @@ fn three_system_page_element_counts() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0);
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..9).map(|i| make_measure((i % 8) as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(3));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(3),
+    );
 
     assert_eq!(page.systems.len(), 3);
 
@@ -118,7 +136,11 @@ fn three_system_page_element_counts() {
 
     // 3 clefs + time sig digits in first system only
     let path_count = output.matches("<path ").count();
-    assert!(path_count >= 3, "expected >= 3 paths (3 clefs), got {}", path_count);
+    assert!(
+        path_count >= 3,
+        "expected >= 3 paths (3 clefs), got {}",
+        path_count
+    );
 }
 
 #[test]
@@ -128,7 +150,13 @@ fn page_svg_dimensions_are_positive() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0);
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -148,7 +176,11 @@ fn tied_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { tie_forward: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            tie_forward: true,
+            ..Default::default()
+        },
+    })
 }
 
 #[test]
@@ -174,7 +206,13 @@ fn cross_system_tie_draws_two_half_ties() {
         },
     ];
     // 1 measure per system → forces cross-system tie
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -209,7 +247,13 @@ fn no_cross_system_tie_without_tie_forward() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
@@ -240,7 +284,13 @@ fn cross_system_tie_with_no_matching_target_draws_right_half_only() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
@@ -275,7 +325,13 @@ fn within_system_tie_does_not_produce_cross_system_tie() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -323,13 +379,28 @@ fn cross_system_tie_differs_from_no_tie() {
         },
     ];
 
-    let tied_page = layout_page(&prefix(), &tied_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let untied_page = layout_page(&prefix(), &untied_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let tied_page = layout_page(
+        &prefix(),
+        &tied_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let untied_page = layout_page(
+        &prefix(),
+        &untied_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let tied_svg = draw_page(&font, &config, &tied_page).unwrap().to_svg();
     let untied_svg = draw_page(&font, &config, &untied_page).unwrap().to_svg();
 
-    assert_ne!(tied_svg, untied_svg, "cross-system tied output should differ from untied");
+    assert_ne!(
+        tied_svg, untied_svg,
+        "cross-system tied output should differ from untied"
+    );
 }
 
 // --- cross-system slur tests ---
@@ -341,7 +412,11 @@ fn slur_start_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { slur_start: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            slur_start: true,
+            ..Default::default()
+        },
+    })
 }
 
 fn slur_end_note(pos: i8) -> MeasureEvent {
@@ -351,7 +426,11 @@ fn slur_end_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { slur_end: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            slur_end: true,
+            ..Default::default()
+        },
+    })
 }
 
 #[test]
@@ -377,7 +456,13 @@ fn cross_system_slur_draws_two_half_slurs() {
         },
     ];
     // 1 measure per system → forces cross-system slur
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -412,7 +497,13 @@ fn no_cross_system_slur_without_flags() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
@@ -437,13 +528,19 @@ fn cross_system_slur_right_half_only_when_no_end() {
             additional_voices: vec![],
         },
         MeasureContent {
-            events: vec![quarter_note(6)],  // no slur_end
+            events: vec![quarter_note(6)], // no slur_end
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
@@ -478,7 +575,13 @@ fn within_system_slur_not_duplicated_as_cross_system() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -486,7 +589,10 @@ fn within_system_slur_not_duplicated_as_cross_system() {
 
     // Only 1 slur (within-system), no cross-system duplication
     let filled_count = output.matches(r#"stroke="none""#).count();
-    assert_eq!(filled_count, 1, "1 within-system slur, no cross-system slur");
+    assert_eq!(
+        filled_count, 1,
+        "1 within-system slur, no cross-system slur"
+    );
 }
 
 #[test]
@@ -525,13 +631,28 @@ fn cross_system_slur_differs_from_no_slur() {
         },
     ];
 
-    let slur_page = layout_page(&prefix(), &with_slur, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let no_slur_page = layout_page(&prefix(), &without_slur, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let slur_page = layout_page(
+        &prefix(),
+        &with_slur,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let no_slur_page = layout_page(
+        &prefix(),
+        &without_slur,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let slur_svg = draw_page(&font, &config, &slur_page).unwrap().to_svg();
     let no_slur_svg = draw_page(&font, &config, &no_slur_page).unwrap().to_svg();
 
-    assert_ne!(slur_svg, no_slur_svg, "cross-system slurred output should differ from unslurred");
+    assert_ne!(
+        slur_svg, no_slur_svg,
+        "cross-system slurred output should differ from unslurred"
+    );
 }
 
 // --- cross-system hairpin tests ---
@@ -545,7 +666,11 @@ fn cresc_start_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Crescendo), ..Default::default() },})
+        annotations: NoteAnnotations {
+            hairpin_start: Some(HairpinType::Crescendo),
+            ..Default::default()
+        },
+    })
 }
 
 fn hairpin_end_note(pos: i8) -> MeasureEvent {
@@ -555,7 +680,11 @@ fn hairpin_end_note(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { hairpin_end: true, ..Default::default() },})
+        annotations: NoteAnnotations {
+            hairpin_end: true,
+            ..Default::default()
+        },
+    })
 }
 
 #[test]
@@ -581,7 +710,13 @@ fn cross_system_hairpin_draws_four_lines() {
         },
     ];
     // 1 measure per system → forces cross-system hairpin
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -602,7 +737,13 @@ fn cross_system_hairpin_draws_four_lines() {
             additional_voices: vec![],
         },
     ];
-    let no_hp_page = layout_page(&prefix(), &no_hp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_hp_page = layout_page(
+        &prefix(),
+        &no_hp_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
 
     // Cross-system hairpin = 2 half-hairpins × 2 lines each = 4 extra lines
@@ -638,7 +779,13 @@ fn no_cross_system_hairpin_without_flags() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -672,7 +819,13 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
@@ -692,7 +845,13 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
             additional_voices: vec![],
         },
     ];
-    let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_hp_page = layout_page(
+        &prefix(),
+        &no_hp,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
 
     // Only the right half-hairpin (2 lines)
@@ -727,7 +886,13 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -748,13 +913,23 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
             additional_voices: vec![],
         },
     ];
-    let no_hp_page = layout_page(&prefix(), &no_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let no_hp_page = layout_page(
+        &prefix(),
+        &no_hp,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     let no_hp_output = draw_page(&font, &config, &no_hp_page).unwrap().to_svg();
 
     // Only 1 within-system hairpin (2 lines), no cross-system duplication
     let hp_lines = output.matches("<line ").count();
     let no_lines = no_hp_output.matches("<line ").count();
-    assert_eq!(hp_lines, no_lines + 2, "1 within-system hairpin (2 lines), no cross-system duplication");
+    assert_eq!(
+        hp_lines,
+        no_lines + 2,
+        "1 within-system hairpin (2 lines), no cross-system duplication"
+    );
 }
 
 #[test]
@@ -793,13 +968,28 @@ fn cross_system_hairpin_differs_from_no_hairpin() {
         },
     ];
 
-    let hp_page = layout_page(&prefix(), &with_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let no_page = layout_page(&prefix(), &without_hp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let hp_page = layout_page(
+        &prefix(),
+        &with_hp,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let no_page = layout_page(
+        &prefix(),
+        &without_hp,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let hp_svg = draw_page(&font, &config, &hp_page).unwrap().to_svg();
     let no_svg = draw_page(&font, &config, &no_page).unwrap().to_svg();
 
-    assert_ne!(hp_svg, no_svg, "cross-system hairpin output should differ from no hairpin");
+    assert_ne!(
+        hp_svg, no_svg,
+        "cross-system hairpin output should differ from no hairpin"
+    );
 }
 
 #[test]
@@ -831,7 +1021,11 @@ fn cross_system_decresc_differs_from_cresc() {
                 dots: 0,
                 accidental: None,
                 stem_direction: None,
-                annotations: NoteAnnotations { hairpin_start: Some(HairpinType::Decrescendo), ..Default::default() },})],
+                annotations: NoteAnnotations {
+                    hairpin_start: Some(HairpinType::Decrescendo),
+                    ..Default::default()
+                },
+            })],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
@@ -844,13 +1038,28 @@ fn cross_system_decresc_differs_from_cresc() {
         },
     ];
 
-    let cresc_page = layout_page(&prefix(), &cresc, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let decresc_page = layout_page(&prefix(), &decresc, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let cresc_page = layout_page(
+        &prefix(),
+        &cresc,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let decresc_page = layout_page(
+        &prefix(),
+        &decresc,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let cresc_svg = draw_page(&font, &config, &cresc_page).unwrap().to_svg();
     let decresc_svg = draw_page(&font, &config, &decresc_page).unwrap().to_svg();
 
-    assert_ne!(cresc_svg, decresc_svg, "cross-system cresc and decresc should differ");
+    assert_ne!(
+        cresc_svg, decresc_svg,
+        "cross-system cresc and decresc should differ"
+    );
 }
 
 #[test]
@@ -860,7 +1069,13 @@ fn two_system_page_has_different_y_for_staff_lines() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0);
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..6).map(|i| make_measure((i % 8) as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(3));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(3),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -915,7 +1130,10 @@ fn cross_system_hairpin_page(kind: HairpinType) -> String {
         dots: 0,
         accidental: None,
         stem_direction: None,
-        annotations: NoteAnnotations { hairpin_start: Some(kind), ..Default::default() },
+        annotations: NoteAnnotations {
+            hairpin_start: Some(kind),
+            ..Default::default()
+        },
     });
     let measures = vec![
         MeasureContent {
@@ -931,14 +1149,23 @@ fn cross_system_hairpin_page(kind: HairpinType) -> String {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
     draw_page(&font, &config, &page).unwrap().to_svg()
 }
 
 /// Return all `<line ...>` substrings (one per element) from an SVG string.
 fn line_elements(svg: &str) -> Vec<&str> {
-    svg.split("<line ").skip(1).map(|s| s.split('>').next().unwrap_or("")).collect()
+    svg.split("<line ")
+        .skip(1)
+        .map(|s| s.split('>').next().unwrap_or(""))
+        .collect()
 }
 
 /// Parse the `x1` attribute out of a single `<line ...>` payload. Panics if
@@ -993,7 +1220,13 @@ fn cross_system_hairpin_total_line_count_unchanged_by_dashed_continuation() {
             additional_voices: vec![],
         },
     ];
-    let baseline_page = layout_page(&prefix(), &baseline_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let baseline_page = layout_page(
+        &prefix(),
+        &baseline_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let baseline_svg = draw_page(&font, &config, &baseline_page).unwrap().to_svg();
 
     let hp_lines = output.matches("<line ").count();
@@ -1030,7 +1263,11 @@ fn cross_system_hairpin_dashed_lines_anchor_on_target_system_left() {
             solid_x1s.push(parse_x1(line));
         }
     }
-    assert_eq!(dashed_x1s.len(), 2, "expected 2 dashed lines, got {dashed_x1s:?}");
+    assert_eq!(
+        dashed_x1s.len(),
+        2,
+        "expected 2 dashed lines, got {dashed_x1s:?}"
+    );
 
     let max_dashed_x1 = dashed_x1s.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let min_solid_wedge_x1 = solid_x1s
@@ -1083,7 +1320,13 @@ fn cross_system_hairpin_right_half_only_when_no_end_emits_no_dasharray() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
     assert_eq!(
@@ -1156,7 +1399,13 @@ fn within_system_hairpin_emits_no_dasharray() {
         },
     ];
     // Both measures fit on one system (Fixed(2)) — no cross-system hairpin.
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -1169,9 +1418,7 @@ fn within_system_hairpin_emits_no_dasharray() {
 
 // --- cross-system dashed-text crescendo (cresc-text) tests ---
 
-use crate::layout::cresc_text::{
-    CrescTextKind, CRESC_TEXT_DASH_GAP_SS, CRESC_TEXT_DASH_LENGTH_SS,
-};
+use crate::layout::cresc_text::{CrescTextKind, CRESC_TEXT_DASH_GAP_SS, CRESC_TEXT_DASH_LENGTH_SS};
 
 fn cresc_text_start_note(pos: i8, kind: CrescTextKind) -> MeasureEvent {
     MeasureEvent::Note(NoteEvent {
@@ -1225,7 +1472,13 @@ fn cross_system_cresc_text_page(kind: CrescTextKind) -> String {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
     draw_page(&font, &config, &page).unwrap().to_svg()
 }
@@ -1253,7 +1506,13 @@ fn cross_system_cresc_text_baseline() -> String {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
     draw_page(&font, &config, &page).unwrap().to_svg()
 }
@@ -1353,7 +1612,13 @@ fn cross_system_cresc_text_orphan_start_emits_trailing_half_only() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
     let baseline = cross_system_cresc_text_baseline();
 
@@ -1398,7 +1663,13 @@ fn cross_system_cresc_text_orphan_end_emits_nothing() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
     let baseline = cross_system_cresc_text_baseline();
 
@@ -1439,7 +1710,13 @@ fn within_system_cresc_text_not_duplicated_as_cross_system() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
 
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
@@ -1611,13 +1888,25 @@ fn measure_numbers_enabled_adds_text_elements() {
     page_cfg.show_measure_numbers = true;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(3));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg,
+        &SystemBreaking::Fixed(3),
+    );
     let svg = draw_page(&font, &config, &page).unwrap().to_svg();
 
     // Two systems ⇒ two measure number text elements ("1" and "4")
     assert_eq!(page.systems.len(), 2);
-    assert!(svg.contains(">1</text>"), "first system should show measure number 1");
-    assert!(svg.contains(">4</text>"), "second system should show measure number 4");
+    assert!(
+        svg.contains(">1</text>"),
+        "first system should show measure number 1"
+    );
+    assert!(
+        svg.contains(">4</text>"),
+        "second system should show measure number 4"
+    );
 }
 
 #[test]
@@ -1627,12 +1916,24 @@ fn measure_numbers_disabled_no_text_elements() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0); // default: show_measure_numbers = false
     let mc = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(3));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg,
+        &SystemBreaking::Fixed(3),
+    );
     let svg = draw_page(&font, &config, &page).unwrap().to_svg();
 
     // No measure number text should be present (other text may exist from key/time sig)
-    assert!(!svg.contains(">1</text>"), "should not show measure numbers when disabled");
-    assert!(!svg.contains(">4</text>"), "should not show measure numbers when disabled");
+    assert!(
+        !svg.contains(">1</text>"),
+        "should not show measure numbers when disabled"
+    );
+    assert!(
+        !svg.contains(">4</text>"),
+        "should not show measure numbers when disabled"
+    );
 }
 
 #[test]
@@ -1643,7 +1944,13 @@ fn measure_numbers_show_correct_values_across_three_systems() {
     page_cfg.show_measure_numbers = true;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
     let measures: Vec<_> = (0..9).map(|i| make_measure((i % 8) as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(3));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg,
+        &SystemBreaking::Fixed(3),
+    );
 
     assert_eq!(page.systems.len(), 3);
     assert_eq!(page.systems[0].first_measure_number, 1);
@@ -1664,7 +1971,13 @@ fn measure_numbers_positioned_above_staff() {
     page_cfg.show_measure_numbers = true;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
     let measures = vec![make_measure(4)];
-    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(4));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -1680,7 +1993,10 @@ fn measure_numbers_positioned_above_staff() {
     let y_end = text_tag[y_start..].find('"').unwrap() + y_start;
     let y_val: f64 = text_tag[y_start..y_end].parse().unwrap();
     // y should be negative (above the staff line at y=0)
-    assert!(y_val < 0.0, "measure number y={y_val} should be above the staff (negative)");
+    assert!(
+        y_val < 0.0,
+        "measure number y={y_val} should be above the staff (negative)"
+    );
 }
 
 #[test]
@@ -1691,7 +2007,13 @@ fn measure_numbers_font_size_scales_with_staff_space() {
     page_cfg.show_measure_numbers = true;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
     let measures = vec![make_measure(4)];
-    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Fixed(4));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
 
     let svg = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -1722,8 +2044,10 @@ fn first_measure_number_set_correctly_for_auto_breaks() {
         assert!(
             page.systems[i].first_measure_number > page.systems[i - 1].first_measure_number,
             "system {} measure number {} should be > system {} measure number {}",
-            i, page.systems[i].first_measure_number,
-            i - 1, page.systems[i - 1].first_measure_number,
+            i,
+            page.systems[i].first_measure_number,
+            i - 1,
+            page.systems[i - 1].first_measure_number,
         );
     }
 }
@@ -1737,15 +2061,33 @@ fn measure_numbers_enabled_differs_from_disabled() {
 
     let mut page_cfg_on = PageLayoutConfig::new(ss, 8000.0);
     page_cfg_on.show_measure_numbers = true;
-    let page_on = layout_page(&prefix(), &measures, &mc, &page_cfg_on, &SystemBreaking::Fixed(4));
+    let page_on = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg_on,
+        &SystemBreaking::Fixed(4),
+    );
     let svg_on = draw_page(&font, &config, &page_on).unwrap().to_svg();
 
     let page_cfg_off = PageLayoutConfig::new(ss, 8000.0);
-    let page_off = layout_page(&prefix(), &measures, &mc, &page_cfg_off, &SystemBreaking::Fixed(4));
+    let page_off = layout_page(
+        &prefix(),
+        &measures,
+        &mc,
+        &page_cfg_off,
+        &SystemBreaking::Fixed(4),
+    );
     let svg_off = draw_page(&font, &config, &page_off).unwrap().to_svg();
 
-    assert_ne!(svg_on, svg_off, "enabling measure numbers should change the SVG output");
-    assert!(svg_on.len() > svg_off.len(), "SVG with measure numbers should be larger");
+    assert_ne!(
+        svg_on, svg_off,
+        "enabling measure numbers should change the SVG output"
+    );
+    assert!(
+        svg_on.len() > svg_off.len(),
+        "SVG with measure numbers should be larger"
+    );
 }
 
 // ---- Cross-system lyric extender tests ----
@@ -1801,7 +2143,13 @@ fn cross_system_lyric_extender_draws_two_lines() {
         },
     ];
     // 1 measure per system → forces cross-system extender
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -1825,7 +2173,13 @@ fn cross_system_lyric_extender_draws_two_lines() {
             additional_voices: vec![],
         },
     ];
-    let page_no_ext = layout_page(&prefix(), &measures_no_ext, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_no_ext = layout_page(
+        &prefix(),
+        &measures_no_ext,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg_no_ext = draw_page(&font, &config, &page_no_ext).unwrap();
     let no_ext_lines = svg_no_ext.to_svg().matches("<line ").count();
 
@@ -1860,7 +2214,13 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg_with = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -1879,12 +2239,22 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
             additional_voices: vec![],
         },
     ];
-    let page_bare = layout_page(&prefix(), &measures_bare, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_bare = layout_page(
+        &prefix(),
+        &measures_bare,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg_bare = draw_page(&font, &config, &page_bare).unwrap().to_svg();
 
     // Line count difference should be 0 (word lyrics don't produce extender lines)
-    let diff = svg_with.matches("<line ").count() as i32 - svg_bare.matches("<line ").count() as i32;
-    assert_eq!(diff, 0, "word lyric should not produce cross-system extender lines");
+    let diff =
+        svg_with.matches("<line ").count() as i32 - svg_bare.matches("<line ").count() as i32;
+    assert_eq!(
+        diff, 0,
+        "word lyric should not produce cross-system extender lines"
+    );
 }
 
 #[test]
@@ -1909,7 +2279,13 @@ fn within_system_extender_does_not_produce_cross_system_extender() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
     // Everything in one system
     assert_eq!(page.systems.len(), 1);
 
@@ -1959,13 +2335,28 @@ fn cross_system_lyric_extender_differs_from_no_extender() {
         },
     ];
 
-    let page_ext = layout_page(&prefix(), &measures_ext, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let page_bare = layout_page(&prefix(), &measures_bare, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_ext = layout_page(
+        &prefix(),
+        &measures_ext,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let page_bare = layout_page(
+        &prefix(),
+        &measures_bare,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let svg_ext = draw_page(&font, &config, &page_ext).unwrap().to_svg();
     let svg_bare = draw_page(&font, &config, &page_bare).unwrap().to_svg();
 
-    assert_ne!(svg_ext, svg_bare, "cross-system lyric extender should change SVG output");
+    assert_ne!(
+        svg_ext, svg_bare,
+        "cross-system lyric extender should change SVG output"
+    );
 }
 
 #[test]
@@ -1989,7 +2380,13 @@ fn cross_system_lyric_extender_lines_are_horizontal() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2002,9 +2399,7 @@ fn cross_system_lyric_extender_lines_are_horizontal() {
     let lines: Vec<&str> = output.split("<line ").skip(1).collect();
     let mut found_lyric_lines = 0;
     for line_tag in &lines {
-        if let (Some(y1_start), Some(y2_start)) =
-            (line_tag.find("y1=\""), line_tag.find("y2=\""))
-        {
+        if let (Some(y1_start), Some(y2_start)) = (line_tag.find("y1=\""), line_tag.find("y2=\"")) {
             let y1: &str = &line_tag[y1_start + 4..];
             let y1 = y1.split('"').next().unwrap();
             let y2: &str = &line_tag[y2_start + 4..];
@@ -2076,7 +2471,13 @@ fn cross_system_ottava_draws_two_brackets() {
         },
     ];
     // 1 measure per system → forces cross-system ottava
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -2097,7 +2498,13 @@ fn cross_system_ottava_draws_two_brackets() {
             additional_voices: vec![],
         },
     ];
-    let no_ott_page = layout_page(&prefix(), &no_ott_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_ott_page = layout_page(
+        &prefix(),
+        &no_ott_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let no_ott_output = draw_page(&font, &config, &no_ott_page).unwrap().to_svg();
 
     // Cross-system ottava produces 2 half-brackets with dashed lines and labels.
@@ -2109,7 +2516,8 @@ fn cross_system_ottava_draws_two_brackets() {
     assert!(
         ott_lines > no_lines,
         "cross-system ottava should add lines (dashed + hook), got {} vs {}",
-        ott_lines, no_lines
+        ott_lines,
+        no_lines
     );
 
     let ott_texts = output.matches("<text ").count();
@@ -2117,7 +2525,8 @@ fn cross_system_ottava_draws_two_brackets() {
     assert!(
         ott_texts >= no_texts + 2,
         "cross-system ottava should add at least 2 text labels (8va), got {} vs {}",
-        ott_texts, no_texts
+        ott_texts,
+        no_texts
     );
 
     // Verify the label text "8va" appears
@@ -2148,13 +2557,25 @@ fn no_cross_system_ottava_without_flags() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
     // No "8va" or "8vb" labels should appear
-    assert!(!output.contains("8va"), "no ottava label without ottava annotations");
-    assert!(!output.contains("8vb"), "no ottava label without ottava annotations");
+    assert!(
+        !output.contains("8va"),
+        "no ottava label without ottava annotations"
+    );
+    assert!(
+        !output.contains("8vb"),
+        "no ottava label without ottava annotations"
+    );
 }
 
 #[test]
@@ -2179,7 +2600,13 @@ fn cross_system_ottava_right_half_only_when_no_end() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2200,18 +2627,22 @@ fn within_system_ottava_not_duplicated_by_cross_system() {
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
 
     // Both start and end within the same system (single measure)
-    let measures = vec![
-        MeasureContent {
-            events: vec![
-                ottava_start_note(10, OttavaKind::Ottava8va),
-                ottava_end_note(12),
-            ],
-            barline: BarlineStyle::Final,
-            volta: None,
-            additional_voices: vec![],
-        },
-    ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let measures = vec![MeasureContent {
+        events: vec![
+            ottava_start_note(10, OttavaKind::Ottava8va),
+            ottava_end_note(12),
+        ],
+        barline: BarlineStyle::Final,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2246,7 +2677,13 @@ fn cross_system_ottava_8vb_draws_below_staff() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2271,9 +2708,18 @@ fn cross_system_ottava_8vb_draws_below_staff() {
             additional_voices: vec![],
         },
     ];
-    let page_8va = layout_page(&prefix(), &measures_8va, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_8va = layout_page(
+        &prefix(),
+        &measures_8va,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output_8va = draw_page(&font, &config, &page_8va).unwrap().to_svg();
-    assert_ne!(output, output_8va, "8vb and 8va cross-system ottavas should differ");
+    assert_ne!(
+        output, output_8va,
+        "8vb and 8va cross-system ottavas should differ"
+    );
 }
 
 // --- Cross-system glissando tests ---
@@ -2315,7 +2761,13 @@ fn cross_system_glissando_draws_two_half_lines() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2333,7 +2785,13 @@ fn cross_system_glissando_draws_two_half_lines() {
             additional_voices: vec![],
         },
     ];
-    let no_gliss_page = layout_page(&prefix(), &no_gliss_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let no_gliss_page = layout_page(
+        &prefix(),
+        &no_gliss_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let no_gliss_output = draw_page(&font, &config, &no_gliss_page).unwrap().to_svg();
 
     let line_count = output.matches("<line ").count();
@@ -2381,8 +2839,20 @@ fn no_cross_system_glissando_without_flag() {
             additional_voices: vec![],
         },
     ];
-    let page_no = layout_page(&prefix(), &measures_no_flag, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let page_with = layout_page(&prefix(), &measures_with_flag, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_no = layout_page(
+        &prefix(),
+        &measures_no_flag,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let page_with = layout_page(
+        &prefix(),
+        &measures_with_flag,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output_no = draw_page(&font, &config, &page_no).unwrap().to_svg();
     let output_with = draw_page(&font, &config, &page_with).unwrap().to_svg();
 
@@ -2402,18 +2872,19 @@ fn within_system_glissando_not_duplicated_as_cross_system() {
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
 
     // Both notes in the same system — glissando resolves within system
-    let measures = vec![
-        MeasureContent {
-            events: vec![
-                glissando_note(0, GlissandoStyle::Line),
-                quarter_note(8),
-            ],
-            barline: BarlineStyle::Final,
-            volta: None,
-            additional_voices: vec![],
-        },
-    ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let measures = vec![MeasureContent {
+        events: vec![glissando_note(0, GlissandoStyle::Line), quarter_note(8)],
+        barline: BarlineStyle::Final,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2462,12 +2933,27 @@ fn cross_system_glissando_differs_from_no_glissando() {
         },
     ];
 
-    let page_with = layout_page(&prefix(), &with_gliss, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let page_without = layout_page(&prefix(), &without_gliss, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_with = layout_page(
+        &prefix(),
+        &with_gliss,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let page_without = layout_page(
+        &prefix(),
+        &without_gliss,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let out_with = draw_page(&font, &config, &page_with).unwrap().to_svg();
     let out_without = draw_page(&font, &config, &page_without).unwrap().to_svg();
 
-    assert_ne!(out_with, out_without, "glissando version should differ from non-glissando");
+    assert_ne!(
+        out_with, out_without,
+        "glissando version should differ from non-glissando"
+    );
 }
 
 #[test]
@@ -2491,7 +2977,13 @@ fn cross_system_glissando_with_text_shows_label() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let svg = draw_page(&font, &config, &page).unwrap();
     let output = svg.to_svg();
 
@@ -2576,8 +3068,20 @@ fn cross_system_trill_extension_adds_incoming_wiggle_paths_on_next_system() {
         },
     ];
 
-    let page_with = layout_page(&prefix(), &with_trill, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let page_without = layout_page(&prefix(), &without_trill, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_with = layout_page(
+        &prefix(),
+        &with_trill,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let page_without = layout_page(
+        &prefix(),
+        &without_trill,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page_with.systems.len(), 2, "test requires two systems");
 
     let out_with = draw_page(&font, &config, &page_with).unwrap().to_svg();
@@ -2640,11 +3144,25 @@ fn cross_system_trill_extension_only_when_last_note_is_trilled() {
         },
     ];
 
-    let page_resolved = layout_page(&prefix(), &measures_resolved, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let page_unresolved = layout_page(&prefix(), &measures_unresolved, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_resolved = layout_page(
+        &prefix(),
+        &measures_resolved,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let page_unresolved = layout_page(
+        &prefix(),
+        &measures_unresolved,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_resolved = draw_page(&font, &config, &page_resolved).unwrap().to_svg();
-    let out_unresolved = draw_page(&font, &config, &page_unresolved).unwrap().to_svg();
+    let out_unresolved = draw_page(&font, &config, &page_unresolved)
+        .unwrap()
+        .to_svg();
 
     let resolved_paths = out_resolved.matches("<path ").count();
     let unresolved_paths = out_unresolved.matches("<path ").count();
@@ -2668,15 +3186,19 @@ fn cross_system_trill_extension_no_target_system_no_incoming_wiggle() {
     let page_cfg = PageLayoutConfig::new(ss, 8000.0);
     let mcfg = MeasureLayoutConfig::from_staff_space(ss);
 
-    let measures = vec![
-        MeasureContent {
-            events: vec![trill_ext_whole_note(8), whole_note(8)],
-            barline: BarlineStyle::Final,
-            volta: None,
-            additional_voices: vec![],
-        },
-    ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let measures = vec![MeasureContent {
+        events: vec![trill_ext_whole_note(8), whole_note(8)],
+        barline: BarlineStyle::Final,
+        volta: None,
+        additional_voices: vec![],
+    }];
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
     assert_eq!(page.systems.len(), 1, "test requires exactly one system");
 
     let svg = draw_page(&font, &config, &page).unwrap();
@@ -2713,7 +3235,13 @@ fn cross_system_trill_extension_incoming_y_anchored_to_target_staff() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
 
     let sys2_top_y = page.systems[1].y;
@@ -2738,13 +3266,21 @@ fn cross_system_trill_extension_incoming_y_anchored_to_target_staff() {
     // a properly anchored incoming wiggle would sit.
     let mut found_in_band = false;
     for line in output.split('\n') {
-        let Some(idx) = line.find("translate(") else { continue; };
+        let Some(idx) = line.find("translate(") else {
+            continue;
+        };
         let rest = &line[idx + "translate(".len()..];
-        let Some(close) = rest.find(')') else { continue; };
+        let Some(close) = rest.find(')') else {
+            continue;
+        };
         let args = &rest[..close];
         let parts: Vec<&str> = args.split(',').collect();
-        if parts.len() != 2 { continue; }
-        let Ok(y) = parts[1].trim().parse::<f64>() else { continue; };
+        if parts.len() != 2 {
+            continue;
+        }
+        let Ok(y) = parts[1].trim().parse::<f64>() else {
+            continue;
+        };
         if y > sys1_top_y && y < sys2_top_y {
             found_in_band = true;
             break;
@@ -2780,7 +3316,13 @@ fn cross_system_trill_extension_no_op_without_trill() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
     // No trill glyph nor wiggle paths should appear. The "tr" glyph for
@@ -2858,8 +3400,20 @@ fn cross_system_trill_bracket_end_adds_one_hook_on_target_system() {
         },
     ];
 
-    let p1 = layout_page(&prefix(), &with_end_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p1 = layout_page(
+        &prefix(),
+        &with_end_bracket,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p2 = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(p1.systems.len(), 2);
     assert_eq!(p2.systems.len(), 2);
 
@@ -2913,8 +3467,20 @@ fn cross_system_trill_bracket_both_adds_start_on_n_and_end_on_n_plus_1() {
         },
     ];
 
-    let p1 = layout_page(&prefix(), &with_both, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p1 = layout_page(
+        &prefix(),
+        &with_both,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p2 = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_with = draw_page(&font, &config, &p1).unwrap().to_svg();
     let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
@@ -2965,8 +3531,20 @@ fn cross_system_trill_bracket_start_adds_only_one_hook_on_source_system() {
         },
     ];
 
-    let p1 = layout_page(&prefix(), &with_start, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p1 = layout_page(
+        &prefix(),
+        &with_start,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p2 = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_with = draw_page(&font, &config, &p1).unwrap().to_svg();
     let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
@@ -3055,8 +3633,20 @@ fn cross_system_trill_bracket_custom_length_changes_n_plus_1_hook() {
         },
     ];
 
-    let p_short = layout_page(&prefix(), &short, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_long = layout_page(&prefix(), &long, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_short = layout_page(
+        &prefix(),
+        &short,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_long = layout_page(
+        &prefix(),
+        &long,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_short = draw_page(&font, &config, &p_short).unwrap().to_svg();
     let out_long = draw_page(&font, &config, &p_long).unwrap().to_svg();
@@ -3097,8 +3687,20 @@ fn cross_system_trill_bracket_custom_direction_changes_n_plus_1_hook() {
             },
         ]
     };
-    let p_down = layout_page(&prefix(), &mk(HookDirection::Down), &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_up = layout_page(&prefix(), &mk(HookDirection::Up), &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_down = layout_page(
+        &prefix(),
+        &mk(HookDirection::Down),
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_up = layout_page(
+        &prefix(),
+        &mk(HookDirection::Up),
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_down = draw_page(&font, &config, &p_down).unwrap().to_svg();
     let out_up = draw_page(&font, &config, &p_up).unwrap().to_svg();
@@ -3158,8 +3760,20 @@ fn cross_system_trill_bracket_custom_defaults_match_plain_bracketed() {
         },
     ];
 
-    let p1 = layout_page(&prefix(), &custom, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p2 = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p1 = layout_page(
+        &prefix(),
+        &custom,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p2 = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let out_custom = draw_page(&font, &config, &p1).unwrap().to_svg();
     let out_plain = draw_page(&font, &config, &p2).unwrap().to_svg();
 
@@ -3286,8 +3900,20 @@ fn cross_system_trill_extension_speed_changes_svg_byte_for_byte() {
         },
     ];
 
-    let p1 = layout_page(&prefix(), &fast_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p2 = layout_page(&prefix(), &slow_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p1 = layout_page(
+        &prefix(),
+        &fast_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p2 = layout_page(
+        &prefix(),
+        &slow_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_fast = draw_page(&font, &config, &p1).unwrap().to_svg();
     let out_slow = draw_page(&font, &config, &p2).unwrap().to_svg();
@@ -3337,8 +3963,20 @@ fn cross_system_trill_extension_standard_speed_matches_unset_speed() {
         },
     ];
 
-    let p1 = layout_page(&prefix(), &standard, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p2 = layout_page(&prefix(), &unset, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p1 = layout_page(
+        &prefix(),
+        &standard,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p2 = layout_page(
+        &prefix(),
+        &unset,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_std = draw_page(&font, &config, &p1).unwrap().to_svg();
     let out_unset = draw_page(&font, &config, &p2).unwrap().to_svg();
@@ -3354,11 +3992,7 @@ fn cross_system_trill_extension_standard_speed_matches_unset_speed() {
 use crate::layout::trill_extension::{TrillSpeedRamp, TrillSpeedRampSpec};
 
 /// A whole note carrying a trill+extension with a multi-speed `TrillSpeedRamp`.
-fn trill_ext_ramp_whole_note(
-    pos: i8,
-    ramp: TrillSpeedRamp,
-    region_count: usize,
-) -> MeasureEvent {
+fn trill_ext_ramp_whole_note(pos: i8, ramp: TrillSpeedRamp, region_count: usize) -> MeasureEvent {
     MeasureEvent::Note(NoteEvent {
         staff_position: pos,
         duration_log2: 0,
@@ -3446,8 +4080,20 @@ fn cross_system_multi_speed_trill_adds_incoming_paths_on_next_system() {
         },
     ];
 
-    let p_with = layout_page(&prefix(), &with_ramp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_without = layout_page(&prefix(), &without_trill, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_with = layout_page(
+        &prefix(),
+        &with_ramp,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_without = layout_page(
+        &prefix(),
+        &without_trill,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(p_with.systems.len(), 2, "test requires two systems");
 
     let out_with = draw_page(&font, &config, &p_with).unwrap().to_svg();
@@ -3509,8 +4155,20 @@ fn cross_system_multi_speed_trill_renders_distinct_svg_from_single_speed() {
         },
     ];
 
-    let p_ramp = layout_page(&prefix(), &ramp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_single = layout_page(&prefix(), &single_speed_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_ramp = layout_page(
+        &prefix(),
+        &ramp_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_single = layout_page(
+        &prefix(),
+        &single_speed_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(p_ramp.systems.len(), 2);
     assert_eq!(p_single.systems.len(), 2);
 
@@ -3562,7 +4220,13 @@ fn cross_system_multi_speed_trill_uses_multiple_distinct_wiggle_glyphs() {
         },
     ];
 
-    let p = layout_page(&prefix(), &ramp_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p = layout_page(
+        &prefix(),
+        &ramp_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(p.systems.len(), 2);
     let out = draw_page(&font, &config, &p).unwrap().to_svg();
 
@@ -3653,8 +4317,20 @@ fn cross_system_multi_speed_trill_explicit_length_suppresses_continuation() {
         },
     ];
 
-    let p_expl = layout_page(&prefix(), &explicit_score, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_none = layout_page(&prefix(), &no_ramp_score, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_expl = layout_page(
+        &prefix(),
+        &explicit_score,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_none = layout_page(
+        &prefix(),
+        &no_ramp_score,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(p_expl.systems.len(), 2);
     assert_eq!(p_none.systems.len(), 2);
 
@@ -3879,8 +4555,20 @@ fn cross_system_multi_speed_trill_bracket_end_adds_one_hook_on_target_system() {
         },
     ];
 
-    let p_bracket = layout_page(&prefix(), &with_end_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_plain = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_bracket = layout_page(
+        &prefix(),
+        &with_end_bracket,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_plain = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_bracket = draw_page(&font, &config, &p_bracket).unwrap().to_svg();
     let out_plain = draw_page(&font, &config, &p_plain).unwrap().to_svg();
@@ -3951,8 +4639,20 @@ fn cross_system_multi_speed_trill_bracket_both_adds_start_on_n_and_end_on_n_plus
         },
     ];
 
-    let p_bracket = layout_page(&prefix(), &with_both_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_plain = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_bracket = layout_page(
+        &prefix(),
+        &with_both_bracket,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_plain = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_bracket = draw_page(&font, &config, &p_bracket).unwrap().to_svg();
     let out_plain = draw_page(&font, &config, &p_plain).unwrap().to_svg();
@@ -4021,8 +4721,20 @@ fn cross_system_multi_speed_trill_bracket_start_only_adds_no_hook_on_target() {
         },
     ];
 
-    let p_bracket = layout_page(&prefix(), &with_start_bracket, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_plain = layout_page(&prefix(), &plain, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_bracket = layout_page(
+        &prefix(),
+        &with_start_bracket,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_plain = layout_page(
+        &prefix(),
+        &plain,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
 
     let out_bracket = draw_page(&font, &config, &p_bracket).unwrap().to_svg();
     let out_plain = draw_page(&font, &config, &p_plain).unwrap().to_svg();
@@ -4091,8 +4803,20 @@ fn cross_system_multi_speed_trill_accel_distinct_from_decel() {
         },
     ];
 
-    let p_accel = layout_page(&prefix(), &accel, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_decel = layout_page(&prefix(), &decel, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_accel = layout_page(
+        &prefix(),
+        &accel,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_decel = layout_page(
+        &prefix(),
+        &decel,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let out_accel = draw_page(&font, &config, &p_accel).unwrap().to_svg();
     let out_decel = draw_page(&font, &config, &p_decel).unwrap().to_svg();
 
@@ -4151,8 +4875,20 @@ fn cross_system_multi_speed_constant_ramp_equals_single_speed_when_one_region() 
         },
     ];
 
-    let p_const = layout_page(&prefix(), &constant_ramp, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
-    let p_single = layout_page(&prefix(), &single_speed, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let p_const = layout_page(
+        &prefix(),
+        &constant_ramp,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
+    let p_single = layout_page(
+        &prefix(),
+        &single_speed,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(p_const.systems.len(), 2);
     assert_eq!(p_single.systems.len(), 2);
 
@@ -4201,7 +4937,13 @@ fn cross_system_multi_speed_trill_no_target_system_no_crash() {
         volta: None,
         additional_voices: vec![],
     }];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
     assert_eq!(page.systems.len(), 1, "test requires exactly one system");
 
     let out = draw_page(&font, &config, &page).unwrap().to_svg();
@@ -4259,7 +5001,13 @@ fn within_system_dashed_hairpin_emits_two_dasharrays() {
         },
     ];
     // Both measures fit on one system → entirely within-system path.
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -4285,7 +5033,13 @@ fn within_system_dashed_hairpin_emits_two_dasharrays() {
                 additional_voices: vec![],
             },
         ];
-        let solid_page = layout_page(&prefix(), &solid_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+        let solid_page = layout_page(
+            &prefix(),
+            &solid_measures,
+            &mcfg,
+            &page_cfg,
+            &SystemBreaking::Fixed(2),
+        );
         draw_page(&font, &config, &solid_page).unwrap().to_svg()
     };
     assert_eq!(
@@ -4325,7 +5079,13 @@ fn within_system_dashed_hairpin_dasharray_value_matches_layout_constants() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
     let occurrences = output.matches(&expected_attr).count();
@@ -4365,7 +5125,13 @@ fn cross_system_dashed_hairpin_emits_dasharray_on_all_four_lines() {
         },
     ];
     // 1 measure per system → forces cross-system hairpin.
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page.systems.len(), 2);
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -4396,7 +5162,13 @@ fn cross_system_dashed_hairpin_emits_dasharray_on_all_four_lines() {
             additional_voices: vec![],
         },
     ];
-    let solid_page = layout_page(&prefix(), &solid_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let solid_page = layout_page(
+        &prefix(),
+        &solid_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let solid_output = draw_page(&font, &config, &solid_page).unwrap().to_svg();
     assert_eq!(
         solid_output.matches("stroke-dasharray").count(),
@@ -4435,7 +5207,13 @@ fn cross_system_dashed_hairpin_trailing_half_uses_dasharray_layout_constants() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
     // All 4 dashed wedge lines must carry the same expected attribute.
@@ -4519,7 +5297,10 @@ fn parse_cx_attr(circle_attrs: &str) -> f64 {
 
 /// Collect every `<circle ...>` element payload from an SVG string.
 fn circle_elements(svg: &str) -> Vec<&str> {
-    svg.split("<circle ").skip(1).map(|s| s.split('>').next().unwrap_or("")).collect()
+    svg.split("<circle ")
+        .skip(1)
+        .map(|s| s.split('>').next().unwrap_or(""))
+        .collect()
 }
 
 #[test]
@@ -4547,7 +5328,13 @@ fn within_system_niente_closed_end_emits_one_circle() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1, "expected single-system layout");
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
@@ -4565,7 +5352,13 @@ fn within_system_niente_closed_end_emits_one_circle() {
             additional_voices: vec![],
         },
     ];
-    let plain_page = layout_page(&prefix(), &plain_measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let plain_page = layout_page(
+        &prefix(),
+        &plain_measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     let plain_output = draw_page(&font, &config, &plain_page).unwrap().to_svg();
 
     assert_eq!(output.matches("<circle ").count(), 1);
@@ -4608,7 +5401,13 @@ fn within_system_niente_radius_matches_layout_constant() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
     let circle_line = output
@@ -4651,7 +5450,13 @@ fn within_system_niente_svg(start_note: MeasureEvent) -> String {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     assert_eq!(page.systems.len(), 1);
     draw_page(&font, &config, &page).unwrap().to_svg()
 }
@@ -4664,7 +5469,8 @@ fn within_system_niente_crescendo_closed_anchors_at_start_tip() {
     // these two fixtures (same notes, same metrics) — only the niente
     // tip flips — so cx_closed < cx_open is a sharp invariant of the
     // routing logic that doesn't depend on absolute layout coordinates.
-    let svg_closed = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::ClosedEnd));
+    let svg_closed =
+        within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::ClosedEnd));
     let svg_open = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::OpenEnd));
 
     let circles_closed = circle_elements(&svg_closed);
@@ -4688,7 +5494,8 @@ fn within_system_niente_decrescendo_closed_anchors_at_end_tip() {
     // relative-comparison contract: cx_closed > cx_open. Catches a
     // regression where the renderer routes the niente by direction
     // alone, ignoring the placement enum.
-    let svg_closed = within_system_niente_svg(decresc_start_niente_note(4, NientePlacement::ClosedEnd));
+    let svg_closed =
+        within_system_niente_svg(decresc_start_niente_note(4, NientePlacement::ClosedEnd));
     let svg_open = within_system_niente_svg(decresc_start_niente_note(4, NientePlacement::OpenEnd));
 
     let circles_closed = circle_elements(&svg_closed);
@@ -4714,7 +5521,8 @@ fn within_system_niente_open_end_renders_distinct_circle_from_closed() {
     // regression where the placement flag is dropped before reaching the
     // layout helper — a regression that would silently produce identical
     // SVG for both placements.
-    let svg_closed = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::ClosedEnd));
+    let svg_closed =
+        within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::ClosedEnd));
     let svg_open = within_system_niente_svg(cresc_start_niente_note(4, NientePlacement::OpenEnd));
     assert_ne!(
         svg_closed, svg_open,
@@ -4767,7 +5575,13 @@ fn within_system_niente_combined_with_dashed_keeps_circle_solid() {
             additional_voices: vec![],
         },
     ];
-    let page = layout_page(&prefix(), &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(2));
+    let page = layout_page(
+        &prefix(),
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(2),
+    );
     let output = draw_page(&font, &config, &page).unwrap().to_svg();
 
     assert_eq!(output.matches("<circle ").count(), 1);
@@ -4815,12 +5629,19 @@ fn cross_system_niente_crescendo_closed_circle_on_source_system() {
             additional_voices: vec![],
         },
     ];
-    let page_c = layout_page(&prefix(), &measures_c, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_c = layout_page(
+        &prefix(),
+        &measures_c,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     assert_eq!(page_c.systems.len(), 2, "Fixed(1) → two-system layout");
     let out_c = draw_page(&font, &config, &page_c).unwrap().to_svg();
     let circles_c = circle_elements(&out_c);
     assert_eq!(
-        circles_c.len(), 1,
+        circles_c.len(),
+        1,
         "cross-system cresc+closed niente must emit exactly one circle (trailing only)"
     );
     let cy_c = parse_cy_attr(circles_c[0]);
@@ -4842,11 +5663,18 @@ fn cross_system_niente_crescendo_closed_circle_on_source_system() {
             additional_voices: vec![],
         },
     ];
-    let page_d = layout_page(&prefix(), &measures_d, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_d = layout_page(
+        &prefix(),
+        &measures_d,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let out_d = draw_page(&font, &config, &page_d).unwrap().to_svg();
     let circles_d = circle_elements(&out_d);
     assert_eq!(
-        circles_d.len(), 1,
+        circles_d.len(),
+        1,
         "cross-system decresc+closed niente must emit exactly one circle (incoming only)"
     );
     let cy_d = parse_cy_attr(circles_d[0]);
@@ -4890,7 +5718,13 @@ fn cross_system_niente_open_end_flips_owning_half() {
             additional_voices: vec![],
         },
     ];
-    let page_closed = layout_page(&prefix(), &measures_closed, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_closed = layout_page(
+        &prefix(),
+        &measures_closed,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let out_closed = draw_page(&font, &config, &page_closed).unwrap().to_svg();
     let cy_closed = parse_cy_attr(circle_elements(&out_closed)[0]);
 
@@ -4909,7 +5743,13 @@ fn cross_system_niente_open_end_flips_owning_half() {
             additional_voices: vec![],
         },
     ];
-    let page_open = layout_page(&prefix(), &measures_open, &mcfg, &page_cfg, &SystemBreaking::Fixed(1));
+    let page_open = layout_page(
+        &prefix(),
+        &measures_open,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(1),
+    );
     let out_open = draw_page(&font, &config, &page_open).unwrap().to_svg();
     let circles_open = circle_elements(&out_open);
     assert_eq!(circles_open.len(), 1);

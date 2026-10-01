@@ -14,7 +14,10 @@ fn progression_two_chords_shows_header_and_steps() {
         .assert()
         .success();
     let out = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
-    assert!(out.contains("Progression:"), "should show Progression header");
+    assert!(
+        out.contains("Progression:"),
+        "should show Progression header"
+    );
     assert!(out.contains("Voices: 3"), "should show voice count");
     assert!(out.contains("Start:"), "should show starting voicing");
     assert!(out.contains("Step 1:"), "should show at least one step");
@@ -117,8 +120,14 @@ fn progression_four_voice_ii_v_i() {
         "should show total cost"
     );
     // Extract cost value — it should not be 0 for different chords
-    let cost_line = out.lines().find(|l| l.contains("Total voice-leading cost:")).unwrap();
-    assert!(!cost_line.contains("cost: 0"), "cost should be > 0 for different chords");
+    let cost_line = out
+        .lines()
+        .find(|l| l.contains("Total voice-leading cost:"))
+        .unwrap();
+    assert!(
+        !cost_line.contains("cost: 0"),
+        "cost should be > 0 for different chords"
+    );
 }
 
 // --- Integer input ---
@@ -147,7 +156,45 @@ fn progression_distance_positive_for_different_chords() {
     let step_line = out.lines().find(|l| l.contains("Step 1:")).unwrap();
     assert!(step_line.contains("dist="), "step should show distance");
     // dist should not be 0
-    assert!(!step_line.contains("dist=0"), "distance should be > 0 for different chords");
+    assert!(
+        !step_line.contains("dist=0"),
+        "distance should be > 0 for different chords"
+    );
+}
+
+// --- Weighted metric ---
+
+#[test]
+fn progression_weighted_metric_scores_each_voice() {
+    cmd()
+        .args([
+            "progression",
+            "C,E,G",
+            "F,A,C",
+            "G,B,D",
+            "--metric",
+            "weighted",
+            "--weights",
+            "10,1,1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Metric: weighted L1"))
+        .stdout(predicate::str::contains("Weights: 10,1,1"))
+        .stdout(predicate::str::contains(
+            "Total voice-leading cost: 18 (weighted L1, 2 steps)",
+        ));
+}
+
+#[test]
+fn progression_weights_require_weighted_metric() {
+    cmd()
+        .args(["progression", "C,E,G", "F,A,C", "--weights", "1,1,1"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--weights requires --metric weighted",
+        ));
 }
 
 // --- Error cases ---
@@ -215,7 +262,11 @@ mod midi_integration {
             .output()
             .expect("command should run");
 
-        assert!(out.status.success(), "exit 0: {:?}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "exit 0: {:?}",
+            String::from_utf8_lossy(&out.stderr)
+        );
 
         let bytes = std::fs::read(&midi_path).expect("MIDI file should exist");
         // MThd magic bytes
@@ -272,10 +323,7 @@ mod midi_integration {
             stdout.contains("Progression:"),
             "stdout should still contain text summary when writing MIDI"
         );
-        assert!(
-            stdout.contains("Step 1:"),
-            "stdout should still show steps"
-        );
+        assert!(stdout.contains("Step 1:"), "stdout should still show steps");
     }
 
     #[test]

@@ -8,16 +8,22 @@ fn main() {
     let svg = TabScoreBuilder::guitar()
         .measures_per_system(2)
         // Measure 1: E minor chord arpeggio (open position)
-        .fret(6, 0).next()  // open low E
-        .fret(5, 2).next()  // A string fret 2 (B)
-        .fret(4, 2).next()  // D string fret 2 (E)
-        .fret(3, 0)         // open G
+        .fret(6, 0)
+        .next() // open low E
+        .fret(5, 2)
+        .next() // A string fret 2 (B)
+        .fret(4, 2)
+        .next() // D string fret 2 (E)
+        .fret(3, 0) // open G
         .barline()
         // Measure 2: ascending scale on string 1
-        .fret(1, 0).next()   // open high E
-        .fret(1, 1).next()   // F
-        .fret(1, 3).next()   // G
-        .fret(1, 5)          // A
+        .fret(1, 0)
+        .next() // open high E
+        .fret(1, 1)
+        .next() // F
+        .fret(1, 3)
+        .next() // G
+        .fret(1, 5) // A
         .barline()
         // Measure 3: power chord (E5) — simultaneous
         .fret(6, 0)
@@ -31,9 +37,12 @@ fn main() {
         .fret(4, 5)
         .barline()
         // Measure 4: high position with 2-digit frets
-        .fret(1, 12).next()
-        .fret(1, 15).next()
-        .fret(2, 12).next()
+        .fret(1, 12)
+        .next()
+        .fret(1, 15)
+        .next()
+        .fret(2, 12)
+        .next()
         .fret(1, 17)
         .end_barline();
 

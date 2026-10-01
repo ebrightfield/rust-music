@@ -118,11 +118,8 @@ fn main() {
         .render_svg();
 
     std::fs::create_dir_all("music-engraver/examples/output").ok();
-    std::fs::write(
-        "music-engraver/examples/output/accent_extensions.svg",
-        &svg,
-    )
-    .expect("write SVG");
+    std::fs::write("music-engraver/examples/output/accent_extensions.svg", &svg)
+        .expect("write SVG");
 
     assert!(svg.starts_with("<svg"), "output should start with <svg");
     assert!(svg.contains("</svg>"), "output should have closing tag");

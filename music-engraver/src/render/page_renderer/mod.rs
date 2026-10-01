@@ -1,12 +1,16 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::cresc_text::{layout_cresc_text, layout_cresc_text_continuation, CrescTextKind};
-use crate::layout::glissando::{layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle};
+use crate::layout::glissando::{
+    layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle,
+};
 use crate::layout::hairpin::{layout_hairpin_styled, HairpinType, NientePlacement};
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::page::{PageLayout, PageSystem};
-use crate::layout::slur::{layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem};
+use crate::layout::slur::{
+    layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem,
+};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::auto_stem_direction;
 use crate::layout::tie::{
@@ -19,21 +23,21 @@ use crate::layout::trill_extension::{
     layout_trill_extension_multi_speed, layout_trill_extension_with_glyph,
     trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
 };
-use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_bracket_hooks};
 use crate::render::cresc_text_renderer::draw_cresc_text;
-use crate::render::note_renderer::NoteheadKind;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
+use crate::render::note_renderer::notehead_advance;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
 use crate::render::system_renderer::{
     collect_cresc_text_note_info, collect_glissando_note_info, collect_hairpin_note_info,
     collect_lyric_note_info, collect_note_positions, collect_ottava_note_info,
-    collect_slur_note_info, collect_trill_extension_note_info, draw_system,
-    layout_trill_end_hook, TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
+    collect_slur_note_info, collect_trill_extension_note_info, draw_system, layout_trill_end_hook,
+    widest_notehead_advance, TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
 };
 use crate::render::tie_renderer::draw_tie;
+use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_bracket_hooks};
 use crate::render::trill_extension_renderer::{
     draw_trill_extension, draw_trill_extension_multi_speed,
 };
@@ -91,18 +95,36 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
 
     for ps in &page.systems {
         for measure in &ps.system.measures {
-            let voices = std::iter::once(&measure.layout).chain(measure.additional_voice_layouts.iter());
+            let voices =
+                std::iter::once(&measure.layout).chain(measure.additional_voice_layouts.iter());
             for voice in voices {
                 for positioned in &voice.elements {
                     let positions: Vec<i8> = match &positioned.element {
                         MeasureElement::Note(n) => vec![n.staff_position],
                         MeasureElement::Chord(c) => c.staff_positions.clone(),
-                        MeasureElement::BeamGroup(bg) => {
-                            bg.notes.iter().map(|n| n.staff_position).collect()
-                        }
-                        MeasureElement::TupletGroup(tg) => {
-                            tg.beam_group.notes.iter().map(|n| n.staff_position).collect()
-                        }
+                        MeasureElement::BeamGroup(bg) => bg
+                            .notes
+                            .iter()
+                            .flat_map(|note| {
+                                note.annotations.grouped_chord.as_ref().map_or_else(
+                                    || std::slice::from_ref(&note.staff_position),
+                                    |chord| chord.staff_positions.as_slice(),
+                                )
+                            })
+                            .copied()
+                            .collect(),
+                        MeasureElement::TupletGroup(tg) => tg
+                            .beam_group
+                            .notes
+                            .iter()
+                            .flat_map(|note| {
+                                note.annotations.grouped_chord.as_ref().map_or_else(
+                                    || std::slice::from_ref(&note.staff_position),
+                                    |chord| chord.staff_positions.as_slice(),
+                                )
+                            })
+                            .copied()
+                            .collect(),
                         _ => continue,
                     };
                     let allowance = STEM_ALLOWANCE_SS * config.staff_space;
@@ -127,7 +149,11 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
     }
     (
         if top.is_finite() { top } else { 0.0 },
-        if bottom.is_finite() { bottom } else { page.page_height },
+        if bottom.is_finite() {
+            bottom
+        } else {
+            page.page_height
+        },
     )
 }
 
@@ -229,11 +255,7 @@ pub(crate) const MEASURE_NUMBER_FONT_SIZE_SS: f64 = 1.2;
 /// the first bar in each subsequent system. The number is placed above the
 /// top staff line, left-aligned with the start of the first measure's
 /// note content (after the prefix: clef, key sig, time sig).
-fn draw_measure_numbers(
-    svg: &mut SvgWriter,
-    config: &EngravingConfig,
-    page: &PageLayout,
-) {
+fn draw_measure_numbers(svg: &mut SvgWriter, config: &EngravingConfig, page: &PageLayout) {
     let ss = config.staff_space;
     let font_size = MEASURE_NUMBER_FONT_SIZE_SS * ss;
     let y_offset = MEASURE_NUMBER_ABOVE_STAFF_SS * ss;
@@ -285,7 +307,8 @@ fn find_unresolved_ties(
 
     let mut unresolved = Vec::new();
 
-    for (i, &(nx, pos, dur_log2, tie_forward, stem_dir)) in note_positions.iter().enumerate() {
+    for (i, &(nx, pos, dur_log2, style, tie_forward, stem_dir)) in note_positions.iter().enumerate()
+    {
         if !tie_forward {
             continue;
         }
@@ -293,20 +316,13 @@ fn find_unresolved_ties(
         // Check if there's a matching target within this system
         let has_target = note_positions[i + 1..]
             .iter()
-            .any(|&(_, target_pos, _, _, _)| target_pos == pos);
+            .any(|&(_, target_pos, _, _, _, _)| target_pos == pos);
 
         if has_target {
             continue; // Resolved within the system
         }
 
-        // Unresolved — compute absolute coordinates for the half-tie
-        let notehead_kind = match dur_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = notehead_advance(font, dur_log2, style)?;
 
         let direction = stem_dir.unwrap_or_else(|| auto_stem_direction(pos));
         let tie_dir = tie_direction_from_stem(direction);
@@ -351,7 +367,7 @@ fn find_incoming_tie_targets(
     let mut seen_positions = std::collections::HashSet::new();
     let mut targets = Vec::new();
 
-    for &(nx, pos, _dur_log2, _tie_forward, stem_dir) in &note_positions {
+    for &(nx, pos, _dur_log2, _style, _tie_forward, stem_dir) in &note_positions {
         if !seen_positions.insert(pos) {
             continue; // Already have this position
         }
@@ -478,13 +494,7 @@ fn find_unresolved_slurs(
             continue; // Resolved within the system
         }
 
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = notehead_advance(font, info.duration_log2, info.notehead_style)?;
 
         let stem_dir = info
             .stem_direction
@@ -678,13 +688,12 @@ fn find_unresolved_hairpins(
             continue; // Resolved within the system
         }
 
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = widest_notehead_advance(
+            font,
+            info.duration_log2,
+            info.notehead_styles,
+            info.notehead_count,
+        )?;
 
         // Match the 0.3ss padding used in system_renderer for hairpin start
         let x_right = page_system.x + info.x + advance + 0.3 * config.staff_space;
@@ -884,13 +893,12 @@ fn find_unresolved_cresc_texts(
             continue; // Resolved within the system
         }
 
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = widest_notehead_advance(
+            font,
+            info.duration_log2,
+            info.notehead_styles,
+            info.notehead_count,
+        )?;
 
         // Match the same start-side padding draw_system_cresc_texts uses
         // (notehead_right + 0.3ss). Keeps a within-system cresc-text and a
@@ -1058,14 +1066,20 @@ pub(crate) fn draw_cross_system_lyric_extenders(
             src_system.system.staff_width,
             config.staff_space,
         );
-        let src_y_baseline =
-            src_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+        let src_y_baseline = src_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
 
         // Draw trailing half-extender from the source syllable to the right
         // edge of the system.
         let x_from = src_system.x + last_extender.x;
         let x_to = src_system.x + src_system.system.staff_width;
-        draw_lyric_extender(svg, x_from, x_to, src_y_baseline, config.staff_space, stroke_width);
+        draw_lyric_extender(
+            svg,
+            x_from,
+            x_to,
+            src_y_baseline,
+            config.staff_space,
+            stroke_width,
+        );
 
         // Draw incoming half-extender at the start of the target system.
         let tgt_system = &systems[i + 1];
@@ -1078,8 +1092,7 @@ pub(crate) fn draw_cross_system_lyric_extenders(
                 tgt_system.system.staff_width,
                 config.staff_space,
             );
-            let tgt_y_baseline =
-                tgt_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
+            let tgt_y_baseline = tgt_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
 
             // Start from the left edge of the first measure's content area
             let first_measure_x = tgt_system
@@ -1108,7 +1121,9 @@ pub(crate) fn draw_cross_system_lyric_extenders(
 /// An extender is "unresolved" if there is no subsequent note/chord in the
 /// note_info list to draw the extender line to — meaning the held syllable
 /// continues past the system boundary.
-fn find_last_unresolved_extender(note_info: &[crate::render::system_renderer::LyricNoteInfo]) -> Option<&crate::render::system_renderer::LyricNoteInfo> {
+fn find_last_unresolved_extender(
+    note_info: &[crate::render::system_renderer::LyricNoteInfo],
+) -> Option<&crate::render::system_renderer::LyricNoteInfo> {
     // Walk backwards: the last note with an extender that has no next note
     // to resolve it is the one whose index == note_info.len() - 1, since the
     // within-system renderer would have drawn the line if a target existed.
@@ -1264,10 +1279,7 @@ struct IncomingOttavaTarget {
 
 /// Find notes with `ottava_start` at the end of a system that have no
 /// matching `ottava_end` within the same system.
-fn find_unresolved_ottavas(
-    font: &MusicFont,
-    page_system: &PageSystem,
-) -> Result<Vec<UnresolvedOttava>, FontError> {
+fn find_unresolved_ottavas(page_system: &PageSystem) -> Vec<UnresolvedOttava> {
     let system = &page_system.system;
     let note_info = collect_ottava_note_info(system);
 
@@ -1285,13 +1297,6 @@ fn find_unresolved_ottavas(
             continue; // Resolved within the system
         }
 
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let _outline = font.glyph_outline(notehead_kind.glyph())?;
-
         unresolved.push(UnresolvedOttava {
             x_start: page_system.x + info.x,
             kind,
@@ -1299,7 +1304,7 @@ fn find_unresolved_ottavas(
         });
     }
 
-    Ok(unresolved)
+    unresolved
 }
 
 /// Find the first note with `ottava_end = true` in a system.
@@ -1317,13 +1322,12 @@ fn find_incoming_ottava_targets(
             continue;
         }
 
-        let notehead_kind = match info.duration_log2 {
-            0 => NoteheadKind::Whole,
-            1 => NoteheadKind::Half,
-            _ => NoteheadKind::Filled,
-        };
-        let outline = font.glyph_outline(notehead_kind.glyph())?;
-        let advance = outline.advance_width as f64;
+        let advance = widest_notehead_advance(
+            font,
+            info.duration_log2,
+            info.notehead_styles,
+            info.notehead_count,
+        )?;
 
         targets.push(IncomingOttavaTarget {
             x_right: page_system.x + info.x + advance,
@@ -1355,7 +1359,7 @@ pub(crate) fn draw_cross_system_ottava_brackets(
     systems: &[PageSystem],
 ) -> Result<(), FontError> {
     for i in 0..systems.len().saturating_sub(1) {
-        let unresolved = find_unresolved_ottavas(font, &systems[i])?;
+        let unresolved = find_unresolved_ottavas(&systems[i]);
         if unresolved.is_empty() {
             continue;
         }
@@ -1423,13 +1427,9 @@ pub(crate) fn draw_cross_system_ottava_brackets(
     // trailing case above — no end hook, dashed line to the system's right
     // edge — and matches the trill-extension cross-system convention.
     if let Some(last) = systems.last() {
-        let unresolved = find_unresolved_ottavas(font, last)?;
-        let last_staff = StaffLayout::new(
-            last.x,
-            last.y,
-            last.system.staff_width,
-            config.staff_space,
-        );
+        let unresolved = find_unresolved_ottavas(last);
+        let last_staff =
+            StaffLayout::new(last.x, last.y, last.system.staff_width, config.staff_space);
         for ott_src in &unresolved {
             let trailing_layout = layout_ottava_bracket(
                 ott_src.kind,
@@ -1470,9 +1470,7 @@ struct IncomingGlissandoTarget {
 
 /// Find the last note with `glissando_start` that has no subsequent note
 /// within the same system to resolve against.
-fn find_unresolved_glissandos(
-    page_system: &PageSystem,
-) -> Vec<UnresolvedGlissando> {
+fn find_unresolved_glissandos(page_system: &PageSystem) -> Vec<UnresolvedGlissando> {
     let system = &page_system.system;
     let notes = collect_glissando_note_info(system);
 
@@ -1500,9 +1498,7 @@ fn find_unresolved_glissandos(
 }
 
 /// Find the first note in a system (candidate target for incoming cross-system glissando).
-fn find_incoming_glissando_targets(
-    page_system: &PageSystem,
-) -> Vec<IncomingGlissandoTarget> {
+fn find_incoming_glissando_targets(page_system: &PageSystem) -> Vec<IncomingGlissandoTarget> {
     let system = &page_system.system;
     let notes = collect_glissando_note_info(system);
 
@@ -1799,25 +1795,26 @@ pub(crate) fn draw_cross_system_trill_extensions(
             // non-positive spans (e.g. when start_x >= end_x because the
             // target system's first note sits at the staff_left). The
             // None fall-through matches the within-system fail-safe.
-            let regions = match spec.ramp.synthesize_regions(
-                start_x,
-                end_x,
-                spec.region_count,
-                |speed| font.glyph_advance(speed.to_glyph()).unwrap_or(0) as f64,
-            ) {
-                Some(r) => r,
-                None => continue,
-            };
-            if let Some(layout) =
-                layout_trill_extension_multi_speed(end_x, y, &regions)
-            {
+            let regions =
+                match spec
+                    .ramp
+                    .synthesize_regions(start_x, end_x, spec.region_count, |speed| {
+                        font.glyph_advance(speed.to_glyph()).unwrap_or(0) as f64
+                    }) {
+                    Some(r) => r,
+                    None => continue,
+                };
+            if let Some(layout) = layout_trill_extension_multi_speed(end_x, y, &regions) {
                 draw_trill_extension_multi_speed(svg, font, &layout)?;
 
                 // End hook on the incoming wiggle. Anchored at the
                 // right edge of the multi-speed layout's last tile
                 // (via `layout_trill_bracket_hooks_multi_speed`).
                 // Source-system already drew the Start hook (if any).
-                if matches!(src.bracket, Some(TrillBracketSide::End | TrillBracketSide::Both)) {
+                if matches!(
+                    src.bracket,
+                    Some(TrillBracketSide::End | TrillBracketSide::Both)
+                ) {
                     let hook_stroke = config.thin_barline_thickness_fu();
                     let hook_length = src
                         .bracket_length_ss
@@ -1864,7 +1861,10 @@ pub(crate) fn draw_cross_system_trill_extensions(
             // (the right edge of the final whole-segment tile) — the same
             // anchor used by `layout_trill_bracket_hooks`, so within-system
             // and cross-system End hooks land identically.
-            if matches!(src.bracket, Some(TrillBracketSide::End | TrillBracketSide::Both)) {
+            if matches!(
+                src.bracket,
+                Some(TrillBracketSide::End | TrillBracketSide::Both)
+            ) {
                 let hook_stroke = config.thin_barline_thickness_fu();
                 let hook_length = src
                     .bracket_length_ss

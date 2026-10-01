@@ -46,7 +46,10 @@ mod tests {
         draw_breath_mark(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
         assert!(svg.contains("<path"), "should contain a path element");
-        assert!(svg.contains("translate("), "should have a translate transform");
+        assert!(
+            svg.contains("translate("),
+            "should have a translate transform"
+        );
     }
 
     #[test]
@@ -106,7 +109,10 @@ mod tests {
         draw_breath_mark(&mut w2, &font, &caesura).unwrap();
         let svg2 = w2.to_svg();
 
-        assert_ne!(svg1, svg2, "tick and caesura should produce different paths");
+        assert_ne!(
+            svg1, svg2,
+            "tick and caesura should produce different paths"
+        );
     }
 
     #[test]

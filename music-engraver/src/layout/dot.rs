@@ -31,12 +31,7 @@ pub fn first_dot_x(notehead_x: f64, notehead_advance: f64, staff_space: f64) -> 
 /// Compute x-positions for `dot_count` augmentation dots.
 ///
 /// Returns x-positions (left edge of each dot glyph) in font design units.
-pub fn dot_xs(
-    notehead_x: f64,
-    notehead_advance: f64,
-    staff_space: f64,
-    dot_count: u8,
-) -> Vec<f64> {
+pub fn dot_xs(notehead_x: f64, notehead_advance: f64, staff_space: f64, dot_count: u8) -> Vec<f64> {
     if dot_count == 0 {
         return vec![];
     }

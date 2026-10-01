@@ -178,7 +178,15 @@ mod tests {
     fn draw_stem_produces_line_element() {
         let (_, config, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 2000.0);
-        draw_stem(&mut svg, &staff, &config, 500.0, 295.0, 4, StemDirection::Up);
+        draw_stem(
+            &mut svg,
+            &staff,
+            &config,
+            500.0,
+            295.0,
+            4,
+            StemDirection::Up,
+        );
         let output = svg.to_svg();
         assert_eq!(
             output.matches("<line ").count(),
@@ -191,7 +199,15 @@ mod tests {
     fn draw_stem_uses_config_thickness() {
         let (_, config, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 2000.0);
-        draw_stem(&mut svg, &staff, &config, 500.0, 295.0, 4, StemDirection::Down);
+        draw_stem(
+            &mut svg,
+            &staff,
+            &config,
+            500.0,
+            295.0,
+            4,
+            StemDirection::Down,
+        );
         let output = svg.to_svg();
         let expected_sw = format!("stroke-width=\"{}\"", config.stem_thickness_fu());
         assert!(

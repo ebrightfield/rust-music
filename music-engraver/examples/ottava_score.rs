@@ -63,7 +63,10 @@ fn main() {
     assert!(svg.contains(">8vb</text>"), "should contain 8vb label");
     assert!(svg.contains(">15ma</text>"), "should contain 15ma label");
     assert!(svg.contains(">15mb</text>"), "should contain 15mb label");
-    assert!(svg.contains("stroke-dasharray"), "should contain dashed lines");
+    assert!(
+        svg.contains("stroke-dasharray"),
+        "should contain dashed lines"
+    );
 
     let paths = svg.matches("<path ").count();
     let lines = svg.matches("<line ").count();

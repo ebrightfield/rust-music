@@ -20,7 +20,7 @@ pub enum DurationKind {
     Breve,
     Whole,
     Half,
-    Qtr,  // 32 "ticks"
+    Qtr, // 32 "ticks"
     Eighth,
     Sixteenth,
     ThirtySecond,
@@ -100,19 +100,24 @@ pub struct Duration {
 
 impl Duration {
     pub const WHOLE: Self = Self {
-        dot: 0, dur: DurationKind::Whole
+        dot: 0,
+        dur: DurationKind::Whole,
     };
     pub const HALF: Self = Self {
-        dot: 0, dur: DurationKind::Half
+        dot: 0,
+        dur: DurationKind::Half,
     };
     pub const QTR: Self = Self {
-        dot: 0, dur: DurationKind::Qtr
+        dot: 0,
+        dur: DurationKind::Qtr,
     };
     pub const EIGHTH: Self = Self {
-        dot: 0, dur: DurationKind::Eighth
+        dot: 0,
+        dur: DurationKind::Eighth,
     };
     pub const SIXTEENTH: Self = Self {
-        dot: 0, dur: DurationKind::Sixteenth
+        dot: 0,
+        dur: DurationKind::Sixteenth,
     };
 
     /// A "maybe" constructor.
@@ -166,10 +171,7 @@ impl Duration {
             return self.dur.into();
         }
         let base_dur: u32 = self.dur.into();
-        (0u32..self.dot as u32)
-            .fold(base_dur, |acc, n| {
-                acc + base_dur / 2u32.pow(n + 1)
-            }) as usize
+        (0u32..self.dot as u32).fold(base_dur, |acc, n| acc + base_dur / 2u32.pow(n + 1)) as usize
     }
 
     /// Try to add two durations, returning None if result isn't representable
@@ -205,7 +207,6 @@ impl Duration {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,55 +214,25 @@ mod tests {
     #[test]
     fn dotted_durations() {
         // Dots accumulate duration appropriately
-        assert_eq!(
-            32,
-            Duration::new(DurationKind::Qtr, 0).ticks()
-        );
-        assert_eq!(
-            32 + 16,
-            Duration::new(DurationKind::Qtr, 1).ticks()
-        );
-        assert_eq!(
-            32 + 16 + 8,
-            Duration::new(DurationKind::Qtr, 2).ticks()
-        );
-        assert_eq!(
-            32 + 16 + 8 + 4,
-            Duration::new(DurationKind::Qtr, 3).ticks()
-        );
+        assert_eq!(32, Duration::new(DurationKind::Qtr, 0).ticks());
+        assert_eq!(32 + 16, Duration::new(DurationKind::Qtr, 1).ticks());
+        assert_eq!(32 + 16 + 8, Duration::new(DurationKind::Qtr, 2).ticks());
+        assert_eq!(32 + 16 + 8 + 4, Duration::new(DurationKind::Qtr, 3).ticks());
         // At the extremes, dots don't add anything
-        assert_eq!(
-            3,
-            Duration::new(DurationKind::SixtyFourth, 1).ticks()
-        );
-        assert_eq!(
-            3,
-            Duration::new(DurationKind::SixtyFourth, 2).ticks()
-        );
+        assert_eq!(3, Duration::new(DurationKind::SixtyFourth, 1).ticks());
+        assert_eq!(3, Duration::new(DurationKind::SixtyFourth, 2).ticks());
     }
 
     #[test]
     fn durations_from_ticks() {
         let d = Duration::try_from_ticks(32);
-        assert_eq!(
-            d,
-            Some(Duration::new(DurationKind::Qtr, 0))
-        );
+        assert_eq!(d, Some(Duration::new(DurationKind::Qtr, 0)));
         let d = Duration::try_from_ticks(32 + 16);
-        assert_eq!(
-            d,
-            Some(Duration::new(DurationKind::Qtr, 1))
-        );
+        assert_eq!(d, Some(Duration::new(DurationKind::Qtr, 1)));
         let d = Duration::try_from_ticks(32 + 16 + 8);
-        assert_eq!(
-            d,
-            Some(Duration::new(DurationKind::Qtr, 2))
-        );
+        assert_eq!(d, Some(Duration::new(DurationKind::Qtr, 2)));
         let d = Duration::try_from_ticks(64 + 32 + 16 + 8);
-        assert_eq!(
-            d,
-            Some(Duration::new(DurationKind::Half, 3))
-        );
+        assert_eq!(d, Some(Duration::new(DurationKind::Half, 3)));
     }
 
     #[test]

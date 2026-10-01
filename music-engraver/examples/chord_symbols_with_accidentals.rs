@@ -97,9 +97,18 @@ fn main() {
 
     // Plain-text symbols (no accidentals) must still appear as single text runs:
     // these strings should appear verbatim inside <text>...</text>.
-    assert!(svg.contains(">Cmaj7<"), "should contain plain 'Cmaj7' text element");
-    assert!(svg.contains(">Am<"), "should contain plain 'Am' text element");
-    assert!(svg.contains(">G7<"), "should contain plain 'G7' text element");
+    assert!(
+        svg.contains(">Cmaj7<"),
+        "should contain plain 'Cmaj7' text element"
+    );
+    assert!(
+        svg.contains(">Am<"),
+        "should contain plain 'Am' text element"
+    );
+    assert!(
+        svg.contains(">G7<"),
+        "should contain plain 'G7' text element"
+    );
     assert!(svg.contains(">F<"), "should contain plain 'F' text element");
     assert!(svg.contains(">A<"), "should contain plain 'A' text element");
 
@@ -107,9 +116,18 @@ fn main() {
     // ('B', 'E', 'F', 'C', 'G', 'D') and the trailing fragments ('m', 'maj7',
     // '7', '7b9' → '7' + flat + '9' etc.) must appear, but the ASCII
     // accidental characters must NOT appear inside any <text> element.
-    assert!(svg.contains(">B<"), "expected 'B' text fragment from 'Bb', 'Bb7', etc.");
-    assert!(svg.contains(">E<"), "expected 'E' text fragment from 'Ebmaj7'");
-    assert!(svg.contains(">F<"), "expected 'F' text fragment from 'F#m', 'F#m7b5'");
+    assert!(
+        svg.contains(">B<"),
+        "expected 'B' text fragment from 'Bb', 'Bb7', etc."
+    );
+    assert!(
+        svg.contains(">E<"),
+        "expected 'E' text fragment from 'Ebmaj7'"
+    );
+    assert!(
+        svg.contains(">F<"),
+        "expected 'F' text fragment from 'F#m', 'F#m7b5'"
+    );
 
     // Regression canary: no chord symbol should produce a text element that
     // visibly contains '#' or 'b'-as-flat as ASCII text characters. We check

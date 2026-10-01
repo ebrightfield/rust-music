@@ -81,7 +81,9 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, ParseError> {
                         start..i,
                     ));
                 }
-                let name = std::str::from_utf8(&bytes[name_start..i]).unwrap().to_string();
+                let name = std::str::from_utf8(&bytes[name_start..i])
+                    .unwrap()
+                    .to_string();
                 tokens.push(Token::new(TokenKind::Command(name), start..i));
             }
             c if c.is_ascii_digit() => {
@@ -152,17 +154,23 @@ mod tests {
 
     #[test]
     fn comments_skipped() {
-        assert_eq!(kinds("c4 % trailing\nd4"), vec![
-            TokenKind::Ident("c".into()),
-            TokenKind::Number(4),
-            TokenKind::Ident("d".into()),
-            TokenKind::Number(4),
-        ]);
-        assert_eq!(kinds("c4 %{ block %} d4"), vec![
-            TokenKind::Ident("c".into()),
-            TokenKind::Number(4),
-            TokenKind::Ident("d".into()),
-            TokenKind::Number(4),
-        ]);
+        assert_eq!(
+            kinds("c4 % trailing\nd4"),
+            vec![
+                TokenKind::Ident("c".into()),
+                TokenKind::Number(4),
+                TokenKind::Ident("d".into()),
+                TokenKind::Number(4),
+            ]
+        );
+        assert_eq!(
+            kinds("c4 %{ block %} d4"),
+            vec![
+                TokenKind::Ident("c".into()),
+                TokenKind::Number(4),
+                TokenKind::Ident("d".into()),
+                TokenKind::Number(4),
+            ]
+        );
     }
 }

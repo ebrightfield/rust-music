@@ -104,7 +104,14 @@ pub fn draw_lyric_extender(
         return;
     }
 
-    svg.add_line(x_start, y_baseline, x_end, y_baseline, "black", stroke_width);
+    svg.add_line(
+        x_start,
+        y_baseline,
+        x_end,
+        y_baseline,
+        "black",
+        stroke_width,
+    );
 }
 
 #[cfg(test)]

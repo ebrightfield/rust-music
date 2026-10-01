@@ -56,9 +56,15 @@ fn main() {
 
     // Verify structural elements
     assert!(svg.starts_with("<svg"), "should be valid SVG");
-    assert!(svg.contains("scale(1,"), "should contain brace glyph with scale");
+    assert!(
+        svg.contains("scale(1,"),
+        "should contain brace glyph with scale"
+    );
     // 2 staves × 5 lines = 10 staff lines minimum
-    assert!(line_count >= 10, "need at least 10 staff lines, got {line_count}");
+    assert!(
+        line_count >= 10,
+        "need at least 10 staff lines, got {line_count}"
+    );
     // At least: 2 clefs + 2 key sigs (2 sharps each = 4 paths) + 2 time sigs (num+denom each = 4 paths)
     //   + noteheads + brace = many paths
     assert!(path_count >= 15, "need at least 15 paths, got {path_count}");

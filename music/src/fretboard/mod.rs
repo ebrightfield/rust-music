@@ -1,15 +1,15 @@
 pub mod fretboard_shape;
 pub mod fretted_note;
 
-use std::ops::Deref;
-use once_cell::sync::Lazy;
 use crate::note::note::Note;
-use crate::note::pitch_class::Pc;
 use crate::note::pitch::Pitch;
+use crate::note::pitch_class::Pc;
+use once_cell::sync::Lazy;
+use std::ops::Deref;
 
-pub use fretboard_shape::{FretboardShape, ChordShapeClassification};
-pub use fretted_note::{SoundedNote, FrettedNote};
 use crate::error::MusicSemanticsError;
+pub use fretboard_shape::{ChordShapeClassification, FretboardShape};
+pub use fretted_note::{FrettedNote, SoundedNote};
 // StringConvention is defined in this file and exported directly
 
 /// String numbering conventions used in different contexts.
@@ -35,99 +35,85 @@ pub enum StringConvention {
 }
 
 /// Standard tuning on a 6-string guitar (E A D G B E).
-pub static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::E, 3),
-            Pitch::new(Note::A, 3),
-            Pitch::new(Note::D, 4),
-            Pitch::new(Note::G, 4),
-            Pitch::new(Note::B, 4),
-            Pitch::new(Note::E, 5),
-        ],
-    }
+pub static STD_6STR_GTR: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::E, 3),
+        Pitch::new(Note::A, 3),
+        Pitch::new(Note::D, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::B, 4),
+        Pitch::new(Note::E, 5),
+    ],
 });
 
 /// Drop D tuning on a 6-string guitar (D A D G B E).
-pub static DROP_D: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::D, 3),
-            Pitch::new(Note::A, 3),
-            Pitch::new(Note::D, 4),
-            Pitch::new(Note::G, 4),
-            Pitch::new(Note::B, 4),
-            Pitch::new(Note::E, 5),
-        ],
-    }
+pub static DROP_D: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::D, 3),
+        Pitch::new(Note::A, 3),
+        Pitch::new(Note::D, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::B, 4),
+        Pitch::new(Note::E, 5),
+    ],
 });
 
 /// DADGAD tuning, popular in Celtic and fingerstyle guitar (D A D G A D).
-pub static DADGAD: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::D, 3),
-            Pitch::new(Note::A, 3),
-            Pitch::new(Note::D, 4),
-            Pitch::new(Note::G, 4),
-            Pitch::new(Note::A, 4),
-            Pitch::new(Note::D, 5),
-        ],
-    }
+pub static DADGAD: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::D, 3),
+        Pitch::new(Note::A, 3),
+        Pitch::new(Note::D, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::A, 4),
+        Pitch::new(Note::D, 5),
+    ],
 });
 
 /// Open G tuning (D G D G B D), popular for slide guitar and blues.
-pub static OPEN_G: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::D, 3),
-            Pitch::new(Note::G, 3),
-            Pitch::new(Note::D, 4),
-            Pitch::new(Note::G, 4),
-            Pitch::new(Note::B, 4),
-            Pitch::new(Note::D, 5),
-        ],
-    }
+pub static OPEN_G: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::D, 3),
+        Pitch::new(Note::G, 3),
+        Pitch::new(Note::D, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::B, 4),
+        Pitch::new(Note::D, 5),
+    ],
 });
 
 /// Standard tuning on a 7-string guitar (B E A D G B E).
-pub static STANDARD_7: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::B, 2),
-            Pitch::new(Note::E, 3),
-            Pitch::new(Note::A, 3),
-            Pitch::new(Note::D, 4),
-            Pitch::new(Note::G, 4),
-            Pitch::new(Note::B, 4),
-            Pitch::new(Note::E, 5),
-        ],
-    }
+pub static STANDARD_7: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::B, 2),
+        Pitch::new(Note::E, 3),
+        Pitch::new(Note::A, 3),
+        Pitch::new(Note::D, 4),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::B, 4),
+        Pitch::new(Note::E, 5),
+    ],
 });
 
 /// Standard tuning on a 4-string bass (E A D G).
-pub static BASS_4: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::E, 2),
-            Pitch::new(Note::A, 2),
-            Pitch::new(Note::D, 3),
-            Pitch::new(Note::G, 3),
-        ],
-    }
+pub static BASS_4: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::E, 2),
+        Pitch::new(Note::A, 2),
+        Pitch::new(Note::D, 3),
+        Pitch::new(Note::G, 3),
+    ],
 });
 
 /// Standard tuning on a 5-string bass (B E A D G).
-pub static BASS_5: Lazy<Fretboard> = Lazy::new(|| {
-    Fretboard {
-        open_strings: vec![
-            Pitch::new(Note::B, 1),
-            Pitch::new(Note::E, 2),
-            Pitch::new(Note::A, 2),
-            Pitch::new(Note::D, 3),
-            Pitch::new(Note::G, 3),
-        ],
-    }
+pub static BASS_5: Lazy<Fretboard> = Lazy::new(|| Fretboard {
+    open_strings: vec![
+        Pitch::new(Note::B, 1),
+        Pitch::new(Note::E, 2),
+        Pitch::new(Note::A, 2),
+        Pitch::new(Note::D, 3),
+        Pitch::new(Note::G, 3),
+    ],
 });
 
 /// Represents a fretboard with any arbitrary tuning or number of strings.
@@ -140,7 +126,6 @@ pub struct Fretboard {
 }
 
 impl Fretboard {
-
     /// Allowing a hypothetical three-octave fretboard allows for performing various
     /// melodic/harmonic fretboard shape search patterns higher up the neck, avoiding
     /// running into the open strings
@@ -156,13 +141,18 @@ impl Fretboard {
     /// It is important to remember that colloquially, the thickest string on a guitar
     /// is "the 6th string", but it is indexed here as `self.open_strings[0]`.
     pub fn get_string(&self, string: u8) -> Result<&Pitch, MusicSemanticsError> {
-        self.open_strings.get(string as usize)
-            .ok_or(MusicSemanticsError::StringTooHighForFretboard(string, self.clone()))
+        self.open_strings.get(string as usize).ok_or(
+            MusicSemanticsError::StringTooHighForFretboard(string, self.clone()),
+        )
     }
 
     /// This is the preferred way to create a [SoundedNote] instance, because it
     /// validates the initialization parameters against [self].
-    pub fn sounded_note(&self, string: u8, fret: u8) -> Result<SoundedNote<'_>, MusicSemanticsError> {
+    pub fn sounded_note(
+        &self,
+        string: u8,
+        fret: u8,
+    ) -> Result<SoundedNote<'_>, MusicSemanticsError> {
         if fret > Self::MAX {
             return Err(MusicSemanticsError::FretTooHigh(fret));
         }
@@ -175,8 +165,7 @@ impl Fretboard {
                 fretboard: self,
             });
         }
-        let pitch =
-            open_string.at_distance_from(fret as isize)?;
+        let pitch = open_string.at_distance_from(fret as isize)?;
         Ok(SoundedNote {
             string,
             fret,
@@ -187,7 +176,11 @@ impl Fretboard {
 
     /// Given a string and target note, returns the first available
     /// [SoundedNote] whose fret equals a given [Note].
-    pub fn note_on_string(&self, note: &Note, string: u8) -> Result<SoundedNote<'_>, MusicSemanticsError> {
+    pub fn note_on_string(
+        &self,
+        note: &Note,
+        string: u8,
+    ) -> Result<SoundedNote<'_>, MusicSemanticsError> {
         let fret = self.which_fret(note, string)?;
         self.sounded_note(string, fret)
     }

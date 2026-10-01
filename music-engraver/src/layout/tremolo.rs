@@ -153,8 +153,18 @@ mod tests {
             StemDirection::Up,
         );
         // y should be between tip and notehead
-        assert!(layout.y < notehead_y, "y ({}) should be above notehead ({})", layout.y, notehead_y);
-        assert!(layout.y > tip_y, "y ({}) should be below tip ({})", layout.y, tip_y);
+        assert!(
+            layout.y < notehead_y,
+            "y ({}) should be above notehead ({})",
+            layout.y,
+            notehead_y
+        );
+        assert!(
+            layout.y > tip_y,
+            "y ({}) should be below tip ({})",
+            layout.y,
+            tip_y
+        );
     }
 
     #[test]
@@ -171,8 +181,18 @@ mod tests {
             &staff,
             StemDirection::Down,
         );
-        assert!(layout.y > notehead_y, "y ({}) should be below notehead ({})", layout.y, notehead_y);
-        assert!(layout.y < tip_y, "y ({}) should be above tip ({})", layout.y, tip_y);
+        assert!(
+            layout.y > notehead_y,
+            "y ({}) should be below notehead ({})",
+            layout.y,
+            notehead_y
+        );
+        assert!(
+            layout.y < tip_y,
+            "y ({}) should be above tip ({})",
+            layout.y,
+            tip_y
+        );
     }
 
     #[test]
@@ -195,9 +215,30 @@ mod tests {
     #[test]
     fn different_counts_produce_different_glyphs_in_layout() {
         let staff = test_staff();
-        let l1 = layout_tremolo(TremoloCount::Single, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
-        let l2 = layout_tremolo(TremoloCount::Double, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
-        let l3 = layout_tremolo(TremoloCount::Triple, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
+        let l1 = layout_tremolo(
+            TremoloCount::Single,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
+        let l2 = layout_tremolo(
+            TremoloCount::Double,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
+        let l3 = layout_tremolo(
+            TremoloCount::Triple,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
         assert_ne!(l1.glyph, l2.glyph);
         assert_ne!(l2.glyph, l3.glyph);
     }
@@ -206,8 +247,22 @@ mod tests {
     fn same_position_different_direction_same_y_computation() {
         let staff = test_staff();
         // With same notehead_y and tip_y, direction doesn't affect placement
-        let l_up = layout_tremolo(TremoloCount::Single, 100.0, 500.0, 200.0, &staff, StemDirection::Up);
-        let l_down = layout_tremolo(TremoloCount::Single, 100.0, 500.0, 200.0, &staff, StemDirection::Down);
+        let l_up = layout_tremolo(
+            TremoloCount::Single,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Up,
+        );
+        let l_down = layout_tremolo(
+            TremoloCount::Single,
+            100.0,
+            500.0,
+            200.0,
+            &staff,
+            StemDirection::Down,
+        );
         assert!((l_up.y - l_down.y).abs() < 0.001);
     }
 }

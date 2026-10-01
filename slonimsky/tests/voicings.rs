@@ -196,6 +196,210 @@ fn voicings_triad_shows_family_headers() {
     );
 }
 
+// ==================== range and spacing controls ====================
+
+#[test]
+fn voicings_range_expands_and_bounds_register_placements() {
+    slonimsky()
+        .args(["voicings", "C", "E", "G", "--range", "C4..C5"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Range: C4..C5"))
+        .stdout(predicate::str::contains("1 families, 2 voicings total"))
+        .stdout(predicate::str::contains("C4 E4 G4"))
+        .stdout(predicate::str::contains("E4 G4 C5"))
+        .stdout(predicate::str::contains("C3").not())
+        .stdout(predicate::str::contains("E5").not());
+}
+
+#[test]
+fn voicings_spacing_filters_adjacent_intervals() {
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--min-spacing",
+            "5",
+            "--max-spacing",
+            "8",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Adjacent spacing: 5..8 semitones"))
+        .stdout(predicate::str::contains("1 families, 1 voicings total"))
+        .stdout(predicate::str::contains("intervals: [8, 7]"));
+}
+
+#[test]
+fn voicings_combines_range_and_spacing_filters() {
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--range",
+            "C3..C6",
+            "--min-spacing",
+            "7",
+            "--max-spacing",
+            "9",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1 families, 6 voicings total"))
+        .stdout(predicate::str::contains("6 placements"));
+}
+
+#[test]
+fn voicings_rejects_invalid_constraints() {
+    slonimsky()
+        .args(["voicings", "C", "E", "G", "--range", "C6..C3"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "lower bound C6 exceeds upper bound C3",
+        ));
+
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--min-spacing",
+            "9",
+            "--max-spacing",
+            "4",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--min-spacing (9) cannot exceed --max-spacing (4)",
+        ));
+}
+
+// ==================== instrument controls ====================
+
+#[test]
+fn voicings_strings_and_tuning_generate_playable_placements() {
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--tuning",
+            "standard",
+            "--strings",
+            "3",
+            "--range",
+            "E2..E5",
+            "--limit",
+            "3",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("10 instrument voicings total"))
+        .stdout(predicate::str::contains(
+            "Tuning: standard, sounded strings: 3, doubling: forbid",
+        ))
+        .stdout(predicate::str::contains("Instrument placements"));
+}
+
+#[test]
+fn voicings_required_doubling_uses_extra_strings() {
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--tuning",
+            "bass-4",
+            "--strings",
+            "4",
+            "--doubling",
+            "require",
+            "--range",
+            "E1..G4",
+            "--limit",
+            "1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("71 instrument voicings total"))
+        .stdout(predicate::str::contains(
+            "Tuning: bass-4, sounded strings: 4, doubling: require",
+        ))
+        .stdout(predicate::str::contains("E2 C3 E3 G3"));
+}
+
+#[test]
+fn voicings_allow_doubling_accepts_extra_strings() {
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--strings",
+            "4",
+            "--doubling",
+            "allow",
+            "--range",
+            "E2..E5",
+            "--limit",
+            "1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Tuning: standard, sounded strings: 4, doubling: allow",
+        ));
+}
+
+#[test]
+fn voicings_rejects_incompatible_string_and_doubling_controls() {
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--strings",
+            "4",
+            "--doubling",
+            "forbid",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--doubling forbid requires --strings to equal the 3 chord tones",
+        ));
+
+    slonimsky()
+        .args([
+            "voicings",
+            "C",
+            "E",
+            "G",
+            "--tuning",
+            "bass-4",
+            "--strings",
+            "5",
+            "--doubling",
+            "allow",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--strings (5) exceeds tuning 'bass-4' string count (4)",
+        ));
+}
+
 // ==================== error cases ====================
 
 #[test]

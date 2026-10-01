@@ -76,8 +76,7 @@ fn main() {
 
     // Write to file
     std::fs::create_dir_all("music-engraver/examples/output").ok();
-    std::fs::write("music-engraver/examples/output/tab_let_ring.svg", &svg)
-        .expect("write SVG");
+    std::fs::write("music-engraver/examples/output/tab_let_ring.svg", &svg).expect("write SVG");
 
     // Verify structural elements
     let text_count = svg.matches("<text ").count();
@@ -101,8 +100,5 @@ fn main() {
         svg.contains("stroke-dasharray"),
         "consecutive let ring events should produce dashed continuation lines"
     );
-    assert!(
-        svg.contains("italic"),
-        "let ring text should be italic"
-    );
+    assert!(svg.contains("italic"), "let ring text should be italic");
 }

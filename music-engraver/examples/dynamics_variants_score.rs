@@ -12,10 +12,10 @@
 //!
 //! Produces `examples/output/dynamics_variants_score.svg`.
 
-use music::note::note::Note;
-use music::note::pitch::Pitch;
 use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
+use music::note::note::Note;
+use music::note::pitch::Pitch;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;

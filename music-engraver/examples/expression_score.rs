@@ -65,7 +65,10 @@ fn main() {
         path_count, line_count, text_count
     );
     // Expression text should appear as <text> elements
-    assert!(text_count >= 4, "expected at least 4 expression text elements");
+    assert!(
+        text_count >= 4,
+        "expected at least 4 expression text elements"
+    );
     assert!(svg.contains(">dolce<"), "should contain 'dolce'");
     assert!(svg.contains(">espressivo<"), "should contain 'espressivo'");
     assert!(svg.contains(">legato<"), "should contain 'legato'");

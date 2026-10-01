@@ -1,15 +1,12 @@
-use itertools::Itertools;
-use tera::Context;
 use crate::notation::lilypond::templates::TEMPLATE_ENGINE;
 use crate::notation::lilypond::ToLilypondString;
 use crate::notation::rhythm::RhythmicNotatedEvent;
-
+use itertools::Itertools;
+use tera::Context;
 
 impl<'a> ToLilypondString for Vec<LilypondVoiceElement<'a>> {
     fn to_lilypond_string(&self) -> String {
-        let content = self.iter()
-            .map(|item| item.to_lilypond_string())
-            .join(" ");
+        let content = self.iter().map(|item| item.to_lilypond_string()).join(" ");
         let mut ctx = Context::new();
         ctx.insert("content", &content);
         (*TEMPLATE_ENGINE).render("voice", &ctx).unwrap()
@@ -43,8 +40,8 @@ impl<'a> ToLilypondString for LilypondVoiceElement<'a> {
         match &self {
             LilypondVoiceElement::Common(rhythmic_notated_event) => {
                 rhythmic_notated_event.to_lilypond_string()
-            },
-            LilypondVoiceElement::Other(ly) => ly.to_lilypond_string()
+            }
+            LilypondVoiceElement::Other(ly) => ly.to_lilypond_string(),
         }
     }
 }
@@ -64,7 +61,9 @@ impl<'a> LilypondVoiceElement<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::notation::rhythm::{RhythmicNotatedEvent, duration::Duration, duration::DurationKind};
+    use crate::notation::rhythm::{
+        duration::Duration, duration::DurationKind, RhythmicNotatedEvent,
+    };
     use crate::note::pitch::Pitch;
 
     #[test]
@@ -79,7 +78,9 @@ mod tests {
     fn as_rhythmic_event_returns_none_for_other() {
         struct DummyLy;
         impl ToLilypondString for DummyLy {
-            fn to_lilypond_string(&self) -> String { "dummy".to_string() }
+            fn to_lilypond_string(&self) -> String {
+                "dummy".to_string()
+            }
         }
         let elem: LilypondVoiceElement = LilypondVoiceElement::Other(Box::new(DummyLy));
         assert!(elem.as_rhythmic_event().is_none());

@@ -17,10 +17,10 @@
 
 use std::collections::HashSet;
 
-use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
-use crate::note_collections::chord_name::quality::chord::{ChordQuality, MajorSubtype};
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::chord::{ChordQuality, MajorSubtype};
 
 const NINE_AXIS: &[Pc] = &[Pc1, Pc3];
 const FIVE_AXIS: &[Pc] = &[Pc6, Pc8];
@@ -55,8 +55,10 @@ impl NamingHeuristic for AlteredDominant {
         // Reject stray pcs that aren't part of the altered collection. The
         // altered dominant is built from exactly the following pcs (plus the
         // implicit root Pc0): Pc1, Pc3, Pc4, Pc6, Pc8, Pc10.
-        let allowed: HashSet<Pc> =
-            [Pc0, Pc1, Pc3, Pc4, Pc6, Pc8, Pc10].iter().copied().collect();
+        let allowed: HashSet<Pc> = [Pc0, Pc1, Pc3, Pc4, Pc6, Pc8, Pc10]
+            .iter()
+            .copied()
+            .collect();
         pcs.iter().all(|pc| allowed.contains(pc))
     }
 

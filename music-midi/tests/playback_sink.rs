@@ -82,7 +82,11 @@ fn fake_clock_does_not_go_backward() {
     let t0 = clock.now();
     // Sleep to a past instant — clock should not regress.
     clock.sleep_until(t0 - Duration::from_millis(1));
-    assert_eq!(clock.now(), t0, "clock should not regress when target is in the past");
+    assert_eq!(
+        clock.now(),
+        t0,
+        "clock should not regress when target is in the past"
+    );
 }
 
 #[test]
@@ -136,7 +140,10 @@ fn play_blocking_empty_smf_completes_without_error() {
 
     // No MIDI events were sent (only the AllNotesOff on drop, which hasn't happened yet).
     let sent_during_play = cap.0.lock().unwrap().len();
-    assert_eq!(sent_during_play, 0, "no MIDI events should be sent for an empty SMF");
+    assert_eq!(
+        sent_during_play, 0,
+        "no MIDI events should be sent for an empty SMF"
+    );
 }
 
 #[test]
@@ -182,7 +189,9 @@ fn play_blocking_single_note_sends_noteon_and_noteoff() {
         tracks: vec![track],
     };
 
-    player.play_blocking(&smf).expect("play_blocking should succeed");
+    player
+        .play_blocking(&smf)
+        .expect("play_blocking should succeed");
 
     let sent = cap.0.lock().unwrap();
     // Expect exactly 2 MIDI events (NoteOn + NoteOff), before the drop fires AllNotesOff.
@@ -192,6 +201,10 @@ fn play_blocking_single_note_sends_noteon_and_noteoff() {
     assert_eq!(sent[0][1], 60, "key should be C4 (60)");
     assert_eq!(sent[0][2], 100, "velocity should be 100");
     // Second event: NoteOff on channel 0
-    assert_eq!(sent[1][0] & 0xF0, 0x80, "second event should be NoteOff (0x8n)");
+    assert_eq!(
+        sent[1][0] & 0xF0,
+        0x80,
+        "second event should be NoteOff (0x8n)"
+    );
     assert_eq!(sent[1][1], 60);
 }

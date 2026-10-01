@@ -76,11 +76,16 @@ fn voice_leading_results_sorted_by_distance() {
         .filter_map(|line| {
             let idx = line.find("dist=")?;
             let after = &line[idx + 5..];
-            let end = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
+            let end = after
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(after.len());
             after[..end].parse().ok()
         })
         .collect();
-    assert!(dists.len() >= 2, "should find at least 2 results with distances");
+    assert!(
+        dists.len() >= 2,
+        "should find at least 2 results with distances"
+    );
     for w in dists.windows(2) {
         assert!(
             w[0] <= w[1],
@@ -98,8 +103,10 @@ fn voice_leading_no_crossings_shows_rule() {
     let out = slonimsky()
         .args([
             "voice-leading",
-            "--from", "C4,E4,G4",
-            "--to", "F,A,C",
+            "--from",
+            "C4,E4,G4",
+            "--to",
+            "F,A,C",
             "--no-crossings",
         ])
         .output()
@@ -122,8 +129,10 @@ fn voice_leading_no_crossings_reduces_count() {
     let constrained = slonimsky()
         .args([
             "voice-leading",
-            "--from", "C4,E4,G4",
-            "--to", "F,A,C",
+            "--from",
+            "C4,E4,G4",
+            "--to",
+            "F,A,C",
             "--no-crossings",
         ])
         .output()
@@ -162,9 +171,12 @@ fn voice_leading_limit_caps_output() {
     let limited = slonimsky()
         .args([
             "voice-leading",
-            "--from", "C4,E4,G4",
-            "--to", "F,A,C",
-            "--limit", "2",
+            "--from",
+            "C4,E4,G4",
+            "--to",
+            "F,A,C",
+            "--limit",
+            "2",
         ])
         .output()
         .expect("command should run");
@@ -183,7 +195,10 @@ fn voice_leading_limit_caps_output() {
             trimmed.starts_with("1.") || trimmed.starts_with("2.") || trimmed.starts_with("3.")
         })
         .count();
-    assert_eq!(result_lines, 2, "should show exactly 2 results; got:\n{stdout}");
+    assert_eq!(
+        result_lines, 2,
+        "should show exactly 2 results; got:\n{stdout}"
+    );
 }
 
 // ==================== verbose ====================
@@ -191,12 +206,7 @@ fn voice_leading_limit_caps_output() {
 #[test]
 fn voice_leading_verbose_shows_paths() {
     let out = slonimsky()
-        .args([
-            "voice-leading",
-            "--from", "C4,E4,G4",
-            "--to", "F,A,C",
-            "-v",
-        ])
+        .args(["voice-leading", "--from", "C4,E4,G4", "--to", "F,A,C", "-v"])
         .output()
         .expect("command should run");
 
@@ -213,11 +223,7 @@ fn voice_leading_verbose_shows_paths() {
 #[test]
 fn voice_leading_four_voices_works() {
     let out = slonimsky()
-        .args([
-            "voice-leading",
-            "--from", "C4,E4,G4,B4",
-            "--to", "D,F,A,C",
-        ])
+        .args(["voice-leading", "--from", "C4,E4,G4,B4", "--to", "D,F,A,C"])
         .output()
         .expect("command should run");
 
@@ -231,6 +237,52 @@ fn voice_leading_four_voices_works() {
         stdout.contains("Total:"),
         "should show total; got:\n{stdout}"
     );
+}
+
+// ==================== weighted metric ====================
+
+#[test]
+fn voice_leading_weighted_metric_uses_per_voice_weights() {
+    slonimsky()
+        .args([
+            "voice-leading",
+            "--from",
+            "C4,E4,G4",
+            "--to",
+            "F,A,C",
+            "--metric",
+            "weighted",
+            "--weights",
+            "1,1,10",
+            "--limit",
+            "1",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Metric: weighted L1"))
+        .stdout(predicate::str::contains("Weights: 1,1,10"))
+        .stdout(predicate::str::contains("dist=21"));
+}
+
+#[test]
+fn voice_leading_weighted_metric_validates_voice_count() {
+    slonimsky()
+        .args([
+            "voice-leading",
+            "--from",
+            "C4,E4,G4",
+            "--to",
+            "F,A,C",
+            "--metric",
+            "weighted",
+            "--weights",
+            "1,2",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--weights has 2 values but the voicing has 3 voices",
+        ));
 }
 
 // ==================== error cases ====================
@@ -256,11 +308,7 @@ fn voice_leading_missing_to_fails() {
 #[test]
 fn voice_leading_voice_count_mismatch_fails() {
     let out = slonimsky()
-        .args([
-            "voice-leading",
-            "--from", "C4,E4,G4",
-            "--to", "F,A",
-        ])
+        .args(["voice-leading", "--from", "C4,E4,G4", "--to", "F,A"])
         .output()
         .expect("command should run");
 
@@ -275,11 +323,7 @@ fn voice_leading_voice_count_mismatch_fails() {
 #[test]
 fn voice_leading_bad_pitch_fails() {
     let out = slonimsky()
-        .args([
-            "voice-leading",
-            "--from", "X4,Y4,Z4",
-            "--to", "F,A,C",
-        ])
+        .args(["voice-leading", "--from", "X4,Y4,Z4", "--to", "F,A,C"])
         .output()
         .expect("command should run");
 

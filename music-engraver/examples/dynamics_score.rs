@@ -71,10 +71,7 @@ fn main() {
     assert!(svg.contains("</svg>"));
     let path_count = svg.matches("<path").count();
     let line_count = svg.matches("<line").count();
-    println!(
-        "SVG contains {} paths, {} lines",
-        path_count, line_count
-    );
+    println!("SVG contains {} paths, {} lines", path_count, line_count);
     // Must have dynamic markings (extra paths beyond noteheads/clef/key sig)
     // 14 notes/chords + clef + key sig glyphs + 11 dynamics = at least 25 paths
     assert!(path_count > 20, "expected many paths including dynamics");

@@ -1,9 +1,9 @@
-use music::note_collections::octave_partition::OctavePartition;
-use music::note_collections::pc_set::{PcShape, AsPcSlice};
+use crate::canonical_voicings::CanonicalVoicings;
+use anyhow::anyhow;
 use music::note::pitch_class::Pc;
 use music::note::pitch_class::Pc::*;
-use anyhow::anyhow;
-use crate::canonical_voicings::CanonicalVoicings;
+use music::note_collections::octave_partition::OctavePartition;
+use music::note_collections::pc_set::{AsPcSlice, PcShape};
 
 /// The various possible octave partitions with three notes.
 ///
@@ -47,7 +47,7 @@ impl ThreeNoteChordQuality {
         for i in 0usize..2 {
             copied = copied.rotate_fwd();
             if let Ok(quality) = ThreeNoteChordQuality::try_from(&copied) {
-                return Ok((i+1, quality));
+                return Ok((i + 1, quality));
             }
         }
         // this chord quality is combinatorically exhaustive, it should always
@@ -77,7 +77,6 @@ pub const WW_PCS: &[Pc] = &[Pc0, Pc2, Pc4];
 pub const WH_PCS: &[Pc] = &[Pc0, Pc2, Pc3];
 pub const HW_PCS: &[Pc] = &[Pc0, Pc1, Pc3];
 pub const HH_PCS: &[Pc] = &[Pc0, Pc1, Pc2];
-
 
 impl From<&ThreeNoteChordQuality> for OctavePartition {
     fn from(value: &ThreeNoteChordQuality) -> Self {
@@ -146,7 +145,7 @@ impl TryFrom<&PcShape> for ThreeNoteChordQuality {
 
 impl CanonicalVoicings for ThreeNoteChordQuality {
     const N: usize = 3;
-    const FAMILIES: &'static [&'static[usize]] = &[&[0,1,2], &[0,2,1]];
+    const FAMILIES: &'static [&'static [usize]] = &[&[0, 1, 2], &[0, 2, 1]];
 }
 
 // TODO Should this be something more like a vector of possible qualities, one on each mode?
@@ -175,7 +174,6 @@ impl CanonicalVoicings for ThreeNoteChordQuality {
 //         }
 //     }
 // }
-
 
 #[cfg(test)]
 mod tests {

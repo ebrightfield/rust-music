@@ -378,7 +378,8 @@ fn build_linear_interval_svg(pitches: &[Pc], config: &IntervalConfig) -> String 
     let mut sorted_pitches: Vec<u8> = pitches.iter().map(|pc| (*pc).into()).collect();
     sorted_pitches.sort();
 
-    let width = margin * 2 + (sorted_pitches.len() as u32 - 1).max(1) * note_spacing + note_radius * 2;
+    let width =
+        margin * 2 + (sorted_pitches.len() as u32 - 1).max(1) * note_spacing + note_radius * 2;
     let height = margin * 2 + title_height + arc_height + note_radius * 2;
 
     let mut svg = SvgBuilder::new(width, height);
@@ -394,7 +395,8 @@ fn build_linear_interval_svg(pitches: &[Pc], config: &IntervalConfig) -> String 
     for i in 0..sorted_pitches.len().saturating_sub(1) {
         let x1 = (margin + note_radius + i as u32 * note_spacing) as f64;
         let x2 = (margin + note_radius + (i + 1) as u32 * note_spacing) as f64;
-        let interval = (sorted_pitches[i + 1] as i32 - sorted_pitches[i] as i32).rem_euclid(12) as u8;
+        let interval =
+            (sorted_pitches[i + 1] as i32 - sorted_pitches[i] as i32).rem_euclid(12) as u8;
 
         // Arc center and height proportional to interval
         let cx = (x1 + x2) / 2.0;
@@ -439,7 +441,6 @@ fn build_linear_interval_svg(pitches: &[Pc], config: &IntervalConfig) -> String 
 
     svg.build()
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -528,9 +529,7 @@ mod tests {
     #[test]
     fn test_from_pc_set() {
         let pc_set = PcShape::new(vec![Pc::Pc0, Pc::Pc4, Pc::Pc7]);
-        let svg = IntervalBuilder::new()
-            .from_pc_shape(&pc_set)
-            .build_vector();
+        let svg = IntervalBuilder::new().from_pc_shape(&pc_set).build_vector();
 
         assert!(svg.starts_with("<svg"));
     }
@@ -550,9 +549,7 @@ mod tests {
     fn test_chromatic_scale_intervals() {
         // Chromatic scale has all intervals
         let all_pcs: Vec<Pc> = (0u8..12).map(Pc::from).collect();
-        let svg = IntervalBuilder::new()
-            .pitches(all_pcs)
-            .build_full_vector();
+        let svg = IntervalBuilder::new().pitches(all_pcs).build_full_vector();
 
         assert!(svg.starts_with("<svg"));
     }

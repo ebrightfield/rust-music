@@ -40,7 +40,10 @@ fn ear_training_produces_midi_with_seed() {
 
     // Format 1 (parallel) has 2+ tracks
     let num_tracks = u16::from_be_bytes([bytes[10], bytes[11]]);
-    assert_eq!(num_tracks, 2, "SMF should have 2 tracks (conductor + notes)");
+    assert_eq!(
+        num_tracks, 2,
+        "SMF should have 2 tracks (conductor + notes)"
+    );
 }
 
 #[test]
@@ -125,7 +128,10 @@ fn ear_training_seed_produces_deterministic_output() {
     assert_eq!(bytes1, bytes2, "same seed should produce identical MIDI");
 
     // Same seed → same answer key text
-    assert_eq!(out1.stdout, out2.stdout, "same seed should produce identical answers");
+    assert_eq!(
+        out1.stdout, out2.stdout,
+        "same seed should produce identical answers"
+    );
 }
 
 #[test]
@@ -196,14 +202,23 @@ fn ear_training_json_output_is_valid() {
 
     let json_str = std::fs::read_to_string(&json_path).expect("JSON file should exist");
     assert!(json_str.starts_with('['), "JSON should be an array");
-    assert!(json_str.trim_end().ends_with(']'), "JSON array should close");
+    assert!(
+        json_str.trim_end().ends_with(']'),
+        "JSON array should close"
+    );
 
     // Check structural fields in each entry
     assert!(json_str.contains("\"item\""), "should have item field");
     assert!(json_str.contains("\"root\""), "should have root field");
     assert!(json_str.contains("\"target\""), "should have target field");
-    assert!(json_str.contains("\"semitones\""), "should have semitones field");
-    assert!(json_str.contains("\"interval\""), "should have interval field");
+    assert!(
+        json_str.contains("\"semitones\""),
+        "should have semitones field"
+    );
+    assert!(
+        json_str.contains("\"interval\""),
+        "should have interval field"
+    );
 }
 
 #[test]
@@ -263,10 +278,7 @@ fn ear_training_verbose_prints_to_stderr() {
         "verbose should report items written: {}",
         stderr
     );
-    assert!(
-        stderr.contains("bytes"),
-        "verbose should report byte count"
-    );
+    assert!(stderr.contains("bytes"), "verbose should report byte count");
 }
 
 // ==================== count parameter ====================
@@ -293,11 +305,7 @@ fn ear_training_count_1_produces_single_item() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("1 items"), "should show 1 item");
     // Only one numbered answer
-    assert!(
-        stdout.contains("# 1:"),
-        "should have item #1: {}",
-        stdout
-    );
+    assert!(stdout.contains("# 1:"), "should have item #1: {}", stdout);
 }
 
 #[test]

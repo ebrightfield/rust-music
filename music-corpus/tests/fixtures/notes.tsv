@@ -1,0 +1,10 @@
+corpus	piece	i	mc	mn	quarterbeats	duration	gracenote	staff	voice	tied	tpc	midi
+fixture	movement	1	1	1	0	1/2		1	1	1	0	60
+fixture	movement	2	1	1	2	1/2		1	1	-1	0	60
+fixture	movement	3	1	1	0	1		1	2		4	64
+fixture	movement	4	1	1	0	1		2	1		1	67
+fixture	movement	9	1	1	1	0	grace16	1	1		0	72
+fixture	movement	5	2	2	4	1		1	1		1	67
+fixture	movement	6	2	2	4	1		1	2		5	71
+fixture	movement	7	2	2	4	1		2	1		2	62
+fixture	movement	8	2	2	4	1		2	2		-1	65

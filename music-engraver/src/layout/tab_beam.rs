@@ -256,10 +256,22 @@ mod tests {
     #[test]
     fn mixed_durations_eighths_and_sixteenths() {
         let notes = vec![
-            TabBeamedNote { x: 100.0, duration_log2: 3 },
-            TabBeamedNote { x: 200.0, duration_log2: 4 },
-            TabBeamedNote { x: 300.0, duration_log2: 4 },
-            TabBeamedNote { x: 400.0, duration_log2: 3 },
+            TabBeamedNote {
+                x: 100.0,
+                duration_log2: 3,
+            },
+            TabBeamedNote {
+                x: 200.0,
+                duration_log2: 4,
+            },
+            TabBeamedNote {
+                x: 300.0,
+                duration_log2: 4,
+            },
+            TabBeamedNote {
+                x: 400.0,
+                duration_log2: 3,
+            },
         ];
         let staff = guitar_staff();
         let layout = layout_tab_beam_group(&staff, &notes, 5.0, 20.0, 10.0).unwrap();

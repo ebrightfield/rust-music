@@ -5,13 +5,24 @@ use proptest::prelude::*;
 
 fn arb_pitch_str() -> impl Strategy<Value = String> {
     let valid_combos: Vec<(&str, &str)> = vec![
-        ("c", ""), ("c", "s"), ("c", "es"),
-        ("d", ""), ("d", "s"), ("d", "es"),
-        ("e", ""), ("e", "es"),
-        ("f", ""), ("f", "s"),
-        ("g", ""), ("g", "s"), ("g", "es"),
-        ("a", ""), ("a", "s"), ("a", "es"),
-        ("b", ""), ("b", "es"),
+        ("c", ""),
+        ("c", "s"),
+        ("c", "es"),
+        ("d", ""),
+        ("d", "s"),
+        ("d", "es"),
+        ("e", ""),
+        ("e", "es"),
+        ("f", ""),
+        ("f", "s"),
+        ("g", ""),
+        ("g", "s"),
+        ("g", "es"),
+        ("a", ""),
+        ("a", "s"),
+        ("a", "es"),
+        ("b", ""),
+        ("b", "es"),
     ];
     let combo = prop::sample::select(valid_combos);
     let octave = 1u8..=7u8;
@@ -21,8 +32,7 @@ fn arb_pitch_str() -> impl Strategy<Value = String> {
 fn arb_duration_str() -> impl Strategy<Value = String> {
     let bases: Vec<&str> = vec!["1", "2", "4", "8", "16", "32", "64", "128"];
     let dots: Vec<&str> = vec!["", ".", ".."];
-    (prop::sample::select(bases), prop::sample::select(dots))
-        .prop_map(|(b, d)| format!("{b}{d}"))
+    (prop::sample::select(bases), prop::sample::select(dots)).prop_map(|(b, d)| format!("{b}{d}"))
 }
 
 fn arb_clef() -> impl Strategy<Value = &'static str> {
@@ -44,7 +54,11 @@ fn arb_event_ron() -> impl Strategy<Value = String> {
             arb_duration_str()
         )
             .prop_map(|(ps, d)| {
-                let joined = ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ");
+                let joined = ps
+                    .iter()
+                    .map(|p| format!("\"{p}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("Chord(pitches: [{joined}], duration: \"{d}\")")
             }),
     ]

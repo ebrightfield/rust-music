@@ -79,7 +79,14 @@ mod tests {
             .sum();
 
         layout_tuplet_bracket(
-            100.0, 900.0, &[2, 4, 6], placement, number, ss, thickness_ss, number_width,
+            100.0,
+            900.0,
+            &[2, 4, 6],
+            placement,
+            number,
+            ss,
+            thickness_ss,
+            number_width,
         )
     }
 
@@ -113,7 +120,10 @@ mod tests {
         let mut svg = SvgWriter::new(200.0, 200.0, 0.0, 0.0, 2000.0, 2000.0);
         draw_tuplet_bracket(&mut svg, &layout, &font, 0.0, 0.0);
         let output = svg.to_svg();
-        assert!(output.contains("<path "), "should contain number glyph path");
+        assert!(
+            output.contains("<path "),
+            "should contain number glyph path"
+        );
     }
 
     #[test]

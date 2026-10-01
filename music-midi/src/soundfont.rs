@@ -41,8 +41,7 @@ pub const SF_URL: &str =
     "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/9704918364/GeneralUser-GS.sf2";
 
 // [AMEND-D resolved]: 64-char hex digest pinned by Phase 5-pre.
-pub const SF_SHA256_HEX: &str =
-    "9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe";
+pub const SF_SHA256_HEX: &str = "9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe";
 
 // Compile-time assertion: the pinned hash constant must be exactly 64 hex chars.
 // If the constant gets accidentally reverted to a placeholder, this fails to compile.
@@ -138,12 +137,15 @@ impl OxiSynthAdapter {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut synth = oxisynth::Synth::default();
             synth.set_sample_rate(sr);
-            let font = oxisynth::SoundFont::load(&mut std::io::Cursor::new(&bytes_vec))
-                .map_err(|_| MidiConversionError::SoundFont(
-                    "oxisynth failed to parse SF2 data".into(),
-                ))?;
+            let font =
+                oxisynth::SoundFont::load(&mut std::io::Cursor::new(&bytes_vec)).map_err(|_| {
+                    MidiConversionError::SoundFont("oxisynth failed to parse SF2 data".into())
+                })?;
             synth.add_font(font, true);
-            Ok::<_, MidiConversionError>(Self { inner: synth, sample_rate: sr })
+            Ok::<_, MidiConversionError>(Self {
+                inner: synth,
+                sample_rate: sr,
+            })
         }));
         match result {
             Ok(inner) => inner,
@@ -300,9 +302,7 @@ impl SoundFont {
     }
 
     /// Like `general_user_gs_offline()` but accepts an injected `FsCache`.
-    pub fn general_user_gs_offline_impl(
-        fs: &impl FsCache,
-    ) -> Result<Self, MidiConversionError> {
+    pub fn general_user_gs_offline_impl(fs: &impl FsCache) -> Result<Self, MidiConversionError> {
         let cache = cache_path()?;
         if !fs.exists(&cache) {
             return Err(MidiConversionError::SoundFontDownload(
@@ -365,10 +365,7 @@ fn verify_sha256(bytes: &[u8]) -> Result<(), MidiConversionError> {
     Ok(())
 }
 
-fn load_and_verify_impl(
-    fs: &impl FsCache,
-    path: &Path,
-) -> Result<Vec<u8>, MidiConversionError> {
+fn load_and_verify_impl(fs: &impl FsCache, path: &Path) -> Result<Vec<u8>, MidiConversionError> {
     let bytes = fs.read(path)?;
     verify_sha256(&bytes)?;
     Ok(bytes)

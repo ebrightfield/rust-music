@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use super::common::{OwnedEvent, OwnedMeta};
 use crate::visitor::bounded_vec::deserialize_bounded_vec;
+use serde::{Deserialize, Serialize};
 
 /// A notated music snippet with clef and events (REQ-O9, O10, O17).
 #[derive(Debug, Clone, Serialize, Deserialize)]

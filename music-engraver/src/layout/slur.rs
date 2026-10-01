@@ -175,22 +175,34 @@ mod tests {
     fn over_slur_start_above_note() {
         let cfg = test_config();
         let layout = layout_slur(100.0, 500.0, 400.0, 400.0, SlurDirection::Over, &cfg);
-        assert!(layout.y_start < 400.0, "Over slur start should be above note y");
+        assert!(
+            layout.y_start < 400.0,
+            "Over slur start should be above note y"
+        );
     }
 
     #[test]
     fn under_slur_start_below_note() {
         let cfg = test_config();
         let layout = layout_slur(100.0, 500.0, 400.0, 400.0, SlurDirection::Under, &cfg);
-        assert!(layout.y_start > 400.0, "Under slur start should be below note y");
+        assert!(
+            layout.y_start > 400.0,
+            "Under slur start should be below note y"
+        );
     }
 
     #[test]
     fn over_slur_apex_above_both_endpoints() {
         let cfg = test_config();
         let layout = layout_slur(100.0, 500.0, 400.0, 400.0, SlurDirection::Over, &cfg);
-        assert!(layout.y_outer_apex < layout.y_start, "Over apex should be above start");
-        assert!(layout.y_outer_apex < layout.y_end, "Over apex should be above end");
+        assert!(
+            layout.y_outer_apex < layout.y_start,
+            "Over apex should be above start"
+        );
+        assert!(
+            layout.y_outer_apex < layout.y_end,
+            "Over apex should be above end"
+        );
         assert!(
             layout.y_inner_apex > layout.y_outer_apex,
             "Inner apex closer to notes than outer"
@@ -201,8 +213,14 @@ mod tests {
     fn under_slur_apex_below_both_endpoints() {
         let cfg = test_config();
         let layout = layout_slur(100.0, 500.0, 400.0, 400.0, SlurDirection::Under, &cfg);
-        assert!(layout.y_outer_apex > layout.y_start, "Under apex should be below start");
-        assert!(layout.y_outer_apex > layout.y_end, "Under apex should be below end");
+        assert!(
+            layout.y_outer_apex > layout.y_start,
+            "Under apex should be below start"
+        );
+        assert!(
+            layout.y_outer_apex > layout.y_end,
+            "Under apex should be below end"
+        );
         assert!(layout.y_inner_apex < layout.y_outer_apex);
     }
 

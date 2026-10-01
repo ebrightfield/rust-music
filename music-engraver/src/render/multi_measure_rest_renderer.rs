@@ -55,7 +55,12 @@ pub fn draw_multi_measure_rest(svg: &mut SvgWriter, layout: &MultiMeasureRestLay
         anchor: "middle",
         ..TextStyle::bold(layout.count_font_size)
     };
-    svg.add_text(layout.count_x, layout.count_y, &layout.count.to_string(), &style);
+    svg.add_text(
+        layout.count_x,
+        layout.count_y,
+        &layout.count.to_string(),
+        &style,
+    );
 }
 
 #[cfg(test)]
@@ -80,13 +85,19 @@ mod tests {
     fn draws_three_rects() {
         let output = render(4);
         let rect_count = output.matches("<rect").count();
-        assert_eq!(rect_count, 3, "should have 3 rects (2 serifs + 1 bar), got {rect_count}");
+        assert_eq!(
+            rect_count, 3,
+            "should have 3 rects (2 serifs + 1 bar), got {rect_count}"
+        );
     }
 
     #[test]
     fn draws_count_text() {
         let output = render(4);
-        assert!(output.contains(">4</text>"), "should contain count text '4'");
+        assert!(
+            output.contains(">4</text>"),
+            "should contain count text '4'"
+        );
     }
 
     #[test]
@@ -101,7 +112,10 @@ mod tests {
     #[test]
     fn count_text_is_bold() {
         let output = render(4);
-        assert!(output.contains("font-weight=\"bold\""), "count should be bold");
+        assert!(
+            output.contains("font-weight=\"bold\""),
+            "count should be bold"
+        );
     }
 
     #[test]

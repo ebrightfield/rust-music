@@ -51,10 +51,7 @@ mod tests {
 
     #[test]
     fn double_dotted_half() {
-        assert_eq!(
-            parse_duration_shorthand("2.."),
-            Ok((DurationKind::Half, 2))
-        );
+        assert_eq!(parse_duration_shorthand("2.."), Ok((DurationKind::Half, 2)));
     }
 
     #[test]

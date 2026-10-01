@@ -66,18 +66,23 @@ fn main() {
 
     let path_count = svg.matches("<path").count();
     let line_count = svg.matches("<line").count();
-    println!(
-        "SVG: {} paths, {} lines",
-        path_count, line_count
-    );
+    println!("SVG: {} paths, {} lines", path_count, line_count);
 
     // 12 notes + 1 clef × 2 systems + 5 dynamics = ~19 paths
-    assert!(path_count > 15, "expected paths for notes, clefs, dynamics: got {}", path_count);
+    assert!(
+        path_count > 15,
+        "expected paths for notes, clefs, dynamics: got {}",
+        path_count
+    );
     // 5 staff lines × 2 systems + stems + hairpin wedge lines
     // Cross-system cresc: 2 half-hairpins × 2 lines each = 4 lines
     // Within-system decresc: 1 hairpin × 2 lines = 2 lines
     // Staff: 10, stems: ~10, hairpins: ~6 = ~26
-    assert!(line_count > 20, "expected staff lines + stems + hairpin wedges: got {}", line_count);
+    assert!(
+        line_count > 20,
+        "expected staff lines + stems + hairpin wedges: got {}",
+        line_count
+    );
 
     println!("Cross-system hairpins rendered successfully.");
 }

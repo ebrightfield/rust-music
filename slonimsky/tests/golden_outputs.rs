@@ -147,9 +147,12 @@ fn golden_voice_leading_cmaj_to_fmaj() {
     let out = slonimsky()
         .args([
             "voice-leading",
-            "--from", "C4,E4,G4",
-            "--to", "F,A,C",
-            "--limit", "5",
+            "--from",
+            "C4,E4,G4",
+            "--to",
+            "F,A,C",
+            "--limit",
+            "5",
         ])
         .output()
         .expect("command should run");
@@ -187,7 +190,10 @@ fn golden_subchords_cmaj7_size3() {
     // Structural: expected named chords present
     assert!(stdout.contains("CMaj"), "should contain CMaj triad");
     assert!(stdout.contains("Emin"), "should contain Emin triad");
-    assert!(stdout.contains("Total: 4"), "should have 4 subchords of a 4-note set choose 3");
+    assert!(
+        stdout.contains("Total: 4"),
+        "should have 4 subchords of a 4-note set choose 3"
+    );
 }
 
 // ==================== progression ====================
@@ -226,7 +232,16 @@ fn golden_progression_cmaj_fmaj_gmaj() {
 fn golden_contains_cmaj_super_10() {
     let expected = read_golden("contains_cmaj_super_10.txt");
     let out = slonimsky()
-        .args(["contains", "0", "4", "7", "--direction", "super", "--limit", "10"])
+        .args([
+            "contains",
+            "0",
+            "4",
+            "7",
+            "--direction",
+            "super",
+            "--limit",
+            "10",
+        ])
         .output()
         .expect("command should run");
 
@@ -285,10 +300,7 @@ fn golden_closest_cmaj_chords_5() {
     );
     assert!(stdout.contains("C Maj7"), "should include C Maj7");
     assert!(stdout.contains("C Dom7"), "should include C Dom7");
-    assert!(
-        stdout.contains("Total: 5"),
-        "should report 5 total results"
-    );
+    assert!(stdout.contains("Total: 5"), "should report 5 total results");
 }
 
 // ==================== voicings ====================
@@ -486,11 +498,16 @@ fn golden_sight_reading_c_major_seed42() {
     let out = slonimsky()
         .args([
             "sight-reading",
-            "--key", "C",
-            "--scale", "major",
-            "--difficulty", "1",
-            "--measures", "2",
-            "--seed", "42",
+            "--key",
+            "C",
+            "--scale",
+            "major",
+            "--difficulty",
+            "1",
+            "--measures",
+            "2",
+            "--seed",
+            "42",
         ])
         .output()
         .expect("command should run");
@@ -503,10 +520,7 @@ fn golden_sight_reading_c_major_seed42() {
         "sight-reading output differs from golden file"
     );
     // Structural: header and measures present
-    assert!(
-        stdout.contains("Key: C major"),
-        "should show key in header"
-    );
+    assert!(stdout.contains("Key: C major"), "should show key in header");
     assert!(
         stdout.contains("Difficulty: 1/5"),
         "should show difficulty level"
@@ -556,7 +570,9 @@ fn golden_analyze_i_vi_ii_v_text() {
 fn golden_analyze_i_vi_ii_v_json() {
     let expected = read_golden("analyze_i_vi_ii_v.json");
     let out = slonimsky()
-        .args(["analyze", "C,E,G", "A,C,E", "D,F,A", "G,B,D", "--format", "json"])
+        .args([
+            "analyze", "C,E,G", "A,C,E", "D,F,A", "G,B,D", "--format", "json",
+        ])
         .output()
         .expect("command should run");
 
@@ -601,14 +617,8 @@ fn golden_annotate_cmaj_fmaj_gmaj() {
     // Structural: steps with voice-leading detail
     assert!(stdout.contains("Step 1:"), "should have Step 1");
     assert!(stdout.contains("Step 2:"), "should have Step 2");
-    assert!(
-        stdout.contains("L1 cost: 3"),
-        "step 1 L1 cost should be 3"
-    );
-    assert!(
-        stdout.contains("L1 cost: 6"),
-        "step 2 L1 cost should be 6"
-    );
+    assert!(stdout.contains("L1 cost: 3"), "step 1 L1 cost should be 3");
+    assert!(stdout.contains("L1 cost: 6"), "step 2 L1 cost should be 6");
     assert!(
         stdout.contains("common tone"),
         "step 1 should identify C4 as common tone"
@@ -617,10 +627,7 @@ fn golden_annotate_cmaj_fmaj_gmaj() {
         stdout.contains("Crossings: none"),
         "no voice crossings expected"
     );
-    assert!(
-        stdout.contains("Total L1 cost: 9"),
-        "total L1 should be 9"
-    );
+    assert!(stdout.contains("Total L1 cost: 9"), "total L1 should be 9");
     assert!(
         stdout.contains("Smoothness rating: excellent"),
         "overall smoothness should be excellent"
@@ -734,7 +741,16 @@ fn golden_scale_book_major_c() {
 fn golden_superchords_cmaj_size4() {
     let expected = read_golden("superchords_cmaj_size4.txt");
     let out = slonimsky()
-        .args(["superchords", "C", "E", "G", "--min-size", "4", "--max-size", "4"])
+        .args([
+            "superchords",
+            "C",
+            "E",
+            "G",
+            "--min-size",
+            "4",
+            "--max-size",
+            "4",
+        ])
         .output()
         .expect("command should run");
 
@@ -748,8 +764,14 @@ fn golden_superchords_cmaj_size4() {
     // Structural checks: must contain known superchords of C major triad
     assert!(stdout.contains("C Maj7"), "should contain CMaj7");
     assert!(stdout.contains("C Dom7"), "should contain CDom7");
-    assert!(stdout.contains("A Min7"), "should contain Am7 (shares C,E,G subset)");
-    assert!(stdout.contains("Total: 9 superchords"), "should have exactly 9 size-4 superchords");
+    assert!(
+        stdout.contains("A Min7"),
+        "should contain Am7 (shares C,E,G subset)"
+    );
+    assert!(
+        stdout.contains("Total: 9 superchords"),
+        "should have exactly 9 size-4 superchords"
+    );
 }
 
 // ==================== arpeggio-dictionary (structural, not exact) ====================
@@ -760,10 +782,16 @@ fn golden_superchords_cmaj_size4() {
 fn golden_arpeggio_dict_cmaj_structure() {
     let out = slonimsky()
         .args([
-            "arpeggio-dictionary", "C", "E", "G",
-            "--keys", "C",
-            "--positions", "3",
-            "--max-span", "4",
+            "arpeggio-dictionary",
+            "C",
+            "E",
+            "G",
+            "--keys",
+            "C",
+            "--positions",
+            "3",
+            "--max-span",
+            "4",
         ])
         .output()
         .expect("command should run");
@@ -778,16 +806,14 @@ fn golden_arpeggio_dict_cmaj_structure() {
         stdout.contains("Tuning: standard"),
         "should show default tuning"
     );
-    assert!(
-        stdout.contains("Key: C"),
-        "should have C key section"
-    );
+    assert!(stdout.contains("Key: C"), "should have C key section");
     assert!(
         stdout.contains("Total: 3 shapes across 1 keys"),
         "should show correct totals"
     );
     // Each shape line has a numbered prefix, fret notation, and a "(frets N-M)" range
-    let shape_lines: Vec<&str> = stdout.lines()
+    let shape_lines: Vec<&str> = stdout
+        .lines()
         .filter(|l| l.trim_start().starts_with(|c: char| c.is_ascii_digit()) && l.contains("frets"))
         .collect();
     assert_eq!(shape_lines.len(), 3, "should have exactly 3 shape lines");
@@ -795,7 +821,11 @@ fn golden_arpeggio_dict_cmaj_structure() {
     for line in &shape_lines {
         let fret_part = line.trim().split_whitespace().nth(1).unwrap_or("");
         let segments: Vec<&str> = fret_part.split('-').collect();
-        assert_eq!(segments.len(), 6, "standard tuning = 6 strings, got: {fret_part}");
+        assert_eq!(
+            segments.len(),
+            6,
+            "standard tuning = 6 strings, got: {fret_part}"
+        );
         for seg in &segments {
             assert!(
                 *seg == "x" || seg.parse::<u8>().is_ok(),
@@ -825,8 +855,14 @@ fn golden_fretboard_c_chord_svg() {
     // Structural checks on the golden SVG itself
     assert!(stdout.starts_with("<svg"), "output should be SVG");
     assert!(stdout.trim_end().ends_with("</svg>"), "SVG should close");
-    assert!(stdout.contains("<circle"), "fretboard SVG should contain note circles");
-    assert!(stdout.contains("<line"), "fretboard SVG should contain fret/string lines");
+    assert!(
+        stdout.contains("<circle"),
+        "fretboard SVG should contain note circles"
+    );
+    assert!(
+        stdout.contains("<line"),
+        "fretboard SVG should contain fret/string lines"
+    );
 }
 
 // ==================== chord-dictionary (structural, non-deterministic ordering) ====================
@@ -899,21 +935,36 @@ fn golden_chord_dictionary_cmaj_svg_structure() {
     let svg_path = dir.path().join("chordex.svg");
     let out = slonimsky()
         .args([
-            "chord-dictionary", "C", "E", "G",
-            "--max-results", "3",
-            "-o", svg_path.to_str().unwrap(),
+            "chord-dictionary",
+            "C",
+            "E",
+            "G",
+            "--max-results",
+            "3",
+            "-o",
+            svg_path.to_str().unwrap(),
         ])
         .output()
         .expect("command should run");
 
-    assert!(out.status.success(), "exit 0, stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "exit 0, stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let svg = std::fs::read_to_string(&svg_path).expect("SVG file should exist");
     assert!(svg.starts_with("<svg"), "output should be SVG");
     assert!(svg.trim_end().ends_with("</svg>"), "SVG should close");
     // A multi-shape grid should have multiple <svg elements (nested viewboxes) or
     // multiple fretboard groups. Check for at least one <circle (note dot) and <line.
-    assert!(svg.contains("<circle"), "chord-dictionary SVG should contain note circles");
-    assert!(svg.contains("<line"), "chord-dictionary SVG should contain lines");
+    assert!(
+        svg.contains("<circle"),
+        "chord-dictionary SVG should contain note circles"
+    );
+    assert!(
+        svg.contains("<line"),
+        "chord-dictionary SVG should contain lines"
+    );
     // Should have at least 200 bytes (a single fretboard SVG is ~2KB)
     assert!(
         svg.len() > 200,

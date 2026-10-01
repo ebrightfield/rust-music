@@ -26,14 +26,15 @@ impl<'a> ToVexTab for FrettedNote<'a> {
     fn to_vextab(&self) -> String {
         match &self {
             FrettedNote::Sounded(sounded_note) => sounded_note.to_vextab(),
-            FrettedNote::Muted { .. } => "".to_string()
+            FrettedNote::Muted { .. } => "".to_string(),
         }
     }
 }
 
 impl<'a> ToVexTab for FretboardShape<'a> {
     fn to_vextab(&self) -> String {
-        self.fretted_notes.iter()
+        self.fretted_notes
+            .iter()
             .filter_map(|item| match &item {
                 FrettedNote::Sounded(note) => Some(note),
                 FrettedNote::Muted { .. } => None,
@@ -45,9 +46,9 @@ impl<'a> ToVexTab for FretboardShape<'a> {
 
 impl<'a> ToVexTab for Vec<&SoundedNote<'a>> {
     fn to_vextab(&self) -> String {
-        let notes = self.iter().map(|fretted_note| {
-            fretted_note.to_vextab()
-        })
+        let notes = self
+            .iter()
+            .map(|fretted_note| fretted_note.to_vextab())
             .collect::<Vec<String>>()
             .join(".");
         format!("({notes})")
@@ -56,9 +57,13 @@ impl<'a> ToVexTab for Vec<&SoundedNote<'a>> {
 
 impl ToVexTab for Voicing {
     fn to_vextab(&self) -> String {
-        format!("({})", self.iter().map(|pitch| {
-            pitch.to_vextab()
-        }).collect::<Vec<_>>().join("."))
+        format!(
+            "({})",
+            self.iter()
+                .map(|pitch| { pitch.to_vextab() })
+                .collect::<Vec<_>>()
+                .join(".")
+        )
     }
 }
 
@@ -71,8 +76,9 @@ impl ToVexTab for DurationKind {
             DurationKind::Eighth => ":8",
             DurationKind::Sixteenth => ":16",
             DurationKind::ThirtySecond => ":32",
-            _ => panic!("Unsupported rhythmic duration for Vextab")
-        }.to_string()
+            _ => panic!("Unsupported rhythmic duration for Vextab"),
+        }
+        .to_string()
     }
 }
 
@@ -92,7 +98,7 @@ impl<'a> ToVexTab for RhythmicNotatedEvent<'a> {
                 let duration = d.to_vextab();
                 format!("{}{}", duration, pitch_content)
             }
-            NotatedEvent::Tuplet(_) => todo!()
+            NotatedEvent::Tuplet(_) => todo!(),
         }
     }
 }
@@ -104,13 +110,13 @@ impl<'a> ToVexTab for SingleEvent<'a> {
             SingleEvent::Voicing(v) => v.to_vextab(),
             SingleEvent::Fretted(s) => s.to_vextab(),
             SingleEvent::FrettedMany(notes) => {
-                let notes = notes.iter().map(|fretted_note| {
-                    fretted_note.to_vextab()
-                })
+                let notes = notes
+                    .iter()
+                    .map(|fretted_note| fretted_note.to_vextab())
                     .collect::<Vec<String>>()
                     .join(".");
                 format!("({notes})")
-            },
+            }
             SingleEvent::Rest => "##".to_string(),
         }
     }

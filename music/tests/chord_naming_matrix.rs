@@ -36,7 +36,9 @@ fn assert_infers(pcs: &[Pc], expected: &str) {
         got.as_deref(),
         Some(expected),
         "inference mismatch for {:?}: expected {:?}, got {:?}",
-        pcs, expected, got,
+        pcs,
+        expected,
+        got,
     );
 }
 

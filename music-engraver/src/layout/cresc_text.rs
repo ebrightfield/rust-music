@@ -502,7 +502,11 @@ mod tests {
             CrescTextKind::Diminuendo,
         ] {
             let l = layout_cresc_text_continuation(kind, 100.0, 1000.0, &staff, SS);
-            assert!(!l.has_label, "has_label should be false for kind {:?}", kind);
+            assert!(
+                !l.has_label,
+                "has_label should be false for kind {:?}",
+                kind
+            );
         }
     }
 
@@ -536,8 +540,8 @@ mod tests {
         );
         // Exact delta: the label-width estimate + padding.
         let label_chars = CrescTextKind::Crescendo.label().chars().count() as f64;
-        let expected_delta =
-            label_chars * CRESC_TEXT_LABEL_WIDTH_PER_CHAR_SS * SS + CRESC_TEXT_LABEL_PADDING_SS * SS;
+        let expected_delta = label_chars * CRESC_TEXT_LABEL_WIDTH_PER_CHAR_SS * SS
+            + CRESC_TEXT_LABEL_PADDING_SS * SS;
         let actual_delta = plain.x_line_start - cont.x_line_start;
         assert!(
             (actual_delta - expected_delta).abs() < 1e-9,
@@ -550,13 +554,8 @@ mod tests {
     #[test]
     fn continuation_x_coordinates_preserved() {
         let staff = test_staff();
-        let l = layout_cresc_text_continuation(
-            CrescTextKind::Decrescendo,
-            175.5,
-            923.25,
-            &staff,
-            SS,
-        );
+        let l =
+            layout_cresc_text_continuation(CrescTextKind::Decrescendo, 175.5, 923.25, &staff, SS);
         assert!((l.x_start - 175.5).abs() < f64::EPSILON);
         assert!((l.x_end - 923.25).abs() < f64::EPSILON);
         assert!((l.label_x - 175.5).abs() < f64::EPSILON);
@@ -650,8 +649,7 @@ mod tests {
         // The label string is kept on the layout (it just doesn't get
         // rendered when has_label == false). Useful for inspection.
         let staff = test_staff();
-        let l =
-            layout_cresc_text_continuation(CrescTextKind::Diminuendo, 0.0, 500.0, &staff, SS);
+        let l = layout_cresc_text_continuation(CrescTextKind::Diminuendo, 0.0, 500.0, &staff, SS);
         assert_eq!(l.label, "dim.");
     }
 
@@ -670,8 +668,7 @@ mod tests {
         assert!(
             suppressed,
             "degenerate range: x_line_start ({}) must not be strictly less than x_end ({})",
-            l.x_line_start,
-            l.x_end
+            l.x_line_start, l.x_end
         );
     }
 
@@ -679,7 +676,8 @@ mod tests {
     fn continuation_x_end_independent_of_kind() {
         let staff = test_staff();
         let c = layout_cresc_text_continuation(CrescTextKind::Crescendo, 100.0, 999.0, &staff, SS);
-        let d = layout_cresc_text_continuation(CrescTextKind::Decrescendo, 100.0, 999.0, &staff, SS);
+        let d =
+            layout_cresc_text_continuation(CrescTextKind::Decrescendo, 100.0, 999.0, &staff, SS);
         let m = layout_cresc_text_continuation(CrescTextKind::Diminuendo, 100.0, 999.0, &staff, SS);
         assert!((c.x_end - 999.0).abs() < f64::EPSILON);
         assert!((d.x_end - 999.0).abs() < f64::EPSILON);
@@ -693,7 +691,8 @@ mod tests {
         // label-width offset would surface here.
         let staff = test_staff();
         let c = layout_cresc_text_continuation(CrescTextKind::Crescendo, 100.0, 999.0, &staff, SS);
-        let d = layout_cresc_text_continuation(CrescTextKind::Decrescendo, 100.0, 999.0, &staff, SS);
+        let d =
+            layout_cresc_text_continuation(CrescTextKind::Decrescendo, 100.0, 999.0, &staff, SS);
         let m = layout_cresc_text_continuation(CrescTextKind::Diminuendo, 100.0, 999.0, &staff, SS);
         assert!((c.x_line_start - 100.0).abs() < f64::EPSILON);
         assert!((d.x_line_start - 100.0).abs() < f64::EPSILON);

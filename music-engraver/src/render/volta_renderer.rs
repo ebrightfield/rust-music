@@ -47,15 +47,20 @@ pub fn draw_volta_bracket(svg: &mut SvgWriter, layout: &VoltaBracketLayout) {
 
     // Text label
     if let Some((tx, ty, ref text)) = layout.text {
-        svg.add_text(tx, ty, text, &TextStyle {
-            font_family: "serif",
-            font_size: layout.font_size,
-            fill: "black",
-            anchor: "start",
-            font_weight: "bold",
-            font_style: "normal",
-            dominant_baseline: "auto",
-        });
+        svg.add_text(
+            tx,
+            ty,
+            text,
+            &TextStyle {
+                font_family: "serif",
+                font_size: layout.font_size,
+                fill: "black",
+                anchor: "start",
+                font_weight: "bold",
+                font_style: "normal",
+                dominant_baseline: "auto",
+            },
+        );
     }
 }
 
@@ -115,7 +120,10 @@ mod tests {
         draw_volta_bracket(&mut svg, &layout);
         let output = svg.to_svg();
         let line_count = output.matches("<line ").count();
-        assert_eq!(line_count, 1, "neither hook should produce 1 line (top only)");
+        assert_eq!(
+            line_count, 1,
+            "neither hook should produce 1 line (top only)"
+        );
     }
 
     #[test]
@@ -125,7 +133,10 @@ mod tests {
         draw_volta_bracket(&mut svg, &layout);
         let output = svg.to_svg();
         assert!(output.contains(">2.</text>"), "should contain '2.' text");
-        assert!(output.contains("font-weight=\"bold\""), "text should be bold");
+        assert!(
+            output.contains("font-weight=\"bold\""),
+            "text should be bold"
+        );
     }
 
     #[test]

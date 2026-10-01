@@ -83,18 +83,12 @@ mod tests {
 
     #[test]
     fn parses_aeses1_doubleflat() {
-        assert_eq!(
-            parse_pitch_shorthand("aeses1").unwrap(),
-            (Note::Aeses, 1)
-        );
+        assert_eq!(parse_pitch_shorthand("aeses1").unwrap(), (Note::Aeses, 1));
     }
 
     #[test]
     fn parses_cisis0_doublesharp() {
-        assert_eq!(
-            parse_pitch_shorthand("css0").unwrap(),
-            (Note::Cisis, 0)
-        );
+        assert_eq!(parse_pitch_shorthand("css0").unwrap(), (Note::Cisis, 0));
     }
 
     #[test]

@@ -17,8 +17,7 @@ use std::panic;
 use std::path::PathBuf;
 
 use music::fretboard::fretboard_shape::melodic_shape_search::{
-    find_open_scale_shape, n_note_per_string_shape, MelodicFretboardShape,
-    ScaleShapeSearchResult,
+    find_open_scale_shape, n_note_per_string_shape, MelodicFretboardShape, ScaleShapeSearchResult,
 };
 use music::fretboard::STD_6STR_GTR;
 use music::note::note::Note;
@@ -170,7 +169,13 @@ fn main() {
                     title: "C Major / Ionian",
                     root: Note::C,
                     pcs: vec![
-                        Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
+                        Pc::Pc0,
+                        Pc::Pc2,
+                        Pc::Pc4,
+                        Pc::Pc5,
+                        Pc::Pc7,
+                        Pc::Pc9,
+                        Pc::Pc11,
                     ],
                 },
                 Entry {
@@ -178,7 +183,13 @@ fn main() {
                     title: "D Dorian",
                     root: Note::D,
                     pcs: vec![
-                        Pc::Pc0, Pc::Pc2, Pc::Pc3, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc10,
+                        Pc::Pc0,
+                        Pc::Pc2,
+                        Pc::Pc3,
+                        Pc::Pc5,
+                        Pc::Pc7,
+                        Pc::Pc9,
+                        Pc::Pc10,
                     ],
                 },
                 Entry {
@@ -186,7 +197,13 @@ fn main() {
                     title: "A Harmonic Minor",
                     root: Note::A,
                     pcs: vec![
-                        Pc::Pc0, Pc::Pc2, Pc::Pc3, Pc::Pc5, Pc::Pc7, Pc::Pc8, Pc::Pc11,
+                        Pc::Pc0,
+                        Pc::Pc2,
+                        Pc::Pc3,
+                        Pc::Pc5,
+                        Pc::Pc7,
+                        Pc::Pc8,
+                        Pc::Pc11,
                     ],
                 },
                 Entry {
@@ -194,7 +211,13 @@ fn main() {
                     title: "C Melodic Minor",
                     root: Note::C,
                     pcs: vec![
-                        Pc::Pc0, Pc::Pc2, Pc::Pc3, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
+                        Pc::Pc0,
+                        Pc::Pc2,
+                        Pc::Pc3,
+                        Pc::Pc5,
+                        Pc::Pc7,
+                        Pc::Pc9,
+                        Pc::Pc11,
                     ],
                 },
             ],
@@ -228,8 +251,7 @@ fn main() {
                     let filename = format!("{}-{}-open.svg", cardinality, entry.slug);
                     let title = format!("{} — open position", entry.title);
                     let tile = render_shape(&shape, &entry.root, &title, &theme);
-                    fs::write(out_dir.join(&filename), &tile.svg_body)
-                        .expect("write svg");
+                    fs::write(out_dir.join(&filename), &tile.svg_body).expect("write svg");
                     println!("wrote {}", out_dir.join(&filename).display());
                     items.push(DocItem::Tile(tile));
                     total += 1;
@@ -248,12 +270,7 @@ fn main() {
                     let spelled_for_nps = spelled.clone();
                     let start_owned = *start;
                     let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                        n_note_per_string_shape(
-                            n_cfg,
-                            &spelled_for_nps,
-                            &start_owned,
-                            fretboard,
-                        )
+                        n_note_per_string_shape(n_cfg, &spelled_for_nps, &start_owned, fretboard)
                     }));
                     if let Ok(Ok(shape)) = res {
                         let filename = format!(
@@ -263,13 +280,9 @@ fn main() {
                             label,
                             note_slug(start)
                         );
-                        let title = format!(
-                            "{} — {} from {}",
-                            entry.title, label, start
-                        );
+                        let title = format!("{} — {} from {}", entry.title, label, start);
                         let tile = render_shape(&shape, &entry.root, &title, &theme);
-                        fs::write(out_dir.join(&filename), &tile.svg_body)
-                            .expect("write svg");
+                        fs::write(out_dir.join(&filename), &tile.svg_body).expect("write svg");
                         println!("wrote {}", out_dir.join(&filename).display());
                         items.push(DocItem::Tile(tile));
                         total += 1;
@@ -285,10 +298,8 @@ fn main() {
             if let Ok(Ok(result)) = simple_res {
                 for (idx, shape) in result.simple.iter().enumerate() {
                     let (min_fret, _) = shape.span();
-                    let filename = format!(
-                        "{}-{}-simple-{:02}.svg",
-                        cardinality, entry.slug, idx + 1
-                    );
+                    let filename =
+                        format!("{}-{}-simple-{:02}.svg", cardinality, entry.slug, idx + 1);
                     let title = format!(
                         "{} — simple shape {} (fret {}+)",
                         entry.title,
@@ -296,8 +307,7 @@ fn main() {
                         min_fret
                     );
                     let tile = render_shape(shape, &entry.root, &title, &theme);
-                    fs::write(out_dir.join(&filename), &tile.svg_body)
-                        .expect("write svg");
+                    fs::write(out_dir.join(&filename), &tile.svg_body).expect("write svg");
                     println!("wrote {}", out_dir.join(&filename).display());
                     items.push(DocItem::Tile(tile));
                     total += 1;
@@ -326,12 +336,7 @@ fn note_slug(note: &Note) -> String {
         .to_lowercase()
 }
 
-fn render_shape(
-    shape: &MelodicFretboardShape,
-    root: &Note,
-    title: &str,
-    theme: &SvgTheme,
-) -> Tile {
+fn render_shape(shape: &MelodicFretboardShape, root: &Note, title: &str, theme: &SvgTheme) -> Tile {
     let (min_fret, max_fret) = shape.span();
     let has_open = shape.shape.iter().any(|n| n.fret == 0);
 
@@ -355,7 +360,9 @@ fn render_shape(
 
     for note in &shape.shape {
         let pos = if note.fret == 0 {
-            FretPosition::Open { string: note.string }
+            FretPosition::Open {
+                string: note.string,
+            }
         } else {
             FretPosition::Fretted {
                 string: note.string,
@@ -370,7 +377,11 @@ fn render_shape(
 
     let svg_body = builder.build();
     let (width, height) = parse_svg_dims(&svg_body);
-    Tile { svg_body, width, height }
+    Tile {
+        svg_body,
+        width,
+        height,
+    }
 }
 
 /// Parse `width="N"` and `height="N"` out of an `<svg ...>` root tag.
@@ -563,10 +574,7 @@ fn write_pages(items: &[DocItem], out_dir: &std::path::Path) -> usize {
                     // Center horizontally within the usable width.
                     let x = PAGE_MARGIN + USABLE_W.saturating_sub(scaled_w) / 2;
                     if (scale - 1.0).abs() < f64::EPSILON {
-                        s.push_str(&format!(
-                            r#"<g transform="translate({},{})">"#,
-                            x, y
-                        ));
+                        s.push_str(&format!(r#"<g transform="translate({},{})">"#, x, y));
                     } else {
                         s.push_str(&format!(
                             r#"<g transform="translate({},{}) scale({:.4})">"#,

@@ -93,5 +93,8 @@ fn main() {
     // least 3 rects (plus possibly background/system rects, if any).
     let rects = svg.matches("<rect").count();
     println!("rect count (≥3 expected from count-7 H-bar fallback): {rects}");
-    assert!(rects >= 3, "expected ≥3 rects from H-bar fallback, got {rects}");
+    assert!(
+        rects >= 3,
+        "expected ≥3 rects from H-bar fallback, got {rects}"
+    );
 }

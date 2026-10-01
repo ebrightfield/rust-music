@@ -221,7 +221,10 @@ mod tests {
         draw_fret_number_at(&mut svg, &staff, 1, 5, 500.0);
         let output = svg.to_svg();
         assert!(output.contains(r#"fill="white""#), "bg should be white");
-        assert!(output.contains(r#"stroke="none""#), "bg should have no stroke");
+        assert!(
+            output.contains(r#"stroke="none""#),
+            "bg should have no stroke"
+        );
     }
 
     #[test]

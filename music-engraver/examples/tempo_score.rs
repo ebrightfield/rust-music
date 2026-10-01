@@ -90,5 +90,8 @@ fn main() {
     assert!(svg.contains(">Andante<"), "should contain 'Andante'");
     assert!(svg.contains("= 72"), "should contain '= 72'");
     // At least 3 tempo text elements (Allegro, = 132, Andante, = 72)
-    assert!(text_count >= 4, "expected at least 4 text elements, got {text_count}");
+    assert!(
+        text_count >= 4,
+        "expected at least 4 text elements, got {text_count}"
+    );
 }

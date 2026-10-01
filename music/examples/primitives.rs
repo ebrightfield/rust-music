@@ -13,7 +13,6 @@
 use music::prelude::*;
 
 fn main() {
-
     // The Pc is a mod-12 enum that can be converted to and from numbers,
     // and has some built-in methods for distance calculations and manipulation.
     {
@@ -72,10 +71,7 @@ fn main() {
     // use `Pitch::try_new` if you need to handle out-of-range octaves.
     {
         let p = Pitch::new(Note::C, 4);
-        assert_eq!(
-            p,
-            Pitch::from_midi(60).unwrap(),
-        );
+        assert_eq!(p, Pitch::from_midi(60).unwrap(),);
         assert_eq!(p.midi_note, 60);
 
         // There are convenience methods for finding the pitch for the next note up/down
@@ -93,20 +89,11 @@ fn main() {
         assert_eq!(p.diatonic_distance(&pitch!(g, 2)), -10);
 
         // The `pitch!` macro is a shorthand for the infallible constructor.
-        assert_eq!(
-            pitch!(fis, 4),
-            Pitch::new(Note::Fis, 4),
-        );
+        assert_eq!(pitch!(fis, 4), Pitch::new(Note::Fis, 4),);
 
         // Since pitches are bounded, we have to try_transpose instead.
         let transposed = pitch!(fis, 4).try_transpose(13).unwrap();
-        assert_eq!(
-            transposed,
-            Pitch::new(Note::G, 5),
-        );
-        assert_eq!(
-            p.raise_octaves(2).unwrap(),
-            pitch!(c, 6)
-        );
+        assert_eq!(transposed, Pitch::new(Note::G, 5),);
+        assert_eq!(p.raise_octaves(2).unwrap(), pitch!(c, 6));
     }
 }

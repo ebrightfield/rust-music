@@ -1,9 +1,11 @@
-use std::collections::HashSet;
-use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
-use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
-use crate::note_collections::chord_name::quality::chord::{ChordQuality, DimSubtype};
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{
+    generate_alt, generate_alt_and_extensions, TriadContext,
+};
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::chord::{ChordQuality, DimSubtype};
+use std::collections::HashSet;
 
 /// Common Logic across all heuristics based on diminished chords.
 pub fn search_for_dim_quality(pcs: &HashSet<Pc>) -> ChordQuality {
@@ -29,10 +31,7 @@ impl NamingHeuristic for DimNChords {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc3]),
-            HashSet::from([Pc6]),
-        ]
+        vec![HashSet::from([Pc3]), HashSet::from([Pc6])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
@@ -68,10 +67,7 @@ impl NamingHeuristic for NotMin6Chord {
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc1, Pc2]),
-            HashSet::from([Pc5]),
-        ]
+        vec![HashSet::from([Pc1, Pc2]), HashSet::from([Pc5])]
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
@@ -85,10 +81,7 @@ impl NamingHeuristic for TritoneAndDimSeventh {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc6]),
-            HashSet::from([Pc9]),
-        ]
+        vec![HashSet::from([Pc6]), HashSet::from([Pc9])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
@@ -103,4 +96,3 @@ impl NamingHeuristic for TritoneAndDimSeventh {
         Some(search_for_dim_quality(pcs))
     }
 }
-

@@ -130,6 +130,12 @@ fn main() {
     assert!(output.contains("= 72"), "should contain '= 72'");
     assert!(output.contains("= 160"), "should contain '= 160'");
     // Note glyphs for metronome marks (3 marks with note symbols)
-    assert!(path_count >= 3, "expected at least 3 glyph paths, got {path_count}");
-    assert!(text_count >= 5, "expected at least 5 text elements, got {text_count}");
+    assert!(
+        path_count >= 3,
+        "expected at least 3 glyph paths, got {path_count}"
+    );
+    assert!(
+        text_count >= 5,
+        "expected at least 5 text elements, got {text_count}"
+    );
 }

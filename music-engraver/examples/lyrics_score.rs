@@ -71,7 +71,10 @@ fn main() {
     );
 
     // Lyric text should appear as <text> elements
-    assert!(text_count >= 10, "expected at least 10 lyric text elements, got {text_count}");
+    assert!(
+        text_count >= 10,
+        "expected at least 10 lyric text elements, got {text_count}"
+    );
     // Hyphens are now drawn as separate centered '-' text elements between
     // syllables, not appended to the source syllable. Source text must appear
     // alone in its own <text>...</text>.
@@ -84,8 +87,14 @@ fn main() {
     assert!(svg.contains(">dear<"), "should contain 'dear'");
     assert!(svg.contains(">friend!<"), "should contain 'friend!'");
     // Old ASCII-concatenated forms must NOT appear (regression canary).
-    assert!(!svg.contains(">Hap -<"), "syllable text should not have ' -' appended");
-    assert!(!svg.contains(">birth -<"), "syllable text should not have ' -' appended");
+    assert!(
+        !svg.contains(">Hap -<"),
+        "syllable text should not have ' -' appended"
+    );
+    assert!(
+        !svg.contains(">birth -<"),
+        "syllable text should not have ' -' appended"
+    );
     // At least one separated hyphen '-' should appear (in measures 1 and 3
     // each carry 2 hyphenated pairs, so at least 4 hyphens total).
     let hyphen_count = svg.matches(">-<").count();
@@ -94,7 +103,10 @@ fn main() {
         "expected >=4 standalone hyphen text elements, got {hyphen_count}"
     );
     // "SKIP" should NOT appear — lyric on rest is a no-op
-    assert!(!svg.contains(">SKIP<"), "'SKIP' lyric on rest should not render");
+    assert!(
+        !svg.contains(">SKIP<"),
+        "'SKIP' lyric on rest should not render"
+    );
 
     // Lyrics should NOT be italic (unlike expression text)
     // Check that text elements exist without font-style="italic" nearby

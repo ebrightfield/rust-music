@@ -265,10 +265,7 @@ fn format_prime_form(pf: &[u8]) -> String {
 
 /// Format a PcSet for display: {0, 4, 7}
 fn format_pc_set(pcs: &[music::note::pitch_class::Pc]) -> String {
-    let inner: Vec<String> = pcs
-        .iter()
-        .map(|pc| u8::from(*pc).to_string())
-        .collect();
+    let inner: Vec<String> = pcs.iter().map(|pc| u8::from(*pc).to_string()).collect();
     format!("{{{}}}", inner.join(", "))
 }
 
@@ -293,8 +290,10 @@ pub fn run(args: ForteArgs) -> Result<()> {
         };
         // Re-run the prime-form verbose section inline rather than calling run()
         // to avoid duplicating the header lines
-        let pf_pcs: Vec<music::note::pitch_class::Pc> =
-            pf.iter().map(|&n| music::note::pitch_class::Pc::from(n)).collect();
+        let pf_pcs: Vec<music::note::pitch_class::Pc> = pf
+            .iter()
+            .map(|&n| music::note::pitch_class::Pc::from(n))
+            .collect();
         let pf_shape = music::note_collections::pc_set::PcShape::new(pf_pcs);
         let matrix = music::geometry::IntervalMatrix::new(&pf_shape);
         let iv = matrix.reduced_interval_vector();
@@ -484,8 +483,16 @@ mod tests {
     fn forte_decachord_10_1() {
         // Decachord {0..9} → prime form [0,1,2,3,4,5,6,7,8,9] → 10-1
         let pcs = vec![
-            Pc::Pc0, Pc::Pc1, Pc::Pc2, Pc::Pc3, Pc::Pc4,
-            Pc::Pc5, Pc::Pc6, Pc::Pc7, Pc::Pc8, Pc::Pc9,
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc6,
+            Pc::Pc7,
+            Pc::Pc8,
+            Pc::Pc9,
         ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -496,8 +503,18 @@ mod tests {
     fn forte_chromatic_aggregate_12_1() {
         // Full chromatic aggregate → 12-1
         let pcs = vec![
-            Pc::Pc0, Pc::Pc1, Pc::Pc2, Pc::Pc3, Pc::Pc4, Pc::Pc5,
-            Pc::Pc6, Pc::Pc7, Pc::Pc8, Pc::Pc9, Pc::Pc10, Pc::Pc11,
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc6,
+            Pc::Pc7,
+            Pc::Pc8,
+            Pc::Pc9,
+            Pc::Pc10,
+            Pc::Pc11,
         ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
@@ -508,8 +525,17 @@ mod tests {
     fn forte_undecachord_11_1() {
         // 11 PCs (missing Pc11) → prime form [0,1,2,3,4,5,6,7,8,9,10] → 11-1
         let pcs = vec![
-            Pc::Pc0, Pc::Pc1, Pc::Pc2, Pc::Pc3, Pc::Pc4,
-            Pc::Pc5, Pc::Pc6, Pc::Pc7, Pc::Pc8, Pc::Pc9, Pc::Pc10,
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc6,
+            Pc::Pc7,
+            Pc::Pc8,
+            Pc::Pc9,
+            Pc::Pc10,
         ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -678,7 +704,15 @@ mod tests {
     #[test]
     fn forte_major_scale_is_7_35() {
         // Major scale {0,2,4,5,7,9,11} → prime form [0,1,3,5,6,8,10] → 7-35
-        let pcs = vec![Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11];
+        let pcs = vec![
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
+        ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 3, 5, 6, 8, 10]);
         assert_eq!(lookup_forte(&pf), Some("7-35"));
@@ -687,7 +721,15 @@ mod tests {
     #[test]
     fn forte_chromatic_heptachord_is_7_1() {
         // Chromatic heptachord {0,1,2,3,4,5,6} → 7-1
-        let pcs = vec![Pc::Pc0, Pc::Pc1, Pc::Pc2, Pc::Pc3, Pc::Pc4, Pc::Pc5, Pc::Pc6];
+        let pcs = vec![
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc6,
+        ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 2, 3, 4, 5, 6]);
         assert_eq!(lookup_forte(&pf), Some("7-1"));
@@ -696,7 +738,15 @@ mod tests {
     #[test]
     fn forte_harmonic_minor_is_7_32() {
         // Harmonic minor {0,2,3,5,7,8,11} → prime form [0,1,3,4,6,8,9] → 7-32
-        let pcs = vec![Pc::Pc0, Pc::Pc2, Pc::Pc3, Pc::Pc5, Pc::Pc7, Pc::Pc8, Pc::Pc11];
+        let pcs = vec![
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc8,
+            Pc::Pc11,
+        ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 3, 4, 6, 8, 9]);
         assert_eq!(lookup_forte(&pf), Some("7-32"));
@@ -705,7 +755,15 @@ mod tests {
     #[test]
     fn forte_melodic_minor_is_7_34() {
         // Melodic minor (ascending) {0,2,3,5,7,9,11} → prime form [0,1,3,4,6,8,10] → 7-34
-        let pcs = vec![Pc::Pc0, Pc::Pc2, Pc::Pc3, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11];
+        let pcs = vec![
+            Pc::Pc0,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc5,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc11,
+        ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 3, 4, 6, 8, 10]);
         assert_eq!(lookup_forte(&pf), Some("7-34"));
@@ -778,8 +836,14 @@ mod tests {
     fn forte_octatonic_is_8_28() {
         // Octatonic scale {0,1,3,4,6,7,9,10} → prime form [0,1,3,4,6,7,9,10] → 8-28
         let pcs = vec![
-            Pc::Pc0, Pc::Pc1, Pc::Pc3, Pc::Pc4,
-            Pc::Pc6, Pc::Pc7, Pc::Pc9, Pc::Pc10,
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc6,
+            Pc::Pc7,
+            Pc::Pc9,
+            Pc::Pc10,
         ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 3, 4, 6, 7, 9, 10]);
@@ -789,8 +853,14 @@ mod tests {
     #[test]
     fn forte_chromatic_octachord_is_8_1() {
         let pcs = vec![
-            Pc::Pc0, Pc::Pc1, Pc::Pc2, Pc::Pc3,
-            Pc::Pc4, Pc::Pc5, Pc::Pc6, Pc::Pc7,
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc6,
+            Pc::Pc7,
         ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 2, 3, 4, 5, 6, 7]);
@@ -800,8 +870,15 @@ mod tests {
     #[test]
     fn forte_chromatic_nonachord_is_9_1() {
         let pcs = vec![
-            Pc::Pc0, Pc::Pc1, Pc::Pc2, Pc::Pc3,
-            Pc::Pc4, Pc::Pc5, Pc::Pc6, Pc::Pc7, Pc::Pc8,
+            Pc::Pc0,
+            Pc::Pc1,
+            Pc::Pc2,
+            Pc::Pc3,
+            Pc::Pc4,
+            Pc::Pc5,
+            Pc::Pc6,
+            Pc::Pc7,
+            Pc::Pc8,
         ];
         let pf = prime_form(&pcs);
         assert_eq!(pf, vec![0, 1, 2, 3, 4, 5, 6, 7, 8]);

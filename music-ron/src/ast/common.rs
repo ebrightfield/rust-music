@@ -1,5 +1,5 @@
-use music::note::note::Note;
 use music::notation::rhythm::duration::DurationKind;
+use music::note::note::Note;
 use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -60,7 +60,9 @@ impl<'de> Deserialize<'de> for OwnedPitch {
                 // REQ-O11: validate shorthand at parse time so RON position info is available.
                 parse_pitch_shorthand(v)
                     .map(|_| OwnedPitch::Shorthand(v.to_owned()))
-                    .map_err(|(input, _)| de::Error::custom(format!("invalid pitch shorthand: \"{input}\"")))
+                    .map_err(|(input, _)| {
+                        de::Error::custom(format!("invalid pitch shorthand: \"{input}\""))
+                    })
             }
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<OwnedPitch, A::Error> {
@@ -124,7 +126,9 @@ impl<'de> Deserialize<'de> for OwnedDuration {
             type Value = OwnedDuration;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a duration shorthand string like \"4\" or \"8.\" or a struct { kind, dots }")
+                f.write_str(
+                    "a duration shorthand string like \"4\" or \"8.\" or a struct { kind, dots }",
+                )
             }
 
             fn visit_str<E: de::Error>(self, v: &str) -> Result<OwnedDuration, E> {
@@ -169,13 +173,18 @@ impl<'de> Deserialize<'de> for OwnedDuration {
 /// Struct variants for snippet events (REQ-O17).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OwnedEvent {
-    Note { pitch: OwnedPitch, duration: OwnedDuration },
+    Note {
+        pitch: OwnedPitch,
+        duration: OwnedDuration,
+    },
     Chord {
         #[serde(deserialize_with = "deserialize_bounded_vec")]
         pitches: Vec<OwnedPitch>,
         duration: OwnedDuration,
     },
-    Rest { duration: OwnedDuration },
+    Rest {
+        duration: OwnedDuration,
+    },
     Tie,
     Tuplet {
         numerator: u8,
@@ -257,13 +266,25 @@ mod tests {
     #[test]
     fn pitch_long_form_ron() {
         let p: OwnedPitch = ron::from_str("(note: Cis, octave: 5)").unwrap();
-        assert!(matches!(p, OwnedPitch::Long { note: Note::Cis, octave: 5 }));
+        assert!(matches!(
+            p,
+            OwnedPitch::Long {
+                note: Note::Cis,
+                octave: 5
+            }
+        ));
     }
 
     #[test]
     fn pitch_long_form_negative_octave() {
         let p: OwnedPitch = ron::from_str("(note: C, octave: -1)").unwrap();
-        assert!(matches!(p, OwnedPitch::Long { note: Note::C, octave: -1 }));
+        assert!(matches!(
+            p,
+            OwnedPitch::Long {
+                note: Note::C,
+                octave: -1
+            }
+        ));
     }
 
     // --- OwnedDuration custom deser tests ---
@@ -289,6 +310,12 @@ mod tests {
     #[test]
     fn duration_long_form_ron() {
         let d: OwnedDuration = ron::from_str("(kind: Qtr, dots: 1)").unwrap();
-        assert!(matches!(d, OwnedDuration::Long { kind: DurationKind::Qtr, dots: 1 }));
+        assert!(matches!(
+            d,
+            OwnedDuration::Long {
+                kind: DurationKind::Qtr,
+                dots: 1
+            }
+        ));
     }
 }

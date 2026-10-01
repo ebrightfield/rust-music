@@ -103,17 +103,13 @@ impl Pc {
     /// Returns the number of semitones up ("clockwise on the clock-face")
     /// to another [Pc].
     pub fn distance_up_to(&self, other: &Pc) -> u8 {
-        u8::try_from(
-            (i32::from(other) - i32::from(self)).rem_euclid(12)
-        ).unwrap()
+        u8::try_from((i32::from(other) - i32::from(self)).rem_euclid(12)).unwrap()
     }
 
     /// Returns the number of semitones down ("counter-clockwise on the clock-face")
     /// to another [Pc].
     pub fn distance_down_to(&self, other: &Pc) -> u8 {
-        u8::try_from(
-            (i32::from(self) - i32::from(other)).rem_euclid(12)
-        ).unwrap()
+        u8::try_from((i32::from(self) - i32::from(other)).rem_euclid(12)).unwrap()
     }
 }
 
@@ -350,18 +346,42 @@ impl From<&Note> for Pc {
 
 #[macro_export]
 macro_rules! pc {
-    (0) => {Pc::Pc0};
-    (1) => {Pc::Pc1};
-    (2) => {Pc::Pc2};
-    (3) => {Pc::Pc3};
-    (4) => {Pc::Pc4};
-    (5) => {Pc::Pc5};
-    (6) => {Pc::Pc6};
-    (7) => {Pc::Pc7};
-    (8) => {Pc::Pc8};
-    (9) => {Pc::Pc9};
-    (10) => {Pc::Pc10};
-    (11) => {Pc::Pc11};
+    (0) => {
+        Pc::Pc0
+    };
+    (1) => {
+        Pc::Pc1
+    };
+    (2) => {
+        Pc::Pc2
+    };
+    (3) => {
+        Pc::Pc3
+    };
+    (4) => {
+        Pc::Pc4
+    };
+    (5) => {
+        Pc::Pc5
+    };
+    (6) => {
+        Pc::Pc6
+    };
+    (7) => {
+        Pc::Pc7
+    };
+    (8) => {
+        Pc::Pc8
+    };
+    (9) => {
+        Pc::Pc9
+    };
+    (10) => {
+        Pc::Pc10
+    };
+    (11) => {
+        Pc::Pc11
+    };
 }
 
 #[cfg(test)]
@@ -373,12 +393,10 @@ mod tests {
         let all_pcs: Vec<Pc> = PcIter::default().collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 12);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc0));
-        let all_pcs: Vec<Pc> = PcIter::starting_on(&Pc::Pc4)
-            .collect::<Vec<Pc>>();
+        let all_pcs: Vec<Pc> = PcIter::starting_on(&Pc::Pc4).collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 12);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc4));
-        let all_pcs: Vec<Pc> = PcIter::section(&Pc::Pc4, &Pc::Pc3)
-            .collect::<Vec<Pc>>();
+        let all_pcs: Vec<Pc> = PcIter::section(&Pc::Pc4, &Pc::Pc3).collect::<Vec<Pc>>();
         assert_eq!(all_pcs.len(), 11);
         assert_eq!(all_pcs.first().cloned(), Some(Pc::Pc4));
         assert_eq!(all_pcs.last().cloned(), Some(Pc::Pc2));
@@ -412,7 +430,7 @@ mod tests {
         assert_eq!(Pc::from(0i32), Pc::Pc0);
         assert_eq!(Pc::from(7i32), Pc::Pc7);
         assert_eq!(Pc::from(-1i32), Pc::Pc11); // negative wraps
-        assert_eq!(Pc::from(-5i32), Pc::Pc7);  // negative wraps
+        assert_eq!(Pc::from(-5i32), Pc::Pc7); // negative wraps
 
         // Test From<Pc> for u8
         assert_eq!(u8::from(Pc::Pc0), 0);

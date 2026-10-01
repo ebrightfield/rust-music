@@ -211,9 +211,7 @@ impl Measure {
 
 /// Build one measure by choosing a weighted cell for each quarter-note beat.
 fn build_measure(beats: usize, weights: &[u32; 6], rng: &mut Rng) -> Measure {
-    let cells = (0..beats)
-        .map(|_| PALETTE[rng.weighted(weights)])
-        .collect();
+    let cells = (0..beats).map(|_| PALETTE[rng.weighted(weights)]).collect();
     Measure { cells }
 }
 
@@ -292,7 +290,11 @@ fn rhythm_to_events(measures: &[Measure], pitch: Pitch) -> Vec<NotationEvent> {
 
 fn print_text(measures: &[Measure], num: u8, den: u8, style: Style, syncopation: u8) {
     println!("=== Rhythm Drill ===");
-    println!("Time: {num}/{den}   Style: {}   Syncopation: {}/3", style.label(), syncopation);
+    println!(
+        "Time: {num}/{den}   Style: {}   Syncopation: {}/3",
+        style.label(),
+        syncopation
+    );
     println!("Measures: {}", measures.len());
     println!();
     for (i, measure) in measures.iter().enumerate() {
@@ -341,7 +343,11 @@ mod tests {
     fn each_beat_cell_sums_to_a_quarter() {
         for cell in PALETTE {
             let total: usize = cell.events().iter().map(|(d, _)| d.ticks()).sum();
-            assert_eq!(total, Duration::QTR.ticks(), "cell must fill exactly one beat");
+            assert_eq!(
+                total,
+                Duration::QTR.ticks(),
+                "cell must fill exactly one beat"
+            );
         }
     }
 
@@ -351,7 +357,11 @@ mod tests {
         let mut rng = Rng::new(42);
         let measure = build_measure(4, &weights, &mut rng);
         let total: usize = measure.events().iter().map(|(d, _)| d.ticks()).sum();
-        assert_eq!(total, 4 * Duration::QTR.ticks(), "4/4 measure must sum to 4 quarters");
+        assert_eq!(
+            total,
+            4 * Duration::QTR.ticks(),
+            "4/4 measure must sum to 4 quarters"
+        );
     }
 
     #[test]

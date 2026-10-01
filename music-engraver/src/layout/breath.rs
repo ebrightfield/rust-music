@@ -112,7 +112,8 @@ mod tests {
         for i in 0..glyphs.len() {
             for j in (i + 1)..glyphs.len() {
                 assert_ne!(
-                    glyphs[i], glyphs[j],
+                    glyphs[i],
+                    glyphs[j],
                     "{:?} and {:?} should produce distinct glyphs",
                     BreathMark::all()[i],
                     BreathMark::all()[j]

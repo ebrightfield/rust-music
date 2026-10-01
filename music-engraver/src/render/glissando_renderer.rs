@@ -38,7 +38,8 @@ mod tests {
     #[test]
     fn draws_line_element() {
         let staff = test_staff();
-        let layout = layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
+        let layout =
+            layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
         let mut svg = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         draw_glissando(&mut svg, &layout);
         let output = svg.to_svg();
@@ -48,27 +49,52 @@ mod tests {
     #[test]
     fn line_only_no_text() {
         let staff = test_staff();
-        let layout = layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
+        let layout =
+            layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
         let mut svg = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         draw_glissando(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(!output.contains("gliss."), "Line style should not show text");
+        assert!(
+            !output.contains("gliss."),
+            "Line style should not show text"
+        );
     }
 
     #[test]
     fn line_with_text_shows_gliss_label() {
         let staff = test_staff();
-        let layout = layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::LineWithText, None).unwrap();
+        let layout = layout_glissando(
+            100.0,
+            0,
+            1200.0,
+            8,
+            &staff,
+            GlissandoStyle::LineWithText,
+            None,
+        )
+        .unwrap();
         let mut svg = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         draw_glissando(&mut svg, &layout);
         let output = svg.to_svg();
-        assert!(output.contains("gliss."), "LineWithText should show 'gliss.' label");
+        assert!(
+            output.contains("gliss."),
+            "LineWithText should show 'gliss.' label"
+        );
     }
 
     #[test]
     fn text_is_italic() {
         let staff = test_staff();
-        let layout = layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::LineWithText, None).unwrap();
+        let layout = layout_glissando(
+            100.0,
+            0,
+            1200.0,
+            8,
+            &staff,
+            GlissandoStyle::LineWithText,
+            None,
+        )
+        .unwrap();
         let mut svg = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         draw_glissando(&mut svg, &layout);
         let output = svg.to_svg();
@@ -78,20 +104,28 @@ mod tests {
     #[test]
     fn ascending_line_coordinates() {
         let staff = test_staff();
-        let layout = layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
+        let layout =
+            layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
         let mut svg = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         draw_glissando(&mut svg, &layout);
         let output = svg.to_svg();
         // Should contain x1 attribute with the layout's x_start value
         let x1_str = format!("x1=\"{}\"", layout.x_start);
-        assert!(output.contains(&x1_str), "should embed x_start: {} in {}", x1_str, output);
+        assert!(
+            output.contains(&x1_str),
+            "should embed x_start: {} in {}",
+            x1_str,
+            output
+        );
     }
 
     #[test]
     fn ascending_vs_descending_produce_different_svgs() {
         let staff = test_staff();
-        let asc = layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
-        let desc = layout_glissando(100.0, 8, 1200.0, 0, &staff, GlissandoStyle::Line, None).unwrap();
+        let asc =
+            layout_glissando(100.0, 0, 1200.0, 8, &staff, GlissandoStyle::Line, None).unwrap();
+        let desc =
+            layout_glissando(100.0, 8, 1200.0, 0, &staff, GlissandoStyle::Line, None).unwrap();
         let mut svg1 = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         let mut svg2 = SvgWriter::new(600.0, 300.0, 0.0, 0.0, 600.0, 300.0);
         draw_glissando(&mut svg1, &asc);

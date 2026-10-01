@@ -31,16 +31,19 @@ pub fn convert_tab<'a>(
         // Translate user-facing string number to 0-indexed-from-low for sounded_note.
         let zero_indexed = convention_to_zero_indexed(convention, ev.string, num_strings)
             .ok_or_else(|| MusicRonError::InvalidPitch {
-                input: format!("string {} out of range for {num_strings}-string instrument", ev.string),
+                input: format!(
+                    "string {} out of range for {num_strings}-string instrument",
+                    ev.string
+                ),
                 path: format!("{path}.string"),
             })?;
 
-        let sounded = fretboard
-            .sounded_note(zero_indexed, ev.fret)
-            .map_err(|e| MusicRonError::InvalidPitch {
+        let sounded = fretboard.sounded_note(zero_indexed, ev.fret).map_err(|e| {
+            MusicRonError::InvalidPitch {
                 input: e.to_string(),
                 path: path.clone(),
-            })?;
+            }
+        })?;
 
         out.push(RhythmicNotatedEvent::fretted(sounded, duration));
     }
@@ -85,15 +88,12 @@ fn convention_to_zero_indexed(
 mod tests {
     use super::*;
     use crate::ast::common::OwnedDuration;
-    use crate::ast::tab::{OwnedTab, OwnedTabEvent};
     use crate::ast::common::OwnedTuning;
+    use crate::ast::tab::{OwnedTab, OwnedTabEvent};
     use music::fretboard::STD_6STR_GTR;
     use music::note::note::Note;
 
-    fn make_tab(
-        events: Vec<OwnedTabEvent>,
-        convention: Option<StringConvention>,
-    ) -> OwnedTab {
+    fn make_tab(events: Vec<OwnedTabEvent>, convention: Option<StringConvention>) -> OwnedTab {
         OwnedTab {
             meta: None,
             version: None,
@@ -235,20 +235,53 @@ mod tests {
     #[test]
     fn convention_translation_boundaries() {
         // ZeroIndexedFromLow: valid 0..5, invalid 6
-        assert_eq!(convention_to_zero_indexed(StringConvention::ZeroIndexedFromLow, 0, 6), Some(0));
-        assert_eq!(convention_to_zero_indexed(StringConvention::ZeroIndexedFromLow, 5, 6), Some(5));
-        assert_eq!(convention_to_zero_indexed(StringConvention::ZeroIndexedFromLow, 6, 6), None);
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::ZeroIndexedFromLow, 0, 6),
+            Some(0)
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::ZeroIndexedFromLow, 5, 6),
+            Some(5)
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::ZeroIndexedFromLow, 6, 6),
+            None
+        );
 
         // OneIndexedFromHigh: 1→5, 6→0, 0→None, 7→None
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 1, 6), Some(5));
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 6, 6), Some(0));
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 0, 6), None);
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 7, 6), None);
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 1, 6),
+            Some(5)
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 6, 6),
+            Some(0)
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 0, 6),
+            None
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromHigh, 7, 6),
+            None
+        );
 
         // OneIndexedFromLow: 1→0, 6→5, 0→None, 7→None
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 1, 6), Some(0));
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 6, 6), Some(5));
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 0, 6), None);
-        assert_eq!(convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 7, 6), None);
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 1, 6),
+            Some(0)
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 6, 6),
+            Some(5)
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 0, 6),
+            None
+        );
+        assert_eq!(
+            convention_to_zero_indexed(StringConvention::OneIndexedFromLow, 7, 6),
+            None
+        );
     }
 }

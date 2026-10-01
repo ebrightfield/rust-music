@@ -10,8 +10,7 @@ use music_engraver::render::{draw_barline, draw_clef, draw_staff_lines, SvgWrite
 fn main() {
     let font = bravura_font();
     let config = font.engraving_config();
-    let staff =
-        music_engraver::layout::staff::StaffLayout::from_config(0.0, 0.0, 9000.0, &config);
+    let staff = music_engraver::layout::staff::StaffLayout::from_config(0.0, 0.0, 9000.0, &config);
 
     let mut svg = SvgWriter::new(1100.0, 300.0, -100.0, -1500.0, 10000.0, 4000.0);
 
@@ -55,6 +54,9 @@ fn main() {
     // Expected paths: 1 clef + 2 dots (start repeat) + 2 dots (end repeat) = 5
     // Expected lines: 5 staff + 1 single + 2 double + 2 final + 2 start repeat + 2 end repeat = 14
     assert_eq!(path_count, 5, "Expected 5 paths (1 clef + 4 repeat dots)");
-    assert_eq!(line_count, 14, "Expected 14 lines (5 staff + 9 barline strokes)");
+    assert_eq!(
+        line_count, 14,
+        "Expected 14 lines (5 staff + 9 barline strokes)"
+    );
     println!("Expected: 5 paths, 14 lines");
 }

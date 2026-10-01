@@ -1,21 +1,26 @@
 // REQ-O1..O6: ToMidiEvents trait + ConvertCtx
 
-use crate::{event::{AbsoluteTicks, MidiEvent}, error::MidiConversionError,
-            tempo::TempoSource, dynamics::VelocityPolicy};
+use crate::{
+    dynamics::VelocityPolicy,
+    error::MidiConversionError,
+    event::{AbsoluteTicks, MidiEvent},
+    tempo::TempoSource,
+};
 use music::notation::rhythm::meter::Meter;
 
-/// Pitch and fretboard converters.
-pub mod pitch;
-/// Chord voicing converters.
-pub mod voicing;
-/// Rhythmic notation converters (tied notes, tuplets).
-pub mod rhythm;
 /// Melodic event sequence converters.
 pub mod melody;
+/// Pitch and fretboard converters.
+pub mod pitch;
+/// Rhythmic notation converters (tied notes, tuplets).
+pub mod rhythm;
+/// Chord voicing converters.
+pub mod voicing;
 
 // [AMEND-A] `score` requires the `music/lilypond` feature; gate at submodule decl.
 /// LilypondScore converter. Requires the `score` feature (implies `music/lilypond`).
-#[cfg(feature = "score")] pub mod score;
+#[cfg(feature = "score")]
+pub mod score;
 
 /// Shared context for all MIDI conversion operations.
 ///
@@ -53,9 +58,15 @@ impl<'a> ConvertCtx<'a> {
     ) -> Result<Self, MidiConversionError> {
         // REQ-O9: multiple-of-32 invariant
         if ppq == 0 || ppq % 32 != 0 {
-            return Err(MidiConversionError::InvalidPpq(ppq));   // REQ-X7
+            return Err(MidiConversionError::InvalidPpq(ppq)); // REQ-X7
         }
-        Ok(Self { ppq, tempo, velocity, meter, instrument_lookup })
+        Ok(Self {
+            ppq,
+            tempo,
+            velocity,
+            meter,
+            instrument_lookup,
+        })
     }
 
     // Rescale a `music` internal tick count to MIDI ticks at the current PPQ.
@@ -96,13 +107,15 @@ mod tests {
     use super::*;
     use crate::{dynamics::VelocityPolicy, tempo::StaticTempoMap};
 
-    fn instr(_s: &str) -> u8 { 0 }
+    fn instr(_s: &str) -> u8 {
+        0
+    }
 
     #[test]
     fn rescale_quarter_note_at_480() {
         let t = StaticTempoMap::constant(120.0);
         let ctx = ConvertCtx::new(480, &t, VelocityPolicy::Fixed(80), None, &instr).unwrap();
-        assert_eq!(ctx.rescale_ticks(32), 480);   // quarter note = 32 music ticks = 480 MIDI ticks
+        assert_eq!(ctx.rescale_ticks(32), 480); // quarter note = 32 music ticks = 480 MIDI ticks
         assert_eq!(ctx.rescale_ticks(128), 1920); // whole note
     }
 }

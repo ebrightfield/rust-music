@@ -1,10 +1,14 @@
 // REQ-O2
 use music::note::pitch::Pitch;
 use music::note_collections::voicing::Voicing;
-use music_midi::{ConvertCtx, DEFAULT_PPQ, MidiMessage, ToMidiEvents,
-                 dynamics::VelocityPolicy, tempo::StaticTempoMap};
+use music_midi::{
+    dynamics::VelocityPolicy, tempo::StaticTempoMap, ConvertCtx, MidiMessage, ToMidiEvents,
+    DEFAULT_PPQ,
+};
 
-fn instr(_s: &str) -> u8 { 0 }
+fn instr(_s: &str) -> u8 {
+    0
+}
 
 #[test]
 fn c_major_triad_emits_three_noteons_then_three_noteoffs() {
@@ -18,11 +22,21 @@ fn c_major_triad_emits_three_noteons_then_three_noteoffs() {
     let mut out = Vec::new();
     let end = v.append_midi(0, 0, &ctx, &mut out).unwrap();
     assert_eq!(out.len(), 6);
-    let ons: Vec<_> = out.iter().filter(|e| matches!(e.message, MidiMessage::NoteOn { .. })).collect();
-    let offs: Vec<_> = out.iter().filter(|e| matches!(e.message, MidiMessage::NoteOff { .. })).collect();
+    let ons: Vec<_> = out
+        .iter()
+        .filter(|e| matches!(e.message, MidiMessage::NoteOn { .. }))
+        .collect();
+    let offs: Vec<_> = out
+        .iter()
+        .filter(|e| matches!(e.message, MidiMessage::NoteOff { .. }))
+        .collect();
     assert_eq!(ons.len(), 3);
     assert_eq!(offs.len(), 3);
-    for o in &ons { assert_eq!(o.time, 0); }
-    for o in &offs { assert_eq!(o.time, DEFAULT_PPQ as u64); }
+    for o in &ons {
+        assert_eq!(o.time, 0);
+    }
+    for o in &offs {
+        assert_eq!(o.time, DEFAULT_PPQ as u64);
+    }
     assert_eq!(end, DEFAULT_PPQ as u64);
 }

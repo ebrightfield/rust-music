@@ -1,5 +1,5 @@
-use tera::Context;
 use crate::notation::lilypond::templates::{OMIT_TIME_SIGNATURE, RAGGED_RIGHT, TEMPLATE_ENGINE};
+use tera::Context;
 
 /// Wrap content in a markup block
 pub fn markup(content: String) -> String {
@@ -8,11 +8,7 @@ pub fn markup(content: String) -> String {
 
 /// Wrap content in a score block, optionally with ragged-right set to false.
 pub fn score(content: String, ragged_right: bool) -> String {
-    let format_block = if ragged_right {
-        RAGGED_RIGHT
-    } else {
-        ""
-    };
+    let format_block = if ragged_right { RAGGED_RIGHT } else { "" };
     let mut ctx = Context::new();
     ctx.insert("content", &content);
     ctx.insert("format_block", format_block);
@@ -70,14 +66,8 @@ mod tests {
 
     #[test]
     fn ly_tab_staff() {
-        let result = staff(
-            "c2 d e f g".to_string(),
-            Some("3/4".to_string())
-        );
-        let _result = score(
-            result,
-            true
-        );
+        let result = staff("c2 d e f g".to_string(), Some("3/4".to_string()));
+        let _result = score(result, true);
         //println!("{}", result);
     }
 }

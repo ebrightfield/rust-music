@@ -29,10 +29,10 @@ fn main() {
         // Measure 1: D4 E4 F#4 G4 (ascending quarter notes)
         MeasureContent {
             events: vec![
-                quarter(1),  // D4 in treble
-                quarter(2),  // E4
-                quarter(3),  // F#4
-                quarter(4),  // G4
+                quarter(1), // D4 in treble
+                quarter(2), // E4
+                quarter(3), // F#4
+                quarter(4), // G4
             ],
             barline: BarlineStyle::Single,
             volta: None,
@@ -41,9 +41,9 @@ fn main() {
         // Measure 2: A4 B4 half
         MeasureContent {
             events: vec![
-                quarter(5),  // A4
-                quarter(6),  // B4
-                half(7),     // C5
+                quarter(5), // A4
+                quarter(6), // B4
+                half(7),    // C5
             ],
             barline: BarlineStyle::Single,
             volta: None,
@@ -58,12 +58,7 @@ fn main() {
         },
         // Measure 4: quarter rest, three quarters descending
         MeasureContent {
-            events: vec![
-                qrest(),
-                quarter(6),
-                quarter(4),
-                quarter(2),
-            ],
+            events: vec![qrest(), quarter(6), quarter(4), quarter(2)],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
@@ -77,22 +72,14 @@ fn main() {
         },
         // Measure 6: dotted half + quarter
         MeasureContent {
-            events: vec![
-                dotted_half(5),
-                quarter(3),
-            ],
+            events: vec![dotted_half(5), quarter(3)],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
         },
         // Measure 7: four quarters
         MeasureContent {
-            events: vec![
-                quarter(4),
-                quarter(2),
-                quarter(6),
-                quarter(8),
-            ],
+            events: vec![quarter(4), quarter(2), quarter(6), quarter(8)],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
@@ -109,7 +96,13 @@ fn main() {
     let page_cfg = PageLayoutConfig::new(ss, 10000.0);
 
     // Break into 2 systems of 4 measures each
-    let page = layout_page(&prefix, &measures, &mcfg, &page_cfg, &SystemBreaking::Fixed(4));
+    let page = layout_page(
+        &prefix,
+        &measures,
+        &mcfg,
+        &page_cfg,
+        &SystemBreaking::Fixed(4),
+    );
 
     let svg = draw_page(&font, &config, &page).expect("render failed");
     let output = svg.to_svg();
@@ -121,7 +114,10 @@ fn main() {
     let line_count = output.matches("<line ").count();
     let systems = page.systems.len();
     println!("Wrote examples/output/multi_system.svg");
-    println!("  {systems} systems, {path_count} paths, {line_count} lines, {} bytes", output.len());
+    println!(
+        "  {systems} systems, {path_count} paths, {line_count} lines, {} bytes",
+        output.len()
+    );
 
     assert!(output.starts_with("<svg"));
     assert!(output.contains("</svg>"));
@@ -139,7 +135,7 @@ fn quarter(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })
 }
 
@@ -150,7 +146,7 @@ fn half(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })
 }
 
@@ -161,7 +157,7 @@ fn whole(pos: i8) -> MeasureEvent {
         dots: 0,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })
 }
 
@@ -172,7 +168,7 @@ fn dotted_half(pos: i8) -> MeasureEvent {
         dots: 1,
         accidental: None,
         stem_direction: None,
-    annotations: NoteAnnotations::default(),
+        annotations: NoteAnnotations::default(),
     })
 }
 

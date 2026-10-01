@@ -112,18 +112,12 @@ pub fn layout_page(
     }
 
     let chunks = match breaking {
-        SystemBreaking::Auto => break_measures_auto(
-            prefix,
-            measures,
-            measure_config,
-            page_config.system_width,
-        ),
-        SystemBreaking::Optimal => break_measures_optimal(
-            prefix,
-            measures,
-            measure_config,
-            page_config.system_width,
-        ),
+        SystemBreaking::Auto => {
+            break_measures_auto(prefix, measures, measure_config, page_config.system_width)
+        }
+        SystemBreaking::Optimal => {
+            break_measures_optimal(prefix, measures, measure_config, page_config.system_width)
+        }
         other => break_measures(measures.len(), other),
     };
 
@@ -179,10 +173,7 @@ pub fn layout_page(
 
 /// Compute the natural (unjustified) width of a measure's content in font
 /// design units. Does not include prefix elements (clef, key sig, time sig).
-pub(crate) fn content_natural_width(
-    content: &MeasureContent,
-    config: &MeasureLayoutConfig,
-) -> f64 {
+pub(crate) fn content_natural_width(content: &MeasureContent, config: &MeasureLayoutConfig) -> f64 {
     let mut elems: Vec<MeasureElement> = content
         .events
         .iter()
@@ -198,9 +189,7 @@ pub(crate) fn prefix_natural_width(prefix: &SystemPrefix, config: &MeasureLayout
     let mut elems = Vec::with_capacity(3);
     elems.push(MeasureElement::Clef(prefix.clef_layout.clone()));
     if !matches!(prefix.key_signature, KeySignature::Open) {
-        elems.push(MeasureElement::KeySignature(
-            prefix.key_signature.clone(),
-        ));
+        elems.push(MeasureElement::KeySignature(prefix.key_signature.clone()));
     }
     if let Some(ts) = &prefix.time_signature {
         elems.push(MeasureElement::TimeSignature(ts.clone()));
@@ -457,7 +446,7 @@ mod tests {
             dots: 0,
             accidental: None,
             stem_direction: None,
-        annotations: NoteAnnotations::default(),
+            annotations: NoteAnnotations::default(),
         })
     }
 
@@ -639,17 +628,26 @@ mod tests {
 
         // First system's first measure should have time sig element
         let first_elems = &page.systems[0].system.measures[0].layout.elements;
-        let has_time_sig = first_elems
-            .iter()
-            .any(|e| matches!(e.element, crate::layout::measure::MeasureElement::TimeSignature(_)));
+        let has_time_sig = first_elems.iter().any(|e| {
+            matches!(
+                e.element,
+                crate::layout::measure::MeasureElement::TimeSignature(_)
+            )
+        });
         assert!(has_time_sig, "first system should have time signature");
 
         // Second system's first measure should NOT have time sig
         let second_elems = &page.systems[1].system.measures[0].layout.elements;
-        let has_time_sig_2 = second_elems
-            .iter()
-            .any(|e| matches!(e.element, crate::layout::measure::MeasureElement::TimeSignature(_)));
-        assert!(!has_time_sig_2, "second system should not have time signature");
+        let has_time_sig_2 = second_elems.iter().any(|e| {
+            matches!(
+                e.element,
+                crate::layout::measure::MeasureElement::TimeSignature(_)
+            )
+        });
+        assert!(
+            !has_time_sig_2,
+            "second system should not have time signature"
+        );
     }
 
     #[test]
@@ -1016,7 +1014,8 @@ mod tests {
         // Chunks must be contiguous and non-overlapping
         for i in 0..chunks.len() - 1 {
             assert_eq!(
-                chunks[i].1, chunks[i + 1].0,
+                chunks[i].1,
+                chunks[i + 1].0,
                 "chunks must be contiguous at boundary {i}"
             );
         }
@@ -1092,7 +1091,11 @@ mod tests {
         let measures: Vec<_> = (0..3).map(|i| make_measure(i as i8)).collect();
         let chunks = break_measures_optimal(&prefix, &measures, &config, 1.0);
         // Should still cover all measures, one per system
-        assert_eq!(chunks.len(), 3, "very narrow target should give one measure per system");
+        assert_eq!(
+            chunks.len(),
+            3,
+            "very narrow target should give one measure per system"
+        );
         assert_eq!(chunks, vec![(0, 1), (1, 2), (2, 3)]);
     }
 }

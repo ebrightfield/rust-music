@@ -46,7 +46,10 @@ mod tests {
         draw_navigation_sign(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
         assert!(svg.contains("<path"), "should contain a path element");
-        assert!(svg.contains("translate("), "should have a translate transform");
+        assert!(
+            svg.contains("translate("),
+            "should have a translate transform"
+        );
     }
 
     #[test]
@@ -120,6 +123,9 @@ mod tests {
         let mut writer = test_writer();
         draw_navigation_sign(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
-        assert!(svg.contains("789"), "SVG should contain the x-coordinate 789");
+        assert!(
+            svg.contains("789"),
+            "SVG should contain the x-coordinate 789"
+        );
     }
 }

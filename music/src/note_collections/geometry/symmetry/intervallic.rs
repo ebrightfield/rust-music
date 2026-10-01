@@ -1,5 +1,5 @@
+use crate::note_collections::{pc_set::PcShape, OctavePartition};
 use std::ops::Deref;
-use crate::note_collections::{OctavePartition, pc_set::PcShape};
 
 pub trait IntervallicSymmetry: Sized {
     /// Returns the same type as self, but with its interval content
@@ -15,8 +15,8 @@ pub trait IntervallicSymmetry: Sized {
 
 impl IntervallicSymmetry for OctavePartition {
     fn invert_intervals(&self) -> Option<Self> {
-        let inverted = OctavePartition::try_new(
-            self.deref().iter().rev().copied().collect()).unwrap();
+        let inverted =
+            OctavePartition::try_new(self.deref().iter().rev().copied().collect()).unwrap();
         if *self == inverted {
             return None;
         }
@@ -28,8 +28,6 @@ impl IntervallicSymmetry for PcShape {
     fn invert_intervals(&self) -> Option<Self> {
         let partition = OctavePartition::from(self);
         let inverted_partition = partition.invert_intervals();
-        inverted_partition.map(
-            |partition| PcShape::from(&partition)
-        )
+        inverted_partition.map(|partition| PcShape::from(&partition))
     }
 }

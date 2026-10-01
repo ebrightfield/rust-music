@@ -84,5 +84,8 @@ fn main() {
     // Lines: 5 staff × N systems + stems + barlines.
     assert!(line_count >= 10, "expected ≥10 lines, got {line_count}");
     // Polygons: at least one beam in M1 + one in M2.
-    assert!(polygon_count >= 2, "expected ≥2 beam polygons, got {polygon_count}");
+    assert!(
+        polygon_count >= 2,
+        "expected ≥2 beam polygons, got {polygon_count}"
+    );
 }

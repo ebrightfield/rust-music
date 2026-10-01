@@ -98,10 +98,7 @@ fn c_major_shape_positions(frets_per_string: &[&[u8]; 6]) -> PositionSet {
 /// Transpose every fret by `semitones`. If the resulting minimum fret is >= 12,
 /// shift the whole shape down by an octave so it lives in the playable range.
 fn transpose_shape(shape: &PositionSet, semitones: u8) -> PositionSet {
-    let shifted: PositionSet = shape
-        .iter()
-        .map(|(s, f)| (*s, *f + semitones))
-        .collect();
+    let shifted: PositionSet = shape.iter().map(|(s, f)| (*s, *f + semitones)).collect();
     let min_fret = shifted.iter().map(|(_, f)| *f).min().unwrap();
     if min_fret >= 12 {
         shifted.iter().map(|(s, f)| (*s, f - 12)).collect()
@@ -129,26 +126,24 @@ fn drop_4_and_7(shape: &PositionSet, root_pc: Pc) -> PositionSet {
         .collect()
 }
 
-fn shape_to_positions(shape: &music::fretboard::fretboard_shape::melodic_shape_search::MelodicFretboardShape) -> PositionSet {
-    shape
-        .shape
-        .iter()
-        .map(|n| (n.string, n.fret))
-        .collect()
+fn shape_to_positions(
+    shape: &music::fretboard::fretboard_shape::melodic_shape_search::MelodicFretboardShape,
+) -> PositionSet {
+    shape.shape.iter().map(|n| (n.string, n.fret)).collect()
 }
 
 /// All 12 pitch classes, paired with a default spelling of the root.
 const ROOTS: &[(u8, Note)] = &[
-    (0,  Note::C),
-    (1,  Note::Des),
-    (2,  Note::D),
-    (3,  Note::Ees),
-    (4,  Note::E),
-    (5,  Note::F),
-    (6,  Note::Fis),
-    (7,  Note::G),
-    (8,  Note::Aes),
-    (9,  Note::A),
+    (0, Note::C),
+    (1, Note::Des),
+    (2, Note::D),
+    (3, Note::Ees),
+    (4, Note::E),
+    (5, Note::F),
+    (6, Note::Fis),
+    (7, Note::G),
+    (8, Note::Aes),
+    (9, Note::A),
     (10, Note::Bes),
     (11, Note::B),
 ];
@@ -157,13 +152,17 @@ const ROOTS: &[(u8, Note)] = &[
 /// stores pitch classes relative to the root, and `try_spell` interprets them
 /// as intervals above the given root — so the set is the same for every key.
 const MAJOR_INTERVALS: &[Pc] = &[
-    Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc5, Pc::Pc7, Pc::Pc9, Pc::Pc11,
+    Pc::Pc0,
+    Pc::Pc2,
+    Pc::Pc4,
+    Pc::Pc5,
+    Pc::Pc7,
+    Pc::Pc9,
+    Pc::Pc11,
 ];
 
 /// Major-pentatonic intervals from root (drop the 4th and 7th).
-const MAJOR_PENTATONIC_INTERVALS: &[Pc] = &[
-    Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc7, Pc::Pc9,
-];
+const MAJOR_PENTATONIC_INTERVALS: &[Pc] = &[Pc::Pc0, Pc::Pc2, Pc::Pc4, Pc::Pc7, Pc::Pc9];
 
 fn assert_shape_present(
     simple: &[music::fretboard::fretboard_shape::melodic_shape_search::MelodicFretboardShape],
@@ -173,7 +172,10 @@ fn assert_shape_present(
     let found = simple.iter().any(|s| shape_to_positions(s) == *expected);
     if !found {
         // Build a diagnostic: expected + list of actual shapes' positions.
-        let mut msg = format!("\n{}\n  expected shape (as (string, fret) pairs):\n    ", context);
+        let mut msg = format!(
+            "\n{}\n  expected shape (as (string, fret) pairs):\n    ",
+            context
+        );
         let mut expected_sorted: Vec<_> = expected.iter().collect();
         expected_sorted.sort();
         for (s, f) in expected_sorted {
@@ -207,17 +209,16 @@ fn all_caged_shapes_present_for_major_scales() {
                 continue;
             }
         };
-        let result =
-            match ScaleShapeSearchResult::from_raw_search_result(&spelled, fretboard) {
-                Ok(r) => r,
-                Err(e) => {
-                    failures.push(format!(
-                        "{} major: from_raw_search_result failed: {:?}",
-                        root_note, e
-                    ));
-                    continue;
-                }
-            };
+        let result = match ScaleShapeSearchResult::from_raw_search_result(&spelled, fretboard) {
+            Ok(r) => r,
+            Err(e) => {
+                failures.push(format!(
+                    "{} major: from_raw_search_result failed: {:?}",
+                    root_note, e
+                ));
+                continue;
+            }
+        };
 
         for (name, frets_per_string) in CAGED_C_MAJOR {
             let c_shape = c_major_shape_positions(frets_per_string);
@@ -258,17 +259,16 @@ fn all_caged_shapes_present_for_major_pentatonic_scales() {
                 continue;
             }
         };
-        let result =
-            match ScaleShapeSearchResult::from_raw_search_result(&spelled, fretboard) {
-                Ok(r) => r,
-                Err(e) => {
-                    failures.push(format!(
-                        "{} major pentatonic: from_raw_search_result failed: {:?}",
-                        root_note, e
-                    ));
-                    continue;
-                }
-            };
+        let result = match ScaleShapeSearchResult::from_raw_search_result(&spelled, fretboard) {
+            Ok(r) => r,
+            Err(e) => {
+                failures.push(format!(
+                    "{} major pentatonic: from_raw_search_result failed: {:?}",
+                    root_note, e
+                ));
+                continue;
+            }
+        };
 
         for (name, frets_per_string) in CAGED_C_MAJOR {
             let c_major_shape = c_major_shape_positions(frets_per_string);

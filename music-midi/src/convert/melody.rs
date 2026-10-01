@@ -1,12 +1,18 @@
 // REQ-O1, O3: MelodicEvent stream uses its Duration directly
 use super::{ConvertCtx, ToMidiEvents};
-use crate::{event::{AbsoluteTicks, MidiEvent, MidiMessage}, error::MidiConversionError};
+use crate::{
+    error::MidiConversionError,
+    event::{AbsoluteTicks, MidiEvent, MidiMessage},
+};
 use music::melody::sequencer::MelodicEvent;
 
 impl ToMidiEvents for [MelodicEvent] {
     fn append_midi(
-        &self, mut base_tick: AbsoluteTicks, channel: u8,
-        ctx: &ConvertCtx<'_>, out: &mut Vec<MidiEvent>,
+        &self,
+        mut base_tick: AbsoluteTicks,
+        channel: u8,
+        ctx: &ConvertCtx<'_>,
+        out: &mut Vec<MidiEvent>,
     ) -> Result<AbsoluteTicks, MidiConversionError> {
         let mut i = 0;
         while i < self.len() {
@@ -23,10 +29,22 @@ impl ToMidiEvents for [MelodicEvent] {
                 return Err(MidiConversionError::PitchOutOfRange(cur.pitch.midi_note));
             }
             let vel = ctx.velocity.velocity_no_event();
-            out.push(MidiEvent { time: base_tick, channel,
-                message: MidiMessage::NoteOn { key: cur.pitch.midi_note, velocity: vel } });
-            out.push(MidiEvent { time: base_tick + dur_ticks, channel,
-                message: MidiMessage::NoteOff { key: cur.pitch.midi_note, velocity: 64 } });
+            out.push(MidiEvent {
+                time: base_tick,
+                channel,
+                message: MidiMessage::NoteOn {
+                    key: cur.pitch.midi_note,
+                    velocity: vel,
+                },
+            });
+            out.push(MidiEvent {
+                time: base_tick + dur_ticks,
+                channel,
+                message: MidiMessage::NoteOff {
+                    key: cur.pitch.midi_note,
+                    velocity: 64,
+                },
+            });
             base_tick += dur_ticks;
             i = j;
         }

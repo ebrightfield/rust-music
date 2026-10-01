@@ -29,11 +29,7 @@ pub const ACCIDENTAL_NOTEHEAD_PADDING_SS: f64 = 0.12;
 ///
 /// The accidental is placed to the left of the notehead with standard padding.
 /// All values are in font design units.
-pub fn accidental_x(
-    notehead_x: f64,
-    accidental_advance_width: f64,
-    staff_space: f64,
-) -> f64 {
+pub fn accidental_x(notehead_x: f64, accidental_advance_width: f64, staff_space: f64) -> f64 {
     let padding = ACCIDENTAL_NOTEHEAD_PADDING_SS * staff_space;
     notehead_x - accidental_advance_width - padding
 }

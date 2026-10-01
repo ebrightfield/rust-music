@@ -8,4 +8,5 @@ members = [
     "music-midi",
     "music-ron",
     "slonimsky",
+    "music-corpus",
 ]

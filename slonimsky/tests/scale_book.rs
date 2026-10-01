@@ -20,18 +20,9 @@ fn text_output_has_header_with_mode_and_key_counts() {
         stdout.contains("Scale Book:"),
         "should have 'Scale Book:' header"
     );
-    assert!(
-        stdout.contains("7 modes"),
-        "should mention 7 modes"
-    );
-    assert!(
-        stdout.contains("1 keys"),
-        "should mention 1 key"
-    );
-    assert!(
-        stdout.contains("7 entries"),
-        "7 modes × 1 key = 7 entries"
-    );
+    assert!(stdout.contains("7 modes"), "should mention 7 modes");
+    assert!(stdout.contains("1 keys"), "should mention 1 key");
+    assert!(stdout.contains("7 entries"), "7 modes × 1 key = 7 entries");
 }
 
 #[test]
@@ -42,11 +33,16 @@ fn text_output_contains_all_major_mode_names() {
         .unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    for mode in &["Ionian", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Aeolian", "Locrian"] {
-        assert!(
-            stdout.contains(mode),
-            "should contain mode name '{mode}'"
-        );
+    for mode in &[
+        "Ionian",
+        "Dorian",
+        "Phrygian",
+        "Lydian",
+        "Mixolydian",
+        "Aeolian",
+        "Locrian",
+    ] {
+        assert!(stdout.contains(mode), "should contain mode name '{mode}'");
     }
 }
 
@@ -60,7 +56,8 @@ fn text_output_c_ionian_has_correct_notes() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     // C Ionian should contain all natural notes
     // Find the Ionian line for key C
-    let ionian_line = stdout.lines()
+    let ionian_line = stdout
+        .lines()
         .find(|l| l.contains("Ionian") && l.trim().starts_with("C"))
         .expect("should have C Ionian line");
     for note in &["C", "D", "E", "F", "G", "A", "B"] {
@@ -109,9 +106,15 @@ fn melodic_minor_has_correct_mode_names() {
         .unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Melodic Minor"), "should have Melodic Minor");
+    assert!(
+        stdout.contains("Melodic Minor"),
+        "should have Melodic Minor"
+    );
     assert!(stdout.contains("Altered"), "should have Altered mode");
-    assert!(stdout.contains("Lydian Dominant"), "should have Lydian Dominant");
+    assert!(
+        stdout.contains("Lydian Dominant"),
+        "should have Lydian Dominant"
+    );
 }
 
 #[test]
@@ -122,8 +125,14 @@ fn harmonic_minor_has_correct_mode_names() {
         .unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Harmonic Minor"), "should have Harmonic Minor");
-    assert!(stdout.contains("Phrygian Dominant"), "should have Phrygian Dominant");
+    assert!(
+        stdout.contains("Harmonic Minor"),
+        "should have Harmonic Minor"
+    );
+    assert!(
+        stdout.contains("Phrygian Dominant"),
+        "should have Phrygian Dominant"
+    );
 }
 
 #[test]
@@ -134,7 +143,10 @@ fn harmonic_major_accepted() {
         .unwrap();
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Harmonic Major"), "should have Harmonic Major");
+    assert!(
+        stdout.contains("Harmonic Major"),
+        "should have Harmonic Major"
+    );
 }
 
 // --- SVG output ---
@@ -145,8 +157,12 @@ fn svg_output_valid_structure() {
     let out_path = dir.path().join("book.svg");
     slonimsky()
         .args([
-            "scale-book", "major", "--keys", "C,G",
-            "-o", out_path.to_str().unwrap(),
+            "scale-book",
+            "major",
+            "--keys",
+            "C,G",
+            "-o",
+            out_path.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -164,8 +180,12 @@ fn svg_output_has_pitch_circle_groups() {
     let out_path = dir.path().join("book.svg");
     slonimsky()
         .args([
-            "scale-book", "major", "--keys", "C",
-            "-o", out_path.to_str().unwrap(),
+            "scale-book",
+            "major",
+            "--keys",
+            "C",
+            "-o",
+            out_path.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -181,14 +201,22 @@ fn svg_output_dark_theme_accepted() {
     let out_path = dir.path().join("dark.svg");
     slonimsky()
         .args([
-            "scale-book", "major", "--keys", "C",
-            "-t", "dark",
-            "-o", out_path.to_str().unwrap(),
+            "scale-book",
+            "major",
+            "--keys",
+            "C",
+            "-t",
+            "dark",
+            "-o",
+            out_path.to_str().unwrap(),
         ])
         .assert()
         .success();
     let content = std::fs::read_to_string(&out_path).unwrap();
-    assert!(content.starts_with("<svg"), "dark theme should produce valid SVG");
+    assert!(
+        content.starts_with("<svg"),
+        "dark theme should produce valid SVG"
+    );
 }
 
 // --- Verbose ---
@@ -234,10 +262,7 @@ fn bad_extension_fails() {
     let dir = TempDir::new().unwrap();
     let out_path = dir.path().join("out.pdf");
     slonimsky()
-        .args([
-            "scale-book", "major",
-            "-o", out_path.to_str().unwrap(),
-        ])
+        .args(["scale-book", "major", "-o", out_path.to_str().unwrap()])
         .assert()
         .failure()
         .stderr(predicate::str::contains(".svg"));

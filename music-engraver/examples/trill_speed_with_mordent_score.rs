@@ -18,10 +18,10 @@
 //!
 //! Produces `examples/output/trill_speed_with_mordent_score.svg`.
 
-use music::note::note::Note;
-use music::note::pitch::Pitch;
 use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
+use music::note::note::Note;
+use music::note::pitch::Pitch;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::trill_extension::{TrillExtensionSpeedOptions, TrillWiggleSpeed};
@@ -145,15 +145,16 @@ pub fn build_mixed_speed_compound() -> String {
         b = b
             .note(p(n, oct), Duration::WHOLE)
             .trill_with_extension_speed_with_options(
-                TrillExtensionSpeedOptions::new(*speed)
-                    .with_ornament(Ornament::TrillWithMordent),
+                TrillExtensionSpeedOptions::new(*speed).with_ornament(Ornament::TrillWithMordent),
             )
             .barline();
     }
 
     // Terminating quarter so the last measure's trill has a within-system
     // anchor for its incoming wiggle on the resumed system.
-    b.note(p(Note::B, 5), Duration::QTR).end_barline().render_svg()
+    b.note(p(Note::B, 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
 }
 
 /// Same musical content + speeds as `build_mixed_speed_compound`, but
@@ -187,7 +188,9 @@ fn build_plain_trill_same_speeds() -> String {
             .barline();
     }
 
-    b.note(p(Note::B, 5), Duration::QTR).end_barline().render_svg()
+    b.note(p(Note::B, 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
 }
 
 /// Same musical content + speeds as `build_mixed_speed_compound`, but
@@ -221,7 +224,9 @@ fn build_default_ornament_options_same_speeds() -> String {
             .barline();
     }
 
-    b.note(p(Note::B, 5), Duration::QTR).end_barline().render_svg()
+    b.note(p(Note::B, 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
 }
 
 /// Same musical content as `build_mixed_speed_compound`, but every
@@ -254,7 +259,9 @@ fn build_plain_compound_no_extension() -> String {
             .barline();
     }
 
-    b.note(p(Note::B, 5), Duration::QTR).end_barline().render_svg()
+    b.note(p(Note::B, 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
 }
 
 /// All-Slowest compound-trill version of the canonical score. Lower
@@ -289,7 +296,9 @@ fn build_all_slowest_compound() -> String {
             .barline();
     }
 
-    b.note(p(Note::B, 5), Duration::QTR).end_barline().render_svg()
+    b.note(p(Note::B, 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
 }
 
 /// All-Fastest compound-trill version of the canonical score. Upper
@@ -323,5 +332,7 @@ fn build_all_fastest_compound() -> String {
             .barline();
     }
 
-    b.note(p(Note::B, 5), Duration::QTR).end_barline().render_svg()
+    b.note(p(Note::B, 5), Duration::QTR)
+        .end_barline()
+        .render_svg()
 }

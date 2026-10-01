@@ -13,7 +13,7 @@ fn constant_one_change_point() {
 #[test]
 fn ticks_to_seconds_120bpm_quarter_is_half_second() {
     let t = StaticTempoMap::constant(120.0);
-    let s = t.ticks_to_seconds(480);  // one quarter @ PPQ=480
+    let s = t.ticks_to_seconds(480); // one quarter @ PPQ=480
     assert!((s - 0.5).abs() < 1e-9);
 }
 

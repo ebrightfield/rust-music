@@ -1,26 +1,34 @@
 use anyhow::{Context, Result};
-use music::fretboard::{
-    Fretboard, FretboardShape, BASS_4, BASS_5, DADGAD, DROP_D, OPEN_G, STANDARD_7, STD_6STR_GTR,
-};
+use music::ascii::ToAsciiFretboard;
+use music::fretboard::{FretboardShape, StringConvention};
 use music::svg::{FretboardBuilder, Orientation};
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
 use super::input::resolve_theme;
+use super::tuning::TuningSpec;
 
-fn resolve_tuning(name: &str) -> Result<&'static Fretboard> {
-    match name.to_lowercase().as_str() {
-        "standard" => Ok(&STD_6STR_GTR),
-        "drop-d" | "dropd" => Ok(&DROP_D),
-        "dadgad" => Ok(&DADGAD),
-        "open-g" | "openg" => Ok(&OPEN_G),
-        "7-string" | "7string" => Ok(&STANDARD_7),
-        "bass-4" | "bass4" => Ok(&BASS_4),
-        "bass-5" | "bass5" => Ok(&BASS_5),
-        other => anyhow::bail!(
-            "unknown tuning: '{other}' (options: standard, drop-d, dadgad, open-g, 7-string, bass-4, bass-5)"
-        ),
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OutputFormat {
+    Svg,
+    FretSpec,
+    Positions,
+}
+
+impl OutputFormat {
+    fn resolve(explicit: Option<&str>, output: Option<&str>) -> Result<Self> {
+        let value = explicit.or_else(|| {
+            output.and_then(|path| Path::new(path).extension().and_then(|ext| ext.to_str()))
+        });
+        match value.unwrap_or("svg").to_ascii_lowercase().as_str() {
+            "svg" => Ok(Self::Svg),
+            "ascii" | "positions" | "txt" => Ok(Self::Positions),
+            "fret-spec" | "frets" => Ok(Self::FretSpec),
+            other => anyhow::bail!(
+                "unsupported fretboard output format '{other}' (options: svg, positions, fret-spec)"
+            ),
+        }
     }
 }
 
@@ -28,9 +36,7 @@ fn resolve_orientation(name: &str) -> Result<Orientation> {
     match name.to_lowercase().as_str() {
         "vertical" | "up-down" => Ok(Orientation::Vertical),
         "horizontal" | "right-left" => Ok(Orientation::Horizontal),
-        other => anyhow::bail!(
-            "unknown orientation: '{other}' (options: vertical, horizontal)"
-        ),
+        other => anyhow::bail!("unknown orientation: '{other}' (options: vertical, horizontal)"),
     }
 }
 
@@ -38,6 +44,9 @@ pub struct FretboardArgs {
     pub frets: String,
     pub output: Option<String>,
     pub theme: Option<String>,
+    pub format: Option<String>,
+    pub notes: bool,
+    pub high_to_low: bool,
     pub tuning: String,
     pub orientation: Option<String>,
     pub title: Option<String>,
@@ -46,10 +55,9 @@ pub struct FretboardArgs {
 }
 
 pub fn run(args: FretboardArgs) -> Result<()> {
-    let tuning = resolve_tuning(&args.tuning)?;
-    let theme = resolve_theme(args.theme.as_deref())?;
-
-    let shape = FretboardShape::from_string(&args.frets, tuning)
+    let tuning = TuningSpec::parse(&args.tuning)?;
+    let format = OutputFormat::resolve(args.format.as_deref(), args.output.as_deref())?;
+    let shape = FretboardShape::from_string(&args.frets, &tuning.fretboard)
         .with_context(|| format!("invalid fret notation: '{}'", args.frets))?;
 
     if args.verbose {
@@ -57,78 +65,81 @@ pub fn run(args: FretboardArgs) -> Result<()> {
         eprintln!(
             "fretboard: frets='{}', tuning={}, strings={}, span={}-{}, playable={}",
             args.frets,
-            args.tuning,
-            tuning.num_strings(),
+            tuning.label,
+            tuning.fretboard.num_strings(),
             lo,
             hi,
             shape.is_playable()
         );
     }
 
-    let mut builder = FretboardBuilder::new()
-        .from_shape(&shape)
-        .theme(theme);
+    if format != OutputFormat::Svg {
+        anyhow::ensure!(
+            args.orientation.is_none() && args.title.is_none() && args.num_frets.is_none(),
+            "--orientation, --title, and --num-frets only apply to SVG output"
+        );
+        let convention = if args.high_to_low {
+            StringConvention::OneIndexedFromHigh
+        } else {
+            StringConvention::ZeroIndexedFromLow
+        };
+        let builder = shape
+            .to_ascii()
+            .show_notes(args.notes)
+            .string_convention(convention);
+        let text = match format {
+            OutputFormat::FretSpec => builder.fret_spec(),
+            OutputFormat::Positions => builder.position_list(),
+            OutputFormat::Svg => unreachable!(),
+        } + "\n";
+        return match &args.output {
+            Some(path) => {
+                fs::write(path, text).with_context(|| format!("failed to write {path}"))?;
+                Ok(())
+            }
+            None => {
+                io::stdout().write_all(text.as_bytes())?;
+                Ok(())
+            }
+        };
+    }
 
-    if let Some(ref t) = args.title {
-        builder = builder.title(t.as_str());
+    let theme = resolve_theme(args.theme.as_deref())?;
+    let mut builder = FretboardBuilder::new().from_shape(&shape).theme(theme);
+    if let Some(title) = &args.title {
+        builder = builder.title(title);
     }
-    if let Some(ref o) = args.orientation {
-        builder = builder.orientation(resolve_orientation(o)?);
+    if let Some(orientation) = &args.orientation {
+        builder = builder.orientation(resolve_orientation(orientation)?);
     }
-    if let Some(n) = args.num_frets {
-        builder = builder.num_frets(n);
+    if let Some(num_frets) = args.num_frets {
+        builder = builder.num_frets(num_frets);
     }
-
     let svg = builder.build();
 
-    match args.output {
-        Some(ref path) => {
-            let p = Path::new(path);
-            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("svg");
+    match &args.output {
+        Some(path) => {
+            let ext = Path::new(path)
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or("svg");
             anyhow::ensure!(
                 ext == "svg",
-                "fretboard only supports .svg output (got .{ext})"
+                "SVG fretboard output requires a .svg file (got .{ext})"
             );
-            fs::write(p, &svg)
-                .with_context(|| format!("failed to write {path}"))?;
+            fs::write(path, &svg).with_context(|| format!("failed to write {path}"))?;
             if args.verbose {
                 eprintln!("wrote {path} ({} bytes)", svg.len());
             }
         }
-        None => {
-            io::stdout().write_all(svg.as_bytes())?;
-        }
+        None => io::stdout().write_all(svg.as_bytes())?,
     }
-
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn resolve_standard_tuning() {
-        let fb = resolve_tuning("standard").unwrap();
-        assert_eq!(fb.num_strings(), 6);
-    }
-
-    #[test]
-    fn resolve_drop_d_tuning() {
-        let fb = resolve_tuning("drop-d").unwrap();
-        assert_eq!(fb.num_strings(), 6);
-    }
-
-    #[test]
-    fn resolve_7string_tuning() {
-        let fb = resolve_tuning("7-string").unwrap();
-        assert_eq!(fb.num_strings(), 7);
-    }
-
-    #[test]
-    fn reject_unknown_tuning() {
-        assert!(resolve_tuning("ukulele").is_err());
-    }
 
     #[test]
     fn run_c_major_shape() {
@@ -138,6 +149,9 @@ mod tests {
             frets: "x-3-2-0-1-0".into(),
             output: Some(out.to_string_lossy().into_owned()),
             theme: None,
+            format: None,
+            notes: false,
+            high_to_low: false,
             tuning: "standard".into(),
             orientation: None,
             title: Some("C Major".into()),
@@ -162,6 +176,9 @@ mod tests {
             frets: "0-2-2-1-0-0".into(),
             output: None,
             theme: Some("dark".into()),
+            format: None,
+            notes: false,
+            high_to_low: false,
             tuning: "standard".into(),
             orientation: None,
             title: None,
@@ -178,6 +195,9 @@ mod tests {
             frets: "not-valid-frets".into(),
             output: None,
             theme: None,
+            format: None,
+            notes: false,
+            high_to_low: false,
             tuning: "standard".into(),
             orientation: None,
             title: None,

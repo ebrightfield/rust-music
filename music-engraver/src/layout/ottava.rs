@@ -189,29 +189,40 @@ mod tests {
     #[test]
     fn above_bracket_y_is_above_staff_top() {
         let staff = test_staff();
-        let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 100.0, 800.0, &staff, 250.0, true,
-        );
+        let layout =
+            layout_ottava_bracket(OttavaKind::Ottava8va, 100.0, 800.0, &staff, 250.0, true);
         let staff_top = staff.y_of(8);
-        assert!(layout.y_line < staff_top,
-            "8va y_line {} should be above staff top {}", layout.y_line, staff_top);
+        assert!(
+            layout.y_line < staff_top,
+            "8va y_line {} should be above staff top {}",
+            layout.y_line,
+            staff_top
+        );
     }
 
     #[test]
     fn below_bracket_y_is_below_staff_bottom() {
         let staff = test_staff();
-        let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8vb, 100.0, 800.0, &staff, 250.0, true,
-        );
+        let layout =
+            layout_ottava_bracket(OttavaKind::Ottava8vb, 100.0, 800.0, &staff, 250.0, true);
         let staff_bottom = staff.y_of(0);
-        assert!(layout.y_line > staff_bottom,
-            "8vb y_line {} should be below staff bottom {}", layout.y_line, staff_bottom);
+        assert!(
+            layout.y_line > staff_bottom,
+            "8vb y_line {} should be below staff bottom {}",
+            layout.y_line,
+            staff_bottom
+        );
     }
 
     #[test]
     fn x_coordinates_preserved() {
         let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 150.0, 900.0, &test_staff(), 250.0, true,
+            OttavaKind::Ottava8va,
+            150.0,
+            900.0,
+            &test_staff(),
+            250.0,
+            true,
         );
         assert!((layout.x_start - 150.0).abs() < f64::EPSILON);
         assert!((layout.x_end - 900.0).abs() < f64::EPSILON);
@@ -220,16 +231,28 @@ mod tests {
     #[test]
     fn line_start_is_after_label() {
         let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 100.0, 800.0, &test_staff(), 250.0, true,
+            OttavaKind::Ottava8va,
+            100.0,
+            800.0,
+            &test_staff(),
+            250.0,
+            true,
         );
-        assert!(layout.x_line_start > layout.x_start,
-            "dashed line should start after label");
+        assert!(
+            layout.x_line_start > layout.x_start,
+            "dashed line should start after label"
+        );
     }
 
     #[test]
     fn has_end_hook_when_requested() {
         let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 100.0, 800.0, &test_staff(), 250.0, true,
+            OttavaKind::Ottava8va,
+            100.0,
+            800.0,
+            &test_staff(),
+            250.0,
+            true,
         );
         assert!(layout.has_end_hook);
     }
@@ -237,7 +260,12 @@ mod tests {
     #[test]
     fn no_end_hook_when_not_requested() {
         let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 100.0, 800.0, &test_staff(), 250.0, false,
+            OttavaKind::Ottava8va,
+            100.0,
+            800.0,
+            &test_staff(),
+            250.0,
+            false,
         );
         assert!(!layout.has_end_hook);
     }
@@ -245,44 +273,55 @@ mod tests {
     #[test]
     fn font_size_scales_with_staff_space() {
         let layout_250 = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 0.0, 500.0, &test_staff(), 250.0, true,
+            OttavaKind::Ottava8va,
+            0.0,
+            500.0,
+            &test_staff(),
+            250.0,
+            true,
         );
         let staff_500 = StaffLayout::new(0.0, 0.0, 2000.0, 500.0);
-        let layout_500 = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 0.0, 500.0, &staff_500, 500.0, true,
-        );
+        let layout_500 =
+            layout_ottava_bracket(OttavaKind::Ottava8va, 0.0, 500.0, &staff_500, 500.0, true);
         assert!((layout_500.font_size / layout_250.font_size - 2.0).abs() < 0.01);
     }
 
     #[test]
     fn dash_length_scales_with_staff_space() {
         let layout_250 = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 0.0, 500.0, &test_staff(), 250.0, true,
+            OttavaKind::Ottava8va,
+            0.0,
+            500.0,
+            &test_staff(),
+            250.0,
+            true,
         );
         let staff_500 = StaffLayout::new(0.0, 0.0, 2000.0, 500.0);
-        let layout_500 = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 0.0, 500.0, &staff_500, 500.0, true,
-        );
+        let layout_500 =
+            layout_ottava_bracket(OttavaKind::Ottava8va, 0.0, 500.0, &staff_500, 500.0, true);
         assert!((layout_500.dash_length / layout_250.dash_length - 2.0).abs() < 0.01);
     }
 
     #[test]
     fn above_and_below_produce_different_y() {
         let staff = test_staff();
-        let above = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 100.0, 800.0, &staff, 250.0, true,
+        let above = layout_ottava_bracket(OttavaKind::Ottava8va, 100.0, 800.0, &staff, 250.0, true);
+        let below = layout_ottava_bracket(OttavaKind::Ottava8vb, 100.0, 800.0, &staff, 250.0, true);
+        assert!(
+            (above.y_line - below.y_line).abs() > 100.0,
+            "above and below y should differ substantially"
         );
-        let below = layout_ottava_bracket(
-            OttavaKind::Ottava8vb, 100.0, 800.0, &staff, 250.0, true,
-        );
-        assert!((above.y_line - below.y_line).abs() > 100.0,
-            "above and below y should differ substantially");
     }
 
     #[test]
     fn hook_height_is_positive() {
         let layout = layout_ottava_bracket(
-            OttavaKind::Ottava8va, 100.0, 800.0, &test_staff(), 250.0, true,
+            OttavaKind::Ottava8va,
+            100.0,
+            800.0,
+            &test_staff(),
+            250.0,
+            true,
         );
         assert!(layout.hook_height > 0.0);
     }

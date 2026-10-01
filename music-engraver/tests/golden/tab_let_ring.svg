@@ -18,11 +18,11 @@
   <rect x="4882.5" y="592.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
   <text x="5005" y="750" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">1</text>
   <line x1="5005" y1="-375" x2="5005" y2="-1125" stroke="black" stroke-width="30"/>
-  <text x="1120" y="-1125" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
-  <text x="2415" y="-1125" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
-  <text x="3710" y="-1125" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
-  <text x="5005" y="-1125" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
-  <line x1="1620" y1="-1125" x2="5005" y2="-1125" stroke="black" stroke-width="30" stroke-dasharray="4,3"/>
+  <text x="1120" y="-1850" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
+  <text x="2415" y="-1850" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
+  <text x="3710" y="-1850" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
+  <text x="5005" y="-1850" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
+  <line x1="1620" y1="-1850" x2="5005" y2="-1850" stroke="black" stroke-width="30" stroke-dasharray="4,3"/>
   <line x1="5375" y1="0" x2="5375" y2="1250" stroke="black" stroke-width="40"/>
   <rect x="5622.5" y="-157.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
   <text x="5745" y="0" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">0</text>
@@ -37,7 +37,7 @@
   <rect x="9507.5" y="1092.5" width="244.99999999999997" height="315" fill="white" stroke="none" stroke-width="0"/>
   <text x="9630" y="1250" font-family="serif" font-size="350" fill="black" text-anchor="middle" font-weight="bold" font-style="normal" dominant-baseline="central">5</text>
   <line x1="9630" y1="-375" x2="9630" y2="-1125" stroke="black" stroke-width="30"/>
-  <text x="5745" y="-1125" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
+  <text x="5745" y="-1850" font-family="serif" font-size="250" fill="black" text-anchor="middle" font-weight="normal" font-style="italic">let ring</text>
   <line x1="10000" y1="0" x2="10000" y2="1250" stroke="black" stroke-width="40"/>
   <line x1="10100" y1="0" x2="10100" y2="1250" stroke="black" stroke-width="125"/>
 </svg>

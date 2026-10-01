@@ -171,8 +171,9 @@ impl<'a> AsciiFretboardBuilder<'a> {
     fn ordered_string_indices(&self) -> Vec<usize> {
         let n = self.shape.fretted_notes.len();
         match self.convention {
-            StringConvention::ZeroIndexedFromLow
-            | StringConvention::OneIndexedFromLow => (0..n).collect(),
+            StringConvention::ZeroIndexedFromLow | StringConvention::OneIndexedFromLow => {
+                (0..n).collect()
+            }
             StringConvention::OneIndexedFromHigh => (0..n).rev().collect(),
         }
     }
@@ -244,10 +245,7 @@ mod tests {
     #[test]
     fn position_list_plain() {
         let shape = FretboardShape::from_string("x-3-2-0-1-0", &STD_6STR_GTR).unwrap();
-        assert_eq!(
-            shape.to_ascii().position_list(),
-            "A:3 D:2 G:0 B:1 E2:0"
-        );
+        assert_eq!(shape.to_ascii().position_list(), "A:3 D:2 G:0 B:1 E2:0");
     }
 
     #[test]
@@ -289,7 +287,8 @@ mod tests {
     fn fret_spec_tab_convention_reverses_order() {
         let shape = FretboardShape::from_string("x-3-2-0-1-0", &STD_6STR_GTR).unwrap();
         assert_eq!(
-            shape.to_ascii()
+            shape
+                .to_ascii()
                 .string_convention(StringConvention::OneIndexedFromHigh)
                 .fret_spec(),
             "0-1-0-2-3-x"
@@ -300,7 +299,8 @@ mod tests {
     fn position_list_tab_convention_reverses_order() {
         let shape = FretboardShape::from_string("x-3-2-0-1-0", &STD_6STR_GTR).unwrap();
         assert_eq!(
-            shape.to_ascii()
+            shape
+                .to_ascii()
                 .string_convention(StringConvention::OneIndexedFromHigh)
                 .position_list(),
             "E2:0 B:1 G:0 D:2 A:3"
@@ -330,7 +330,8 @@ mod tests {
             .map(String::from)
             .collect();
         assert_eq!(
-            shape.to_ascii()
+            shape
+                .to_ascii()
                 .string_names(names)
                 .string_convention(StringConvention::OneIndexedFromHigh)
                 .position_list(),

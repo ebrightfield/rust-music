@@ -29,7 +29,9 @@ struct FakeClock {
 
 impl FakeClock {
     fn new() -> Self {
-        Self { base: Instant::now() }
+        Self {
+            base: Instant::now(),
+        }
     }
 }
 
@@ -64,13 +66,19 @@ fn play_background_empty_smf_completes_and_stop_is_clean() {
         tracks: vec![],
     };
 
-    let handle = player.play_background(&smf).expect("play_background should succeed");
+    let handle = player
+        .play_background(&smf)
+        .expect("play_background should succeed");
     // stop() blocks until the thread finishes and AllNotesOff is sent.
     handle.stop();
 
     let sent = cap.0.lock().unwrap();
     // AllNotesOff on all 16 channels is sent by the player's Drop on the thread.
-    assert_eq!(sent.len(), 16, "stop() should have triggered AllNotesOff on all channels");
+    assert_eq!(
+        sent.len(),
+        16,
+        "stop() should have triggered AllNotesOff on all channels"
+    );
     for (i, bytes) in sent.iter().enumerate() {
         assert_eq!(bytes[0] & 0xF0, 0xB0, "channel {i}: CC status");
         assert_eq!(bytes[1], 123, "channel {i}: AllNotesOff controller");
@@ -92,7 +100,9 @@ fn play_background_stop_can_be_called_after_natural_finish() {
         tracks: vec![],
     };
 
-    let handle = player.play_background(&smf).expect("play_background should succeed");
+    let handle = player
+        .play_background(&smf)
+        .expect("play_background should succeed");
 
     // Give the thread time to finish naturally before we call stop().
     std::thread::sleep(Duration::from_millis(50));
@@ -103,7 +113,7 @@ fn play_background_stop_can_be_called_after_natural_finish() {
 
 #[test]
 fn play_background_stop_is_deterministic() {
-    use midly::{Format, Header, Smf, TrackEvent, TrackEventKind, Timing};
+    use midly::{Format, Header, Smf, Timing, TrackEvent, TrackEventKind};
 
     // Construct a LONG SMF: many events spaced 10 seconds apart at 480 PPQ.
     // If the test ever waits for natural completion, this would hang for minutes.

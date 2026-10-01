@@ -1,9 +1,11 @@
-use std::collections::HashSet;
-use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{generate_alt, generate_alt_and_extensions, TriadContext};
-use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
-use crate::note_collections::chord_name::quality::chord::{ChordQuality, SusSubtype};
 use crate::note::pitch_class::Pc;
 use crate::note::pitch_class::Pc::*;
+use crate::note_collections::chord_name::naming_heuristics::alts_and_extensions::{
+    generate_alt, generate_alt_and_extensions, TriadContext,
+};
+use crate::note_collections::chord_name::naming_heuristics::NamingHeuristic;
+use crate::note_collections::chord_name::quality::chord::{ChordQuality, SusSubtype};
+use std::collections::HashSet;
 
 /// Common Logic across all heuristics based on diminished chords.
 pub fn search_for_sus_quality(pcs: &HashSet<Pc>) -> ChordQuality {
@@ -37,17 +39,11 @@ impl NamingHeuristic for SusNChords {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc2, Pc5]),
-            HashSet::from([Pc7]),
-        ]
+        vec![HashSet::from([Pc2, Pc5]), HashSet::from([Pc7])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc8, Pc9]),
-            HashSet::from([Pc10, Pc11]),
-        ]
+        vec![HashSet::from([Pc8, Pc9]), HashSet::from([Pc10, Pc11])]
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
@@ -61,10 +57,7 @@ impl NamingHeuristic for BothSecondAndFourth {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc2]),
-            HashSet::from([Pc5]),
-        ]
+        vec![HashSet::from([Pc2]), HashSet::from([Pc5])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
@@ -79,7 +72,6 @@ impl NamingHeuristic for BothSecondAndFourth {
         Some(search_for_sus_quality(pcs))
     }
 }
-
 
 #[derive(Debug)]
 pub struct Altered13Sus;
@@ -95,9 +87,7 @@ impl NamingHeuristic for Altered13Sus {
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc1]),
-        ]
+        vec![HashSet::from([Pc1])]
     }
 
     fn generate_name(&self, pcs: &HashSet<Pc>) -> Option<ChordQuality> {
@@ -112,10 +102,7 @@ impl NamingHeuristic for FourthAndSeventh {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc5]),
-            HashSet::from([Pc10, Pc11]),
-        ]
+        vec![HashSet::from([Pc5]), HashSet::from([Pc10, Pc11])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {
@@ -134,10 +121,7 @@ impl NamingHeuristic for FlatSecondAndFourth {
     type T = ChordQuality;
 
     fn required(&self) -> Vec<HashSet<Pc>> {
-        vec![
-            HashSet::from([Pc1]),
-            HashSet::from([Pc5]),
-        ]
+        vec![HashSet::from([Pc1]), HashSet::from([Pc5])]
     }
 
     fn optional(&self) -> Vec<HashSet<Pc>> {

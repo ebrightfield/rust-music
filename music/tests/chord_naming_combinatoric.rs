@@ -118,8 +118,16 @@ fn generate_audit() -> String {
     for upper in 0u16..(1 << 11) {
         let mask = (upper << 1) | 1;
         let pcs = pcs_from_mask(mask);
-        let pcs_label = pcs.iter().map(|p| format!("{:?}", p)).collect::<Vec<_>>().join(",");
-        let intervals = pcs.iter().map(|p| u8::from(p).to_string()).collect::<Vec<_>>().join(",");
+        let pcs_label = pcs
+            .iter()
+            .map(|p| format!("{:?}", p))
+            .collect::<Vec<_>>()
+            .join(",");
+        let intervals = pcs
+            .iter()
+            .map(|p| u8::from(p).to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let size = pcs.len();
         let pc_hashset: HashSet<Pc> = pcs.iter().copied().collect();
 
@@ -144,7 +152,10 @@ fn generate_audit() -> String {
             pcs_label,
             intervals,
             size,
-            renders[0], renders[1], renders[2], renders[3],
+            renders[0],
+            renders[1],
+            renders[2],
+            renders[3],
             heuristic,
             disagreement,
         ));
@@ -169,7 +180,11 @@ fn configs() -> Vec<(&'static str, NamingConfig, ChordNameDisplayConfig)> {
             NamingConfig::jazz(),
             ChordNameDisplayConfig::default(),
         ),
-        ("pop", NamingConfig::pop(), ChordNameDisplayConfig::default()),
+        (
+            "pop",
+            NamingConfig::pop(),
+            ChordNameDisplayConfig::default(),
+        ),
     ]
 }
 

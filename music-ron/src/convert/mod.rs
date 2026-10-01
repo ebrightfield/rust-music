@@ -30,22 +30,33 @@ pub(crate) fn xor_identity(
         });
     }
     // Safe: present.len() == 1 guaranteed by guard above, so exactly one (_, true) exists.
-    Ok(fields.iter().find(|(_, set)| *set).map(|(name, _)| *name).unwrap_or(""))
-
+    Ok(fields
+        .iter()
+        .find(|(_, set)| *set)
+        .map(|(name, _)| *name)
+        .unwrap_or(""))
 }
 
+pub mod chord_progression;
+pub mod fretboard_shape;
+pub mod interval_matrix;
+pub mod pitch_circle;
+pub mod scale_diagram;
 pub mod snippet;
 pub mod tab;
-pub mod fretboard_shape;
-pub mod pitch_circle;
-pub mod chord_progression;
-pub mod scale_diagram;
-pub mod interval_matrix;
 
+pub use chord_progression::{
+    convert_chord_progression, ResolvedChordEntry, ResolvedChordProgression,
+};
+pub use fretboard_shape::{
+    convert_fretboard_shape, FretValue, ResolvedBarre, ResolvedFretboardShape,
+};
+pub use interval_matrix::{
+    convert_interval_matrix, IntervalMatrixIdentity, IntervalStyle, ResolvedIntervalMatrix,
+};
+pub use pitch_circle::{convert_pitch_circle, PitchCircleIdentity, ResolvedPitchCircle};
+pub use scale_diagram::{
+    convert_scale_diagram, Orientation, ResolvedScaleDiagram, ScaleDiagramIdentity,
+};
 pub use snippet::{convert_snippet, ResolvedSnippet};
 pub use tab::convert_tab;
-pub use fretboard_shape::{convert_fretboard_shape, FretValue, ResolvedBarre, ResolvedFretboardShape};
-pub use pitch_circle::{convert_pitch_circle, PitchCircleIdentity, ResolvedPitchCircle};
-pub use chord_progression::{convert_chord_progression, ResolvedChordEntry, ResolvedChordProgression};
-pub use scale_diagram::{convert_scale_diagram, ScaleDiagramIdentity, Orientation, ResolvedScaleDiagram};
-pub use interval_matrix::{convert_interval_matrix, IntervalStyle, IntervalMatrixIdentity, ResolvedIntervalMatrix};

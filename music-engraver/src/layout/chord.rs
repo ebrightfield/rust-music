@@ -8,6 +8,10 @@ pub struct ChordNote {
     pub staff_position: StaffPosition,
     /// Accidental glyph to display, if any.
     pub accidental: Option<smufl::Glyph>,
+    /// Duration-resolved semantic notehead shape.
+    pub notehead_style: crate::layout::measure::NoteheadStyle,
+    /// Whether the notehead is enclosed by SMuFL notehead parentheses.
+    pub parenthesized: bool,
 }
 
 /// Layout result for a single note within a chord, indicating whether its
@@ -22,6 +26,10 @@ pub struct ChordNoteLayout {
     pub offset: bool,
     /// Accidental glyph, if any.
     pub accidental: Option<smufl::Glyph>,
+    /// Duration-resolved semantic notehead shape.
+    pub notehead_style: crate::layout::measure::NoteheadStyle,
+    /// Whether the notehead is enclosed by SMuFL notehead parentheses.
+    pub parenthesized: bool,
 }
 
 /// Determine which noteheads in a chord need to be offset to avoid collision.
@@ -57,8 +65,8 @@ pub fn layout_chord_noteheads(
             // Within a cluster, alternate: first note normal, second offset, third normal, etc.
             let mut i = 0;
             while i < sorted.len() {
-                let is_second = i > 0
-                    && sorted[i].staff_position - sorted[i - 1].staff_position == 1;
+                let is_second =
+                    i > 0 && sorted[i].staff_position - sorted[i - 1].staff_position == 1;
 
                 if is_second {
                     // Previous note was normal → this one is offset
@@ -68,12 +76,16 @@ pub fn layout_chord_noteheads(
                         staff_position: sorted[i].staff_position,
                         offset: !prev_offset,
                         accidental: sorted[i].accidental,
+                        notehead_style: sorted[i].notehead_style,
+                        parenthesized: sorted[i].parenthesized,
                     });
                 } else {
                     result.push(ChordNoteLayout {
                         staff_position: sorted[i].staff_position,
                         offset: false,
                         accidental: sorted[i].accidental,
+                        notehead_style: sorted[i].notehead_style,
+                        parenthesized: sorted[i].parenthesized,
                     });
                 }
                 i += 1;
@@ -103,6 +115,8 @@ pub fn layout_chord_noteheads(
                     staff_position: note.staff_position,
                     offset: offsets[idx],
                     accidental: note.accidental,
+                    notehead_style: note.notehead_style,
+                    parenthesized: note.parenthesized,
                 });
             }
         }
@@ -150,6 +164,8 @@ mod tests {
         ChordNote {
             staff_position: pos,
             accidental: None,
+            notehead_style: crate::layout::measure::NoteheadStyle::Normal,
+            parenthesized: false,
         }
     }
 
@@ -157,6 +173,8 @@ mod tests {
         ChordNote {
             staff_position: pos,
             accidental: Some(acc),
+            notehead_style: crate::layout::measure::NoteheadStyle::Normal,
+            parenthesized: false,
         }
     }
 
@@ -205,7 +223,10 @@ mod tests {
         let result = layout_chord_noteheads(&[note(2), note(3)], StemDirection::Up);
         assert_eq!(result.len(), 2);
         assert!(!result[0].offset, "lower note stays on stem side (stem up)");
-        assert!(result[1].offset, "upper note offset right of stem (stem up)");
+        assert!(
+            result[1].offset,
+            "upper note offset right of stem (stem up)"
+        );
     }
 
     #[test]
@@ -308,10 +329,7 @@ mod tests {
 
     #[test]
     fn accidentals_carried_through() {
-        let notes = vec![
-            note_with_acc(2, smufl::Glyph::AccidentalSharp),
-            note(4),
-        ];
+        let notes = vec![note_with_acc(2, smufl::Glyph::AccidentalSharp), note(4)];
         let result = layout_chord_noteheads(&notes, StemDirection::Up);
         assert_eq!(result[0].accidental, Some(smufl::Glyph::AccidentalSharp));
         assert_eq!(result[1].accidental, None);

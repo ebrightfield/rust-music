@@ -34,9 +34,8 @@ fn main() {
     let font = bravura_font();
     let upe = font.units_per_em() as f64;
 
-    let advance_of = |g: Glyph| -> f64 {
-        font.glyph_advance(g).expect("advance must be present") as f64
-    };
+    let advance_of =
+        |g: Glyph| -> f64 { font.glyph_advance(g).expect("advance must be present") as f64 };
     let std_adv = advance_of(Glyph::WiggleTrill);
     let slow_adv = advance_of(Glyph::WiggleTrillSlow);
     let fast_adv = advance_of(Glyph::WiggleTrillFast);
@@ -122,10 +121,7 @@ fn main() {
     std::fs::write(&out_path, &rendered).expect("write svg");
 
     // Sanity: the SVG must contain three trill lines worth of <path> elements.
-    assert!(
-        rendered.starts_with("<svg"),
-        "output must start with <svg>"
-    );
+    assert!(rendered.starts_with("<svg"), "output must start with <svg>");
     let path_count = rendered.matches("<path").count();
     assert!(
         path_count >= 9,

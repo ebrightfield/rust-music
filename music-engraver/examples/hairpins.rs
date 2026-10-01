@@ -52,7 +52,14 @@ fn main() {
         let pos = pitch_to_staff_position(pitch, &clef);
         let dir = auto_stem_direction(pos);
         let advance = draw_stemmed_note(
-            &mut svg, &staff, &font, &config, x, pos, NoteheadKind::Filled, Some(dir),
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            x,
+            pos,
+            NoteheadKind::Filled,
+            Some(dir),
         )
         .unwrap();
         note_xs.push(x);

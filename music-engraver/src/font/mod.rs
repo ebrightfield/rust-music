@@ -37,14 +37,18 @@ mod tests {
 
     #[test]
     fn bravura_otf_is_valid_opentype() {
-        assert_eq!(&BRAVURA_OTF[..4], b"OTTO", "Expected CFF-based OpenType magic");
+        assert_eq!(
+            &BRAVURA_OTF[..4],
+            b"OTTO",
+            "Expected CFF-based OpenType magic"
+        );
         assert!(BRAVURA_OTF.len() > 100_000, "Font file suspiciously small");
     }
 
     #[test]
     fn bravura_otf_parseable_by_ttf_parser() {
-        let face = ttf_parser::Face::parse(BRAVURA_OTF, 0)
-            .expect("ttf-parser should parse Bravura.otf");
+        let face =
+            ttf_parser::Face::parse(BRAVURA_OTF, 0).expect("ttf-parser should parse Bravura.otf");
         assert!(face.units_per_em() > 0);
         assert!(
             face.number_of_glyphs() > 2000,
