@@ -399,6 +399,25 @@ mod tests {
     }
 
     #[test]
+    fn respelled_sounded_note_keeps_fret_and_takes_the_written_octave() {
+        // Open B string = B4 (MIDI 71) on STD_6STR_GTR. Spelled as C♭ it is
+        // C♭5: same string, fret, and MIDI note, written an octave-letter up.
+        let open_b = STD_6STR_GTR.sounded_note(4, 0).unwrap();
+        assert_eq!(open_b.pitch, Pitch::new(Note::B, 4));
+        let c_flat = open_b.spelled_as_in(&vec![Note::Ces]).unwrap();
+        assert_eq!((c_flat.string, c_flat.fret), (4, 0));
+        assert_eq!(c_flat.pitch, Pitch::new(Note::Ces, 5));
+        assert_eq!(c_flat.pitch.midi_note, 71);
+
+        // G string fret 5 = C5 (MIDI 72); spelled as B♯ it is B♯4.
+        let c5 = STD_6STR_GTR.sounded_note(3, 5).unwrap();
+        assert_eq!(c5.pitch, Pitch::new(Note::C, 5));
+        let b_sharp = c5.spelled_as_in(&vec![Note::Bis]).unwrap();
+        assert_eq!(b_sharp.pitch, Pitch::new(Note::Bis, 4));
+        assert_eq!(b_sharp.pitch.midi_note, 72);
+    }
+
+    #[test]
     fn test_same_note_lower_string() {
         // G on 3rd string (G) open
         let g_open = STD_6STR_GTR.sounded_note(3, 0).unwrap();

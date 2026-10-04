@@ -48,7 +48,8 @@ fn clef_reference(clef: &Clef) -> (Letter, i8, StaffPosition) {
 /// Staff position 0 = bottom line, 8 = top line. Each step is one
 /// diatonic half-space (line to adjacent space or vice versa).
 /// Accidentals do not affect vertical position — C♯4 and C♭4 both
-/// sit at the same staff position as C4.
+/// sit at the same staff position as C4. `pitch.octave` is the written octave
+/// of the letter, so C♭4 (MIDI 59, sounding B3) still sits with C4.
 pub fn pitch_to_staff_position(pitch: &Pitch, clef: &Clef) -> StaffPosition {
     let spelling = Spelling::from(&pitch.note);
     let pitch_diatonic = absolute_diatonic(spelling.letter, pitch.octave);
@@ -221,16 +222,56 @@ mod tests {
         assert_eq!(pitch_to_staff_position(&p(Note::C, 7), &Clef::Treble), 19);
     }
 
+    /// `Pitch::octave` is the written octave, so placement reads it directly:
+    /// B♯3 and C4 are both MIDI 60 but B♯3 sits on the B3 position.
     #[test]
-    fn enharmonic_spellings_have_different_positions() {
-        // B#3 and C4 are enharmonic but on different lines
-        let b_sharp = pitch_to_staff_position(&p(Note::Bis, 3), &Clef::Treble);
-        let c_nat = pitch_to_staff_position(&p(Note::C, 4), &Clef::Treble);
-        // B#3 diatonic: octave 3, letter B(6) → 3*7+6 = 27; G4=32; diff=-5; pos=2-5=-3
-        // C4 diatonic: octave 4, letter C(0) → 4*7+0 = 28; G4=32; diff=-4; pos=2-4=-2
-        assert_eq!(b_sharp, -3);
-        assert_eq!(c_nat, -2);
-        assert_ne!(b_sharp, c_nat);
+    fn b_sharp_shares_midi_with_c_but_sits_on_its_written_b() {
+        let b_sharp = p(Note::Bis, 3);
+        let c_nat = p(Note::C, 4);
+        assert_eq!(b_sharp.midi_note, 60);
+        assert_eq!(c_nat.midi_note, 60);
+        // B♯3 diatonic: 3*7+6 = 27; G4 = 32; pos = 2-5 = -3.
+        // C4 diatonic: 4*7+0 = 28; G4 = 32; pos = 2-4 = -2.
+        assert_eq!(pitch_to_staff_position(&b_sharp, &Clef::Treble), -3);
+        assert_eq!(pitch_to_staff_position(&c_nat, &Clef::Treble), -2);
+        // MIDI 60 spelled as B♯ lands on the same written position.
+        let from_midi = Pitch::from_midi_spelled_as(60, &vec![Note::Bis]).unwrap();
+        assert_eq!(pitch_to_staff_position(&from_midi, &Clef::Treble), -3);
+    }
+
+    #[test]
+    fn c_flat_shares_midi_with_b_but_sits_on_its_written_c_in_treble() {
+        // C♭5 = MIDI 71 (sounds B4) sits in the C5 space, not on the B4 line.
+        let c_flat = p(Note::Ces, 5);
+        assert_eq!(c_flat.midi_note, 71);
+        assert_eq!(p(Note::B, 4).midi_note, 71);
+        assert_eq!(pitch_to_staff_position(&c_flat, &Clef::Treble), 5);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 4), &Clef::Treble), 4);
+        let from_midi = Pitch::from_midi_spelled_as(71, &vec![Note::Ces]).unwrap();
+        assert_eq!(pitch_to_staff_position(&from_midi, &Clef::Treble), 5);
+        // C♭4 = MIDI 59 sits on the middle-C ledger line.
+        assert_eq!(p(Note::Ces, 4).midi_note, 59);
+        assert_eq!(pitch_to_staff_position(&p(Note::Ces, 4), &Clef::Treble), -2);
+    }
+
+    #[test]
+    fn c_flat_and_b_sharp_sit_on_their_written_letters_in_bass() {
+        // C♭4 = MIDI 59 on the middle-C ledger line above the bass staff (B3 is 9).
+        let c_flat4 = p(Note::Ces, 4);
+        assert_eq!(c_flat4.midi_note, 59);
+        assert_eq!(pitch_to_staff_position(&c_flat4, &Clef::Bass), 10);
+        let from_midi = Pitch::from_midi_spelled_as(59, &vec![Note::Ces]).unwrap();
+        assert_eq!(pitch_to_staff_position(&from_midi, &Clef::Bass), 10);
+        // C♭3 = MIDI 47 in the C3 space; B2 (also MIDI 47) is on the line below.
+        let c_flat3 = p(Note::Ces, 3);
+        assert_eq!(c_flat3.midi_note, 47);
+        assert_eq!(pitch_to_staff_position(&c_flat3, &Clef::Bass), 3);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 2), &Clef::Bass), 2);
+        // B♯2 = MIDI 48 on the B2 line; C3 (also MIDI 48) is in the space above.
+        let b_sharp2 = p(Note::Bis, 2);
+        assert_eq!(b_sharp2.midi_note, 48);
+        assert_eq!(pitch_to_staff_position(&b_sharp2, &Clef::Bass), 2);
+        assert_eq!(pitch_to_staff_position(&p(Note::C, 3), &Clef::Bass), 3);
     }
 
     #[test]
