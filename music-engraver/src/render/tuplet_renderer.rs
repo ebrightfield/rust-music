@@ -5,13 +5,14 @@ use crate::render::svg_writer::SvgWriter;
 /// Draw a tuplet bracket with number onto the SVG.
 ///
 /// Renders:
-/// 1. Left hook (vertical tick)
+/// 1. Left hook (vertical tick), unless [`TupletBracketLayout::left_hook`] is off
 /// 2. Left bracket line (from left hook to number gap)
 /// 3. Number glyph(s) (centered in the gap)
 /// 4. Right bracket line (from number gap to right hook)
-/// 5. Right hook (vertical tick)
+/// 5. Right hook (vertical tick), unless [`TupletBracketLayout::right_hook`] is off
 ///
-/// The bracket is interrupted around the number to avoid collision.
+/// The bracket is interrupted around the number to avoid collision. With
+/// [`TupletBracketLayout::show_bracket`] off only the number is drawn.
 pub fn draw_tuplet_bracket(
     svg: &mut SvgWriter,
     layout: &TupletBracketLayout,
@@ -34,21 +35,25 @@ pub fn draw_tuplet_bracket(
     let gap_l = layout.gap_left_x + x_offset;
     let gap_r = layout.gap_right_x + x_offset;
 
-    // Left hook
-    svg.add_line(x_l, y, x_l, hook_end_y, "black", thick);
+    if layout.show_bracket {
+        if layout.left_hook {
+            svg.add_line(x_l, y, x_l, hook_end_y, "black", thick);
+        }
 
-    // Left bracket line (from left hook to gap)
-    if gap_l > x_l {
-        svg.add_line(x_l, y, gap_l, y, "black", thick);
+        // Left bracket line (from left hook to gap)
+        if gap_l > x_l {
+            svg.add_line(x_l, y, gap_l, y, "black", thick);
+        }
+
+        // Right bracket line (from gap to right hook)
+        if gap_r < x_r {
+            svg.add_line(gap_r, y, x_r, y, "black", thick);
+        }
+
+        if layout.right_hook {
+            svg.add_line(x_r, y, x_r, hook_end_y, "black", thick);
+        }
     }
-
-    // Right bracket line (from gap to right hook)
-    if gap_r < x_r {
-        svg.add_line(gap_r, y, x_r, y, "black", thick);
-    }
-
-    // Right hook
-    svg.add_line(x_r, y, x_r, hook_end_y, "black", thick);
 
     // Number glyph(s)
     let mut glyph_x = layout.number_x + x_offset;

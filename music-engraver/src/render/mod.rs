@@ -21,6 +21,7 @@ pub mod expression_renderer;
 pub mod flag_renderer;
 pub mod glissando_renderer;
 pub mod grace_renderer;
+pub mod group_renderer;
 pub mod hairpin_renderer;
 pub mod key_sig_renderer;
 pub mod lyric_renderer;

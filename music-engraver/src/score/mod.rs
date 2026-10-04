@@ -27,9 +27,11 @@
 //! ```
 
 mod event;
+mod groups;
 pub mod guitar;
 pub mod multi_staff;
 pub mod tab;
+pub use groups::GroupSpanError;
 
 #[cfg(test)]
 use std::collections::HashMap;
@@ -55,6 +57,7 @@ use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::{HairpinType, NientePlacement};
+use crate::layout::group::{BeamSpec, GroupMark, TupletSpec};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
@@ -69,6 +72,7 @@ use crate::layout::tempo::TempoMark;
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_extension::TrillWiggleSpeed;
+use crate::layout::stem::StemDirection;
 use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use crate::render::page_renderer::draw_page;
 
@@ -82,24 +86,22 @@ use event::{convert_resolved_event, resolve_measure_accidentals, ScoreEvent};
 /// A completed measure: voiced events, barline style, and optional volta annotation.
 pub(crate) type CompletedMeasure = (Vec<(u8, ScoreEvent)>, BarlineStyle, Option<VoltaAnnotation>);
 
-/// Force stem direction on a `MeasureEvent` based on voice index.
-///
-/// Voice 0 (and even voices) get stems up; voice 1 (and odd voices) get stems down.
-/// This follows standard engraving convention for two-voice writing on a single staff.
-fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
-    use crate::layout::stem::StemDirection;
-    let dir = if voice.is_multiple_of(2) {
-        StemDirection::Up
-    } else {
-        StemDirection::Down
-    };
+/// Force the voice stem direction (even voices up, odd voices down) on a
+/// multi-voice measure's note or chord that has no direction yet — neither a
+/// requested one nor its beam's. This follows standard engraving convention
+/// for two-voice writing on a single staff.
+fn force_stem_direction(event: &mut MeasureEvent, voice: usize) {
+    let dir = groups::voice_stem_direction(voice);
     match event {
-        MeasureEvent::Note(n) => n.stem_direction = Some(dir),
-        MeasureEvent::Chord(c) => c.stem_direction = Some(dir),
-        MeasureEvent::BeamGroup(bg) => bg.stem_direction = Some(dir),
-        MeasureEvent::TupletGroup(tg) => tg.beam_group.stem_direction = Some(dir),
-        // Multi-measure rests and ordinary rests have no stem to flip.
-        MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => {}
+        MeasureEvent::Note(n) => {
+            n.stem_direction.get_or_insert(dir);
+        }
+        MeasureEvent::Chord(c) => {
+            c.stem_direction.get_or_insert(dir);
+        }
+        // Span marks, multi-measure rests, and ordinary rests have no stem.
+        MeasureEvent::GroupMark(_) | MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => {
+        }
     }
 }
 
@@ -252,6 +254,24 @@ impl ScoreBuilder {
         self
     }
 
+    /// Annotations of the most recently added note or chord, looking past
+    /// zero-duration beam/tuplet span marks (so a builder called right after
+    /// [`Self::end_beam`] or [`Self::end_tuplet`] targets the span's last
+    /// member). `None` when the most recent event is a rest, a multi-measure
+    /// rest, or absent.
+    fn last_annotations_mut(&mut self) -> Option<&mut NoteAnnotations> {
+        for (_, event) in self.current_events.iter_mut().rev() {
+            match event {
+                ScoreEvent::GroupMark(_) => continue,
+                ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. } => {
+                    return Some(annotations);
+                }
+                ScoreEvent::Rest { .. } | ScoreEvent::MultiMeasureRest { .. } => return None,
+            }
+        }
+        None
+    }
+
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
         self.current_events.push((
@@ -312,11 +332,7 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()`. Has no effect if the last event
     /// is not a note.
     pub fn tie(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.tie_forward = true;
         }
         self
@@ -328,11 +344,7 @@ impl ScoreBuilder {
     /// `slur_end()` called on it, within the same system. The curve direction
     /// is determined by the stem direction of the start note.
     pub fn slur_start(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.slur_start = true;
         }
         self
@@ -343,11 +355,7 @@ impl ScoreBuilder {
     /// Pairs with a preceding `slur_start()` call. The slur is drawn between
     /// the most recent `slur_start` note and this note.
     pub fn slur_end(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.slur_end = true;
         }
         self
@@ -360,11 +368,7 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()` or `.chord()`. Has no effect
     /// if the last event is not a note or chord.
     pub fn dynamic(mut self, dyn_mark: Dynamic) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.dynamic = Some(dyn_mark);
         }
         self
@@ -374,11 +378,7 @@ impl ScoreBuilder {
     /// recently added note or chord. The wedge extends from this note to the
     /// next note/chord with `hairpin_end()`.
     pub fn hairpin_start(mut self, kind: HairpinType) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.hairpin_start = Some(kind);
         }
         self
@@ -386,11 +386,7 @@ impl ScoreBuilder {
 
     /// Mark the most recently added note or chord as the end of a hairpin wedge.
     pub fn hairpin_end(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.hairpin_end = true;
         }
         self
@@ -424,11 +420,7 @@ impl ScoreBuilder {
     /// is not a note or chord, and (silently) no visible effect if the
     /// last event has no `hairpin_start` set.
     pub fn hairpin_dashed(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.hairpin_dashed = true;
         }
         self
@@ -454,11 +446,7 @@ impl ScoreBuilder {
     /// is not a note or chord, and (silently) no visible effect if the last
     /// event has no `hairpin_start` set.
     pub fn hairpin_niente_start(mut self, placement: NientePlacement) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.hairpin_niente = Some(placement);
         }
         self
@@ -487,11 +475,7 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()` or `.chord()`. Has no
     /// effect if the last event is not a note or chord.
     pub fn cresc_text_start(mut self, kind: CrescTextKind) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.cresc_text_start = Some(kind);
         }
         self
@@ -501,11 +485,7 @@ impl ScoreBuilder {
     /// dashed-text crescendo / diminuendo marking. Pairs with a
     /// preceding `cresc_text_start()` call.
     pub fn cresc_text_end(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.cresc_text_end = true;
         }
         self
@@ -540,11 +520,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn rehearsal_mark(mut self, text: impl Into<String>, style: RehearsalStyle) -> Self {
         let mark = Some((text.into(), style));
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.rehearsal_mark = mark;
         }
         self
@@ -559,11 +535,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn tempo(mut self, mark: TempoMark) -> Self {
         let m = Some(mark);
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.tempo_mark = m;
         }
         self
@@ -578,11 +550,7 @@ impl ScoreBuilder {
     /// if the last event is not a note or chord.
     pub fn expression(mut self, text: impl Into<String>) -> Self {
         let e = Some(text.into());
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.expression = e;
         }
         self
@@ -599,11 +567,7 @@ impl ScoreBuilder {
     /// Must be called immediately after `.note()` or `.chord()`. Has no effect
     /// if the last event is not a note or chord.
     pub fn lyric(mut self, syllable: LyricSyllable) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.lyric = Some(syllable);
         }
         self
@@ -621,11 +585,7 @@ impl ScoreBuilder {
     /// articulations follow the standard stem-opposite rule. No-op if the
     /// last event was a rest.
     pub fn articulation(mut self, artic: Articulation) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.articulations.push(artic);
         }
         self
@@ -638,11 +598,7 @@ impl ScoreBuilder {
     /// articulations, ornaments do not flip based on stem direction.
     /// No-op if the last event was a rest.
     pub fn ornament(mut self, orn: Ornament) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(orn);
         }
         self
@@ -659,11 +615,7 @@ impl ScoreBuilder {
     /// extension silently disappears — convention is that the trill simply
     /// ends with the note).
     pub fn trill_with_extension(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
         }
@@ -691,11 +643,7 @@ impl ScoreBuilder {
         mut self,
         side: crate::layout::trill_bracket::TrillBracketSide,
     ) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_bracket = Some(side);
@@ -723,11 +671,7 @@ impl ScoreBuilder {
         direction: crate::layout::trill_bracket::HookDirection,
         length_ss: f64,
     ) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_bracket = Some(side);
@@ -768,11 +712,7 @@ impl ScoreBuilder {
         mut self,
         opts: crate::layout::trill_bracket::TrillBracketOptions,
     ) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             // `None` ornament collapses to `Trill` here (not at the renderer)
             // because the annotation field is the source of truth for the
             // glyph + trill-extension-eligibility check downstream; keeping
@@ -814,11 +754,7 @@ impl ScoreBuilder {
     /// the wavy line reads as one continuous mark of consistent density
     /// across the line break.
     pub fn trill_with_extension_speed(mut self, speed: TrillWiggleSpeed) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_wiggle_speed = Some(speed);
@@ -856,11 +792,7 @@ impl ScoreBuilder {
         mut self,
         opts: crate::layout::trill_extension::TrillExtensionSpeedOptions,
     ) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             // `None` ornament collapses to `Trill` here (not at the renderer)
             // so the annotation field remains the single source of truth for
             // the glyph + trill-extension-eligibility check downstream. This
@@ -906,11 +838,7 @@ impl ScoreBuilder {
     /// "extend to next note" behavior is the only path that ever produces
     /// cross-system wavy lines.
     pub fn trill_with_extension_length_ss(mut self, length_ss: f64) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_extension_length_ss = Some(length_ss);
@@ -954,11 +882,7 @@ impl ScoreBuilder {
     /// the annotation, so a future caller can read it back, but it has no
     /// effect on the rendered wiggle while a positive length is in force.
     pub fn trill_with_extension_to(mut self, note_offset: usize) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_extension_to_note_offset = Some(note_offset);
@@ -988,11 +912,7 @@ impl ScoreBuilder {
     /// [`trill_with_extension_bracketed_with_options`](Self::trill_with_extension_bracketed_with_options)
     /// with `.with_ornament(Ornament::TrillWithMordent)`.
     pub fn trill_with_mordent_with_extension(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::TrillWithMordent);
             annotations.trill_extension = true;
         }
@@ -1059,11 +979,7 @@ impl ScoreBuilder {
         mut self,
         opts: crate::layout::trill_options::TrillExtensionFullOptions,
     ) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             // `None` ornament collapses to `Trill` at the builder layer (not
             // the renderer) so the annotation field stays the single source
             // of truth for glyph + extension-eligibility — matches the
@@ -1134,11 +1050,7 @@ impl ScoreBuilder {
         ramp: crate::layout::trill_extension::TrillSpeedRamp,
         region_count: usize,
     ) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ornament = Some(Ornament::Trill);
             annotations.trill_extension = true;
             annotations.trill_speed_ramp = Some(
@@ -1153,11 +1065,7 @@ impl ScoreBuilder {
     ///
     /// No-op if the last event was a rest.
     pub fn navigation_sign(mut self, sign: NavigationSign) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.navigation_sign = Some(sign);
         }
         self
@@ -1168,11 +1076,7 @@ impl ScoreBuilder {
     ///
     /// No-op if the last event was a rest.
     pub fn ottava_start(mut self, kind: OttavaKind) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ottava_start = Some(kind);
         }
         self
@@ -1182,11 +1086,7 @@ impl ScoreBuilder {
     ///
     /// No-op if the last event was a rest.
     pub fn ottava_end(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.ottava_end = true;
         }
         self
@@ -1197,11 +1097,7 @@ impl ScoreBuilder {
     /// The SMuFL "keyboardPedalPed" glyph is placed below the staff, well below
     /// dynamics, expression text, and lyrics. No-op if the last event was a rest.
     pub fn pedal_down(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.pedal = Some(PedalMark::Down);
         }
         self
@@ -1212,11 +1108,7 @@ impl ScoreBuilder {
     /// The SMuFL "keyboardPedalUp" glyph is placed below the staff at the same
     /// vertical position as pedal-down markings. No-op if the last event was a rest.
     pub fn pedal_up(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.pedal = Some(PedalMark::Up);
         }
         self
@@ -1230,11 +1122,7 @@ impl ScoreBuilder {
     /// vertical position as the standard pedal markings. No-op if the last
     /// event was a rest.
     pub fn pedal_half(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.pedal = Some(PedalMark::Half);
         }
         self
@@ -1248,11 +1136,7 @@ impl ScoreBuilder {
     /// is placed below the staff at the same vertical position as the
     /// sustain pedal markings. No-op if the last event was a rest.
     pub fn pedal_sost(mut self) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.pedal = Some(PedalMark::Sost);
         }
         self
@@ -1264,11 +1148,7 @@ impl ScoreBuilder {
     /// eighth-note subdivision, double = sixteenth, triple = thirty-second.
     /// No-op if the last event was a rest.
     pub fn tremolo(mut self, count: TremoloCount) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.tremolo = Some(count);
         }
         self
@@ -1283,11 +1163,7 @@ impl ScoreBuilder {
     ///
     /// No-op if the last event was a rest.
     pub fn arpeggio(mut self, direction: ArpeggioDirection) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.arpeggio = Some(direction);
         }
         self
@@ -1299,11 +1175,7 @@ impl ScoreBuilder {
     ///
     /// No-op if the last event was a rest.
     pub fn breath_mark(mut self, mark: BreathMark) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.breath_mark = Some(mark);
         }
         self
@@ -1313,11 +1185,7 @@ impl ScoreBuilder {
     /// line to the next note. The diagonal line is drawn between the two notes
     /// during system rendering. No-op if the last event is a rest.
     pub fn glissando(mut self, style: GlissandoStyle) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.glissando_start = Some(style);
         }
         self
@@ -1334,11 +1202,7 @@ impl ScoreBuilder {
         use crate::layout::note_placement::pitch_to_staff_position;
         let clef = self.clef.to_clef();
         let staff_pos = pitch_to_staff_position(&pitch, &clef);
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.grace_note = Some((staff_pos, kind));
         }
         self
@@ -1356,11 +1220,7 @@ impl ScoreBuilder {
         use crate::layout::note_placement::pitch_to_staff_position;
         let clef = self.clef.to_clef();
         let staff_pos = pitch_to_staff_position(&pitch, &clef);
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.grace_note = Some((staff_pos, kind));
             annotations.grace_note_slur = true;
         }
@@ -1374,11 +1234,7 @@ impl ScoreBuilder {
     /// note/chord they apply to. No-op if the last event was a rest.
     pub fn chord_symbol(mut self, symbol: impl Into<String>) -> Self {
         let s = Some(symbol.into());
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.chord_symbol = s;
         }
         self
@@ -1455,10 +1311,112 @@ impl ScoreBuilder {
         self
     }
 
-    /// Add a beam group (multiple notes connected by beams) to the current measure.
+    /// Open a beam span in the current voice: every note, chord, and rest
+    /// added until the matching [`Self::end_beam`] is beamed together, with
+    /// one automatically chosen stem direction. Members are ordinary events,
+    /// so every annotation builder (tie, slur, dynamic, lyric, …) applies to
+    /// them as usual. A beam may cross a barline, and may overlap or sit
+    /// inside a tuplet span. Rests are covered by the beam; notes and chords
+    /// must be eighths or shorter.
     ///
-    /// All notes must be eighth notes or shorter (duration_log2 >= 3).
-    /// Stem direction is auto-detected from the group's staff positions.
+    /// Invalid spans (a beam begun inside an open beam, a beam never ended,
+    /// an unbeamable member, …) make the render entry points return
+    /// [`crate::error::EngraverError::Group`].
+    ///
+    /// # Example
+    /// ```no_run
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::pitch::Pitch;
+    /// use music::note::note::Note;
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// let svg = ScoreBuilder::new()
+    ///     .begin_beam()
+    ///     .note(Pitch::new(Note::E, 4), Duration::EIGHTH)
+    ///     .slur_start()
+    ///     .rest(Duration::EIGHTH)
+    ///     .chord(vec![Pitch::new(Note::G, 4), Pitch::new(Note::B, 4)], Duration::EIGHTH)
+    ///     .slur_end()
+    ///     .end_beam()
+    ///     .end_barline()
+    ///     .render_svg();
+    /// ```
+    pub fn begin_beam(self) -> Self {
+        self.begin_beam_with(BeamSpec::default())
+    }
+
+    /// Open a beam span with explicit options: a forced stem direction for
+    /// every member (`\stemUp` / `\stemDown`) or secondary-beam subdivision
+    /// (`subdivideBeams`). See [`Self::begin_beam`].
+    pub fn begin_beam_with(self, spec: BeamSpec) -> Self {
+        self.push_group_mark(GroupMark::BeamStart {
+            spec,
+            continued: false,
+        })
+    }
+
+    /// Close the beam span opened by [`Self::begin_beam`] in the current voice.
+    pub fn end_beam(self) -> Self {
+        self.push_group_mark(GroupMark::BeamEnd { continues: false })
+    }
+
+    /// Open a tuplet span in the current voice: the notes, chords, and rests
+    /// added until the matching [`Self::end_tuplet`] are performed at
+    /// `spec.number : spec.in_time_of` and engraved with the spec's number,
+    /// bracket, and placement. A tuplet is not beamed by itself — open a beam
+    /// span inside (or around) it for that — and may nest inside another
+    /// tuplet or cross a barline. Members may mix durations and kinds.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::pitch::Pitch;
+    /// use music::note::note::Note;
+    /// use music_engraver::layout::group::TupletSpec;
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// // `\tuplet 3/2 { r8 b8 b8 }`: an unbeamed triplet with a rest member.
+    /// let svg = ScoreBuilder::new()
+    ///     .begin_tuplet(TupletSpec::new(3, 2))
+    ///     .rest(Duration::EIGHTH)
+    ///     .note(Pitch::new(Note::B, 4), Duration::EIGHTH)
+    ///     .note(Pitch::new(Note::B, 4), Duration::EIGHTH)
+    ///     .end_tuplet()
+    ///     .end_barline()
+    ///     .render_svg();
+    /// ```
+    pub fn begin_tuplet(self, spec: TupletSpec) -> Self {
+        self.push_group_mark(GroupMark::TupletStart {
+            spec,
+            continued: false,
+        })
+    }
+
+    /// Close the innermost tuplet span open in the current voice.
+    pub fn end_tuplet(self) -> Self {
+        self.push_group_mark(GroupMark::TupletEnd { continues: false })
+    }
+
+    fn push_group_mark(mut self, mark: GroupMark) -> Self {
+        self.current_events
+            .push((self.current_voice, ScoreEvent::GroupMark(mark)));
+        self
+    }
+
+    /// Force the stem direction of the most recently added note or chord
+    /// (`\stemUp` / `\stemDown` on one event). Inside a beam, the beam's
+    /// direction comes from its spec first, then from its first member with a
+    /// forced direction.
+    pub fn stem_direction(mut self, direction: StemDirection) -> Self {
+        if let Some(annotations) = self.last_annotations_mut() {
+            annotations.stem_direction = Some(direction);
+        }
+        self
+    }
+
+    /// Add a beam group: sugar for [`Self::begin_beam`], one
+    /// [`Self::note`] per entry, and [`Self::end_beam`]. Every note must be an
+    /// eighth or shorter.
     ///
     /// # Example
     /// ```no_run
@@ -1477,10 +1435,8 @@ impl ScoreBuilder {
     ///     .end_barline()
     ///     .render_svg();
     /// ```
-    pub fn beam_group(mut self, notes: Vec<(Pitch, Duration)>) -> Self {
-        self.current_events
-            .push((self.current_voice, ScoreEvent::BeamGroup { notes }));
-        self
+    pub fn beam_group(self, notes: Vec<(Pitch, Duration)>) -> Self {
+        self.grouped_notes(None, true, Self::auto_display(notes))
     }
 
     /// Add a beam group whose notes each carry an [`AccidentalDisplay`] policy.
@@ -1490,41 +1446,13 @@ impl ScoreBuilder {
         self,
         notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
     ) -> Self {
-        self.styled_beam_group(Self::accidental_display_members(notes))
+        self.grouped_notes(None, true, notes)
     }
 
-    /// One styled single-pitch group member per note, carrying its display policy.
-    fn accidental_display_members(
-        notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
-    ) -> Vec<(Vec<Pitch>, Duration, NoteAnnotations)> {
-        notes
-            .into_iter()
-            .map(|(pitch, duration, display)| {
-                (
-                    vec![pitch],
-                    duration,
-                    NoteAnnotations {
-                        accidental_displays: vec![display],
-                        ..NoteAnnotations::default()
-                    },
-                )
-            })
-            .collect()
-    }
-
-    pub(crate) fn styled_beam_group(
-        mut self,
-        members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
-    ) -> Self {
-        self.current_events
-            .push((self.current_voice, ScoreEvent::StyledBeamGroup { members }));
-        self
-    }
-
-    /// Add a tuplet group to the current measure.
-    ///
-    /// Renders beamed notes with a tuplet bracket and number above or below.
-    /// `tuplet_number` is the number to display (e.g. 3 for triplet, 5 for quintuplet).
+    /// Add a tuplet whose number is also its performed ratio's normal-note
+    /// count (`tuplet_number : tuplet_number`, i.e. written durations keep
+    /// their spacing). Sugar for [`Self::tuplet_ratio`]; callers that know the
+    /// performed ratio use that instead.
     ///
     /// # Example
     /// ```no_run
@@ -1543,30 +1471,22 @@ impl ScoreBuilder {
     ///     .render_svg();
     /// ```
     pub fn tuplet(self, tuplet_number: u32, notes: Vec<(Pitch, Duration)>) -> Self {
-        // Preserve the legacy visual-only tuplet timing. Semantic callers that
-        // know the performed ratio use `tuplet_ratio`.
         self.tuplet_ratio(tuplet_number, tuplet_number, notes)
     }
 
-    /// Add a tuplet with an explicit `tuplet_number:in_time_of` performed ratio.
-    ///
-    /// The ratio is retained through measure layout, so arbitrary tuplets
-    /// receive the correct rhythmic advance relative to surrounding events.
+    /// Add a `tuplet_number : in_time_of` tuplet of notes: sugar for
+    /// [`Self::begin_tuplet`] with [`TupletSpec::new`], the notes, and
+    /// [`Self::end_tuplet`]. When there are at least two notes and all are
+    /// eighths or shorter, they are also beamed together (a beam span inside
+    /// the tuplet); otherwise they stay unbeamed. Use the span API for any
+    /// other combination (rests, chords, partial beams, custom appearance).
     pub fn tuplet_ratio(
-        mut self,
+        self,
         tuplet_number: u32,
         in_time_of: u32,
         notes: Vec<(Pitch, Duration)>,
     ) -> Self {
-        self.current_events.push((
-            self.current_voice,
-            ScoreEvent::TupletGroup {
-                notes,
-                tuplet_number,
-                in_time_of,
-            },
-        ));
-        self
+        self.tuplet_ratio_with_accidentals(tuplet_number, in_time_of, Self::auto_display(notes))
     }
 
     /// Add a `tuplet_number:in_time_of` tuplet whose notes each carry an
@@ -1579,27 +1499,46 @@ impl ScoreBuilder {
         in_time_of: u32,
         notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
     ) -> Self {
-        self.styled_tuplet_ratio(
-            tuplet_number,
-            in_time_of,
-            Self::accidental_display_members(notes),
+        let beamed = notes.len() >= 2
+            && notes
+                .iter()
+                .all(|(_, duration, _)| event::duration_kind_to_log2(duration.kind()) >= 3);
+        self.grouped_notes(
+            Some(TupletSpec::new(tuplet_number, in_time_of)),
+            beamed,
+            notes,
         )
     }
 
-    pub(crate) fn styled_tuplet_ratio(
+    fn auto_display(notes: Vec<(Pitch, Duration)>) -> Vec<(Pitch, Duration, AccidentalDisplay)> {
+        notes
+            .into_iter()
+            .map(|(pitch, duration)| (pitch, duration, AccidentalDisplay::Auto))
+            .collect()
+    }
+
+    /// Notes inside an optional tuplet span and, when `beamed`, a beam span.
+    fn grouped_notes(
         mut self,
-        tuplet_number: u32,
-        in_time_of: u32,
-        members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
+        tuplet: Option<TupletSpec>,
+        beamed: bool,
+        notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
     ) -> Self {
-        self.current_events.push((
-            self.current_voice,
-            ScoreEvent::StyledTupletGroup {
-                members,
-                tuplet_number,
-                in_time_of,
-            },
-        ));
+        if let Some(spec) = tuplet {
+            self = self.begin_tuplet(spec);
+        }
+        if beamed {
+            self = self.begin_beam();
+        }
+        for (pitch, duration, display) in notes {
+            self = self.note_with_accidental(pitch, duration, display);
+        }
+        if beamed {
+            self = self.end_beam();
+        }
+        if tuplet.is_some() {
+            self = self.end_tuplet();
+        }
         self
     }
 
@@ -1769,21 +1708,33 @@ impl ScoreBuilder {
     /// Convert accumulated `ScoreEvent`s into `MeasureContent`s suitable for layout.
     ///
     /// Each measure's accidentals are resolved staff-wide in musical order
-    /// across all voices (see `resolve_measure_accidentals`), against the key
-    /// signature and the measure's own accidental state, which resets at
-    /// every barline. When multiple voices are present, voice 0 goes in
-    /// `events` and voices 1+ go in `additional_voices`. Multi-voice measures
-    /// force stem directions: voice 0 = stems up, voice 1 = stems down.
+    /// across all voices (see `resolve_measure_accidentals`, which also
+    /// receives the tuplet spans each voice carries over the barline),
+    /// against the key signature and the measure's own accidental state,
+    /// which resets at every barline. When multiple voices are present, voice
+    /// 0 goes in `events` and voices 1+ go in `additional_voices`.
+    ///
+    /// Beam and tuplet spans are then finished (see
+    /// [`groups::finish_group_spans`]): each beam gets one stem direction and
+    /// spans crossing a barline are split into self-contained measure
+    /// pieces. Finally, multi-voice measures force the remaining stem
+    /// directions: even voices up, odd voices down.
+    ///
+    /// Assumes [`Self::validate_group_spans`] passed; the render entry points
+    /// check it first.
     pub(crate) fn build_measure_contents(&self) -> Vec<MeasureContent> {
         let clef = self.clef.to_clef();
-        self.measures
+        let mut open_tuplets: Vec<Vec<TupletSpec>> = Vec::new();
+        let mut contents: Vec<MeasureContent> = self
+            .measures
             .iter()
             .map(|(voiced_events, barline, volta)| {
                 // Determine the maximum voice index in this measure.
                 let max_voice = voiced_events.iter().map(|(v, _)| *v).max().unwrap_or(0);
-                let is_multi_voice = max_voice > 0;
 
-                let resolved = resolve_measure_accidentals(voiced_events, &self.key_sig);
+                let resolved =
+                    resolve_measure_accidentals(voiced_events, &self.key_sig, &open_tuplets);
+                groups::advance_open_tuplets(&mut open_tuplets, voiced_events);
                 let mut accidentals = resolved.iter();
 
                 // Separate events by voice.
@@ -1791,11 +1742,11 @@ impl ScoreBuilder {
                     (0..=max_voice).map(|_| Vec::new()).collect();
 
                 for (voice, event) in voiced_events {
-                    let mut me = convert_resolved_event(event, &clef, &mut accidentals);
-                    if is_multi_voice {
-                        force_stem_direction(&mut me, *voice);
-                    }
-                    voice_buckets[*voice as usize].push(me);
+                    voice_buckets[*voice as usize].push(convert_resolved_event(
+                        event,
+                        &clef,
+                        &mut accidentals,
+                    ));
                 }
 
                 let primary = voice_buckets.remove(0);
@@ -1806,7 +1757,29 @@ impl ScoreBuilder {
                     additional_voices: voice_buckets,
                 }
             })
-            .collect()
+            .collect();
+
+        groups::finish_group_spans(&mut contents);
+        for content in contents
+            .iter_mut()
+            .filter(|content| !content.additional_voices.is_empty())
+        {
+            for (voice, events) in std::iter::once(&mut content.events)
+                .chain(content.additional_voices.iter_mut())
+                .enumerate()
+            {
+                for event in events {
+                    force_stem_direction(event, voice);
+                }
+            }
+        }
+        contents
+    }
+
+    /// Check that the beam and tuplet spans of every completed measure are
+    /// well formed (see [`GroupSpanError`] for what is rejected).
+    pub(crate) fn validate_group_spans(&self) -> Result<(), GroupSpanError> {
+        groups::validate_group_spans(&self.measures)
     }
 
     /// Switch the active voice for subsequent events.
@@ -1876,13 +1849,16 @@ impl ScoreBuilder {
         }
     }
 
-    /// Render the score to an SVG string, returning an error if font operations fail.
+    /// Render the score to an SVG string.
     ///
     /// Flushes any pending events as a final measure (with `Final` barline)
-    /// if no explicit end barline was provided.
+    /// if no explicit end barline was provided. Returns
+    /// [`crate::error::EngraverError::Group`] for malformed beam or tuplet
+    /// spans and [`crate::error::EngraverError::Font`] if font operations fail.
     #[must_use = "the SVG string is returned but not used"]
     pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
         self.flush_pending();
+        self.validate_group_spans()?;
 
         if self.measures.is_empty() {
             return Ok(String::from(
@@ -1922,19 +1898,19 @@ impl ScoreBuilder {
     /// Render the score to an SVG string.
     ///
     /// Convenience wrapper around [`try_render_svg`](Self::try_render_svg) that
-    /// panics on font errors. For error handling, use `try_render_svg` instead.
+    /// panics on errors. For error handling, use `try_render_svg` instead.
     ///
     /// # Panics
     ///
-    /// Panics if font glyph lookup fails. This cannot happen with the bundled
-    /// Bravura font because all SMuFL glyph names used by the layout engine are
-    /// present in Bravura's metadata, and the font data is compiled in via
-    /// `include_bytes!`. The only realistic failure path would be a corrupted
-    /// binary or a future code change that requests a glyph not in the font.
+    /// Panics on malformed beam or tuplet spans (see
+    /// [`GroupSpanError`]) and if font glyph lookup fails. The latter cannot
+    /// happen with the bundled Bravura font because all SMuFL glyph names used
+    /// by the layout engine are present in Bravura's metadata, and the font
+    /// data is compiled in via `include_bytes!`.
     #[must_use = "the SVG string is returned but not used"]
     pub fn render_svg(self) -> String {
         self.try_render_svg()
-            .expect("bundled Bravura font contains all required SMuFL glyphs")
+            .unwrap_or_else(|error| panic!("score failed to render: {error}"))
     }
 
     /// Render the score to PNG bytes at the given scale factor.

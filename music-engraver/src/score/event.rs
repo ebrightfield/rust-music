@@ -14,10 +14,8 @@ use music::note::spelling::{Accidental, Spelling};
 
 use crate::layout::accidental::{accidental_glyph, AccidentalDisplay, ResolvedAccidental};
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{
-    BeamGroupEvent, ChordEvent, GroupedChordMember, NoteAnnotations, NoteEvent, RestEvent,
-    TupletGroupEvent,
-};
+use crate::layout::group::{GroupMark, TupletSpec};
+use crate::layout::measure::{ChordEvent, NoteAnnotations, NoteEvent, RestEvent};
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::system::MeasureEvent;
 
@@ -37,22 +35,10 @@ pub(crate) enum ScoreEvent {
         duration: Duration,
         annotations: NoteAnnotations,
     },
-    BeamGroup {
-        notes: Vec<(Pitch, Duration)>,
-    },
-    StyledBeamGroup {
-        members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
-    },
-    TupletGroup {
-        notes: Vec<(Pitch, Duration)>,
-        tuplet_number: u32,
-        in_time_of: u32,
-    },
-    StyledTupletGroup {
-        members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
-        tuplet_number: u32,
-        in_time_of: u32,
-    },
+    /// A zero-duration beam or tuplet span boundary. The notes, chords, and
+    /// rests between a start and its matching end (in the same voice) are
+    /// the span's members.
+    GroupMark(GroupMark),
     /// Multi-measure rest: the rendered measure consists of an H-bar (or a
     /// church-rest cluster, for small counts) with a count number indicating
     /// how many consecutive measures of rest this single measure-shaped
@@ -227,64 +213,13 @@ fn next_accidental(accidentals: &mut ResolvedAccidentals<'_>) -> Option<Resolved
         .expect("one resolved accidental per notated pitch")
 }
 
-/// Convert a single pitch+duration into a `NoteEvent` for beam/tuplet groups.
-fn pitch_to_note_event(
-    pitch: &Pitch,
-    duration: &Duration,
-    clef: &Clef,
-    accidentals: &mut ResolvedAccidentals<'_>,
-) -> NoteEvent {
-    let staff_pos = pitch_to_staff_position(pitch, clef);
-    let log2 = duration_kind_to_log2(duration.kind());
-    let dots = duration.num_dots();
-    let acc = next_accidental(accidentals);
-    NoteEvent {
-        staff_position: staff_pos,
-        duration_log2: log2,
-        dots,
-        accidental: acc,
-        stem_direction: None,
-        annotations: NoteAnnotations::default(),
-    }
-}
-
-fn pitches_to_styled_group_member(
-    pitches: &[Pitch],
-    duration: &Duration,
-    annotations: &NoteAnnotations,
-    clef: &Clef,
-    accidentals: &mut ResolvedAccidentals<'_>,
-) -> NoteEvent {
-    let mut staff_positions = Vec::with_capacity(pitches.len());
-    let mut member_accidentals = Vec::with_capacity(pitches.len());
-    for pitch in pitches {
-        staff_positions.push(pitch_to_staff_position(pitch, clef));
-        member_accidentals.push(next_accidental(accidentals));
-    }
-    let staff_position = staff_positions[0];
-    let accidental = member_accidentals[0];
-    let mut annotations = annotations.clone();
-    if pitches.len() > 1 {
-        annotations.grouped_chord = Some(GroupedChordMember {
-            staff_positions,
-            accidentals: member_accidentals,
-        });
-    }
-    NoteEvent {
-        staff_position,
-        duration_log2: duration_kind_to_log2(duration.kind()),
-        dots: duration.num_dots(),
-        accidental,
-        stem_direction: None,
-        annotations,
-    }
-}
-
 /// Convert a `ScoreEvent` into a `MeasureEvent` for the layout engine.
 ///
 /// Accidentals are not resolved here: each notated pitch takes the next entry
 /// of `accidentals`, which [`resolve_measure_accidentals`] produced for the
-/// whole measure in musical order.
+/// whole measure in musical order. A note or chord's requested stem
+/// direction ([`NoteAnnotations::stem_direction`]) becomes the event's
+/// `stem_direction`.
 pub(crate) fn convert_resolved_event(
     event: &ScoreEvent,
     clef: &Clef,
@@ -306,7 +241,7 @@ pub(crate) fn convert_resolved_event(
                 duration_log2: log2,
                 dots,
                 accidental: acc,
-                stem_direction: None,
+                stem_direction: annotations.stem_direction,
                 annotations: annotations.clone(),
             })
         }
@@ -340,82 +275,11 @@ pub(crate) fn convert_resolved_event(
                 duration_log2: log2,
                 dots,
                 accidentals: chord_accidentals,
-                stem_direction: None,
+                stem_direction: annotations.stem_direction,
                 annotations: annotations.clone(),
             })
         }
-        ScoreEvent::BeamGroup { notes } => {
-            let note_events: Vec<NoteEvent> = notes
-                .iter()
-                .map(|(pitch, duration)| pitch_to_note_event(pitch, duration, clef, accidentals))
-                .collect();
-            MeasureEvent::BeamGroup(BeamGroupEvent {
-                notes: note_events,
-                stem_direction: None,
-            })
-        }
-        ScoreEvent::StyledBeamGroup { members } => {
-            let note_events = members
-                .iter()
-                .map(|(pitches, duration, annotations)| {
-                    pitches_to_styled_group_member(
-                        pitches,
-                        duration,
-                        annotations,
-                        clef,
-                        accidentals,
-                    )
-                })
-                .collect();
-            MeasureEvent::BeamGroup(BeamGroupEvent {
-                notes: note_events,
-                stem_direction: None,
-            })
-        }
-        ScoreEvent::TupletGroup {
-            notes,
-            tuplet_number,
-            in_time_of,
-        } => {
-            let note_events: Vec<NoteEvent> = notes
-                .iter()
-                .map(|(pitch, duration)| pitch_to_note_event(pitch, duration, clef, accidentals))
-                .collect();
-            MeasureEvent::TupletGroup(TupletGroupEvent {
-                beam_group: BeamGroupEvent {
-                    notes: note_events,
-                    stem_direction: None,
-                },
-                tuplet_number: *tuplet_number,
-                in_time_of: *in_time_of,
-            })
-        }
-        ScoreEvent::StyledTupletGroup {
-            members,
-            tuplet_number,
-            in_time_of,
-        } => {
-            let note_events = members
-                .iter()
-                .map(|(pitches, duration, annotations)| {
-                    pitches_to_styled_group_member(
-                        pitches,
-                        duration,
-                        annotations,
-                        clef,
-                        accidentals,
-                    )
-                })
-                .collect();
-            MeasureEvent::TupletGroup(TupletGroupEvent {
-                beam_group: BeamGroupEvent {
-                    notes: note_events,
-                    stem_direction: None,
-                },
-                tuplet_number: *tuplet_number,
-                in_time_of: *in_time_of,
-            })
-        }
+        ScoreEvent::GroupMark(mark) => MeasureEvent::GroupMark(*mark),
         ScoreEvent::MultiMeasureRest { count, style } => MeasureEvent::MultiMeasureRest {
             count: *count,
             style: *style,
@@ -435,31 +299,53 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
     a
 }
 
-/// Least common multiple of the tuplet numbers among `events` (1 without
-/// tuplets): scaling ticks by it makes every tuplet member's onset integral.
-fn tuplet_tick_scale<'a>(events: impl IntoIterator<Item = &'a ScoreEvent>) -> u64 {
-    events.into_iter().fold(1, |scale, event| match event {
-        ScoreEvent::TupletGroup { tuplet_number, .. }
-        | ScoreEvent::StyledTupletGroup { tuplet_number, .. }
-            if *tuplet_number > 0 =>
-        {
-            let number = u64::from(*tuplet_number);
-            scale / gcd(scale, number) * number
-        }
-        _ => scale,
+/// Performed-time ratio of the open tuplet stack: written ticks are
+/// multiplied by `.0` (the product of `in_time_of`) and divided by `.1` (the
+/// product of tuplet numbers). `(1, 1)` outside tuplets.
+type TupletRatio = (u64, u64);
+
+fn tuplet_ratio(open: &[TupletSpec]) -> TupletRatio {
+    open.iter().fold((1, 1), |(num, den), spec| {
+        (
+            num * u64::from(spec.in_time_of),
+            den * u64::from(spec.number),
+        )
     })
 }
 
-/// Scaled ticks a member of written `duration` advances, performed at
-/// `tuplet_number : in_time_of` (`1:1` outside tuplets; a zero ratio term
-/// leaves written time unscaled, as in measure layout).
-fn scaled_ticks(duration: &Duration, scale: u64, tuplet_number: u32, in_time_of: u32) -> Onset {
-    let ticks = duration.ticks() as u64 * scale;
-    if tuplet_number == 0 || in_time_of == 0 {
-        ticks
-    } else {
-        ticks * u64::from(in_time_of) / u64::from(tuplet_number)
+/// Least common multiple of the tuplet-number products of every tuplet stack
+/// that occurs in `voiced_events` (starting from each voice's `open_tuplets`
+/// at the measure start; 1 without tuplets): scaling ticks by it makes every
+/// tuplet member's onset integral, nested tuplets included.
+fn tuplet_tick_scale(voiced_events: &[(u8, ScoreEvent)], open_tuplets: &[Vec<TupletSpec>]) -> u64 {
+    let lcm = |scale: u64, number: u64| scale / gcd(scale, number) * number;
+    let mut stacks: Vec<Vec<TupletSpec>> = open_tuplets.to_vec();
+    let mut scale = stacks
+        .iter()
+        .fold(1, |scale, stack| lcm(scale, tuplet_ratio(stack).1));
+    for (voice, event) in voiced_events {
+        let voice = usize::from(*voice);
+        if stacks.len() <= voice {
+            stacks.resize_with(voice + 1, Vec::new);
+        }
+        match event {
+            ScoreEvent::GroupMark(GroupMark::TupletStart { spec, .. }) => {
+                stacks[voice].push(*spec);
+                scale = lcm(scale, tuplet_ratio(&stacks[voice]).1);
+            }
+            ScoreEvent::GroupMark(GroupMark::TupletEnd { .. }) => {
+                stacks[voice].pop();
+            }
+            _ => {}
+        }
     }
+    scale
+}
+
+/// Scaled ticks an event of written `duration` advances, performed at the
+/// open tuplet stack's `ratio` (`scale` must be a multiple of `ratio.1`).
+fn scaled_ticks(duration: &Duration, scale: u64, (num, den): TupletRatio) -> Onset {
+    duration.ticks() as u64 * scale * num / den
 }
 
 /// Display policy for pitch `index` of an annotated note/chord; `None` for
@@ -474,109 +360,37 @@ fn pitch_display(annotations: &NoteAnnotations, index: usize) -> Option<Accident
     })
 }
 
-/// One rhythmic member of an event: its pitches, written duration, and
-/// annotations (`None` for plain group members, which display `Auto`).
-type Member<'a> = (&'a [Pitch], &'a Duration, Option<&'a NoteAnnotations>);
-
-/// Visit the pitches of consecutive `members` performed at
-/// `tuplet_number : in_time_of`; returns their total scaled duration.
-fn visit_members<'a>(
-    members: impl Iterator<Item = Member<'a>>,
-    scale: u64,
-    tuplet_number: u32,
-    in_time_of: u32,
-    visit: &mut impl FnMut(Onset, Pitch, Option<AccidentalDisplay>),
-) -> Onset {
-    let mut offset = 0;
-    for (pitches, duration, annotations) in members {
-        for (index, pitch) in pitches.iter().enumerate() {
-            let display = annotations.map_or(Some(AccidentalDisplay::Auto), |annotations| {
-                pitch_display(annotations, index)
-            });
-            visit(offset, *pitch, display);
-        }
-        offset += scaled_ticks(duration, scale, tuplet_number, in_time_of);
-    }
-    offset
-}
-
-fn plain_member((pitch, duration): &(Pitch, Duration)) -> Member<'_> {
-    (std::slice::from_ref(pitch), duration, None)
-}
-
-fn styled_member(
-    (pitches, duration, annotations): &(Vec<Pitch>, Duration, NoteAnnotations),
-) -> Member<'_> {
-    (pitches.as_slice(), duration, Some(annotations))
-}
-
 /// Visit every notated pitch of `event` in the order [`convert_resolved_event`]
-/// consumes accidentals: chord members in input order, group members in
-/// sequence. Each visit receives the pitch's onset offset from the start of the
-/// event (in ticks scaled by `scale`, which must be a multiple of the event's
-/// tuplet number) and its display policy. Grace notes are annotations that
-/// carry only a staff position, so they neither display nor track accidentals.
+/// consumes accidentals (chord members in input order) with its display
+/// policy. Grace notes are annotations that carry only a staff position, so
+/// they neither display nor track accidentals.
 ///
-/// Returns the event's duration in scaled ticks.
+/// Returns the event's duration in ticks scaled by `scale` and performed at
+/// the open tuplets' `ratio`; span marks and multi-measure rests take none.
 fn visit_pitches(
     event: &ScoreEvent,
     scale: u64,
-    mut visit: impl FnMut(Onset, Pitch, Option<AccidentalDisplay>),
+    ratio: TupletRatio,
+    mut visit: impl FnMut(Pitch, Option<AccidentalDisplay>),
 ) -> Onset {
-    match event {
+    let (pitches, duration, annotations) = match event {
         ScoreEvent::Note {
             pitch,
             duration,
             annotations,
-        } => visit_members(
-            std::iter::once((std::slice::from_ref(pitch), duration, Some(annotations))),
-            scale,
-            1,
-            1,
-            &mut visit,
-        ),
+        } => (std::slice::from_ref(pitch), duration, annotations),
         ScoreEvent::Chord {
             pitches,
             duration,
             annotations,
-        } => visit_members(
-            std::iter::once((pitches.as_slice(), duration, Some(annotations))),
-            scale,
-            1,
-            1,
-            &mut visit,
-        ),
-        ScoreEvent::Rest { duration } => scaled_ticks(duration, scale, 1, 1),
-        ScoreEvent::BeamGroup { notes } => {
-            visit_members(notes.iter().map(plain_member), scale, 1, 1, &mut visit)
-        }
-        ScoreEvent::StyledBeamGroup { members } => {
-            visit_members(members.iter().map(styled_member), scale, 1, 1, &mut visit)
-        }
-        ScoreEvent::TupletGroup {
-            notes,
-            tuplet_number,
-            in_time_of,
-        } => visit_members(
-            notes.iter().map(plain_member),
-            scale,
-            *tuplet_number,
-            *in_time_of,
-            &mut visit,
-        ),
-        ScoreEvent::StyledTupletGroup {
-            members,
-            tuplet_number,
-            in_time_of,
-        } => visit_members(
-            members.iter().map(styled_member),
-            scale,
-            *tuplet_number,
-            *in_time_of,
-            &mut visit,
-        ),
-        ScoreEvent::MultiMeasureRest { .. } => 0,
+        } => (pitches.as_slice(), duration, annotations),
+        ScoreEvent::Rest { duration } => return scaled_ticks(duration, scale, ratio),
+        ScoreEvent::GroupMark(_) | ScoreEvent::MultiMeasureRest { .. } => return 0,
+    };
+    for (index, pitch) in pitches.iter().enumerate() {
+        visit(*pitch, pitch_display(annotations, index));
     }
+    scaled_ticks(duration, scale, ratio)
 }
 
 /// Resolve every notated pitch's accidental in one measure of one staff, in
@@ -585,29 +399,48 @@ fn visit_pitches(
 /// Accidental state is staff-wide: every voice reads and writes one tracker,
 /// which starts empty (key signature only) at each barline. Each voice keeps
 /// its own clock from the measure start, advancing by written durations
-/// (dots included, tuplet members scaled by their ratio). Pitches are then
-/// resolved in order of onset, ties broken by voice index ascending and then
-/// by builder order within the voice (chord members in input order). Entering
-/// voices in a different builder order therefore cannot change the result.
+/// (dots included, members of open tuplet spans scaled by the product of
+/// their ratios). `open_tuplets[voice]` lists the tuplet spans still open
+/// from the previous measure in that voice, outermost first. Pitches are
+/// then resolved in order of onset, ties broken by voice index ascending and
+/// then by builder order within the voice (chord members in input order).
+/// Entering voices in a different builder order therefore cannot change the
+/// result.
 ///
 /// Returns one entry per notated pitch in builder order, ready for
 /// [`convert_resolved_event`].
 pub(crate) fn resolve_measure_accidentals(
     voiced_events: &[(u8, ScoreEvent)],
     key_sig: &KeySignature,
+    open_tuplets: &[Vec<TupletSpec>],
 ) -> Vec<Option<ResolvedAccidental>> {
-    let scale = tuplet_tick_scale(voiced_events.iter().map(|(_, event)| event));
+    let scale = tuplet_tick_scale(voiced_events, open_tuplets);
     let mut voice_clocks: Vec<Onset> = Vec::new();
+    let mut stacks: Vec<Vec<TupletSpec>> = open_tuplets.to_vec();
     let mut pitches: Vec<(Onset, u8, Pitch, Option<AccidentalDisplay>)> = Vec::new();
     for (voice, event) in voiced_events {
         let voice_index = usize::from(*voice);
         if voice_clocks.len() <= voice_index {
             voice_clocks.resize(voice_index + 1, 0);
         }
-        let start = voice_clocks[voice_index];
-        voice_clocks[voice_index] += visit_pitches(event, scale, |offset, pitch, display| {
-            pitches.push((start + offset, *voice, pitch, display));
-        });
+        if stacks.len() <= voice_index {
+            stacks.resize_with(voice_index + 1, Vec::new);
+        }
+        match event {
+            ScoreEvent::GroupMark(GroupMark::TupletStart { spec, .. }) => {
+                stacks[voice_index].push(*spec);
+            }
+            ScoreEvent::GroupMark(GroupMark::TupletEnd { .. }) => {
+                stacks[voice_index].pop();
+            }
+            _ => {
+                let start = voice_clocks[voice_index];
+                let ratio = tuplet_ratio(&stacks[voice_index]);
+                voice_clocks[voice_index] += visit_pitches(event, scale, ratio, |pitch, display| {
+                    pitches.push((start, *voice, pitch, display));
+                });
+            }
+        }
     }
 
     let mut order: Vec<usize> = (0..pitches.len()).collect();
@@ -632,14 +465,10 @@ pub(crate) fn convert_event(
     mut seen: Option<&mut AccidentalTracker>,
 ) -> MeasureEvent {
     let mut resolved = Vec::new();
-    visit_pitches(
-        event,
-        tuplet_tick_scale(std::iter::once(event)),
-        |_, pitch, display| {
-            resolved.push(display.and_then(|display| {
-                resolve_and_track(&pitch, key_sig, display, seen.as_deref_mut())
-            }));
-        },
-    );
+    visit_pitches(event, 1, (1, 1), |pitch, display| {
+        resolved.push(display.and_then(|display| {
+            resolve_and_track(&pitch, key_sig, display, seen.as_deref_mut())
+        }));
+    });
     convert_resolved_event(event, clef, &mut resolved.iter())
 }

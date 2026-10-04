@@ -22,6 +22,11 @@ pub enum EngraverError {
     #[error(transparent)]
     Guitar(#[from] crate::score::guitar::GuitarScoreError),
 
+    /// A beam or tuplet span was malformed (unclosed, nested beams, an
+    /// unbeamable member, …).
+    #[error(transparent)]
+    Group(#[from] crate::score::GroupSpanError),
+
     /// PNG rasterization failed (requires the `png` feature).
     #[cfg(feature = "png")]
     #[error(transparent)]

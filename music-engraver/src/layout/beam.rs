@@ -70,7 +70,7 @@ pub fn beam_group_stem_direction(notes: &[BeamedNote]) -> StemDirection {
 
 /// Beam lines a duration wants: eighth=1, sixteenth=2, etc. Breve through
 /// quarter (`duration_log2 <= 2`) want none.
-fn beam_level(duration_log2: i8) -> u8 {
+pub(crate) fn beam_level(duration_log2: i8) -> u8 {
     u8::try_from(duration_log2.saturating_sub(2)).unwrap_or(0)
 }
 
@@ -264,58 +264,41 @@ fn staff_position_to_y(position: StaffPosition, half_space: f64) -> f64 {
     (8 - position) as f64 * half_space
 }
 
-/// Spacing ratio per doubled duration used when distributing horizontal space
-/// across a beam group. The shortest note in the group gets factor 1.0; each
-/// doubling of duration multiplies the factor by this constant. Mirrors the
-/// proportional-spacing exponent in `draw_beam_group_event` so that the
-/// collision detector and the renderer agree on per-note x-positions.
-const BEAM_GROUP_SPACING_RATIO: f64 = 1.6;
-
-/// X-offsets (relative to the beam group's start x) of each note within the
-/// group's `total_width`. Returns a `Vec<f64>` of length `durations.len()`
-/// where `result[i]` is the local x-position of note `i` measured from the
-/// group's anchor.
+/// Break secondary beams at subdivision boundaries (LilyPond `subdivideBeams`).
 ///
-/// The shortest note (largest `duration_log2`) gets the unit horizontal
-/// share; each doubling of duration is `BEAM_GROUP_SPACING_RATIO` times
-/// wider. This matches Behind-Bars-style "longer notes consume more space"
-/// proportional spacing within a beam group.
+/// `onsets[i]` is note `i`'s onset in whole notes from the start of its
+/// measure. A boundary falls before note `i + 1` when its onset is a whole
+/// multiple of the written duration `interval_log2` (3 = eighth, …); across
+/// it, only the beams that duration itself carries stay connected (one for
+/// an eighth, two for a sixteenth — never fewer than the primary beam). A note
+/// left with more beams than either side now connects keeps them as a
+/// fractional beam pointing left.
 ///
-/// Empty input returns an empty vec. A single-note group returns `vec![0.0]`.
-/// All-identical durations distribute the width evenly.
-///
-/// This helper exists so both the rendering path and the cross-voice
-/// collision detector compute identical per-note absolute x-coordinates;
-/// any divergence would silently misalign collision offsets.
-pub fn beam_group_note_x_offsets(durations: &[i8], total_width: f64) -> Vec<f64> {
-    let n = durations.len();
-    if n == 0 {
-        return Vec::new();
+/// `beams_left`, `beams_right`, and `onsets` are parallel to `notes`.
+pub fn subdivide_beam_counts(
+    notes: &[BeamedNote],
+    onsets: &[f64],
+    interval_log2: i8,
+    beams_left: &mut [u8],
+    beams_right: &mut [u8],
+) {
+    const TOLERANCE: f64 = 1e-9;
+    let interval = 2.0_f64.powi(-i32::from(interval_log2));
+    let cap = beam_level(interval_log2).max(1);
+    for next in 1..notes.len() {
+        let beats = onsets[next] / interval;
+        if (beats - beats.round()).abs() > TOLERANCE {
+            continue;
+        }
+        beams_right[next - 1] = beams_right[next - 1].min(cap);
+        beams_left[next] = beams_left[next].min(cap);
     }
-    if n == 1 {
-        return vec![0.0];
+    for (index, note) in notes.iter().enumerate() {
+        let level = beam_level(note.duration_log2);
+        if level > beams_left[index] && level > beams_right[index] {
+            beams_left[index] = level;
+        }
     }
-
-    let shortest_log2 = durations.iter().copied().max().unwrap_or(3);
-    let factors: Vec<f64> = durations
-        .iter()
-        .map(|&d| {
-            let steps = shortest_log2 as f64 - d as f64;
-            BEAM_GROUP_SPACING_RATIO.powf(steps)
-        })
-        .collect();
-    let total_factor: f64 = factors.iter().sum();
-    if total_factor == 0.0 {
-        return vec![0.0; n];
-    }
-
-    let mut offsets = Vec::with_capacity(n);
-    let mut x = 0.0_f64;
-    for factor in &factors {
-        offsets.push(x);
-        x += total_width * factor / total_factor;
-    }
-    offsets
 }
 
 #[cfg(test)]
@@ -631,102 +614,4 @@ mod tests {
         assert!((staff_position_to_y(-2, HS) - 1250.0).abs() < f64::EPSILON);
     }
 
-    // --- beam_group_note_x_offsets ---
-
-    #[test]
-    fn beam_group_note_x_offsets_empty_returns_empty() {
-        assert!(beam_group_note_x_offsets(&[], 1000.0).is_empty());
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_single_note_is_zero() {
-        assert_eq!(beam_group_note_x_offsets(&[3], 1000.0), vec![0.0]);
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_equal_durations_distribute_evenly() {
-        // Four equal eighth notes → step = total_width / 4 each.
-        let offsets = beam_group_note_x_offsets(&[3, 3, 3, 3], 1000.0);
-        assert_eq!(offsets.len(), 4);
-        assert!((offsets[0] - 0.0).abs() < 1e-9);
-        assert!((offsets[1] - 250.0).abs() < 1e-9);
-        assert!((offsets[2] - 500.0).abs() < 1e-9);
-        assert!((offsets[3] - 750.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_first_note_always_zero() {
-        for durations in [
-            vec![3, 3],
-            vec![3, 4, 5],
-            vec![4, 3, 4],
-            vec![3, 3, 3, 4, 4],
-        ] {
-            let offsets = beam_group_note_x_offsets(&durations, 1234.5);
-            assert!(
-                (offsets[0] - 0.0).abs() < 1e-9,
-                "offsets[0] must be 0 for durations={durations:?}, got {}",
-                offsets[0]
-            );
-        }
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_monotonically_increasing() {
-        // For any positive duration sequence, offsets must be strictly increasing
-        // (each note consumes positive width).
-        let offsets = beam_group_note_x_offsets(&[3, 4, 5, 3], 1000.0);
-        for w in offsets.windows(2) {
-            assert!(w[1] > w[0], "non-monotonic offsets: {:?}", offsets);
-        }
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_longer_note_consumes_more_width() {
-        // [quarter, eighth]: shortest_log2 = 3 (eighth). Quarter's factor =
-        // 1.6^(3-2) = 1.6, eighth's factor = 1.6^0 = 1.0. Total = 2.6.
-        // Width consumed by note 0 (quarter) before note 1 = 1000 * 1.6/2.6.
-        let offsets = beam_group_note_x_offsets(&[2, 3], 1000.0);
-        let expected_step = 1000.0 * 1.6 / 2.6;
-        assert!(
-            (offsets[1] - expected_step).abs() < 1e-9,
-            "expected step {expected_step}, got {}",
-            offsets[1]
-        );
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_total_consumed_strictly_less_than_total_width() {
-        // The last note's offset + its share = total_width, so the last
-        // offset must be strictly less than total_width (each note occupies
-        // positive horizontal space).
-        let offsets = beam_group_note_x_offsets(&[3, 3, 3, 3], 1000.0);
-        assert!(*offsets.last().unwrap() < 1000.0);
-    }
-
-    #[test]
-    fn beam_group_note_x_offsets_matches_renderer_logic_three_eighths() {
-        // Independent reimplementation of the renderer's spacing logic to
-        // assert byte-identical behaviour. Any drift in the helper would
-        // break this and silently misalign collision detection from rendering.
-        let durations = vec![3i8, 3, 3];
-        let total_width = 750.0;
-        let shortest = *durations.iter().max().unwrap();
-        let factors: Vec<f64> = durations
-            .iter()
-            .map(|&d| 1.6_f64.powf(shortest as f64 - d as f64))
-            .collect();
-        let total: f64 = factors.iter().sum();
-        let mut expected = Vec::new();
-        let mut x = 0.0;
-        for f in &factors {
-            expected.push(x);
-            x += total_width * f / total;
-        }
-        let got = beam_group_note_x_offsets(&durations, total_width);
-        assert_eq!(expected.len(), got.len());
-        for (e, g) in expected.iter().zip(&got) {
-            assert!((e - g).abs() < 1e-12, "expected {e}, got {g}");
-        }
-    }
 }

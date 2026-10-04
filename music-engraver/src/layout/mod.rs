@@ -23,6 +23,7 @@ pub mod expression;
 pub mod flag;
 pub mod glissando;
 pub mod grace;
+pub mod group;
 pub mod hairpin;
 pub mod key_signature;
 pub mod lyric;
@@ -70,6 +71,10 @@ pub use articulation::{
 pub use barline::{BarlineLayout, BarlineStyle};
 pub use beam::{
     beam_group_stem_direction, compute_beam_counts, layout_beam_group, BeamGroupLayout, BeamedNote,
+};
+pub use group::{
+    scan_groups, BeamSpec, GroupMark, GroupScan, GroupSegment, TupletBracketVisibility,
+    TupletNumberDisplay, TupletSpec,
 };
 pub use breath::{
     layout_breath_mark, BreathMark, BreathMarkLayout, BREATH_MARK_ABOVE_STAFF_SS,

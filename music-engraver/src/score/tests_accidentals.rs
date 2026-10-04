@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::layout::accidental::{ACCIDENTAL_COLUMN_GAP_SS, ACCIDENTAL_NOTEHEAD_PADDING_SS};
-use crate::layout::measure::{layout_measure, NoteEvent};
+use crate::layout::measure::layout_measure;
 use crate::layout::system::measure_event_to_element;
 use music::notation::rhythm::duration::DurationKind;
 use music::note::note::Note;
@@ -29,13 +29,6 @@ fn cautionary(glyph: Glyph) -> Option<ResolvedAccidental> {
     Some(ResolvedAccidental::cautionary(glyph))
 }
 
-fn member_accidentals(note: &NoteEvent) -> Vec<Option<ResolvedAccidental>> {
-    note.annotations
-        .grouped_chord
-        .as_ref()
-        .map_or_else(|| vec![note.accidental], |chord| chord.accidentals.clone())
-}
-
 /// Every pitch's resolved accidental in a voice, in notation order.
 fn voice_accidentals(events: &[MeasureEvent]) -> Vec<Option<ResolvedAccidental>> {
     events
@@ -43,16 +36,7 @@ fn voice_accidentals(events: &[MeasureEvent]) -> Vec<Option<ResolvedAccidental>>
         .flat_map(|event| match event {
             MeasureEvent::Note(note) => vec![note.accidental],
             MeasureEvent::Chord(chord) => chord.accidentals.clone(),
-            MeasureEvent::BeamGroup(group) => {
-                group.notes.iter().flat_map(member_accidentals).collect()
-            }
-            MeasureEvent::TupletGroup(tuplet) => tuplet
-                .beam_group
-                .notes
-                .iter()
-                .flat_map(member_accidentals)
-                .collect(),
-            MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => Vec::new(),
+            _ => Vec::new(),
         })
         .collect()
 }

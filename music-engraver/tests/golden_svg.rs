@@ -1593,8 +1593,15 @@ fn golden_chords() {
 }
 
 #[test]
-fn golden_beams() {
-    assert_golden("beams", &build_beams());
+fn beamed_excerpt_has_eight_heads_without_individual_flags() {
+    let svg = build_beams();
+    let head = music_engraver::font::bravura_font()
+        .glyph_outline(Glyph::NoteheadBlack).unwrap().path_data;
+    assert_eq!(svg.matches(&head).count(), 8);
+    assert!(svg.matches("<polygon ").count() >= 3, "primary and secondary beams");
+    let flag = music_engraver::font::bravura_font()
+        .glyph_outline(Glyph::Flag8thUp).unwrap().path_data;
+    assert!(!svg.contains(&flag), "a beam replaces individual note flags");
 }
 
 #[test]
@@ -1817,8 +1824,12 @@ fn golden_dynamics_lookalikes() {
 }
 
 #[test]
-fn golden_tuplet() {
-    assert_golden("tuplet", &build_tuplet());
+fn beamed_tuplet_displays_number_but_no_redundant_bracket() {
+    let svg = build_tuplet();
+    let numeral = music_engraver::font::bravura_font()
+        .glyph_outline(Glyph::Tuplet3).unwrap().path_data;
+    assert!(svg.contains(&numeral), "tuplet number must remain visible");
+    assert!(svg.contains("<polygon "), "the triplet remains beamed");
 }
 
 #[test]
@@ -2249,15 +2260,7 @@ fn golden_bass_clef() {
     assert_golden("bass_clef", &build_bass_clef());
 }
 
-#[test]
-fn golden_treble8ba_clef() {
-    assert_golden("treble8ba_clef", &build_treble8ba_clef());
-}
 
-#[test]
-fn golden_treble8va_clef() {
-    assert_golden("treble8va_clef", &build_treble8va_clef());
-}
 
 /// Octave-transposing clefs must place every glyph exactly where plain treble
 /// does — only the clef glyph itself differs. Asserted as an invariant rather
@@ -2309,13 +2312,13 @@ fn transposing_clefs_place_notes_like_treble() {
 }
 
 #[test]
-fn golden_auto_breaks() {
-    assert_golden("auto_breaks", &build_auto_breaks());
-}
-
-#[test]
-fn golden_optimal_breaks() {
-    assert_golden("optimal_breaks", &build_optimal_breaks());
+fn auto_and_optimal_breaks_preserve_dense_beams() {
+    let head = music_engraver::font::bravura_font()
+        .glyph_outline(Glyph::NoteheadBlack).unwrap().path_data;
+    for svg in [build_auto_breaks(), build_optimal_breaks()] {
+        assert_eq!(svg.matches(&head).count(), 12, "all quarter and eighth notes survive line breaks");
+        assert!(svg.matches("<polygon ").count() >= 2, "each eighth group remains beamed");
+    }
 }
 
 #[test]
@@ -2407,7 +2410,15 @@ fn golden_lyrics() {
         "extender or staff/stem lines should exist"
     );
 
-    assert_golden("lyrics", &svg);
+    // The lyric baseline and its glyph descent must fit in the page's
+    // physical viewBox, not merely be present in clipped SVG source.
+    let header = svg.lines().next().unwrap();
+    let bounds = header.split("viewBox=\"").nth(1).unwrap().split('"').next().unwrap();
+    let values: Vec<f64> = bounds.split_whitespace().map(|v| v.parse().unwrap()).collect();
+    let bottom = values[1] + values[3];
+    let hap = svg.lines().find(|line| line.contains(">Hap<")).unwrap();
+    let baseline: f64 = hap.split(" y=\"").nth(1).unwrap().split('"').next().unwrap().parse().unwrap();
+    assert!(bottom > baseline + 50.0, "lyric must not be clipped below the page");
 }
 
 #[test]

@@ -283,6 +283,9 @@ impl MultiStaffScore {
                 stave.flush_pending();
             }
         }
+        for stave in &self.staves {
+            stave.validate_group_spans()?;
+        }
         let guitar_timeline = match self.tab_stave.as_ref() {
             Some(score) => score.validated_bend_timeline()?,
             None => None,

@@ -14,17 +14,16 @@ fn pitch(note: Note, octave: i8) -> Pitch {
     Pitch::new(note, octave)
 }
 
-fn member_log2s(event: &MeasureEvent) -> Vec<i8> {
-    match event {
-        MeasureEvent::BeamGroup(group) => group.notes.iter().map(|n| n.duration_log2).collect(),
-        MeasureEvent::TupletGroup(tuplet) => tuplet
-            .beam_group
-            .notes
-            .iter()
-            .map(|n| n.duration_log2)
-            .collect(),
-        other => panic!("expected a grouped event, got {other:?}"),
-    }
+/// Durations of the notes and chords in `events`, span marks skipped.
+fn member_log2s(events: &[MeasureEvent]) -> Vec<i8> {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.duration_log2),
+            MeasureEvent::Chord(chord) => Some(chord.duration_log2),
+            _ => None,
+        })
+        .collect()
 }
 
 #[test]
@@ -71,22 +70,8 @@ fn breve_note_rest_and_chord_convert_to_breve_log2_with_dots() {
 }
 
 #[test]
-fn breve_members_of_beam_tuplet_and_styled_groups_keep_breve_log2() {
-    let members = || {
-        vec![
-            (vec![pitch(Note::G, 4)], breve(), NoteAnnotations::default()),
-            (
-                vec![pitch(Note::B, 4), pitch(Note::D, 5)],
-                breve(),
-                NoteAnnotations::default(),
-            ),
-        ]
-    };
+fn breve_members_of_a_tuplet_span_keep_breve_log2() {
     let contents = ScoreBuilder::new()
-        .beam_group(vec![
-            (pitch(Note::G, 4), breve()),
-            (pitch(Note::A, 4), breve()),
-        ])
         .tuplet_ratio(
             3,
             2,
@@ -96,16 +81,20 @@ fn breve_members_of_beam_tuplet_and_styled_groups_keep_breve_log2() {
                 (pitch(Note::B, 4), breve()),
             ],
         )
-        .styled_beam_group(members())
-        .styled_tuplet_ratio(3, 2, members())
+        .begin_tuplet(TupletSpec::new(3, 2))
+        .note(pitch(Note::G, 4), breve())
+        .chord(vec![pitch(Note::B, 4), pitch(Note::D, 5)], breve())
+        .note(pitch(Note::G, 4), breve())
+        .end_tuplet()
         .barline()
         .build_measure_contents();
 
     let events = &contents[0].events;
-    assert_eq!(member_log2s(&events[0]), vec![BREVE_LOG2; 2]);
-    assert_eq!(member_log2s(&events[1]), vec![BREVE_LOG2; 3]);
-    assert_eq!(member_log2s(&events[2]), vec![BREVE_LOG2; 2]);
-    assert_eq!(member_log2s(&events[3]), vec![BREVE_LOG2; 2]);
+    assert_eq!(member_log2s(events), vec![BREVE_LOG2; 6]);
+    assert!(
+        matches!(events[5], MeasureEvent::GroupMark(_)) && matches!(events[7], MeasureEvent::Chord(_)),
+        "the chord member stays a chord inside the span: {events:?}"
+    );
 }
 
 #[test]

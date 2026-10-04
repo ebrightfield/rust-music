@@ -8,6 +8,7 @@ use crate::layout::cresc_text::CrescTextKind;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
+use crate::layout::group::{GroupMark, TupletSpec};
 use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
@@ -84,18 +85,6 @@ impl NoteheadStyle {
     }
 }
 
-/// Additional tones carried by one rhythmic member of a beam or tuplet.
-///
-/// The enclosing [`NoteEvent`] supplies duration and shared annotations; this
-/// payload lets the grouped renderer engrave the member as a real chord.
-#[derive(Clone, Debug)]
-pub struct GroupedChordMember {
-    /// Staff positions in the same order as notehead style vectors.
-    pub staff_positions: Vec<StaffPosition>,
-    /// Resolved accidentals parallel to `staff_positions`.
-    pub accidentals: Vec<Option<ResolvedAccidental>>,
-}
-
 /// Articulation and expression annotations attached to a note or chord event.
 ///
 /// These fields are shared between [`NoteEvent`] and [`ChordEvent`], covering
@@ -112,9 +101,11 @@ pub struct NoteAnnotations {
     /// Accidental display policies parallel to the note/chord's pitches. An
     /// empty vector (or a missing entry) means [`AccidentalDisplay::Auto`].
     pub accidental_displays: Vec<AccidentalDisplay>,
-    /// Chord geometry when this annotation belongs to a grouped chord member.
-    /// `None` identifies an ordinary single-note member.
-    pub grouped_chord: Option<GroupedChordMember>,
+    /// Stem direction requested for this note/chord (`\stemUp` /
+    /// `\stemDown`). Score conversion copies it into the event's
+    /// `stem_direction`; `None` leaves the direction to the enclosing beam,
+    /// the voice, or the staff position.
+    pub stem_direction: Option<StemDirection>,
     /// Whether this event is a fixed-position, unpitched semantic head.
     ///
     /// Unpitched heads bypass key-signature accidental resolution entirely:
@@ -335,34 +326,6 @@ pub struct NoteAnnotations {
     pub cresc_text_end: bool,
 }
 
-/// A group of notes to be beamed together.
-///
-/// All notes in a beam group share a common beam line; individual notes
-/// must have `duration_log2 >= 3` (eighth notes or shorter).
-#[derive(Clone, Debug)]
-pub struct BeamGroupEvent {
-    /// The notes in the beam group, in temporal order.
-    pub notes: Vec<NoteEvent>,
-    /// Stem direction override. `None` uses auto-detection based on the
-    /// group's collective staff positions.
-    pub stem_direction: Option<StemDirection>,
-}
-
-/// A tuplet group: a beam group (or sequence of notes) with a tuplet bracket and number.
-///
-/// The underlying notes are beamed together; the tuplet bracket and number
-/// are drawn above or below the group. Placement defaults to above for
-/// stems-up, below for stems-down.
-#[derive(Clone, Debug)]
-pub struct TupletGroupEvent {
-    /// The underlying beam group (notes are beamed and drawn normally).
-    pub beam_group: BeamGroupEvent,
-    /// The tuplet number to display (e.g. 3 for triplet, 5 for quintuplet).
-    pub tuplet_number: u32,
-    /// The written-time denominator of the ratio (e.g. 2 for a 3:2 triplet).
-    pub in_time_of: u32,
-}
-
 /// A chord (multiple simultaneous notes) to be laid out within a measure.
 #[derive(Clone, Debug)]
 pub struct ChordEvent {
@@ -400,10 +363,10 @@ pub enum MeasureElement {
     Rest(RestEvent),
     /// A chord (multiple simultaneous notes).
     Chord(ChordEvent),
-    /// A beam group: multiple notes connected by beam lines instead of flags.
-    BeamGroup(BeamGroupEvent),
-    /// A tuplet group: a beam group with a tuplet bracket and number overlay.
-    TupletGroup(TupletGroupEvent),
+    /// A zero-width beam or tuplet span boundary. Members are the ordinary
+    /// notes, chords, and rests between a start and its matching end; see
+    /// [`crate::layout::group`].
+    GroupMark(GroupMark),
     /// Multi-measure rest: H-bar (default) or church-rest cluster spanning
     /// the measure width with a count number. `count` is the number of
     /// measures of rest; `style` controls the visual depiction.
@@ -566,8 +529,8 @@ impl MeasureLayoutConfig {
 ///
 /// The shortest written note in the measure has duration `1.0`; a note twice
 /// as long has duration `2.0`, etc. Tuplet time scaling is applied by the
-/// caller so an explicit ratio changes the group's advance relative to
-/// ordinary events without changing its internal proportions.
+/// caller so an explicit ratio changes a tuplet member's advance relative to
+/// ordinary events without changing the tuplet's internal proportions.
 fn spring_rest_length(
     duration_log2: i8,
     shortest_log2: i8,
@@ -577,14 +540,6 @@ fn spring_rest_length(
     let steps = f64::from(shortest_log2) - f64::from(duration_log2);
     let duration = 2.0_f64.powf(steps);
     spring_constant * duration.powf(spacing_exponent)
-}
-
-fn tuplet_time_scale(tuplet: &TupletGroupEvent) -> f64 {
-    if tuplet.tuplet_number == 0 || tuplet.in_time_of == 0 {
-        1.0
-    } else {
-        tuplet.in_time_of as f64 / tuplet.tuplet_number as f64
-    }
 }
 
 /// Compute the incompressible rod width for a rhythmic event whose engraved
@@ -631,14 +586,11 @@ fn accidental_left_extent(
 }
 
 fn note_accidental_extent(note: &NoteEvent, config: &MeasureLayoutConfig) -> f64 {
-    match &note.annotations.grouped_chord {
-        Some(chord) => accidental_left_extent(&chord.staff_positions, &chord.accidentals, config),
-        None => accidental_left_extent(
-            std::slice::from_ref(&note.staff_position),
-            std::slice::from_ref(&note.accidental),
-            config,
-        ),
-    }
+    accidental_left_extent(
+        std::slice::from_ref(&note.staff_position),
+        std::slice::from_ref(&note.accidental),
+        config,
+    )
 }
 
 /// Estimated extent of the accidentals left of an element's first notehead
@@ -649,15 +601,6 @@ fn element_left_extent(element: &MeasureElement, config: &MeasureLayoutConfig) -
         MeasureElement::Chord(chord) => {
             accidental_left_extent(&chord.staff_positions, &chord.accidentals, config)
         }
-        MeasureElement::BeamGroup(group) => group
-            .notes
-            .first()
-            .map_or(0.0, |note| note_accidental_extent(note, config)),
-        MeasureElement::TupletGroup(tuplet) => tuplet
-            .beam_group
-            .notes
-            .first()
-            .map_or(0.0, |note| note_accidental_extent(note, config)),
         _ => 0.0,
     }
 }
@@ -666,15 +609,17 @@ fn element_left_extent(element: &MeasureElement, config: &MeasureLayoutConfig) -
 ///
 /// Non-rhythmic elements (clef, key sig, time sig, barline) are fully
 /// incompressible (all rod, no spring). Rhythmic elements (notes, rests,
-/// chords, beam/tuplet groups) decompose into a Gourlay rod (notehead +
-/// accidental + dot + padding) and a duration-driven spring. The system layer
+/// chords) decompose into a Gourlay rod (notehead + accidental + dot +
+/// padding) and a duration-driven spring; a member of an open tuplet span
+/// scales its spring by the open tuplets' ratios. Beam and tuplet span marks
+/// ([`MeasureElement::GroupMark`]) take no width, so span members are spaced
+/// exactly like standalone events and each keeps its own x. The system layer
 /// later scales springs only to fit a target width.
 ///
 /// Accidentals sit left of their notehead column, so each event's accidental
 /// extent (stacked columns and parentheses included) is reserved as an
 /// incompressible gap *before* the event — including a measure-initial event,
-/// whose accidentals would otherwise cross the preceding barline. Accidentals
-/// of later members of a beam or tuplet group stay in the group's rod.
+/// whose accidentals would otherwise cross the preceding barline.
 pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig) -> MeasureLayout {
     let mut positioned = Vec::with_capacity(elements.len());
     let mut x = 0.0;
@@ -685,21 +630,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     // n:in-the-time-of duration relative to ordinary events.
     let shortest_log2 = elements
         .iter()
-        .filter_map(|element| match element {
-            MeasureElement::Note(note) => Some(note.duration_log2),
-            MeasureElement::Rest(rest) => Some(rest.duration_log2),
-            MeasureElement::Chord(chord) => Some(chord.duration_log2),
-            MeasureElement::BeamGroup(group) => {
-                group.notes.iter().map(|note| note.duration_log2).max()
-            }
-            MeasureElement::TupletGroup(tuplet) => tuplet
-                .beam_group
-                .notes
-                .iter()
-                .map(|note| note.duration_log2)
-                .max(),
-            _ => None,
-        })
+        .filter_map(|element| crate::layout::group::member_duration(element).map(|(log2, _)| log2))
         .max()
         .unwrap_or(2);
 
@@ -712,7 +643,10 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
         ) * time_scale.powf(config.spacing_exponent)
     };
 
+    // Tuplet spans open at this point of the measure, outermost first.
+    let mut open_tuplets: Vec<TupletSpec> = Vec::new();
     for elem in elements {
+        let time_scale = crate::layout::group::tuplet_time_scale(&open_tuplets);
         // Each arm yields (rod, spring, trailing_padding). Prefix elements use
         // trailing padding (e.g. clef_padding) that sits outside the element's
         // own width; rhythmic elements fold all spacing into rod + spring
@@ -734,7 +668,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                 }
                 MeasureElement::Note(n) => (
                     event_rod(0.0, n.dots, config),
-                    spring(n.duration_log2, 1.0),
+                    spring(n.duration_log2, time_scale),
                     0.0,
                 ),
                 MeasureElement::Rest(r) => {
@@ -742,7 +676,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     // as the glyph-extent estimate; dots still apply.
                     (
                         event_rod(0.0, r.dots, config),
-                        spring(r.duration_log2, 1.0),
+                        spring(r.duration_log2, time_scale),
                         0.0,
                     )
                 }
@@ -751,49 +685,19 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     // accidental columns are its leading accidental extent.
                     (
                         event_rod(0.0, c.dots, config),
-                        spring(c.duration_log2, 1.0),
+                        spring(c.duration_log2, time_scale),
                         0.0,
                     )
                 }
-                MeasureElement::BeamGroup(bg) => {
-                    // Each inner note contributes its own rod + spring; the group's
-                    // rod/spring are the sums (inner x-offsets come from
-                    // `beam_group_note_x_offsets` fed the group's total width). The
-                    // first member's accidentals are the group's leading extent.
-                    let (rod, spr) =
-                        bg.notes
-                            .iter()
-                            .enumerate()
-                            .fold((0.0, 0.0), |(r, s), (i, n)| {
-                                let extent = if i == 0 {
-                                    0.0
-                                } else {
-                                    note_accidental_extent(n, config)
-                                };
-                                (
-                                    r + event_rod(extent, n.dots, config),
-                                    s + spring(n.duration_log2, 1.0),
-                                )
-                            });
-                    (rod, spr, 0.0)
-                }
-                MeasureElement::TupletGroup(tg) => {
-                    let time_scale = tuplet_time_scale(tg);
-                    let (rod, spr) = tg.beam_group.notes.iter().enumerate().fold(
-                        (0.0, 0.0),
-                        |(r, s), (i, n)| {
-                            let extent = if i == 0 {
-                                0.0
-                            } else {
-                                note_accidental_extent(n, config)
-                            };
-                            (
-                                r + event_rod(extent, n.dots, config),
-                                s + spring(n.duration_log2, time_scale),
-                            )
-                        },
-                    );
-                    (rod, spr, 0.0)
+                MeasureElement::GroupMark(mark) => {
+                    match mark {
+                        GroupMark::TupletStart { spec, .. } => open_tuplets.push(*spec),
+                        GroupMark::TupletEnd { .. } => {
+                            open_tuplets.pop();
+                        }
+                        GroupMark::BeamStart { .. } | GroupMark::BeamEnd { .. } => {}
+                    }
+                    (0.0, 0.0, 0.0)
                 }
                 MeasureElement::MultiMeasureRest { .. } => {
                     // Occupies the full rhythmic width of the measure as an
@@ -1399,48 +1303,52 @@ mod tests {
                 annotations: NoteAnnotations::default(),
             })
         }
-        let makers: [fn(i8) -> MeasureElement; 4] = [
-            note,
+        fn single(element: MeasureElement) -> (Vec<MeasureElement>, usize) {
+            (vec![element], 0)
+        }
+        let makers: [fn(i8) -> (Vec<MeasureElement>, usize); 4] = [
+            |duration_log2| single(note(duration_log2)),
             |duration_log2| {
-                MeasureElement::Rest(RestEvent {
+                single(MeasureElement::Rest(RestEvent {
                     duration_log2,
                     dots: 0,
-                })
+                }))
             },
             |duration_log2| {
-                MeasureElement::Chord(ChordEvent {
+                single(MeasureElement::Chord(ChordEvent {
                     staff_positions: vec![2, 4, 6],
                     duration_log2,
                     dots: 0,
                     accidentals: vec![None; 3],
                     stem_direction: None,
                     annotations: NoteAnnotations::default(),
-                })
+                }))
             },
             |duration_log2| {
-                let member = NoteEvent {
-                    staff_position: 2,
-                    duration_log2,
-                    dots: 0,
-                    accidental: None,
-                    stem_direction: None,
-                    annotations: NoteAnnotations::default(),
-                };
-                MeasureElement::TupletGroup(TupletGroupEvent {
-                    beam_group: BeamGroupEvent {
-                        notes: vec![member.clone(), member.clone(), member],
-                        stem_direction: None,
-                    },
-                    tuplet_number: 3,
-                    in_time_of: 2,
-                })
+                (
+                    vec![
+                        MeasureElement::GroupMark(GroupMark::TupletStart {
+                            spec: TupletSpec::new(3, 2),
+                            continued: false,
+                        }),
+                        note(duration_log2),
+                        MeasureElement::GroupMark(GroupMark::TupletEnd { continues: false }),
+                    ],
+                    1,
+                )
             },
         ];
         let doubling = 2.0_f64.powf(cfg.spacing_exponent);
         for make in makers {
-            let breve = layout_measure(&[make(-1), note(2)], &cfg);
-            let whole = layout_measure(&[make(0), note(2)], &cfg);
-            let (breve_event, whole_event) = (&breve.elements[0], &whole.elements[0]);
+            let layout_with = |duration_log2| {
+                let (mut elements, event) = make(duration_log2);
+                elements.push(note(2));
+                let next = elements.len() - 1;
+                (layout_measure(&elements, &cfg), event, next)
+            };
+            let (breve, event, next) = layout_with(-1);
+            let (whole, ..) = layout_with(0);
+            let (breve_event, whole_event) = (&breve.elements[event], &whole.elements[event]);
             assert!((breve_event.rod - whole_event.rod).abs() < 1e-9);
             assert!(
                 (breve_event.spring / whole_event.spring - doubling).abs() < 1e-9,
@@ -1448,8 +1356,8 @@ mod tests {
                 breve_event.spring,
                 whole_event.spring
             );
-            let breve_next_x = breve.elements[1].x;
-            let whole_next_x = whole.elements[1].x;
+            let breve_next_x = breve.elements[next].x;
+            let whole_next_x = whole.elements[next].x;
             assert!(breve_next_x > whole_next_x);
             assert!(
                 ((breve_next_x - whole_next_x) - (breve_event.spring - whole_event.spring)).abs()

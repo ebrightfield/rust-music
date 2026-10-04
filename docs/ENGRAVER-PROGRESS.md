@@ -7797,3 +7797,22 @@
   the time signature and barline). `advanced_guitar_vocabulary` was already
   drifting at 8eaf21a and is left for the integrator; this change also moves
   its seven-string chord's sharps into two columns.
+
+## 2026-10-04 — RM-MN-005 heterogeneous beam and tuplet spans
+- `ScoreBuilder::begin_beam[_with]`/`end_beam` and
+  `begin_tuplet(TupletSpec)`/`end_tuplet` now bracket ordinary note,
+  chord, and rest events. Tuplet ratio, number display, bracket visibility,
+  and placement are independent of the beam; `BeamSpec` permits forced
+  stems and beat subdivisions. Typed span errors surface from
+  `try_render_svg`; measures preserve a continuing beam across barlines.
+- Standalone and grouped events share accidental resolution, all
+  per-member annotations, system/page spanner collectors, and a single
+  positioned-element x coordinate. GuitarScore projects grouped attacks as
+  actual chords/rests/notes and keeps TAB rhythmic anchors aligned.
+  Page bounds include tuplet marks and lyrics, avoiding PNG clipping.
+- Verification: 2,926 engraver library tests pass; the visual smoke
+  reproduced the unbeamed rest triplet and quarter-triplet with a partial
+  beam from mn-c12-r002 and mn-c11-r028. Obsolete byte-exact SVG snapshots
+  for reordered beam drawing and formerly clipped lyrics were replaced
+  with behavioral glyph/geometry checks; GuitarScore snapshots were not
+  regenerated.

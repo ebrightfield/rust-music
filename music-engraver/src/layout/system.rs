@@ -3,9 +3,10 @@ use music::notation::clef::Clef;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
+use crate::layout::group::GroupMark;
 use crate::layout::measure::{
-    layout_measure, BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, MeasureLayoutConfig,
-    NoteEvent, RestEvent, TupletGroupEvent,
+    layout_measure, ChordEvent, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent,
+    RestEvent,
 };
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::volta::VoltaAnnotation;
@@ -27,16 +28,16 @@ pub struct MeasureContent {
     pub additional_voices: Vec<Vec<MeasureEvent>>,
 }
 
-/// A rhythmic event within a measure — a note, rest, chord, or beam group.
+/// A musical event within a measure — a note, rest, chord, beam/tuplet span
+/// mark, or multi-measure rest.
 #[derive(Clone, Debug)]
 pub enum MeasureEvent {
     Note(NoteEvent),
     Rest(RestEvent),
     Chord(ChordEvent),
-    /// A group of notes connected by beams (eighth notes or shorter).
-    BeamGroup(BeamGroupEvent),
-    /// A tuplet group: beamed notes with a tuplet bracket and number.
-    TupletGroup(TupletGroupEvent),
+    /// A zero-duration beam or tuplet span boundary; the notes, chords, and
+    /// rests between a start and its matching end are the span's members.
+    GroupMark(GroupMark),
     /// Multi-measure rest: the entire measure shows either an H-bar or a
     /// church-rest cluster of SMuFL rest glyphs (small counts), with a count
     /// number indicating how many consecutive measures of rest.
@@ -214,23 +215,24 @@ pub fn layout_system(
             // Start each additional voice at the primary voice's first
             // rhythmic event: past the system prefix in the first measure,
             // and past the primary's leading accidental reservation anywhere.
-            let primary_first = layouts[i]
-                .elements
-                .iter()
-                .find(|element| {
-                    matches!(
-                        element.element,
-                        MeasureElement::Note(_)
-                            | MeasureElement::Rest(_)
-                            | MeasureElement::Chord(_)
-                            | MeasureElement::BeamGroup(_)
-                            | MeasureElement::TupletGroup(_)
-                            | MeasureElement::MultiMeasureRest { .. }
-                    )
-                })
-                .map(|element| element.x);
+            let first_rhythmic_x = |layout: &MeasureLayout| {
+                layout
+                    .elements
+                    .iter()
+                    .find(|element| {
+                        matches!(
+                            element.element,
+                            MeasureElement::Note(_)
+                                | MeasureElement::Rest(_)
+                                | MeasureElement::Chord(_)
+                                | MeasureElement::MultiMeasureRest { .. }
+                        )
+                    })
+                    .map(|element| element.x)
+            };
+            let primary_first = first_rhythmic_x(&layouts[i]);
             if let (Some(primary_first), Some(voice_first)) =
-                (primary_first, voice_layout.elements.first().map(|e| e.x))
+                (primary_first, first_rhythmic_x(&voice_layout))
             {
                 let leading = primary_first - voice_first;
                 for element in &mut voice_layout.elements {
@@ -367,8 +369,7 @@ pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
         MeasureEvent::Note(n) => MeasureElement::Note(n.clone()),
         MeasureEvent::Rest(r) => MeasureElement::Rest(r.clone()),
         MeasureEvent::Chord(c) => MeasureElement::Chord(c.clone()),
-        MeasureEvent::BeamGroup(bg) => MeasureElement::BeamGroup(bg.clone()),
-        MeasureEvent::TupletGroup(tg) => MeasureElement::TupletGroup(tg.clone()),
+        MeasureEvent::GroupMark(mark) => MeasureElement::GroupMark(*mark),
         MeasureEvent::MultiMeasureRest { count, style } => MeasureElement::MultiMeasureRest {
             count: *count,
             style: *style,

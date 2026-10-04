@@ -10,7 +10,7 @@ use music::note::pitch::Pitch;
 use crate::error::EngraverError;
 use crate::font::{EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
-use crate::layout::beam::beam_group_note_x_offsets;
+use crate::layout::group::TupletSpec;
 use crate::layout::bend_gesture::{BendFragment, BendSegmentLayout, BendSegmentPhase, BendView};
 use crate::layout::key_signature::KeySignature;
 #[cfg(test)]
@@ -2025,44 +2025,32 @@ impl GuitarScore {
                         GuitarGroup::Event(event) => {
                             add_event_to_score(score, event, self.clef, &self.bends)
                         }
-                        GuitarGroup::Beam(events) => score.styled_beam_group(
-                            events
-                                .iter()
-                                .map(|event| {
-                                    (
-                                        event_standard_written_pitches(
-                                            event,
-                                            self.clef,
-                                            &self.bends,
-                                        ),
-                                        event.duration,
-                                        event_note_annotations(event),
-                                    )
-                                })
-                                .collect(),
-                        ),
+                        GuitarGroup::Beam(events) => {
+                            add_events_to_score(score.begin_beam(), events, self.clef, &self.bends)
+                                .end_beam()
+                        }
                         GuitarGroup::Tuplet {
                             number,
                             in_time_of,
                             events,
-                        } => score.styled_tuplet_ratio(
-                            *number,
-                            *in_time_of,
-                            events
-                                .iter()
-                                .map(|event| {
-                                    (
-                                        event_standard_written_pitches(
-                                            event,
-                                            self.clef,
-                                            &self.bends,
-                                        ),
-                                        event.duration,
-                                        event_note_annotations(event),
-                                    )
-                                })
-                                .collect(),
-                        ),
+                        } => {
+                            // Beam the tuplet's members when they can all be
+                            // beamed, as `ScoreBuilder::tuplet_ratio` does.
+                            let beamed = events.len() >= 2
+                                && events.iter().all(|event| {
+                                    super::event::duration_kind_to_log2(event.duration.kind()) >= 3
+                                });
+                            let mut score =
+                                score.begin_tuplet(TupletSpec::new(*number, *in_time_of));
+                            if beamed {
+                                score = score.begin_beam();
+                            }
+                            score = add_events_to_score(score, events, self.clef, &self.bends);
+                            if beamed {
+                                score = score.end_beam();
+                            }
+                            score.end_tuplet()
+                        }
                     };
                 }
             }
@@ -2938,6 +2926,17 @@ fn add_event_to_score(
     }
 }
 
+fn add_events_to_score(
+    score: ScoreBuilder,
+    events: &[GuitarEvent],
+    clef: ClefKind,
+    bends: &[BendGesture],
+) -> ScoreBuilder {
+    events.iter().fold(score, |score, event| {
+        add_event_to_score(score, event, clef, bends)
+    })
+}
+
 fn projected_sounding_pitch(
     event: &GuitarEvent,
     physical: FrettedPitch,
@@ -3125,44 +3124,30 @@ pub(crate) fn draw_guitar_tab_system(
             } else {
                 &system_measure.additional_voice_layouts[voice as usize - 1]
             };
-            let positioned = layout.elements.iter().filter(|element| {
+            // Beam and tuplet members are ordinary rhythmic elements, so the
+            // layout's notes, chords, and rests zip 1:1 with the voice's
+            // guitar events (span marks and barlines are skipped).
+            let mut positioned = layout.elements.iter().filter(|element| {
                 matches!(
                     element.element,
-                    MeasureElement::Note(_)
-                        | MeasureElement::Chord(_)
-                        | MeasureElement::Rest(_)
-                        | MeasureElement::BeamGroup(_)
-                        | MeasureElement::TupletGroup(_)
+                    MeasureElement::Note(_) | MeasureElement::Chord(_) | MeasureElement::Rest(_)
                 )
             });
-            debug_assert_eq!(positioned.clone().count(), groups.len());
-            for (group, positioned) in groups.iter().zip(positioned) {
-                let group_x = tab_staff.x + system_measure.x_offset + positioned.x;
-                let xs = match group {
-                    GuitarGroup::Event(event) => {
-                        vec![group_x + notation_center_offset(font, event)?]
-                    }
-                    GuitarGroup::Beam(events) | GuitarGroup::Tuplet { events, .. } => {
-                        let durations: Vec<i8> = events
-                            .iter()
-                            .map(|event| super::event::duration_kind_to_log2(event.duration.kind()))
-                            .collect();
-                        beam_group_note_x_offsets(&durations, positioned.width)
-                            .into_iter()
-                            .zip(events)
-                            .map(|(offset, event)| {
-                                notation_center_offset(font, event)
-                                    .map(|center_offset| group_x + offset + center_offset)
-                            })
-                            .collect::<Result<Vec<_>, _>>()?
-                    }
-                };
+            debug_assert_eq!(
+                positioned.clone().count(),
+                groups.iter().map(|group| group.events().len()).sum::<usize>()
+            );
+            for group in groups {
+                let mut xs = Vec::with_capacity(group.events().len());
+                let mut last_end = 0.0;
+                for (event, positioned) in group.events().iter().zip(positioned.by_ref()) {
+                    let event_x = tab_staff.x + system_measure.x_offset + positioned.x;
+                    xs.push(event_x + notation_center_offset(font, event)?);
+                    last_end = event_x + positioned.width.max(tab_staff.staff_space);
+                }
 
                 for (index, (event, &x)) in group.events().iter().zip(&xs).enumerate() {
-                    let end_x = xs
-                        .get(index + 1)
-                        .copied()
-                        .unwrap_or(group_x + positioned.width.max(tab_staff.staff_space));
+                    let end_x = xs.get(index + 1).copied().unwrap_or(last_end);
                     anchors.insert(
                         event.id,
                         GuitarRenderAnchor {
@@ -4508,36 +4493,13 @@ pub(crate) fn rhythmic_anchor_xs(layout: &MeasureLayout) -> Vec<f64> {
     layout
         .elements
         .iter()
-        .filter_map(|element| match &element.element {
-            MeasureElement::Note(_) | MeasureElement::Chord(_) | MeasureElement::Rest(_) => {
-                Some(vec![element.x])
-            }
-            MeasureElement::BeamGroup(group) => {
-                let durations: Vec<_> = group.notes.iter().map(|note| note.duration_log2).collect();
-                Some(
-                    beam_group_note_x_offsets(&durations, element.width)
-                        .into_iter()
-                        .map(|offset| element.x + offset)
-                        .collect(),
-                )
-            }
-            MeasureElement::TupletGroup(group) => {
-                let durations: Vec<_> = group
-                    .beam_group
-                    .notes
-                    .iter()
-                    .map(|note| note.duration_log2)
-                    .collect();
-                Some(
-                    beam_group_note_x_offsets(&durations, element.width)
-                        .into_iter()
-                        .map(|offset| element.x + offset)
-                        .collect(),
-                )
-            }
-            _ => None,
+        .filter(|element| {
+            matches!(
+                element.element,
+                MeasureElement::Note(_) | MeasureElement::Chord(_) | MeasureElement::Rest(_)
+            )
         })
-        .flatten()
+        .map(|element| element.x)
         .collect()
 }
 
@@ -5169,10 +5131,10 @@ mod tests {
 
             let notation = score.notation_builder();
             let contents = notation.build_measure_contents();
-            let crate::layout::system::MeasureEvent::TupletGroup(tuplet) = &contents[0].events[0]
-            else {
-                panic!("expected tuplet group")
-            };
+            let tuplet = contents[0].events.iter().find_map(|event| match event {
+                crate::layout::system::MeasureEvent::GroupMark(crate::layout::group::GroupMark::TupletStart { spec, .. }) => Some(spec),
+                _ => None,
+            }).expect("expected tuplet span");
             let config = crate::layout::measure::MeasureLayoutConfig::from_staff_space(
                 crate::font::bravura_font().engraving_config().staff_space,
             );
@@ -5186,9 +5148,10 @@ mod tests {
                 .layout
                 .elements
                 .iter()
-                .find_map(|element| {
+                .filter_map(|element| {
                     matches!(element.element, MeasureElement::Note(_)).then_some(element.x)
                 })
+                .last()
                 .expect("following note must be laid out");
             (following_x, tuplet.in_time_of)
         }
@@ -5735,43 +5698,18 @@ mod tests {
         score.end_barline().unwrap();
 
         let contents = score.notation_builder().build_measure_contents();
-        let crate::layout::system::MeasureEvent::BeamGroup(beam) = &contents[0].events[0] else {
-            panic!("expected heterogeneous beam group");
-        };
-        assert_eq!(
-            beam.notes[0].annotations.notehead_styles,
-            vec![NoteheadStyle::X, NoteheadStyle::X]
-        );
-        assert_eq!(
-            beam.notes[0]
-                .annotations
-                .grouped_chord
-                .as_ref()
-                .expect("grouped dead attack retains all standard heads")
-                .staff_positions
-                .len(),
-            2
-        );
-        assert_eq!(
-            beam.notes[1].annotations.notehead_styles,
-            vec![NoteheadStyle::Slash]
-        );
-        let crate::layout::system::MeasureEvent::TupletGroup(tuplet) = &contents[0].events[1]
-        else {
-            panic!("expected heterogeneous tuplet group");
-        };
-        assert_eq!(
-            tuplet.beam_group.notes[0].annotations.notehead_styles,
-            vec![NoteheadStyle::CircleX]
-        );
-        assert_eq!(
-            tuplet.beam_group.notes[1].annotations.notehead_styles,
-            vec![NoteheadStyle::Square]
-        );
-        assert_eq!(
-            tuplet.beam_group.notes[2].annotations.notehead_styles,
-            vec![NoteheadStyle::Slash]
-        );
+        let members: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
+            crate::layout::system::MeasureEvent::Note(n) => Some((1, &n.annotations)),
+            crate::layout::system::MeasureEvent::Chord(c) => Some((c.staff_positions.len(), &c.annotations)),
+            _ => None,
+        }).collect();
+        assert_eq!(members.len(), 5);
+        assert_eq!(members[0].0, 2, "dead attack retains both standard heads");
+        assert_eq!(members[0].1.notehead_styles, vec![NoteheadStyle::X; 2]);
+        assert_eq!(members[1].1.notehead_styles, vec![NoteheadStyle::Slash]);
+        assert_eq!(members[2].1.notehead_styles, vec![NoteheadStyle::CircleX]);
+        assert_eq!(members[3].1.notehead_styles, vec![NoteheadStyle::Square]);
+        assert_eq!(members[4].1.notehead_styles, vec![NoteheadStyle::Slash]);
 
         let font = crate::font::bravura_font();
         let down = font
@@ -6043,40 +5981,21 @@ mod tests {
         score.end_barline().unwrap();
 
         let contents = score.notation_builder().build_measure_contents();
-        let crate::layout::system::MeasureEvent::BeamGroup(beam_group) = &contents[0].events[0]
-        else {
-            panic!("expected grouped realized chords in a beam");
+        let members: Vec<_> = contents[0].events.iter().filter(|event| {
+            matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
+        }).collect();
+        let crate::layout::system::MeasureEvent::Chord(first) = members[0] else {
+            panic!("realized chord remains a chord inside the beam");
         };
-        assert_eq!(
-            beam_group.notes[0]
-                .annotations
-                .grouped_chord
-                .as_ref()
-                .unwrap()
-                .staff_positions
-                .len(),
-            2
-        );
-        assert!(beam_group.notes[1].annotations.grouped_chord.is_none());
-        assert_eq!(
-            beam_group.notes[1].annotations.chord_symbol.as_deref(),
-            Some("D")
-        );
-
-        let crate::layout::system::MeasureEvent::TupletGroup(tuplet_group) = &contents[0].events[1]
-        else {
-            panic!("expected grouped dead attack in a tuplet");
+        assert_eq!(first.staff_positions.len(), 2);
+        let crate::layout::system::MeasureEvent::Note(second) = members[1] else {
+            panic!("slash remains a note inside the beam");
         };
-        let dead = &tuplet_group.beam_group.notes[0];
-        assert_eq!(
-            dead.annotations
-                .grouped_chord
-                .as_ref()
-                .unwrap()
-                .staff_positions
-                .len(),
-            3
-        );
+        assert_eq!(second.annotations.chord_symbol.as_deref(), Some("D"));
+        let crate::layout::system::MeasureEvent::Chord(dead) = members[2] else {
+            panic!("dead attack remains a chord inside the tuplet");
+        };
+        assert_eq!(dead.staff_positions.len(), 3);
         assert_eq!(dead.annotations.notehead_styles, vec![NoteheadStyle::X; 3]);
 
         let font = crate::font::bravura_font();
@@ -6298,18 +6217,18 @@ mod tests {
             panic!("multi-string dead attack projects as a chord");
         };
         assert!(dead_chord.accidentals.iter().all(Option::is_none));
-        let crate::layout::system::MeasureEvent::BeamGroup(group) = &contents[0].events[2] else {
-            panic!("grouped unpitched attacks remain a beam");
+        let projected: Vec<_> = contents[0].events.iter().filter(|event| {
+            matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
+        }).collect();
+        let crate::layout::system::MeasureEvent::Chord(group_chord) = projected[2] else {
+            panic!("dead attack remains a chord in the beam");
         };
-        assert!(group.notes.iter().all(|note| {
-            note.accidental.is_none()
-                && note
-                    .annotations
-                    .grouped_chord
-                    .as_ref()
-                    .is_none_or(|chord| chord.accidentals.iter().all(Option::is_none))
-        }));
-        let crate::layout::system::MeasureEvent::Note(f_sharp) = &contents[0].events[3] else {
+        assert!(group_chord.accidentals.iter().all(Option::is_none));
+        let crate::layout::system::MeasureEvent::Note(group_note) = projected[3] else {
+            panic!("percussion attack remains a note in the beam");
+        };
+        assert!(group_note.accidental.is_none());
+        let crate::layout::system::MeasureEvent::Note(f_sharp) = projected[4] else {
             panic!("pitched event follows unpitched projections");
         };
         assert!(
@@ -6337,19 +6256,17 @@ mod tests {
             .unwrap();
         flat_key.end_barline().unwrap();
         let flat_contents = flat_key.notation_builder().build_measure_contents();
-        for event in &flat_contents[0].events[..3] {
-            match event {
-                crate::layout::system::MeasureEvent::Note(note) => {
-                    assert!(note.accidental.is_none())
-                }
-                crate::layout::system::MeasureEvent::BeamGroup(group) => {
-                    assert!(group.notes.iter().all(|note| note.accidental.is_none()))
-                }
-                _ => panic!("expected only unpitched note and beam projections"),
-            }
+        let projected: Vec<_> = flat_contents[0].events.iter().filter(|event| {
+            matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
+        }).collect();
+        assert_eq!(projected.len(), 5);
+        for event in &projected[..4] {
+            let crate::layout::system::MeasureEvent::Note(note) = event else {
+                panic!("slash and percussion project as unpitched notes");
+            };
+            assert!(note.accidental.is_none());
         }
-        let crate::layout::system::MeasureEvent::Note(b_natural) = &flat_contents[0].events[3]
-        else {
+        let crate::layout::system::MeasureEvent::Note(b_natural) = projected[4] else {
             panic!("pitched B-natural follows unpitched B-position heads");
         };
         assert_eq!(

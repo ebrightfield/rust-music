@@ -26,7 +26,8 @@ use crate::render::cresc_text_renderer::draw_cresc_text;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
-use crate::render::measure_renderer::{draw_additional_voices, draw_measure};
+use crate::render::group_renderer::draw_groups;
+use crate::render::measure_renderer::{draw_additional_voices, draw_measure_elements};
 use crate::render::note_renderer::notehead_advance;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
@@ -165,7 +166,7 @@ pub fn draw_system(
     let clef = system.clef_kind.to_clef();
     for sys_measure in &system.measures {
         let measure_x = x + sys_measure.x_offset;
-        draw_measure(
+        draw_measure_elements(
             svg,
             &staff,
             font,
@@ -186,6 +187,10 @@ pub fn draw_system(
             )?;
         }
     }
+
+    // Draw beam and tuplet spans per voice across the whole system, so a span
+    // crossing a barline is one beam or bracket.
+    draw_system_groups(svg, font, config, system, &staff, x)?;
 
     // Draw ties between notes with tie_forward = true and their target notes
     draw_system_ties(svg, font, config, system, &staff, x)?;
@@ -226,6 +231,46 @@ pub fn draw_system(
     // wiggle.
     draw_system_trill_extensions(svg, font, config, system, &staff, x)?;
 
+    Ok(())
+}
+
+/// Draw every voice's beam and tuplet spans, scanning the voice's elements
+/// across all of the system's measures. Spans crossing a barline join; spans
+/// continuing from or onto another system are drawn as broken pieces.
+fn draw_system_groups(
+    svg: &mut SvgWriter,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    system: &SystemLayout,
+    staff: &StaffLayout,
+    system_x: f64,
+) -> Result<(), FontError> {
+    let voices = system
+        .measures
+        .iter()
+        .map(|measure| measure.additional_voice_layouts.len() + 1)
+        .max()
+        .unwrap_or(0);
+    for voice in 0..voices {
+        let items: Vec<_> = system
+            .measures
+            .iter()
+            .flat_map(|measure| {
+                let layout = match voice {
+                    0 => Some(&measure.layout),
+                    _ => measure.additional_voice_layouts.get(voice - 1),
+                };
+                let measure_x = system_x + measure.x_offset;
+                layout.into_iter().flat_map(move |layout| {
+                    layout
+                        .elements
+                        .iter()
+                        .map(move |positioned| (measure_x + positioned.x, &positioned.element))
+                })
+            })
+            .collect();
+        draw_groups(svg, staff, font, config, &items)?;
+    }
     Ok(())
 }
 

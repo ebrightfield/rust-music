@@ -83,6 +83,8 @@ struct IncomingTieTarget {
 /// them would inflate the canvas for ordinary scores — which shrinks everything
 /// at a fixed output width.
 fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64, f64) {
+    use crate::layout::group::GroupMark;
+    use crate::layout::lyric::{LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
     use crate::layout::measure::MeasureElement;
     use crate::layout::staff::{BOTTOM_LINE, TOP_LINE};
 
@@ -99,36 +101,30 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
                 std::iter::once(&measure.layout).chain(measure.additional_voice_layouts.iter());
             for voice in voices {
                 for positioned in &voice.elements {
-                    let positions: Vec<i8> = match &positioned.element {
-                        MeasureElement::Note(n) => vec![n.staff_position],
-                        MeasureElement::Chord(c) => c.staff_positions.clone(),
-                        MeasureElement::BeamGroup(bg) => bg
-                            .notes
-                            .iter()
-                            .flat_map(|note| {
-                                note.annotations.grouped_chord.as_ref().map_or_else(
-                                    || std::slice::from_ref(&note.staff_position),
-                                    |chord| chord.staff_positions.as_slice(),
-                                )
-                            })
-                            .copied()
-                            .collect(),
-                        MeasureElement::TupletGroup(tg) => tg
-                            .beam_group
-                            .notes
-                            .iter()
-                            .flat_map(|note| {
-                                note.annotations.grouped_chord.as_ref().map_or_else(
-                                    || std::slice::from_ref(&note.staff_position),
-                                    |chord| chord.staff_positions.as_slice(),
-                                )
-                            })
-                            .copied()
-                            .collect(),
+                    // Tuplet brackets and their numbers may stand above either
+                    // the top staff line or an upward stem; lyrics extend far
+                    // below the bottom line. Both must contribute to the page
+                    // viewBox, not just out-of-staff noteheads.
+                    match &positioned.element {
+                        MeasureElement::GroupMark(GroupMark::TupletStart { .. }) => {
+                            top = top.min(ps.y - 3.0 * config.staff_space);
+                            bottom = bottom.max(ps.y + (4.0 + 3.0) * config.staff_space);
+                        }
+                        MeasureElement::Note(n) if n.annotations.lyric.is_some() => {
+                            bottom = bottom.max(ps.y + (4.0 + LYRIC_BELOW_STAFF_SS + LYRIC_FONT_SIZE_SS) * config.staff_space);
+                        }
+                        MeasureElement::Chord(c) if c.annotations.lyric.is_some() => {
+                            bottom = bottom.max(ps.y + (4.0 + LYRIC_BELOW_STAFF_SS + LYRIC_FONT_SIZE_SS) * config.staff_space);
+                        }
+                        _ => {}
+                    }
+                    let positions: &[i8] = match &positioned.element {
+                        MeasureElement::Note(n) => std::slice::from_ref(&n.staff_position),
+                        MeasureElement::Chord(c) => &c.staff_positions,
                         _ => continue,
                     };
                     let allowance = STEM_ALLOWANCE_SS * config.staff_space;
-                    for pos in positions {
+                    for &pos in positions {
                         // Mirrors StaffLayout::y_of for this system's origin.
                         let y = ps.y + (TOP_LINE - pos) as f64 * half_space;
                         if pos > TOP_LINE {

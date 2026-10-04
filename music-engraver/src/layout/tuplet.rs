@@ -48,6 +48,14 @@ pub fn tuplet_number_glyphs(n: u32) -> Vec<Glyph> {
     digits.into_iter().filter_map(tuplet_digit_glyph).collect()
 }
 
+/// Glyphs for a tuplet ratio, e.g. `3:2` → [Tuplet3, TupletColon, Tuplet2].
+pub fn tuplet_ratio_glyphs(number: u32, in_time_of: u32) -> Vec<Glyph> {
+    let mut glyphs = tuplet_number_glyphs(number);
+    glyphs.push(Glyph::TupletColon);
+    glyphs.extend(tuplet_number_glyphs(in_time_of));
+    glyphs
+}
+
 /// Distance from the outermost note to the bracket line, in staff spaces.
 const BRACKET_OFFSET_SS: f64 = 1.0;
 
@@ -82,6 +90,15 @@ pub struct TupletBracketLayout {
     pub bracket_thickness: f64,
     /// Placement (above or below).
     pub placement: TupletPlacement,
+    /// Whether the bracket line is drawn at all; `false` prints the number
+    /// alone (e.g. a tuplet fully covered by a beam).
+    pub show_bracket: bool,
+    /// Whether the left hook is drawn. A bracket continuing from the
+    /// previous system has no left hook.
+    pub left_hook: bool,
+    /// Whether the right hook is drawn. A bracket continuing onto the next
+    /// system has no right hook.
+    pub right_hook: bool,
 }
 
 /// Lay out a tuplet bracket and number for a group of notes.
@@ -109,7 +126,6 @@ pub fn layout_tuplet_bracket(
 ) -> TupletBracketLayout {
     let half_space = staff_space / 2.0;
     let offset = BRACKET_OFFSET_SS * staff_space;
-    let hook_height = BRACKET_HOOK_SS * staff_space;
 
     // Find the most extreme note position, using split_first to prove non-emptiness
     let bracket_y = match extreme_positions.split_first() {
@@ -138,14 +154,43 @@ pub fn layout_tuplet_bracket(
         }
     };
 
-    let number_glyphs = tuplet_number_glyphs(tuplet_number);
+    layout_tuplet_bracket_at(
+        x_left,
+        x_right,
+        bracket_y,
+        placement,
+        tuplet_number_glyphs(tuplet_number),
+        number_advance_width,
+        staff_space,
+        bracket_thickness_ss,
+    )
+}
 
+/// Lay out a tuplet bracket whose line sits at an already-resolved
+/// `bracket_y`, with `number_glyphs` (possibly empty) centered in a gap of the
+/// line. The bracket and both hooks are shown; callers clear
+/// [`TupletBracketLayout::show_bracket`] or the hook flags as needed.
+#[allow(clippy::too_many_arguments)]
+pub fn layout_tuplet_bracket_at(
+    x_left: f64,
+    x_right: f64,
+    bracket_y: f64,
+    placement: TupletPlacement,
+    number_glyphs: Vec<Glyph>,
+    number_advance_width: f64,
+    staff_space: f64,
+    bracket_thickness_ss: f64,
+) -> TupletBracketLayout {
     // Center the number horizontally in the bracket span
     let bracket_center_x = (x_left + x_right) / 2.0;
     let number_x = bracket_center_x - number_advance_width / 2.0;
 
-    // Gap in the bracket line around the number
-    let gap_padding = NUMBER_GAP_SS * staff_space;
+    // Gap in the bracket line around the number (none without a number)
+    let gap_padding = if number_glyphs.is_empty() {
+        0.0
+    } else {
+        NUMBER_GAP_SS * staff_space
+    };
     let gap_left_x = bracket_center_x - number_advance_width / 2.0 - gap_padding;
     let gap_right_x = bracket_center_x + number_advance_width / 2.0 + gap_padding;
 
@@ -153,7 +198,7 @@ pub fn layout_tuplet_bracket(
         x_left,
         x_right,
         bracket_y,
-        hook_height,
+        hook_height: BRACKET_HOOK_SS * staff_space,
         number_glyphs,
         number_x,
         number_y: bracket_y,
@@ -161,6 +206,9 @@ pub fn layout_tuplet_bracket(
         gap_right_x,
         bracket_thickness: bracket_thickness_ss * staff_space,
         placement,
+        show_bracket: true,
+        left_hook: true,
+        right_hook: true,
     }
 }
 
