@@ -49,6 +49,15 @@ std::fs::write("score.svg", &svg).unwrap();
   every accidental's width is reserved to the left of its note.
 - **Multi-system page layout** with configurable measures-per-system and justification
 
+## Publication boundary
+
+`music-engraver` produces notation SVG (and optional PNG); it does not own
+titles, source attributions, prose, paper size, pagination, or PDF output.
+Assemble its SVG scores into fixed-page documents with Typst. A native PDF
+renderer and a `DocumentBuilder` are not required for Modus Novus fidelity.
+The current Modus Novus harvest remains published through LilyPond until
+source-derived notation, alignment, and visual checks pass for this backend.
+
 ## Running examples
 
 ```bash
