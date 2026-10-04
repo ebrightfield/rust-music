@@ -32,14 +32,15 @@ pub trait HasSpelling: Sized {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError>;
 }
 
+/// Respelling keeps the sounding MIDI note and re-derives the written octave
+/// from the chosen spelling: B4 respelled as C♭ is C♭5.
 impl HasSpelling for Pitch {
     fn spelled_as_in(&self, notes: &Vec<Note>) -> Result<Self, MusicSemanticsError> {
-        for note in notes {
-            if Pc::from(note) == Pc::from(&self.note) {
-                return Self::try_new(*note, self.octave);
-            }
+        let pc = Pc::from(&self.note);
+        match notes.iter().find(|note| Pc::from(*note) == pc) {
+            Some(note) => Self::from_midi_as(self.midi_note, *note),
+            None => Err(MusicSemanticsError::NotAMember(self.note, notes.clone())),
         }
-        Err(MusicSemanticsError::NotAMember(self.note, notes.clone()))
     }
 }
 

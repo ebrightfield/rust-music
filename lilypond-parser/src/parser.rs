@@ -402,26 +402,17 @@ fn parse_note_name(s: &str) -> Option<Note> {
     })
 }
 
-/// Inverts the octave-calculation quirk in `impl ToLilypondString for Pitch`.
+/// Build a pitch from a note name and its absolute-mode octave marks.
 ///
-/// Output code: for `Ces`, octave is bumped +1 before emitting marks; for
-/// `Bis`, octave is bumped -1. Then `'`/`,` count encodes `octave - 3` /
-/// `3 - octave`. We recover the original octave by undoing the bump.
+/// LilyPond marks name the written octave of the letter (`c` is C3, each `'`
+/// adds one and each `,` removes one), which is exactly [`Pitch::octave`]:
+/// `ces'` is C♭4 = MIDI 59 and `bis` is B♯3 = MIDI 60.
 fn pitch_from_parsed(note: Note, octave_delta: i32, span: Span) -> Result<Pitch, ParseError> {
-    let rendered_octave = 3 + octave_delta;
-    let original_octave = match note {
-        Note::Ces => rendered_octave - 1,
-        Note::Bis => rendered_octave + 1,
-        _ => rendered_octave,
-    };
-    if original_octave < -1 || original_octave > 9 {
-        return Err(ParseError::new(
-            ParseErrorKind::OctaveOutOfRange(original_octave),
-            span,
-        ));
-    }
-    Pitch::try_new(note, original_octave as i8)
-        .map_err(|_| ParseError::new(ParseErrorKind::OctaveOutOfRange(original_octave), span))
+    let octave = 3 + octave_delta;
+    i8::try_from(octave)
+        .ok()
+        .and_then(|octave| Pitch::try_new(note, octave).ok())
+        .ok_or_else(|| ParseError::new(ParseErrorKind::OctaveOutOfRange(octave), span))
 }
 
 #[cfg(test)]
@@ -540,23 +531,36 @@ mod tests {
     }
 
     #[test]
-    fn ces_and_bis_octave_quirk() {
-        // `ces'` renders from Pitch{Ces, 4}? Check round-trip via outputs below.
-        // Here we just confirm parsing produces a valid Pitch with the inverse
-        // adjustment: `ces'` -> apostrophes=1 -> rendered_oct=4 -> note Ces -> original 3.
+    fn ces_and_bis_marks_are_written_octaves() {
+        // `ces'` is C♭4 = MIDI 59 (sounds B3); `bis` is B♯3 = MIDI 60 (sounds C4).
         let items = parse("ces'4 bis4").unwrap();
         match &items[0] {
             Item::Event(Event::Note(p, _)) => {
                 assert_eq!(p.note, Note::Ces);
-                assert_eq!(p.octave, 3);
+                assert_eq!(p.octave, 4);
+                assert_eq!(p.midi_note, 59);
             }
             _ => panic!(),
         }
         match &items[1] {
             Item::Event(Event::Note(p, _)) => {
                 assert_eq!(p.note, Note::Bis);
-                assert_eq!(p.octave, 4);
+                assert_eq!(p.octave, 3);
+                assert_eq!(p.midi_note, 60);
             }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn out_of_midi_range_spelling_is_rejected() {
+        // `ces,,,,` would be C♭-1 = MIDI -1.
+        let err = parse("ces,,,,4").unwrap_err();
+        assert!(matches!(err.kind, ParseErrorKind::OctaveOutOfRange(-1)));
+        // `c,,,,` is C-1 = MIDI 0 and stays valid.
+        let items = parse("c,,,,4").unwrap();
+        match &items[0] {
+            Item::Event(Event::Note(p, _)) => assert_eq!(p.midi_note, 0),
             _ => panic!(),
         }
     }

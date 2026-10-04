@@ -56,9 +56,9 @@ fn initial_voicing(pcs: &[Pc]) -> Voicing {
             }
         }
         last_midi = midi;
-        let note = pc_to_note(*pc);
-        let octave = (midi / 12) as i8 - 1; // MIDI 60 = C4 → 60/12 - 1 = 4
-        pitches.push(Pitch::new(note, octave));
+        let pitch = Pitch::from_midi_as(midi, pc_to_note(*pc))
+            .expect("close voicing from C4 stays within MIDI range");
+        pitches.push(pitch);
     }
     Voicing::new(pitches)
 }

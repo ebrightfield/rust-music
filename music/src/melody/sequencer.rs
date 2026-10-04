@@ -294,21 +294,18 @@ impl MelodicSequencer {
             &self.config.bounds.highest
         };
 
-        // Find closest chord tone to boundary
-        let boundary_tone = chord.closest_to(boundary)?;
-
         // Calculate overshoot
         let total_distance = (attempted.midi_note as i16 - previous.midi_note as i16).abs();
         let to_boundary = (boundary.midi_note as i16 - previous.midi_note as i16).abs();
         let overshoot = total_distance.saturating_sub(to_boundary);
 
-        // Create pitch at boundary tone
-        let boundary_pitch = Pitch::try_new(*boundary_tone, boundary.octave)?;
-
-        // Move from boundary by overshoot amount in new direction
-        // Estimate steps based on average interval size (assume ~2 semitones per step)
+        // Move from the chord tone nearest the boundary by the overshoot amount
+        // in the new direction. `pitch_n_steps_from` anchors that chord tone in
+        // the boundary's sounding octave and spells the result with its written
+        // octave. Estimate steps based on average interval size (assume ~2
+        // semitones per step).
         let bounce_steps = ((overshoot / 2).max(1) as i8) * self.direction.multiplier();
-        let result = chord.pitch_n_steps_from(&boundary_pitch, bounce_steps)?;
+        let result = chord.pitch_n_steps_from(boundary, bounce_steps)?;
 
         if self.config.bounds.contains(&result) {
             Ok(result)

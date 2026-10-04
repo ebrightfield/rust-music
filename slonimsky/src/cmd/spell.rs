@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use music::note::note::Note;
 use music::note::pitch_class::Pc;
-use music::note::spelling::{Accidental, Letter, Spelling};
+use music::note::spelling::{Accidental, Spelling};
 use music::note_collections::chord_name::{
     ChordName, ChordNameDisplayConfig, MajNotation, TonalSpecification,
 };
@@ -115,19 +115,6 @@ fn letter_steps_for_interval(semitones: u8, others: &[u8]) -> u8 {
     }
 }
 
-/// Semitones above C for a natural letter.
-fn letter_semitones(letter: Letter) -> i32 {
-    match letter {
-        Letter::C => 0,
-        Letter::D => 2,
-        Letter::E => 4,
-        Letter::F => 5,
-        Letter::G => 7,
-        Letter::A => 9,
-        Letter::B => 11,
-    }
-}
-
 /// Spell the note `interval` semitones above `root` as a proper tertian
 /// interval: advance the root's letter by the interval's diatonic letter-step,
 /// then pick the accidental (up to a double) that lands the letter on the
@@ -151,9 +138,10 @@ fn spell_interval(root: Note, interval: u8, others: &[u8]) -> Option<Note> {
 
     // Absolute semitone target, and what the bare letter gives us. Both are
     // reduced mod 12 so the comparison is octave-agnostic.
-    let root_semis = letter_semitones(root_spelling.letter) + accidental_offset(root_spelling.acc);
+    let root_semis = i32::from(root_spelling.letter.natural_semitone())
+        + i32::from(root_spelling.acc.alteration());
     let target = (root_semis + i32::from(interval)).rem_euclid(12);
-    let natural = letter_semitones(letter).rem_euclid(12);
+    let natural = i32::from(letter.natural_semitone());
 
     // Choose the accidental that closes the gap, taking the representative in
     // −6..=5 so we never pick a 10-semitone "correction" over a 2-semitone one.
@@ -219,17 +207,6 @@ fn pick_spelling(root: Note, pc: Pc, interval: u8, others: &[u8]) -> Note {
         })
         .copied()
         .unwrap_or(pool[0])
-}
-
-/// Semitone offset contributed by an accidental.
-fn accidental_offset(acc: Accidental) -> i32 {
-    match acc {
-        Accidental::Natural => 0,
-        Accidental::Sharp => 1,
-        Accidental::DoubleSharp => 2,
-        Accidental::Flat => -1,
-        Accidental::DoubleFlat => -2,
-    }
 }
 
 /// Format interval in semitones as a conventional name.
@@ -319,6 +296,7 @@ pub fn run(args: SpellArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use music::note::spelling::Letter;
 
     #[test]
     fn spell_c_major_triad() {
