@@ -2,7 +2,7 @@
 
 **Status:** Design proposal
 **Source theory:** Paul Narveson, *Theory of Melody* (modern epoch, c. 1600–present)
-**Target codebase:** `music`, `music-midi`, `music-engraver`, `musical-combinatorics` (workspace at `/home/eric/Documents/rust-music`)
+**Target codebase:** `music`, `music-midi`, `music-engraver`, `musical-combinatorics` (workspace at `/home/eric/zooanthid/rust-music`)
 
 This document proposes how Narveson's classifications and laws can become a Rust subsystem that **generates, analyzes, and revises melodies** — producing artifacts that flow naturally into the workspace's existing notation (LilyPond, VexTab, the in-progress engraver) and audio (`music-midi`) pipelines.
 
