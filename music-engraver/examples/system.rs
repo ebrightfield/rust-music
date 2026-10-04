@@ -3,6 +3,7 @@ use music_engraver::font::bravura_font;
 use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
+use music_engraver::layout::measure_meta::MeasureMeta;
 use music_engraver::layout::system::{layout_system, MeasureContent, MeasureEvent, SystemPrefix};
 use music_engraver::layout::time_signature::TimeSignatureKind;
 use music_engraver::render::system_renderer::draw_system;
@@ -62,6 +63,7 @@ fn main() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         // Measure 2: dotted half G4, quarter rest
         MeasureContent {
@@ -82,6 +84,7 @@ fn main() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         // Measure 3: E4 eighth, F#4 eighth, G4 eighth, A4 eighth, B4 half
         MeasureContent {
@@ -130,6 +133,7 @@ fn main() {
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 

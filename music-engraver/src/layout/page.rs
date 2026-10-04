@@ -424,6 +424,7 @@ mod tests {
     use crate::layout::barline::BarlineStyle;
     use crate::layout::key_signature::KeySignature;
     use crate::layout::measure::{NoteAnnotations, NoteEvent};
+    use crate::layout::measure_meta::MeasureMeta;
     use crate::layout::system::{MeasureEvent, SystemPrefix};
     use crate::layout::time_signature::TimeSignatureKind;
     use music::notation::clef::Clef;
@@ -456,6 +457,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }
     }
 

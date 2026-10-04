@@ -27,6 +27,7 @@ pub mod hairpin;
 pub mod key_signature;
 pub mod lyric;
 pub mod measure;
+pub mod measure_meta;
 pub mod multi_measure_rest;
 pub mod multi_staff;
 pub mod navigation;

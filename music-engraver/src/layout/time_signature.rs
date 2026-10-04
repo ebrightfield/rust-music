@@ -1,5 +1,7 @@
 use smufl::Glyph;
 
+use crate::layout::measure_meta::MeasureLength;
+
 /// Time signature display style.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TimeSignatureKind {
@@ -9,6 +11,21 @@ pub enum TimeSignatureKind {
     Common,
     /// Cut time / alla breve symbol (₵).
     CutCommon,
+}
+
+impl TimeSignatureKind {
+    /// The measure length this meter prescribes: `n/d` for numeric meters,
+    /// `4/4` for common time and `2/2` for cut time.
+    pub fn measure_length(&self) -> MeasureLength {
+        match self {
+            Self::Numeric {
+                numerator,
+                denominator,
+            } => MeasureLength::new(u64::from(*numerator), u64::from((*denominator).max(1))),
+            Self::Common => MeasureLength::new(4, 4),
+            Self::CutCommon => MeasureLength::new(2, 2),
+        }
+    }
 }
 
 /// A resolved time signature glyph sequence with vertical positions.

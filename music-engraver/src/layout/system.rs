@@ -7,6 +7,7 @@ use crate::layout::measure::{
     layout_measure, BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, MeasureLayoutConfig,
     NoteEvent, RestEvent, TupletGroupEvent,
 };
+use crate::layout::measure_meta::MeasureMeta;
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::volta::VoltaAnnotation;
 
@@ -25,6 +26,8 @@ pub struct MeasureContent {
     /// gets stems up, voice 1 gets stems down. Currently only laid out for
     /// rendering when the measure renderer's multi-voice path is active.
     pub additional_voices: Vec<Vec<MeasureEvent>>,
+    /// Logical numbering, meter/length semantics, and break permission.
+    pub meta: MeasureMeta,
 }
 
 /// A rhythmic event within a measure — a note, rest, chord, or beam group.
@@ -436,6 +439,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&prefix, &measures, &cfg, None);
 
@@ -461,12 +465,14 @@ mod tests {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(6)],
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -489,18 +495,21 @@ mod tests {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(6)],
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(8)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -529,12 +538,14 @@ mod tests {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(2)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -557,12 +568,14 @@ mod tests {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(6)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ];
 
@@ -610,6 +623,7 @@ mod tests {
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
 
         let natural = layout_system(&prefix, &measures, &cfg, None);
@@ -667,6 +681,7 @@ mod tests {
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let scaled = layout_system(&test_prefix(), &measures, &cfg, Some(1.0));
         for el in &scaled.measures[0].layout.elements {
@@ -686,6 +701,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
         assert!((layout.measures[0].x_offset).abs() < f64::EPSILON);
@@ -700,6 +716,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&prefix, &measures, &cfg, None);
         let elems = &layout.measures[0].layout.elements;
@@ -720,6 +737,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&prefix, &measures, &cfg, None);
         assert_eq!(layout.clef_kind, ClefKind::Bass);
@@ -738,6 +756,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
 
@@ -755,18 +774,21 @@ mod tests {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![quarter_note(4)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
@@ -783,6 +805,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, Some(8000.0));
         assert!((layout.staff_width - 8000.0).abs() < f64::EPSILON);
@@ -796,6 +819,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let layout = layout_system(&test_prefix(), &measures, &cfg, None);
         assert!((layout.staff_width - layout.total_width).abs() < f64::EPSILON);
@@ -809,6 +833,7 @@ mod tests {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![vec![quarter_note(0)]],
+            meta: MeasureMeta::default(),
         }];
 
         let layout = layout_system(&test_prefix(), &measures, &cfg, Some(8000.0));

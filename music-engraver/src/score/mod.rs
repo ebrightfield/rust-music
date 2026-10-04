@@ -58,6 +58,7 @@ use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
+use crate::layout::measure_meta::MeasureMeta;
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
@@ -1804,6 +1805,7 @@ impl ScoreBuilder {
                     barline: *barline,
                     volta: volta.clone(),
                     additional_voices: voice_buckets,
+                    meta: MeasureMeta::default(),
                 }
             })
             .collect()
