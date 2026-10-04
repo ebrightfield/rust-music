@@ -2,6 +2,7 @@
 //! and verify the data matches.
 
 use lilypond_parser::{parse, Event, Item};
+use music::notation::clef::Clef;
 use music::notation::lilypond::ToLilypondString;
 use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::{Note, Pitch};
@@ -48,6 +49,31 @@ fn ces_bis_roundtrip() {
                 assert_eq!(p.octave, octave, "octave mismatch for {}", src);
             }
             other => panic!("{:?}", other),
+        }
+    }
+}
+
+#[test]
+fn c_clef_roundtrip() {
+    for (clef, name) in [(Clef::Alto, "alto"), (Clef::Tenor, "tenor")] {
+        let dur = Duration::new(DurationKind::Qtr, 0);
+        let src = format!(
+            "\\clef {} {}",
+            clef.to_lilypond_string(),
+            render_pitch(&Pitch::new(Note::C, 4), &dur)
+        );
+        let items = parse(&src).unwrap_or_else(|e| panic!("parse {:?}: {:?}", src, e));
+        assert!(
+            matches!(&items[0], Item::Clef(s) if s == name),
+            "{src}: {:?}",
+            items[0]
+        );
+        match &items[1] {
+            Item::Event(Event::Note(p, d)) => {
+                assert_eq!((p.note, p.octave), (Note::C, 4), "{src}");
+                assert_eq!(*d, dur);
+            }
+            other => panic!("expected note after clef in {src}, got {other:?}"),
         }
     }
 }

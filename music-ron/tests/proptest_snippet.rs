@@ -41,6 +41,8 @@ fn arb_clef() -> impl Strategy<Value = &'static str> {
         Just("treble8va"),
         Just("treble8ba"),
         Just("bass"),
+        Just("alto"),
+        Just("tenor"),
     ]
 }
 

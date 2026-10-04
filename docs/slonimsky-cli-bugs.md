@@ -132,8 +132,9 @@ The flag is wired end to end (`ClefChoice::Treble8` → `Clef::Treble8ba` →
 was not the right diagnosis. But the notes *were* wrong: they shifted down an octave in
 staff position, which for a transposing clef is a real bug — see §7, where it is
 diagnosed and fixed. Two contributing render bugs (a clipped viewBox and misplaced
-beams) are fixed under §2, and `alto`/`tenor` are still rejected with an explicit error
-rather than silently ignored, as this item asked.
+beams) are fixed under §2. `alto`/`tenor` were rejected with an explicit error until
+2026-10-04 (RM-MN-003), when `music::Clef` gained `Alto`/`Tenor`; both now render a
+C clef (`Glyph::CClef`) with C4 on the middle / fourth line.
 
 ---
 

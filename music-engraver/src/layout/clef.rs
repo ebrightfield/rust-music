@@ -14,7 +14,9 @@ pub struct ClefLayout {
     /// Staff position of the clef's reference line. For a G-clef this is
     /// the line that defines G4 (staff position 2 = second line from bottom).
     /// For an F-clef this is the line that defines F3 (staff position 6 =
-    /// fourth line from bottom).
+    /// fourth line from bottom). For a C-clef this is the line that defines
+    /// C4, on which the glyph is vertically centered (alto: staff position 4 =
+    /// middle line; tenor: staff position 6 = fourth line from bottom).
     pub staff_position: StaffPosition,
 }
 
@@ -38,6 +40,14 @@ impl ClefLayout {
                 glyph: Glyph::FClef,
                 staff_position: 6,
             },
+            Clef::Alto => Self {
+                glyph: Glyph::CClef,
+                staff_position: 4,
+            },
+            Clef::Tenor => Self {
+                glyph: Glyph::CClef,
+                staff_position: 6,
+            },
         }
     }
 
@@ -58,6 +68,14 @@ impl ClefLayout {
             },
             Clef::Bass => Self {
                 glyph: Glyph::FClef,
+                staff_position: 6,
+            },
+            Clef::Alto => Self {
+                glyph: Glyph::CClef,
+                staff_position: 4,
+            },
+            Clef::Tenor => Self {
+                glyph: Glyph::CClef,
                 staff_position: 6,
             },
         }
@@ -95,6 +113,28 @@ mod tests {
         assert_eq!(cl.glyph, Glyph::FClef);
         // Fourth line from bottom = staff position 6
         assert_eq!(cl.staff_position, 6);
+    }
+
+    #[test]
+    fn alto_clef_maps_to_cclef_on_middle_line() {
+        for cl in [
+            ClefLayout::from_clef(Clef::Alto),
+            ClefLayout::from_clef_ref(&Clef::Alto),
+        ] {
+            assert_eq!(cl.glyph, Glyph::CClef);
+            assert_eq!(cl.staff_position, 4);
+        }
+    }
+
+    #[test]
+    fn tenor_clef_maps_to_cclef_on_fourth_line() {
+        for cl in [
+            ClefLayout::from_clef(Clef::Tenor),
+            ClefLayout::from_clef_ref(&Clef::Tenor),
+        ] {
+            assert_eq!(cl.glyph, Glyph::CClef);
+            assert_eq!(cl.staff_position, 6);
+        }
     }
 
     #[test]

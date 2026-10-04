@@ -109,12 +109,15 @@ pub enum ClefChoice {
     /// Octave-down treble clef (treble-8) — the standard guitar clef.
     Treble8,
     Bass,
+    /// C clef with C4 on the middle line.
+    Alto,
+    /// C clef with C4 on the fourth line.
+    Tenor,
 }
 
 impl ClefChoice {
     /// Parse a `--clef` value. Accepts `treble`, `treble-8`/`treble8`/`guitar`,
-    /// and `bass`. Returns an error for unsupported clefs (e.g. alto/tenor,
-    /// which `music::Clef` does not model).
+    /// `bass`, `alto`, and `tenor`. Returns an error for unknown clefs.
     pub fn from_str_opt(s: Option<&str>) -> Result<Self> {
         match s
             .unwrap_or("treble")
@@ -125,11 +128,11 @@ impl ClefChoice {
             "treble" | "g" => Ok(ClefChoice::Treble),
             "treble-8" | "treble8" | "guitar" => Ok(ClefChoice::Treble8),
             "bass" | "f" => Ok(ClefChoice::Bass),
-            "alto" | "tenor" => anyhow::bail!(
-                "clef '{}' is not supported (music::Clef models only treble, treble-8, bass)",
-                s.unwrap_or("")
+            "alto" => Ok(ClefChoice::Alto),
+            "tenor" => Ok(ClefChoice::Tenor),
+            other => anyhow::bail!(
+                "unknown clef: '{other}' (options: treble, treble-8, bass, alto, tenor)"
             ),
-            other => anyhow::bail!("unknown clef: '{other}' (options: treble, treble-8, bass)"),
         }
     }
 
@@ -138,6 +141,8 @@ impl ClefChoice {
             ClefChoice::Treble => Clef::Treble,
             ClefChoice::Treble8 => Clef::Treble8ba,
             ClefChoice::Bass => Clef::Bass,
+            ClefChoice::Alto => Clef::Alto,
+            ClefChoice::Tenor => Clef::Tenor,
         }
     }
 }
@@ -618,7 +623,16 @@ mod tests {
             ClefChoice::from_str_opt(Some("bass")).unwrap(),
             ClefChoice::Bass
         );
-        assert!(ClefChoice::from_str_opt(Some("alto")).is_err());
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("alto")).unwrap(),
+            ClefChoice::Alto
+        );
+        assert_eq!(
+            ClefChoice::from_str_opt(Some("Tenor")).unwrap(),
+            ClefChoice::Tenor
+        );
+        assert_eq!(ClefChoice::Alto.to_music_clef(), Clef::Alto);
+        assert_eq!(ClefChoice::Tenor.to_music_clef(), Clef::Tenor);
         assert!(ClefChoice::from_str_opt(Some("nonsense")).is_err());
     }
 

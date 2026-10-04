@@ -2878,6 +2878,8 @@ fn unpitched_written_pitch(string: u8, clef: ClefKind) -> Pitch {
     let bottom_line_absolute = match clef {
         ClefKind::Treble | ClefKind::Treble8va | ClefKind::Treble8ba => 30_i16, // E4
         ClefKind::Bass => 18_i16,                                               // G2
+        ClefKind::Alto => 24_i16,                                               // F3
+        ClefKind::Tenor => 22_i16,                                              // D3
     };
     let absolute = bottom_line_absolute + staff_position;
     let octave = absolute.div_euclid(7) as i8;
@@ -2977,7 +2979,7 @@ fn written_pitch(pitch: Pitch, clef: ClefKind) -> Pitch {
     let octave_shift = match clef {
         ClefKind::Treble8ba => 1,
         ClefKind::Treble8va => -1,
-        ClefKind::Treble | ClefKind::Bass => 0,
+        ClefKind::Treble | ClefKind::Bass | ClefKind::Alto | ClefKind::Tenor => 0,
     };
     pitch
         .raise_octaves(octave_shift)
@@ -6247,6 +6249,8 @@ mod tests {
         let treble = positions(Clef::Treble);
         assert_eq!(treble, positions(Clef::Treble8ba));
         assert_eq!(treble, positions(Clef::Bass));
+        assert_eq!(treble, positions(Clef::Alto));
+        assert_eq!(treble, positions(Clef::Tenor));
         assert_eq!(treble.0, vec![6, 1, 0]);
         assert_eq!(treble.1, 4);
         assert_eq!(treble.2, 4);

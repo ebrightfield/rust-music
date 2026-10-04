@@ -250,12 +250,14 @@ pub fn run(args: RhythmDrillArgs) -> Result<()> {
 
     // Output dispatch.
     if let Some(ref path) = args.output {
-        // Render rhythm on a single repeated pitch, the convention for
-        // rhythm-only drills. Rests are emitted as rests so the notation
-        // matches the text output for the same seed.
+        // Render rhythm on a single repeated pitch on the staff's middle line,
+        // the convention for rhythm-only drills. Rests are emitted as rests so
+        // the notation matches the text output for the same seed.
         let drum_pitch = match clef {
             ClefChoice::Bass => Pitch::new(Note::D, 3),
-            _ => Pitch::new(Note::B, 4),
+            ClefChoice::Alto => Pitch::new(Note::C, 4),
+            ClefChoice::Tenor => Pitch::new(Note::A, 3),
+            ClefChoice::Treble | ClefChoice::Treble8 => Pitch::new(Note::B, 4),
         };
         let events = rhythm_to_events(&measures, drum_pitch);
         let n = render_events_to_file(&events, clef, KeySignature::Open, (num, den), path)?;

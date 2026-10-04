@@ -746,7 +746,7 @@ enum Commands {
         #[arg(long)]
         seed: Option<u64>,
 
-        /// Clef for notation output: treble (default), treble-8 (guitar), bass
+        /// Clef for notation output: treble (default), treble-8 (guitar), bass, alto, tenor
         #[arg(long)]
         clef: Option<String>,
     },
@@ -768,7 +768,7 @@ enum Commands {
         #[arg(long, default_value = "4")]
         measures: usize,
 
-        /// Clef for notation output: treble (default), treble-8 (guitar), bass
+        /// Clef for notation output: treble (default), treble-8 (guitar), bass, alto, tenor
         #[arg(long)]
         clef: Option<String>,
 
