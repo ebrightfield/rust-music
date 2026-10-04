@@ -22,6 +22,10 @@ pub enum EngraverError {
     #[error(transparent)]
     Guitar(#[from] crate::score::guitar::GuitarScoreError),
 
+    /// The score's bar structure cannot be engraved as written.
+    #[error(transparent)]
+    Structure(#[from] crate::score::ScoreStructureError),
+
     /// PNG rasterization failed (requires the `png` feature).
     #[cfg(feature = "png")]
     #[error(transparent)]

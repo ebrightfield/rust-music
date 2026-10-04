@@ -16,10 +16,12 @@ use crate::layout::accidental::{accidental_glyph, AccidentalDisplay, ResolvedAcc
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
     BeamGroupEvent, ChordEvent, GroupedChordMember, NoteAnnotations, NoteEvent, RestEvent,
-    TupletGroupEvent,
+    SpacerEvent, TupletGroupEvent,
 };
+use crate::layout::measure_meta::MeasureLength;
 use crate::layout::note_placement::pitch_to_staff_position;
-use crate::layout::system::MeasureEvent;
+use crate::layout::system::{ClefChange, MeasureEvent};
+use crate::layout::time_signature::TimeSignature;
 
 /// An event being accumulated in the current measure.
 #[derive(Clone, Debug)]
@@ -61,6 +63,21 @@ pub(crate) enum ScoreEvent {
         count: u32,
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// Invisible rhythmic placeholder: takes `duration` but draws nothing.
+    Spacer {
+        duration: Duration,
+    },
+    /// Zero-duration clef change; later pitches on the staff use the new clef.
+    ClefChange(ClefChange),
+    /// Zero-duration meter change, valid only at the start of a measure.
+    TimeSignatureChange(TimeSignature),
+}
+
+impl ScoreEvent {
+    /// Whether this is a zero-duration structural change (clef or meter).
+    pub(crate) fn is_structural(&self) -> bool {
+        matches!(self, Self::ClefChange(_) | Self::TimeSignatureChange(_))
+    }
 }
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
@@ -420,13 +437,21 @@ pub(crate) fn convert_resolved_event(
             count: *count,
             style: *style,
         },
+        ScoreEvent::Spacer { duration } => MeasureEvent::Spacer(SpacerEvent {
+            duration_log2: duration_kind_to_log2(duration.kind()),
+            dots: duration.num_dots(),
+        }),
+        ScoreEvent::ClefChange(change) => MeasureEvent::ClefChange(*change),
+        ScoreEvent::TimeSignatureChange(time_signature) => {
+            MeasureEvent::TimeSignature(time_signature.kind.clone())
+        }
     }
 }
 
 /// Time of a pitch within its measure, in 128th-note ticks multiplied by the
 /// measure's [`tuplet_tick_scale`] so that every tuplet member starts on an
 /// exact integer.
-type Onset = u64;
+pub(crate) type Onset = u64;
 
 fn gcd(mut a: u64, mut b: u64) -> u64 {
     while b != 0 {
@@ -575,7 +600,52 @@ fn visit_pitches(
             *in_time_of,
             &mut visit,
         ),
-        ScoreEvent::MultiMeasureRest { .. } => 0,
+        ScoreEvent::Spacer { duration } => scaled_ticks(duration, scale, 1, 1),
+        ScoreEvent::MultiMeasureRest { .. }
+        | ScoreEvent::ClefChange(_)
+        | ScoreEvent::TimeSignatureChange(_) => 0,
+    }
+}
+
+/// Onset of every event of one measure and the measure's written length.
+pub(crate) struct MeasureTimeline {
+    /// Onset of each event from the measure start, parallel to the events,
+    /// in ticks scaled by [`Self::scale`].
+    pub onsets: Vec<Onset>,
+    /// Ticks (128ths of a whole note) are multiplied by this so every tuplet
+    /// member starts on an integer.
+    pub scale: u64,
+    /// Length of the longest voice, in scaled ticks.
+    pub length: Onset,
+}
+
+impl MeasureTimeline {
+    /// `ticks` scaled ticks as an exact length.
+    pub fn to_length(&self, ticks: Onset) -> MeasureLength {
+        MeasureLength::new(ticks, 128 * self.scale)
+    }
+}
+
+/// Compute each event's onset in one measure: every voice keeps its own
+/// clock from the measure start, advancing by written durations (dots
+/// included, tuplet members at their ratio); zero-duration events sit at
+/// their voice's current time.
+pub(crate) fn measure_timeline(voiced_events: &[(u8, ScoreEvent)]) -> MeasureTimeline {
+    let scale = tuplet_tick_scale(voiced_events.iter().map(|(_, event)| event));
+    let mut voice_clocks: Vec<Onset> = Vec::new();
+    let mut onsets = Vec::with_capacity(voiced_events.len());
+    for (voice, event) in voiced_events {
+        let voice_index = usize::from(*voice);
+        if voice_clocks.len() <= voice_index {
+            voice_clocks.resize(voice_index + 1, 0);
+        }
+        onsets.push(voice_clocks[voice_index]);
+        voice_clocks[voice_index] += visit_pitches(event, scale, |_, _, _| {});
+    }
+    MeasureTimeline {
+        onsets,
+        scale,
+        length: voice_clocks.into_iter().max().unwrap_or(0),
     }
 }
 

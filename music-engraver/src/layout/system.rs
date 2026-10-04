@@ -2,13 +2,15 @@ use music::notation::clef::Clef;
 
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
-use crate::layout::key_signature::KeySignature;
+use crate::layout::glyph_metrics::{glyph_advance, glyph_box, GlyphBox};
+use crate::layout::key_signature::{key_signature_layout, KeySignature};
 use crate::layout::measure::{
     layout_measure, BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, MeasureLayoutConfig,
-    NoteEvent, RestEvent, TupletGroupEvent,
+    NoteEvent, RestEvent, SpacerEvent, TupletGroupEvent,
 };
 use crate::layout::measure_meta::MeasureMeta;
-use crate::layout::time_signature::TimeSignatureKind;
+use crate::layout::staff::TOP_LINE;
+use crate::layout::time_signature::{time_signature_layout, TimeSignatureKind};
 use crate::layout::volta::VoltaAnnotation;
 
 /// Input description of a single measure's musical content (no layout yet).
@@ -30,7 +32,13 @@ pub struct MeasureContent {
     pub meta: MeasureMeta,
 }
 
-/// A rhythmic event within a measure — a note, rest, chord, or beam group.
+/// An event within a measure: a rhythmic event (note, rest, chord, group,
+/// spacer) or a zero-duration structural change (clef, time signature).
+///
+/// Structural changes travel in the primary voice's `events`, ordered by
+/// onset. Changes at the very start of a measure (its *leading changes*) are
+/// placed by system layout: absorbed into the system prefix at a system start,
+/// otherwise drawn around the preceding barline per [`ClefChangePlacement`].
 #[derive(Clone, Debug)]
 pub enum MeasureEvent {
     Note(NoteEvent),
@@ -49,6 +57,44 @@ pub enum MeasureEvent {
         /// Visual style (H-bar or church-rest).
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// Invisible rhythmic placeholder (LilyPond spacer `s`).
+    Spacer(SpacerEvent),
+    /// Clef change (zero duration); every later pitch on the staff is placed
+    /// in the new clef.
+    ClefChange(ClefChange),
+    /// Printed time-signature change (zero duration), at a measure start.
+    /// Hidden meter changes have no event; see [`MeasureContent::meta`].
+    TimeSignature(TimeSignatureKind),
+}
+
+/// Where a clef change that falls on a measure boundary is drawn when the
+/// boundary is inside a system. Mid-measure changes are always drawn just
+/// before the next event; at a system break the new clef goes in the next
+/// system's prefix and a courtesy clef ends the previous system.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClefChangePlacement {
+    /// Before the barline that ends the preceding measure (LilyPond's
+    /// default break-align order).
+    #[default]
+    BeforeBarline,
+    /// After that barline, at the start of the new measure.
+    AfterBarline,
+}
+
+/// A mid-score clef change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClefChange {
+    /// The new clef.
+    pub clef: ClefKind,
+    /// Placement at a measure boundary.
+    pub placement: ClefChangePlacement,
+}
+
+impl ClefChange {
+    /// The change-size clef glyph layout for this change.
+    pub fn clef_layout(&self) -> ClefLayout {
+        ClefLayout::change(&self.clef.to_clef())
+    }
 }
 
 /// Describes the frontmatter (clef, key, time sig) that appears at the start of a system.
@@ -130,6 +176,103 @@ pub struct SystemLayout {
     pub staff_width: f64,
 }
 
+/// Vertical ink extent of the clefs, key signatures, and time signatures
+/// among `elements` on a staff whose key signature is placed in `clef`, as
+/// `(top, bottom)` in staff spaces below the top staff line (negative =
+/// above it). `None` when there are none.
+fn glyph_vertical_extent_ss<'a>(
+    elements: impl IntoIterator<Item = &'a MeasureElement>,
+    clef: ClefKind,
+) -> Option<(f64, f64)> {
+    let below_top = |position: i8| f64::from(TOP_LINE - position) / 2.0;
+    let mut extent: Option<(f64, f64)> = None;
+    let mut include = |position: i8, ink: GlyphBox| {
+        let origin = below_top(position);
+        let (top, bottom) = (origin + ink.y_top, origin + ink.y_bottom);
+        extent = Some(match extent {
+            None => (top, bottom),
+            Some((t, b)) => (t.min(top), b.max(bottom)),
+        });
+    };
+    let clef = clef.to_clef();
+    for element in elements {
+        match element {
+            MeasureElement::Clef(clef_layout) => {
+                include(clef_layout.staff_position, clef_layout.ink_box());
+            }
+            MeasureElement::KeySignature(key) => {
+                let layout = key_signature_layout(key, &clef, glyph_advance, 1.0);
+                for accidental in &layout.accidentals {
+                    if let Some(ink) = glyph_box(accidental.glyph) {
+                        include(accidental.staff_position, ink);
+                    }
+                }
+            }
+            MeasureElement::TimeSignature(kind) => {
+                for (glyph, position, _) in time_signature_layout(kind, glyph_advance).glyphs {
+                    if let Some(ink) = glyph_box(glyph) {
+                        include(position, ink);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    extent
+}
+
+impl SystemLayout {
+    /// Vertical ink extent of the system's clefs, key signatures, and time
+    /// signatures (prefix and inline), as `(top, bottom)` in staff spaces
+    /// below the top staff line (negative = above it). `None` when the system
+    /// has none. Used to size page bounds so tall prefix glyphs (a G clef's
+    /// top, a tenor clef, a high key-signature sharp) are not clipped.
+    pub fn glyph_vertical_extent_ss(&self) -> Option<(f64, f64)> {
+        glyph_vertical_extent_ss(
+            self.measures
+                .iter()
+                .flat_map(|measure| measure.layout.elements.iter())
+                .map(|positioned| &positioned.element),
+            self.clef_kind,
+        )
+    }
+}
+
+/// Vertical ink extent, as in [`SystemLayout::glyph_vertical_extent_ss`], of
+/// every prefix a staff can show: its initial prefix and, for each clef it
+/// changes to, that clef at full and change size with the key signature
+/// placed in it. Lets callers size bounds before laying out systems.
+pub fn staff_prefix_glyph_extent_ss(
+    prefix: &SystemPrefix,
+    measures: &[MeasureContent],
+) -> Option<(f64, f64)> {
+    let mut clefs = vec![prefix.clef_kind];
+    for measure in measures {
+        for event in &measure.events {
+            if let MeasureEvent::ClefChange(change) = event {
+                clefs.push(change.clef);
+            }
+        }
+    }
+    clefs
+        .into_iter()
+        .filter_map(|clef| {
+            let mut elements = vec![
+                MeasureElement::Clef(ClefLayout::from_clef_ref(&clef.to_clef())),
+                MeasureElement::Clef(ClefLayout::change(&clef.to_clef())),
+                MeasureElement::KeySignature(prefix.key_signature.clone()),
+            ];
+            elements.extend(
+                prefix
+                    .time_signature
+                    .clone()
+                    .map(MeasureElement::TimeSignature),
+            );
+            glyph_vertical_extent_ss(&elements, clef)
+        })
+        .reduce(|(t1, b1), (t2, b2)| (t1.min(t2), b1.max(b2)))
+}
+
 /// A single measure within a laid-out system, with its horizontal offset.
 #[derive(Clone, Debug)]
 pub struct SystemMeasure {
@@ -143,19 +286,174 @@ pub struct SystemMeasure {
     /// Each entry shares the same temporal x-positions as the primary voice
     /// but may have different notes/rests with forced stem directions.
     pub additional_voice_layouts: Vec<MeasureLayout>,
+    /// The measure's metadata (logical number, meter, lengths).
+    pub meta: MeasureMeta,
+}
+
+/// The leading changes of a measure: the structural events at its very
+/// start, before any rhythmic event.
+pub(crate) fn leading_changes(content: &MeasureContent) -> &[MeasureEvent] {
+    let count = content
+        .events
+        .iter()
+        .take_while(|event| {
+            matches!(
+                event,
+                MeasureEvent::ClefChange(_) | MeasureEvent::TimeSignature(_)
+            )
+        })
+        .count();
+    &content.events[..count]
+}
+
+/// The prefix of a system that starts at `measures[start]`, given the
+/// score's `initial` prefix (the state before the first measure).
+///
+/// The clef is the one in force at that point, including the start
+/// measure's leading clef changes; the key signature is the initial one. The
+/// time signature is shown on the first system (the initial meter, unless the
+/// first measure changes it) and on a later system only when its first
+/// measure begins with a printed meter change.
+pub fn system_start_prefix(
+    initial: &SystemPrefix,
+    measures: &[MeasureContent],
+    start: usize,
+) -> SystemPrefix {
+    let mut clef = initial.clef_kind;
+    for measure in &measures[..start.min(measures.len())] {
+        for event in &measure.events {
+            if let MeasureEvent::ClefChange(change) = event {
+                clef = change.clef;
+            }
+        }
+    }
+    let mut time_signature = if start == 0 {
+        initial.time_signature.clone()
+    } else {
+        None
+    };
+    if let Some(measure) = measures.get(start) {
+        for event in leading_changes(measure) {
+            match event {
+                MeasureEvent::ClefChange(change) => clef = change.clef,
+                MeasureEvent::TimeSignature(kind) => time_signature = Some(kind.clone()),
+                _ => {}
+            }
+        }
+    }
+    SystemPrefix::new(
+        &clef.to_clef(),
+        initial.key_signature.clone(),
+        time_signature,
+    )
+}
+
+/// Primary-voice elements of each measure of one system.
+///
+/// The first measure starts with the prefix, which already reflects its
+/// leading changes. A later measure's leading clef changes are drawn before
+/// the preceding barline ([`ClefChangePlacement::BeforeBarline`]) or after it
+/// ([`ClefChangePlacement::AfterBarline`]), followed by its printed meter
+/// change. When `next` (the first measure of the following system) begins
+/// with changes, courtesy elements end this system: clefs on their side of
+/// the final barline, a meter change after it.
+fn system_measure_elements(
+    prefix: &SystemPrefix,
+    measures: &[MeasureContent],
+    next: Option<&MeasureContent>,
+) -> Vec<Vec<MeasureElement>> {
+    let change_clefs = |changes: &[MeasureEvent], placement: ClefChangePlacement| {
+        changes
+            .iter()
+            .filter_map(move |event| match event {
+                MeasureEvent::ClefChange(change) if change.placement == placement => {
+                    Some(MeasureElement::Clef(change.clef_layout()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let meter_changes = |changes: &[MeasureEvent]| {
+        changes
+            .iter()
+            .filter_map(|event| match event {
+                MeasureEvent::TimeSignature(kind) => {
+                    Some(MeasureElement::TimeSignature(kind.clone()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let last = measures.len().saturating_sub(1);
+    measures
+        .iter()
+        .enumerate()
+        .map(|(i, measure)| {
+            let leading = leading_changes(measure);
+            let mut elems = Vec::new();
+            if i == 0 {
+                elems.push(MeasureElement::Clef(prefix.clef_layout.clone()));
+                if !matches!(prefix.key_signature, KeySignature::Open) {
+                    elems.push(MeasureElement::KeySignature(prefix.key_signature.clone()));
+                }
+                if let Some(ts) = &prefix.time_signature {
+                    elems.push(MeasureElement::TimeSignature(ts.clone()));
+                }
+            } else {
+                elems.extend(change_clefs(leading, ClefChangePlacement::AfterBarline));
+                elems.extend(meter_changes(leading));
+            }
+            elems.extend(
+                measure.events[leading.len()..]
+                    .iter()
+                    .map(measure_event_to_element),
+            );
+            let following = if i < last { measures.get(i + 1) } else { next };
+            let following_changes = following.map_or(&[][..], leading_changes);
+            elems.extend(change_clefs(
+                following_changes,
+                ClefChangePlacement::BeforeBarline,
+            ));
+            elems.push(MeasureElement::Barline(measure.barline));
+            if i == last {
+                elems.extend(change_clefs(
+                    following_changes,
+                    ClefChangePlacement::AfterBarline,
+                ));
+                elems.extend(meter_changes(following_changes));
+            }
+            elems
+        })
+        .collect()
 }
 
 /// Lay out a system of measures.
 ///
-/// The first measure gets the system prefix (clef, key sig, optional time sig).
-/// Subsequent measures get only their rhythmic content plus barlines.
-/// Measures are arranged left-to-right with no gap between them.
+/// The first measure gets the system prefix (clef, key sig, optional time
+/// sig); `prefix` must describe the state at the system start, leading
+/// changes of the first measure included (see [`system_start_prefix`]).
+/// Subsequent measures get their rhythmic content, structural changes, and
+/// barlines. Measures are arranged left-to-right with no gap between them.
 ///
 /// If `target_width` is `Some(w)`, the layout will scale note spacing so the
 /// system fills exactly that width. If `None`, measures use natural widths.
 pub fn layout_system(
     prefix: &SystemPrefix,
     measures: &[MeasureContent],
+    config: &MeasureLayoutConfig,
+    target_width: Option<f64>,
+) -> SystemLayout {
+    layout_system_followed_by(prefix, measures, None, config, target_width)
+}
+
+/// [`layout_system`] for a system followed by another whose first measure is
+/// `next`: changes at the start of `next` add courtesy elements at the end of
+/// this system.
+pub fn layout_system_followed_by(
+    prefix: &SystemPrefix,
+    measures: &[MeasureContent],
+    next: Option<&MeasureContent>,
     config: &MeasureLayoutConfig,
     target_width: Option<f64>,
 ) -> SystemLayout {
@@ -169,32 +467,7 @@ pub fn layout_system(
     }
 
     // First pass: lay out primary voice for each measure at natural width
-    let mut measure_elements: Vec<Vec<MeasureElement>> = Vec::with_capacity(measures.len());
-
-    // First measure: prefix + events + barline
-    let mut first_elems = Vec::new();
-    first_elems.push(MeasureElement::Clef(prefix.clef_layout.clone()));
-    if !matches!(prefix.key_signature, KeySignature::Open) {
-        first_elems.push(MeasureElement::KeySignature(prefix.key_signature.clone()));
-    }
-    if let Some(ts) = &prefix.time_signature {
-        first_elems.push(MeasureElement::TimeSignature(ts.clone()));
-    }
-    for event in &measures[0].events {
-        first_elems.push(measure_event_to_element(event));
-    }
-    first_elems.push(MeasureElement::Barline(measures[0].barline));
-    measure_elements.push(first_elems);
-
-    // Subsequent measures: events + barline only
-    for measure in &measures[1..] {
-        let mut elems = Vec::new();
-        for event in &measure.events {
-            elems.push(measure_event_to_element(event));
-        }
-        elems.push(MeasureElement::Barline(measure.barline));
-        measure_elements.push(elems);
-    }
+    let measure_elements = system_measure_elements(prefix, measures, next);
 
     // Lay out primary voice for each measure
     let mut layouts: Vec<MeasureLayout> = measure_elements
@@ -225,6 +498,7 @@ pub fn layout_system(
                         element.element,
                         MeasureElement::Note(_)
                             | MeasureElement::Rest(_)
+                            | MeasureElement::Spacer(_)
                             | MeasureElement::Chord(_)
                             | MeasureElement::BeamGroup(_)
                             | MeasureElement::TupletGroup(_)
@@ -300,6 +574,7 @@ pub fn layout_system(
             layout: layout.clone(),
             volta: measures[i].volta.clone(),
             additional_voice_layouts: additional_voice_layouts[i].clone(),
+            meta: measures[i].meta.clone(),
         });
         x += layout.total_width;
     }
@@ -376,6 +651,9 @@ pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
             count: *count,
             style: *style,
         },
+        MeasureEvent::Spacer(spacer) => MeasureElement::Spacer(*spacer),
+        MeasureEvent::ClefChange(change) => MeasureElement::Clef(change.clef_layout()),
+        MeasureEvent::TimeSignature(kind) => MeasureElement::TimeSignature(kind.clone()),
     }
 }
 

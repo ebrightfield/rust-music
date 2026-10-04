@@ -20,6 +20,10 @@
 //! ```
 
 use crate::font::{bravura_font, EngravingConfig, MusicFont};
+use crate::layout::bar_number::{
+    layout_bar_numbers, BarNumberSlot, MeasureNumbering, BAR_NUMBER_ABOVE_STAFF_SS,
+    BAR_NUMBER_FONT_SIZE_SS,
+};
 use crate::layout::barline::BarlineStyle;
 use crate::layout::tab::{layout_fret_number, layout_muted_string, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
@@ -30,6 +34,7 @@ use crate::layout::tab_palm_mute::{layout_tab_palm_mute, layout_tab_palm_mute_da
 use crate::layout::tab_rhythm::layout_tab_rhythm;
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
+use crate::render::bar_number_renderer::draw_bar_numbers;
 use crate::render::tab_beam_renderer::draw_tab_beam_group;
 use crate::render::tab_hammer_renderer::draw_tab_legato;
 use crate::render::tab_harmonic_renderer::draw_tab_harmonic;
@@ -39,7 +44,7 @@ use crate::render::tab_renderer::{draw_fret_number, draw_tab_clef, draw_tab_staf
 use crate::render::tab_rhythm_renderer::draw_tab_rhythm;
 use crate::render::tab_slide_renderer::draw_tab_slide;
 use crate::render::tab_vibrato_renderer::draw_tab_vibrato;
-use crate::render::{SvgWriter, TextStyle};
+use crate::render::SvgWriter;
 
 /// A single event in a tab measure.
 #[derive(Clone, Debug)]
@@ -102,8 +107,8 @@ pub struct TabScoreBuilder {
     measures_per_system: usize,
     /// System width in font design units. 0 = auto.
     system_width: f64,
-    /// Display measure numbers above the start of each system.
-    show_measure_numbers: bool,
+    /// Which measures print their number.
+    measure_numbering: MeasureNumbering,
     /// When true, we are accumulating events for a beam group.
     in_beam_group: bool,
     /// Accumulated beam group sub-events: (frets, duration_log2).
@@ -135,7 +140,7 @@ impl TabScoreBuilder {
             measures: Vec::new(),
             measures_per_system: 4,
             system_width: 0.0,
-            show_measure_numbers: false,
+            measure_numbering: MeasureNumbering::Hidden,
             in_beam_group: false,
             beam_group_events: Vec::new(),
             pending_slide: false,
@@ -170,9 +175,9 @@ impl TabScoreBuilder {
         self
     }
 
-    /// Show measure numbers above the start of each system.
-    pub fn show_measure_numbers(mut self) -> Self {
-        self.show_measure_numbers = true;
+    /// Choose which measures print their number (1-based) above the staff.
+    pub fn measure_numbering(mut self, numbering: MeasureNumbering) -> Self {
+        self.measure_numbering = numbering;
         self
     }
 
@@ -533,10 +538,16 @@ impl TabScoreBuilder {
         };
 
         let vb_margin = staff_space;
+        // Bar numbers sit above the first staff: keep them inside the box.
+        let top_margin = if self.measure_numbering == MeasureNumbering::Hidden {
+            vb_margin
+        } else {
+            (BAR_NUMBER_ABOVE_STAFF_SS + BAR_NUMBER_FONT_SIZE_SS) * staff_space
+        };
         let vb_x = -vb_margin;
-        let vb_y = -vb_margin;
+        let vb_y = -top_margin;
         let vb_w = sys_width + 2.0 * vb_margin;
-        let vb_h = page_height + 2.0 * vb_margin;
+        let vb_h = page_height + top_margin + vb_margin;
         let px_per_unit = 7.0 / staff_space;
         let px_w = vb_w * px_per_unit;
         let px_h = vb_h * px_per_unit;
@@ -555,28 +566,6 @@ impl TabScoreBuilder {
             // Draw TAB clef
             draw_tab_clef(&mut svg, &tab_staff, &font)?;
 
-            // Draw measure number above the tab staff
-            if self.show_measure_numbers {
-                let num_x = clef_width;
-                let num_y = sys_y - 1.8 * staff_space;
-                let font_size = 1.2 * staff_space;
-                let measure_number = start + 1;
-                svg.add_text(
-                    num_x,
-                    num_y,
-                    &measure_number.to_string(),
-                    &TextStyle {
-                        font_family: "serif",
-                        font_size,
-                        fill: "black",
-                        anchor: "start",
-                        font_weight: "normal",
-                        font_style: "normal",
-                        dominant_baseline: "auto",
-                    },
-                );
-            }
-
             // Layout and draw measures for this system
             let measures_in_system = &self.measures[*start..*end];
             let content_width = sys_width - clef_width;
@@ -585,6 +574,21 @@ impl TabScoreBuilder {
             } else {
                 content_width / measures_in_system.len() as f64
             };
+
+            // Bar numbers: each measure begins at its left barline (after the
+            // TAB clef for the system's first measure).
+            let numbers = layout_bar_numbers(
+                self.measure_numbering,
+                (*start..*end).map(|index| BarNumberSlot {
+                    number: i32::try_from(index + 1).unwrap_or(i32::MAX),
+                    x: clef_width + (index - start) as f64 * measure_width,
+                    system_start: index == *start,
+                    numbered: true,
+                }),
+                sys_y,
+                staff_space,
+            );
+            draw_bar_numbers(&mut svg, &numbers, staff_space);
 
             for (m_idx, measure) in measures_in_system.iter().enumerate() {
                 let measure_x = clef_width + m_idx as f64 * measure_width;
@@ -1276,7 +1280,7 @@ mod tests {
     #[test]
     fn measure_numbers_shown_when_enabled() {
         let svg = TabScoreBuilder::guitar()
-            .show_measure_numbers()
+            .measure_numbering(MeasureNumbering::SystemStart)
             .fret(1, 0)
             .barline()
             .fret(1, 2)

@@ -76,7 +76,7 @@ pub fn draw_measure(
         let elem_x = x_offset + positioned.x;
         match &positioned.element {
             MeasureElement::Clef(clef_layout) => {
-                draw_clef(svg, staff, clef_layout, font)?;
+                draw_clef(svg, staff, elem_x, clef_layout, font)?;
             }
             MeasureElement::KeySignature(key) => {
                 draw_key_signature(svg, staff, font, elem_x, key, clef_for_key_sig)?;
@@ -99,6 +99,8 @@ pub fn draw_measure(
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
             }
+            // A spacer takes time and space but draws nothing.
+            MeasureElement::Spacer(_) => {}
             MeasureElement::MultiMeasureRest { count, style } => {
                 // The rest fills the rhythmic width allocated by layout — the
                 // measure barlines sit just outside this span, so the cluster
@@ -199,6 +201,7 @@ pub fn draw_additional_voices(
                 | MeasureElement::KeySignature(_)
                 | MeasureElement::TimeSignature(_)
                 | MeasureElement::MultiMeasureRest { .. }
+                | MeasureElement::Spacer(_)
                 | MeasureElement::Barline(_) => {}
 
                 MeasureElement::Note(note) => {

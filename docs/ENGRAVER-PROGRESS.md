@@ -7797,3 +7797,21 @@
   the time signature and barline). `advanced_guitar_vocabulary` was already
   drifting at 8eaf21a and is left for the integrator; this change also moves
   its seven-string chord's sharps into two columns.
+
+## 2026-10-04 — RM-MN-004/010: score structure and meter
+- Added onset-aware clef changes (including after-barline placement), printed and
+  hidden meter changes, courtesy changes at system breaks, and Bravura change-size
+  clefs. `clef`/`time_signature` after content now insert changes instead of
+  rewriting earlier measures. Guitar notation carries meter and clef changes.
+- Per-measure metadata records logical number, meter visibility, nominal and
+  actual lengths, pickups, and cadenza; `partial`, `measure_length`, and
+  `spacer` expose unprinted bar structure without rejecting incomplete bars.
+  System-start/every-bar numbering shares placement across score renderers.
+- Clef advance/bbox controls key-signature spacing and page bounds so alto,
+  tenor, and high accidentals remain inside the SVG viewBox.
+- Verified: 22 structure regressions and 2,942 engraver library tests passed;
+  the 80 SVG golden tests had 79 passes and the previously failing
+  `golden_advanced_guitar_vocabulary`. Rendered and visually inspected PNGs
+  for an alto pickup 8/8→12/8→8/8→7/8 excerpt shape against the LilyPond
+  excerpt PDF, mid-measure/system-break changes, and grand staff; the
+  unrelated slurs/dashed barlines in the reference are outside this change.

@@ -13,22 +13,26 @@ pub fn draw_staff_lines(svg: &mut SvgWriter, staff: &StaffLayout, config: &Engra
     }
 }
 
-/// Draw a clef glyph on the staff.
+/// Draw a clef glyph on the staff with its origin at `x`.
 ///
-/// The glyph is translated so its origin aligns with the left edge of the
-/// staff (offset by one staff space as a conventional left margin) and the
-/// correct staff line vertically.
+/// The origin sits on the clef's reference line (`clef.staff_position`);
+/// change-size clefs drawn from a full-size glyph are scaled about it by
+/// [`ClefLayout::scale`].
 pub fn draw_clef(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
+    x: f64,
     clef: &ClefLayout,
     font: &MusicFont,
 ) -> Result<(), crate::font::FontError> {
     let outline = font.glyph_outline(clef.glyph)?;
     let y = staff.y_of(clef.staff_position);
-    // Horizontal offset: one staff space from the left edge, conventional margin
-    let x = staff.x + staff.staff_space;
-    let transform = format!("translate({x}, {y})");
+    let scale = clef.scale();
+    let transform = if (scale - 1.0).abs() < f64::EPSILON {
+        format!("translate({x}, {y})")
+    } else {
+        format!("translate({x}, {y}) scale({scale})")
+    };
     svg.add_path(&outline.path_data, "black", Some(&transform));
     Ok(())
 }
@@ -92,7 +96,7 @@ mod tests {
         let (font, _, staff) = setup();
         let clef = ClefLayout::from_clef(Clef::Treble);
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        draw_clef(&mut svg, &staff, &clef, &font).unwrap();
+        draw_clef(&mut svg, &staff, staff.x + staff.staff_space, &clef, &font).unwrap();
         let output = svg.to_svg();
 
         assert!(
@@ -110,7 +114,7 @@ mod tests {
         let (font, _, staff) = setup();
         let clef = ClefLayout::from_clef(Clef::Treble);
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        draw_clef(&mut svg, &staff, &clef, &font).unwrap();
+        draw_clef(&mut svg, &staff, staff.x + staff.staff_space, &clef, &font).unwrap();
         let output = svg.to_svg();
 
         // Second line from bottom = staff position 2
@@ -135,7 +139,7 @@ mod tests {
         let (font, _, staff) = setup();
         let clef = ClefLayout::from_clef(Clef::Bass);
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        draw_clef(&mut svg, &staff, &clef, &font).unwrap();
+        draw_clef(&mut svg, &staff, staff.x + staff.staff_space, &clef, &font).unwrap();
         let output = svg.to_svg();
 
         // Fourth line from bottom = staff position 6
@@ -160,12 +164,36 @@ mod tests {
         let clef = ClefLayout::from_clef(Clef::Treble);
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
         draw_staff_lines(&mut svg, &staff, &config);
-        draw_clef(&mut svg, &staff, &clef, &font).unwrap();
+        draw_clef(&mut svg, &staff, staff.x + staff.staff_space, &clef, &font).unwrap();
         let output = svg.to_svg();
 
         assert_eq!(output.matches("<line ").count(), 5);
         assert!(output.matches("<path ").count() >= 1);
         assert!(output.starts_with("<svg"));
         assert!(output.contains("</svg>"));
+    }
+
+    #[test]
+    fn clef_is_drawn_at_the_given_x() {
+        let (font, _, staff) = setup();
+        let clef = ClefLayout::change(&Clef::Bass);
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_clef(&mut svg, &staff, 1234.5, &clef, &font).unwrap();
+        let expected = format!("translate(1234.5, {})\"", staff.y_of(6));
+        assert!(svg.to_svg().contains(&expected), "missing {expected}");
+    }
+
+    #[test]
+    fn octave_treble_change_clef_is_scaled_full_glyph() {
+        let (font, _, staff) = setup();
+        let clef = ClefLayout::change(&Clef::Treble8ba);
+        assert_eq!(clef.glyph, smufl::Glyph::GClef8Vb);
+        let scale = clef.scale();
+        // Bravura gClefChange / gClef heights: 4.648 / 7.024.
+        assert!((scale - 4.648 / 7.024).abs() < 1e-9, "scale {scale}");
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        draw_clef(&mut svg, &staff, 500.0, &clef, &font).unwrap();
+        let expected = format!("translate(500, {}) scale({scale})", staff.y_of(2));
+        assert!(svg.to_svg().contains(&expected), "missing {expected}");
     }
 }

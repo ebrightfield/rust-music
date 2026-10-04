@@ -36,7 +36,7 @@ fn main() {
     draw_staff_lines(&mut svg, &staff, &config);
 
     let clef = ClefLayout::from_clef(Clef::Treble);
-    draw_clef(&mut svg, &staff, &clef, &font).unwrap();
+    draw_clef(&mut svg, &staff, staff.x + staff.staff_space, &clef, &font).unwrap();
 
     let start_x = 1200.0;
     let spacing = 1000.0;
