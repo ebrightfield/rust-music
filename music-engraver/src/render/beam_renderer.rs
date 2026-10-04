@@ -85,6 +85,7 @@ pub(crate) fn draw_beam_group_with_styles(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_beam_group_with_widths(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
