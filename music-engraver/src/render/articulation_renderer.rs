@@ -1,9 +1,16 @@
+use smufl::Glyph;
+
 use crate::font::FontError;
 use crate::font::MusicFont;
 use crate::layout::articulation::ArticulationLayout;
 use crate::render::SvgWriter;
 
-/// Draw an articulation glyph at the position computed by `layout_articulation`.
+/// Gap between a parenthesized mark's ink and each parenthesis, in staff
+/// spaces.
+const MARK_PARENTHESIS_GAP_SS: f64 = 0.1;
+
+/// Draw an articulation glyph at the position computed by `layout_articulation`,
+/// enclosed in parentheses when the layout asks for it.
 ///
 /// Returns `Ok(())` after rendering the glyph path.
 pub fn draw_articulation(
@@ -14,6 +21,47 @@ pub fn draw_articulation(
     let outline = font.glyph_outline(layout.glyph)?;
     let transform = format!("translate({},{})", layout.x, layout.y);
     writer.add_path(&outline.path_data, "black", Some(&transform));
+    if layout.parenthesized {
+        draw_mark_parentheses(writer, font, layout.glyph, layout.x, layout.y)?;
+    }
+    Ok(())
+}
+
+/// Enclose the mark `glyph`, drawn with its origin at `(x, y)`, in SMuFL
+/// parentheses (`accidentalParensLeft` / `accidentalParensRight`), each
+/// [`MARK_PARENTHESIS_GAP_SS`] clear of the glyph's bounding box and
+/// vertically centred on it.
+pub(crate) fn draw_mark_parentheses(
+    writer: &mut SvgWriter,
+    font: &MusicFont,
+    glyph: Glyph,
+    x: f64,
+    y: f64,
+) -> Result<(), FontError> {
+    let staff_space = f64::from(font.units_per_em()) / 4.0;
+    let gap = MARK_PARENTHESIS_GAP_SS * staff_space;
+    let (left, right, center) = match font.glyph_bbox_design_units(glyph) {
+        Some(bbox) => (
+            x + bbox.x_left,
+            x + bbox.x_right,
+            y + (bbox.y_top + bbox.y_bottom) / 2.0,
+        ),
+        None => (x, x + font.glyph_advance(glyph)? as f64, y),
+    };
+    let open = font.glyph_outline(Glyph::AccidentalParensLeft)?;
+    let open_x = left - gap - open.advance_width as f64;
+    writer.add_path(
+        &open.path_data,
+        "black",
+        Some(&format!("translate({open_x},{center})")),
+    );
+    let close = font.glyph_outline(Glyph::AccidentalParensRight)?;
+    let close_x = right + gap;
+    writer.add_path(
+        &close.path_data,
+        "black",
+        Some(&format!("translate({close_x},{center})")),
+    );
     Ok(())
 }
 

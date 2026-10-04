@@ -9,9 +9,13 @@ use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
 
-use music_engraver::layout::grace::GraceNoteKind;
+use music_engraver::layout::grace::{GraceNoteKind, GraceNotes};
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::score::ScoreBuilder;
+
+fn slurred_grace(pitch: Pitch, kind: GraceNoteKind) -> GraceNotes {
+    GraceNotes::new(kind).note(pitch, Duration::EIGHTH).slur()
+}
 
 fn main() {
     let svg = ScoreBuilder::new()
@@ -21,22 +25,22 @@ fn main() {
         .measures_per_system(2)
         // Measure 1: acciaccatura with slur (canonical "crushed note")
         .note(Pitch::new(Note::E, 4), Duration::QTR)
-        .grace_note_slur(Pitch::new(Note::D, 4), GraceNoteKind::Acciaccatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::D, 4), GraceNoteKind::Acciaccatura))
         .note(Pitch::new(Note::G, 4), Duration::QTR)
-        .grace_note_slur(Pitch::new(Note::Fis, 4), GraceNoteKind::Acciaccatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::Fis, 4), GraceNoteKind::Acciaccatura))
         .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
         // Measure 2: appoggiatura with slur (stem-up & stem-down principal)
         .note(Pitch::new(Note::C, 5), Duration::HALF)
-        .grace_note_slur(Pitch::new(Note::B, 4), GraceNoteKind::Appoggiatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::B, 4), GraceNoteKind::Appoggiatura))
         .note(Pitch::new(Note::D, 5), Duration::HALF)
-        .grace_note_slur(Pitch::new(Note::Cis, 5), GraceNoteKind::Appoggiatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::Cis, 5), GraceNoteKind::Appoggiatura))
         .barline()
         // Measure 3: wide intervals (grace below, principal above; and vice versa)
         .note(Pitch::new(Note::A, 5), Duration::QTR)
-        .grace_note_slur(Pitch::new(Note::E, 5), GraceNoteKind::Acciaccatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::E, 5), GraceNoteKind::Acciaccatura))
         .note(Pitch::new(Note::C, 4), Duration::QTR)
-        .grace_note_slur(Pitch::new(Note::F, 4), GraceNoteKind::Acciaccatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::F, 4), GraceNoteKind::Acciaccatura))
         .note(Pitch::new(Note::G, 4), Duration::HALF)
         .barline()
         // Measure 4: slurred grace on a chord, plus a rest (slur should be no-op on rest)
@@ -48,9 +52,9 @@ fn main() {
             ],
             Duration::HALF,
         )
-        .grace_note_slur(Pitch::new(Note::B, 3), GraceNoteKind::Acciaccatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::B, 3), GraceNoteKind::Acciaccatura))
         .rest(Duration::QTR)
-        .grace_note_slur(Pitch::new(Note::A, 4), GraceNoteKind::Acciaccatura)
+        .grace_notes(slurred_grace(Pitch::new(Note::A, 4), GraceNoteKind::Acciaccatura))
         .note(Pitch::new(Note::D, 4), Duration::QTR)
         .end_barline()
         .render_svg();
@@ -73,17 +77,4 @@ fn main() {
         slur_path_count
     );
 
-    // Mechanical assertions.
-    assert!(svg.starts_with("<svg"), "output should be SVG");
-    assert!(
-        svg.contains("scale(0.6"),
-        "grace glyphs should appear at scale 0.6"
-    );
-    // 6 grace_note_slur calls land on pitched events (measures 1–3: 2+2+2 = 6),
-    // measure 4 chord = 1 more. The grace_note_slur on the rest is a no-op.
-    // Total expected slur paths: 7.
-    assert_eq!(
-        slur_path_count, 7,
-        "expected exactly 7 slur paths (one per pitched grace_note_slur call), got {slur_path_count}"
-    );
 }

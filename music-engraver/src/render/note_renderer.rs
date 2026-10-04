@@ -42,7 +42,7 @@ impl NoteheadKind {
 /// Draw ledger lines for a note at the given staff position.
 ///
 /// Ledger lines extend symmetrically past the notehead by `leger_line_extension`
-/// on each side.
+/// (scaled by `scale`, the note's size) on each side.
 pub fn draw_ledger_lines(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -50,19 +50,30 @@ pub fn draw_ledger_lines(
     note_x: f64,
     notehead_width: f64,
     position: StaffPosition,
+    scale: f64,
 ) {
     let ys = staff.ledger_line_ys(position);
     if ys.is_empty() {
         return;
     }
 
-    let extension = config.leger_line_extension_fu();
+    let extension = config.leger_line_extension_fu() * scale;
     let thickness = config.leger_line_thickness_fu();
     let x1 = note_x - extension;
     let x2 = note_x + notehead_width + extension;
 
     for y in ys {
         svg.add_line(x1, y, x2, y, "black", thickness);
+    }
+}
+
+/// SVG transform placing a glyph's origin at `(x, y)` drawn at `scale` (1.0
+/// for normal size).
+pub(crate) fn glyph_transform(x: f64, y: f64, scale: f64) -> String {
+    if (scale - 1.0).abs() < f64::EPSILON {
+        format!("translate({x}, {y})")
+    } else {
+        format!("translate({x}, {y}) scale({scale})")
     }
 }
 
@@ -78,16 +89,7 @@ pub fn draw_notehead(
     position: StaffPosition,
     kind: NoteheadKind,
 ) -> Result<f64, FontError> {
-    draw_styled_notehead(
-        svg,
-        staff,
-        font,
-        x,
-        position,
-        kind,
-        NoteheadStyle::Normal,
-        false,
-    )
+    draw_styled_notehead(svg, staff, font, x, position, kind, NoteheadStyle::Normal, 1.0)
 }
 
 /// Return the actual font advance for a duration-aware semantic notehead.
@@ -101,11 +103,9 @@ pub fn notehead_advance(
         .advance_width as f64)
 }
 
-/// Draw a semantic notehead and optional real SMuFL notehead parentheses.
+/// Draw a semantic notehead at `scale` (1.0 for normal size).
 ///
-/// The returned advance is the selected notehead's advance, excluding the
-/// parentheses, so stems remain attached to the notehead rather than its
-/// enclosure.
+/// Returns the drawn (scaled) advance of the notehead.
 #[allow(clippy::too_many_arguments)]
 pub fn draw_styled_notehead(
     svg: &mut SvgWriter,
@@ -115,26 +115,40 @@ pub fn draw_styled_notehead(
     position: StaffPosition,
     kind: NoteheadKind,
     style: NoteheadStyle,
-    parenthesized: bool,
+    scale: f64,
 ) -> Result<f64, FontError> {
     let outline = font.glyph_outline(style.glyph(kind.duration_log2()))?;
-    let advance = outline.advance_width as f64;
-    let y = staff.y_of(position);
-    if parenthesized {
-        let left = font.glyph_outline(Glyph::NoteheadParenthesisLeft)?;
-        let left_x = x - left.advance_width as f64;
-        let left_transform = format!("translate({left_x}, {y})");
-        svg.add_path(&left.path_data, "black", Some(&left_transform));
-    }
-    let transform = format!("translate({x}, {y})");
+    let transform = glyph_transform(x, staff.y_of(position), scale);
     svg.add_path(&outline.path_data, "black", Some(&transform));
-    if parenthesized {
-        let right = font.glyph_outline(Glyph::NoteheadParenthesisRight)?;
-        let right_x = x + advance;
-        let right_transform = format!("translate({right_x}, {y})");
-        svg.add_path(&right.path_data, "black", Some(&right_transform));
-    }
-    Ok(advance)
+    Ok(outline.advance_width as f64 * scale)
+}
+
+/// Draw real SMuFL notehead parentheses around the span `left_x..right_x` at
+/// `position`, drawn at `scale`.
+///
+/// The opening parenthesis ends at `left_x` (the notehead's left edge, or its
+/// accidental's when the accidental is enclosed too); the closing one starts
+/// at `right_x` (the notehead's right edge). Stems stay attached to the
+/// notehead, never to its enclosure. Returns the opening parenthesis's left
+/// edge, the enclosure's leftmost ink.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_notehead_parentheses(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    left_x: f64,
+    right_x: f64,
+    position: StaffPosition,
+    scale: f64,
+) -> Result<f64, FontError> {
+    let y = staff.y_of(position);
+    let left = font.glyph_outline(Glyph::NoteheadParenthesisLeft)?;
+    let open_x = left_x - left.advance_width as f64 * scale;
+    svg.add_path(&left.path_data, "black", Some(&glyph_transform(open_x, y, scale)));
+    let right = font.glyph_outline(Glyph::NoteheadParenthesisRight)?;
+    let right_transform = glyph_transform(right_x, y, scale);
+    svg.add_path(&right.path_data, "black", Some(&right_transform));
+    Ok(open_x)
 }
 
 /// Draw a complete note: notehead + ledger lines (if needed).
@@ -150,7 +164,7 @@ pub fn draw_note(
     kind: NoteheadKind,
 ) -> Result<f64, FontError> {
     let advance = draw_notehead(svg, staff, font, x, position, kind)?;
-    draw_ledger_lines(svg, staff, config, x, advance, position);
+    draw_ledger_lines(svg, staff, config, x, advance, position, 1.0);
     Ok(advance)
 }
 
@@ -173,7 +187,7 @@ pub fn draw_stemmed_note(
 ) -> Result<f64, FontError> {
     let advance = draw_note(svg, staff, font, config, x, position, kind)?;
     if let Some(dir) = direction {
-        draw_stem(svg, staff, config, x, advance, position, dir);
+        draw_stem(svg, staff, config, x, advance, position, dir, 1.0);
     }
     Ok(advance)
 }
@@ -289,7 +303,7 @@ mod tests {
     fn no_ledger_lines_for_note_on_staff() {
         let (_, config, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 4);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 4, 1.0);
         let output = svg.to_svg();
         assert_eq!(
             output.matches("<line ").count(),
@@ -303,7 +317,7 @@ mod tests {
         let (_, config, staff) = setup();
         // Middle C in treble = position -2
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -2);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -2, 1.0);
         let output = svg.to_svg();
         assert_eq!(
             output.matches("<line ").count(),
@@ -317,7 +331,7 @@ mod tests {
         let (_, config, staff) = setup();
         // Position -4: two ledger lines at -2 and -4
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -4);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -4, 1.0);
         let output = svg.to_svg();
         assert_eq!(
             output.matches("<line ").count(),
@@ -334,7 +348,7 @@ mod tests {
         let extension = config.leger_line_extension_fu();
 
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, note_x, notehead_width, -2);
+        draw_ledger_lines(&mut svg, &staff, &config, note_x, notehead_width, -2, 1.0);
         let output = svg.to_svg();
 
         let expected_x1 = note_x - extension;
@@ -355,7 +369,7 @@ mod tests {
     fn ledger_lines_use_correct_thickness() {
         let (_, config, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -2);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -2, 1.0);
         let output = svg.to_svg();
 
         let expected_sw = format!("stroke-width=\"{}\"", config.leger_line_thickness_fu());
@@ -370,7 +384,7 @@ mod tests {
         let (_, config, staff) = setup();
         // Position 10: one ledger line above
         let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -500.0, 6000.0, 2000.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 10);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 10, 1.0);
         let output = svg.to_svg();
         assert_eq!(
             output.matches("<line ").count(),
@@ -390,11 +404,11 @@ mod tests {
         let (_, config, staff) = setup();
         // Position -1 and 9: just outside but no ledger line needed
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -1);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, -1, 1.0);
         assert_eq!(svg.to_svg().matches("<line ").count(), 0);
 
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 9);
+        draw_ledger_lines(&mut svg, &staff, &config, 500.0, 295.0, 9, 1.0);
         assert_eq!(svg.to_svg().matches("<line ").count(), 0);
     }
 
@@ -627,8 +641,11 @@ mod tests {
             .glyph_outline(Glyph::NoteheadParenthesisRight)
             .unwrap()
             .path_data;
+        let left_advance = font
+            .glyph_advance(Glyph::NoteheadParenthesisLeft)
+            .unwrap() as f64;
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        draw_styled_notehead(
+        let advance = draw_styled_notehead(
             &mut svg,
             &staff,
             &font,
@@ -636,13 +653,41 @@ mod tests {
             4,
             NoteheadKind::Filled,
             NoteheadStyle::Diamond,
-            true,
+            1.0,
         )
         .unwrap();
+        draw_notehead_parentheses(&mut svg, &staff, &font, 500.0, 500.0 + advance, 4, 1.0)
+            .unwrap();
         let output = svg.to_svg();
         assert!(output.contains(&selected));
         assert!(output.contains(&left));
         assert!(output.contains(&right));
         assert!(!output.contains(&ordinary));
+        let y = staff.y_of(4);
+        assert!(output.contains(&format!("translate({}, {y})", 500.0 - left_advance)));
+        assert!(output.contains(&format!("translate({}, {y})", 500.0 + advance)));
+    }
+
+    #[test]
+    fn scaled_notehead_scales_glyph_and_advance() {
+        let (font, _, staff) = setup();
+        let full = font.glyph_advance(Glyph::NoteheadBlack).unwrap() as f64;
+        let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
+        let advance = draw_styled_notehead(
+            &mut svg,
+            &staff,
+            &font,
+            500.0,
+            4,
+            NoteheadKind::Filled,
+            NoteheadStyle::Normal,
+            0.5,
+        )
+        .unwrap();
+        assert!((advance - full * 0.5).abs() < 1e-9);
+        let y = staff.y_of(4);
+        assert!(svg
+            .to_svg()
+            .contains(&format!("translate(500, {y}) scale(0.5)")));
     }
 }

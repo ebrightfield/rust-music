@@ -21,6 +21,16 @@ pub const DOT_NOTEHEAD_PADDING_SS: f64 = 0.5;
 /// the dot's advance width plus a small gap.
 pub const DOT_INTER_DOT_SPACING_SS: f64 = 0.35;
 
+/// Gap between parenthesized dots and each of their enclosing parentheses,
+/// and between the notehead and the opening parenthesis, in staff spaces.
+pub const DOT_PARENTHESES_GAP_SS: f64 = 0.15;
+
+/// Extra width parenthesized dots occupy beyond their plain spacing, in
+/// staff spaces: Bravura's notehead parentheses (0.436 + 0.436 advance) plus
+/// the gaps, less the plain notehead-to-dot padding they replace.
+pub const DOT_PARENTHESES_EXTRA_SS: f64 = 0.436 + 0.436 + 3.0 * DOT_PARENTHESES_GAP_SS
+    - DOT_NOTEHEAD_PADDING_SS;
+
 /// Compute the x-position of the first augmentation dot's left edge.
 ///
 /// All values in font design units.

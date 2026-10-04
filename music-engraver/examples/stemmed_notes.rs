@@ -47,7 +47,7 @@ fn main() {
         // Whole notes don't get stems
         if *kind != NoteheadKind::Whole {
             let direction = auto_stem_direction(pos);
-            draw_stem(&mut svg, &staff, &config, x, advance, pos, direction);
+            draw_stem(&mut svg, &staff, &config, x, advance, pos, direction, 1.0);
         }
     }
 
