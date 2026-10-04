@@ -4,6 +4,7 @@
 use music::notation::clef::Clef;
 
 use music_engraver::font::bravura_font;
+use music_engraver::layout::accidental::ResolvedAccidental;
 use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::clef::ClefLayout;
 use music_engraver::layout::key_signature::KeySignature;
@@ -45,7 +46,7 @@ fn main() {
             staff_position: 5,
             duration_log2: 3,
             dots: 0,
-            accidental: Some(Glyph::AccidentalNatural),
+            accidental: Some(ResolvedAccidental::plain(Glyph::AccidentalNatural)),
             stem_direction: None,
             annotations: NoteAnnotations::default(),
         }),

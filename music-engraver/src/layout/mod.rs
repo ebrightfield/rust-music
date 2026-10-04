@@ -61,6 +61,7 @@ pub mod tuplet;
 pub mod voice_collision;
 pub mod volta;
 
+pub use accidental::{AccidentalDisplay, ResolvedAccidental};
 pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
 pub use articulation::{
     layout_articulation, layout_articulation_stack, Articulation, ArticulationLayout,
@@ -75,8 +76,8 @@ pub use breath::{
     BREATH_MARK_RIGHT_PADDING_SS,
 };
 pub use chord::{
-    chord_extent, chord_has_offsets, layout_chord_noteheads, notehead_x_offset, ChordNote,
-    ChordNoteLayout,
+    chord_extent, chord_has_offsets, chord_left_notehead_offset, layout_chord_noteheads,
+    notehead_x_offset, ChordNote, ChordNoteLayout,
 };
 pub use chord_symbol::{
     layout_chord_symbol, layout_chord_symbol_composite, parse_chord_symbol_segments,

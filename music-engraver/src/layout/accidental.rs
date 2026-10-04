@@ -1,18 +1,71 @@
 use music::note::spelling::Accidental;
 use smufl::Glyph;
 
+use crate::layout::staff::StaffPosition;
+
+/// Caller-requested display policy for one notated pitch's accidental.
+///
+/// The policy never changes the pitch itself; it only decides whether its
+/// accidental is engraved and how. Every policy records the pitch's own
+/// alteration as the in-measure state for its letter and octave, so later
+/// notes compare against what the reader has just been told.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum AccidentalDisplay {
+    /// Engrave the accidental only when the pitch's alteration differs from
+    /// the alteration in force for its letter and octave: the in-measure
+    /// override if one exists, otherwise the key signature. This covers
+    /// cancelling naturals, reinstated key-signature accidentals, and
+    /// suppression of repeated accidentals within the measure.
+    #[default]
+    Auto,
+    /// Always engrave the plain accidental, including a natural on a letter the
+    /// key signature leaves unaltered, even when it restates the state in force.
+    Force,
+    /// Always engrave the accidental enclosed in SMuFL accidental parentheses
+    /// (a cautionary or courtesy sign). It normally restates the state already
+    /// in force; like every policy, it records the pitch's alteration as state.
+    Cautionary,
+}
+
+/// An accidental the resolver decided to engrave: its SMuFL glyph and whether
+/// it is enclosed by `AccidentalParensLeft` / `AccidentalParensRight`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedAccidental {
+    /// The accidental glyph itself.
+    pub glyph: Glyph,
+    /// Whether the glyph is enclosed by SMuFL accidental parentheses.
+    pub parenthesized: bool,
+}
+
+impl ResolvedAccidental {
+    /// An accidental drawn without parentheses.
+    pub const fn plain(glyph: Glyph) -> Self {
+        Self {
+            glyph,
+            parenthesized: false,
+        }
+    }
+
+    /// A cautionary accidental drawn inside SMuFL accidental parentheses.
+    pub const fn cautionary(glyph: Glyph) -> Self {
+        Self {
+            glyph,
+            parenthesized: true,
+        }
+    }
+}
+
 /// Map a `music::Accidental` to the corresponding SMuFL glyph.
 ///
-/// Returns `None` for `Natural` when `show_natural` is false (the common case
-/// in running notation where naturals are only shown to cancel a prior accidental).
-pub fn accidental_glyph(acc: Accidental, show_natural: bool) -> Option<Glyph> {
+/// Whether the glyph is engraved at all is decided by accidental resolution
+/// against the key signature and measure state, not by this mapping.
+pub fn accidental_glyph(acc: Accidental) -> Glyph {
     match acc {
-        Accidental::Natural if show_natural => Some(Glyph::AccidentalNatural),
-        Accidental::Natural => None,
-        Accidental::Sharp => Some(Glyph::AccidentalSharp),
-        Accidental::Flat => Some(Glyph::AccidentalFlat),
-        Accidental::DoubleSharp => Some(Glyph::AccidentalDoubleSharp),
-        Accidental::DoubleFlat => Some(Glyph::AccidentalDoubleFlat),
+        Accidental::Natural => Glyph::AccidentalNatural,
+        Accidental::Sharp => Glyph::AccidentalSharp,
+        Accidental::Flat => Glyph::AccidentalFlat,
+        Accidental::DoubleSharp => Glyph::AccidentalDoubleSharp,
+        Accidental::DoubleFlat => Glyph::AccidentalDoubleFlat,
     }
 }
 
@@ -24,6 +77,15 @@ pub fn accidental_glyph(acc: Accidental, show_natural: bool) -> Option<Glyph> {
 /// approximately 1/8 staff space (0.12).
 pub const ACCIDENTAL_NOTEHEAD_PADDING_SS: f64 = 0.12;
 
+/// Horizontal gap between adjacent stacked accidental columns of one chord,
+/// in staff spaces.
+pub const ACCIDENTAL_COLUMN_GAP_SS: f64 = 0.1;
+
+/// Minimum vertical distance, in staff positions, at which two accidentals of
+/// one chord may share a column. Six steps is a seventh: closer accidentals
+/// (up to a sixth apart) overlap vertically and need separate columns.
+pub const ACCIDENTAL_COLUMN_CLEARANCE: i8 = 6;
+
 /// Compute the x-position at which to draw an accidental, given the notehead's
 /// x-position and the advance width of the accidental glyph.
 ///
@@ -34,53 +96,133 @@ pub fn accidental_x(notehead_x: f64, accidental_advance_width: f64, staff_space:
     notehead_x - accidental_advance_width - padding
 }
 
+/// Stacked accidental columns for the accidentals of one chord.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccidentalColumns {
+    /// For each input accidental, in input order: how far left of the column
+    /// nearest the noteheads its column's right edge sits (0 for that column).
+    pub column_offsets: Vec<f64>,
+    /// Total width of all columns plus the gaps between them.
+    pub extent: f64,
+}
+
+/// Stack the accidentals of one chord into non-overlapping columns.
+///
+/// `accidentals` holds `(staff_position, width)` for every engraved accidental
+/// of the chord, in any order; `width` includes any enclosing parentheses.
+/// Following Gould's ordering, accidentals are placed highest, lowest,
+/// second-highest, second-lowest, …; each takes the column nearest the
+/// noteheads whose occupants are all at least [`ACCIDENTAL_COLUMN_CLEARANCE`]
+/// staff positions away, opening a new column further left otherwise. Every
+/// accidental is right-aligned in its column, and a column is as wide as its
+/// widest member, so a wide (e.g. parenthesized) accidental pushes every
+/// column to its left further out.
+pub fn layout_accidental_columns(
+    accidentals: &[(StaffPosition, f64)],
+    column_gap: f64,
+) -> AccidentalColumns {
+    let count = accidentals.len();
+    let mut by_height: Vec<usize> = (0..count).collect();
+    by_height.sort_by_key(|&index| std::cmp::Reverse(accidentals[index].0));
+    // Gould: highest, lowest, second-highest, second-lowest, …
+    let order: Vec<usize> = (0..count)
+        .map(|turn| {
+            if turn % 2 == 0 {
+                by_height[turn / 2]
+            } else {
+                by_height[count - 1 - turn / 2]
+            }
+        })
+        .collect();
+
+    let mut column_of = vec![0_usize; count];
+    let mut column_widths: Vec<f64> = Vec::new();
+    for (turn, &index) in order.iter().enumerate() {
+        let (position, width) = accidentals[index];
+        let clears = |other: usize| {
+            (i32::from(accidentals[other].0) - i32::from(position)).abs()
+                >= i32::from(ACCIDENTAL_COLUMN_CLEARANCE)
+        };
+        let column = (0..=column_widths.len())
+            .find(|&column| {
+                order[..turn]
+                    .iter()
+                    .all(|&other| column_of[other] != column || clears(other))
+            })
+            .expect("a new empty column always fits");
+        column_of[index] = column;
+        if column == column_widths.len() {
+            column_widths.push(width);
+        } else {
+            column_widths[column] = column_widths[column].max(width);
+        }
+    }
+
+    let mut column_right_offsets = Vec::with_capacity(column_widths.len());
+    let mut extent = 0.0;
+    for (column, width) in column_widths.iter().enumerate() {
+        if column > 0 {
+            extent += column_gap;
+        }
+        column_right_offsets.push(extent);
+        extent += width;
+    }
+    AccidentalColumns {
+        column_offsets: column_of
+            .iter()
+            .map(|&column| column_right_offsets[column])
+            .collect(),
+        extent,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn sharp_maps_to_smufl_sharp() {
-        assert_eq!(
-            accidental_glyph(Accidental::Sharp, false),
-            Some(Glyph::AccidentalSharp)
-        );
+    fn every_alteration_maps_to_its_smufl_glyph() {
+        let cases = [
+            (Accidental::Natural, Glyph::AccidentalNatural),
+            (Accidental::Sharp, Glyph::AccidentalSharp),
+            (Accidental::Flat, Glyph::AccidentalFlat),
+            (Accidental::DoubleSharp, Glyph::AccidentalDoubleSharp),
+            (Accidental::DoubleFlat, Glyph::AccidentalDoubleFlat),
+        ];
+        for (accidental, glyph) in cases {
+            assert_eq!(accidental_glyph(accidental), glyph, "{accidental:?}");
+        }
     }
 
     #[test]
-    fn flat_maps_to_smufl_flat() {
-        assert_eq!(
-            accidental_glyph(Accidental::Flat, false),
-            Some(Glyph::AccidentalFlat)
-        );
+    fn accidentals_a_seventh_apart_share_one_column() {
+        let columns = layout_accidental_columns(&[(1, 249.0), (8, 249.0)], 25.0);
+        assert_eq!(columns.column_offsets, vec![0.0, 0.0]);
+        assert_eq!(columns.extent, 249.0);
     }
 
     #[test]
-    fn double_sharp_maps_correctly() {
-        assert_eq!(
-            accidental_glyph(Accidental::DoubleSharp, false),
-            Some(Glyph::AccidentalDoubleSharp)
-        );
+    fn stacked_thirds_follow_gould_outer_first_column_order() {
+        // Bottom-to-top C, E, G, B a third apart (input deliberately unsorted).
+        // Highest (B=6) and lowest (C=0) are a seventh apart and share the
+        // nearest column; then G (4) and E (2) each need a new column.
+        let columns =
+            layout_accidental_columns(&[(2, 100.0), (6, 100.0), (0, 100.0), (4, 100.0)], 10.0);
+        assert_eq!(columns.column_offsets, vec![220.0, 0.0, 0.0, 110.0]);
+        assert_eq!(columns.extent, 320.0);
     }
 
     #[test]
-    fn double_flat_maps_correctly() {
-        assert_eq!(
-            accidental_glyph(Accidental::DoubleFlat, false),
-            Some(Glyph::AccidentalDoubleFlat)
-        );
-    }
-
-    #[test]
-    fn natural_hidden_by_default() {
-        assert_eq!(accidental_glyph(Accidental::Natural, false), None);
-    }
-
-    #[test]
-    fn natural_shown_when_requested() {
-        assert_eq!(
-            accidental_glyph(Accidental::Natural, true),
-            Some(Glyph::AccidentalNatural)
-        );
+    fn a_wide_member_widens_its_column_and_pushes_outer_columns() {
+        // A parenthesized accidental (width 531) in the nearest column pushes
+        // the plain accidental a third below out past its full width.
+        let columns = layout_accidental_columns(&[(4, 531.0), (2, 249.0)], 25.0);
+        assert_eq!(columns.column_offsets, vec![0.0, 556.0]);
+        assert_eq!(columns.extent, 805.0);
+        // Narrower nearest column → the outer column sits correspondingly closer.
+        let plain = layout_accidental_columns(&[(4, 249.0), (2, 249.0)], 25.0);
+        assert_eq!(plain.column_offsets, vec![0.0, 274.0]);
+        assert_eq!(plain.extent, 523.0);
     }
 
     #[test]

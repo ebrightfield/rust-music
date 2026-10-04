@@ -182,7 +182,7 @@ fn measure_with_accidental_note() {
         staff_position: 4,
         duration_log2: 2,
         dots: 0,
-        accidental: Some(Glyph::AccidentalSharp),
+        accidental: Some(ResolvedAccidental::plain(Glyph::AccidentalSharp)),
         stem_direction: None,
         annotations: NoteAnnotations::default(),
     })];
@@ -525,7 +525,7 @@ fn full_measure_with_all_element_types() {
             staff_position: 6,
             duration_log2: 3,
             dots: 0,
-            accidental: Some(Glyph::AccidentalNatural),
+            accidental: Some(ResolvedAccidental::plain(Glyph::AccidentalNatural)),
             stem_direction: Some(StemDirection::Down),
             annotations: NoteAnnotations::default(),
         }),
@@ -677,7 +677,10 @@ fn chord_with_accidentals() {
         staff_positions: vec![0, 4],
         duration_log2: 2,
         dots: 0,
-        accidentals: vec![Some(Glyph::AccidentalSharp), None],
+        accidentals: vec![
+            Some(ResolvedAccidental::plain(Glyph::AccidentalSharp)),
+            None,
+        ],
         stem_direction: None,
         annotations: NoteAnnotations::default(),
     })];
@@ -1108,7 +1111,7 @@ fn beam_group_with_accidental() {
                 staff_position: 2,
                 duration_log2: 3,
                 dots: 0,
-                accidental: Some(Glyph::AccidentalSharp),
+                accidental: Some(ResolvedAccidental::plain(Glyph::AccidentalSharp)),
                 stem_direction: None,
                 annotations: NoteAnnotations::default(),
             },

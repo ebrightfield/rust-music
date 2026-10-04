@@ -6348,7 +6348,12 @@ mod tests {
         else {
             panic!("pitched B-natural follows unpitched B-position heads");
         };
-        assert_eq!(b_natural.accidental, Some(Glyph::AccidentalNatural));
+        assert_eq!(
+            b_natural.accidental,
+            Some(crate::layout::accidental::ResolvedAccidental::plain(
+                Glyph::AccidentalNatural
+            ))
+        );
     }
 
     #[test]

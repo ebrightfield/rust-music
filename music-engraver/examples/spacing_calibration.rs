@@ -25,6 +25,7 @@
 //! cargo run --example spacing_calibration -p music-engraver
 //! ```
 
+use music_engraver::layout::accidental::ResolvedAccidental;
 use music_engraver::layout::measure::{
     layout_measure, MeasureElement, MeasureLayoutConfig, NoteAnnotations, NoteEvent,
 };
@@ -147,7 +148,7 @@ fn build_elements(case: &Case) -> Vec<MeasureElement> {
                 duration_log2,
                 dots,
                 accidental: if acc {
-                    Some(smufl::Glyph::AccidentalSharp)
+                    Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp))
                 } else {
                     None
                 },

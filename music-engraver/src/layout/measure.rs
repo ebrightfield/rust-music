@@ -1,3 +1,4 @@
+use crate::layout::accidental::{layout_accidental_columns, AccidentalDisplay, ResolvedAccidental};
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
@@ -80,7 +81,7 @@ pub struct GroupedChordMember {
     /// Staff positions in the same order as notehead style vectors.
     pub staff_positions: Vec<StaffPosition>,
     /// Resolved accidentals parallel to `staff_positions`.
-    pub accidentals: Vec<Option<smufl::Glyph>>,
+    pub accidentals: Vec<Option<ResolvedAccidental>>,
 }
 
 /// Articulation and expression annotations attached to a note or chord event.
@@ -96,6 +97,9 @@ pub struct NoteAnnotations {
     /// Whether each resolved notehead is enclosed by real SMuFL notehead
     /// parentheses. Entries are parallel to pitches; missing entries are false.
     pub parenthesized_noteheads: Vec<bool>,
+    /// Accidental display policies parallel to the note/chord's pitches. An
+    /// empty vector (or a missing entry) means [`AccidentalDisplay::Auto`].
+    pub accidental_displays: Vec<AccidentalDisplay>,
     /// Chord geometry when this annotation belongs to a grouped chord member.
     /// `None` identifies an ordinary single-note member.
     pub grouped_chord: Option<GroupedChordMember>,
@@ -358,9 +362,9 @@ pub struct ChordEvent {
     pub duration_log2: u8,
     /// Number of augmentation dots (0–3).
     pub dots: u8,
-    /// Accidental glyphs to display, parallel to `staff_positions`.
+    /// Resolved accidentals to display, parallel to `staff_positions`.
     /// `None` entries mean no accidental for that note.
-    pub accidentals: Vec<Option<smufl::Glyph>>,
+    pub accidentals: Vec<Option<ResolvedAccidental>>,
     /// Stem direction override. `None` uses auto-detection based on chord extent.
     pub stem_direction: Option<StemDirection>,
     /// Articulation/expression annotations (ties, dynamics, slurs, hairpins, etc.).
@@ -410,8 +414,9 @@ pub struct NoteEvent {
     pub duration_log2: u8,
     /// Number of augmentation dots (0–3).
     pub dots: u8,
-    /// Accidental to display (if any). Uses `smufl::Glyph` for the accidental glyph.
-    pub accidental: Option<smufl::Glyph>,
+    /// Accidental to display (if any), already resolved against the key
+    /// signature, the measure's accidental state, and the display policy.
+    pub accidental: Option<ResolvedAccidental>,
     /// Stem direction override. `None` uses auto-detection.
     pub stem_direction: Option<StemDirection>,
     /// Articulation/expression annotations (ties, dynamics, slurs, hairpins, etc.).
@@ -495,9 +500,15 @@ pub struct MeasureLayoutConfig {
     pub spring_constant: f64,
     /// Incompressible rod estimate for one notehead (in font design units).
     pub notehead_rod: f64,
-    /// Additional rod width when an event carries an accidental
+    /// Additional rod width when an event carries one plain accidental
     /// (in font design units).
     pub accidental_rod: f64,
+    /// Further rod width when an accidental is parenthesized, covering both
+    /// SMuFL accidental parentheses (in font design units).
+    pub accidental_parens_rod: f64,
+    /// Horizontal gap between stacked accidental columns of one chord
+    /// (in font design units).
+    pub accidental_column_gap: f64,
     /// Additional rod width per augmentation dot (in font design units).
     pub dot_rod: f64,
     /// Minimum padding included in every rhythmic rod (in font design units).
@@ -530,6 +541,9 @@ impl MeasureLayoutConfig {
             // (e.g. `layout/glissando.rs`): ~1.18 staff spaces.
             notehead_rod: 1.18 * ss,
             accidental_rod: 1.0 * ss,
+            // Bravura's accidentalParensLeft/Right each advance 0.564 ss.
+            accidental_parens_rod: 1.128 * ss,
+            accidental_column_gap: crate::layout::accidental::ACCIDENTAL_COLUMN_GAP_SS * ss,
             dot_rod: 0.35 * ss,
             min_rod_padding: 0.3 * ss,
         }
@@ -561,24 +575,79 @@ fn tuplet_time_scale(tuplet: &TupletGroupEvent) -> f64 {
     }
 }
 
-/// Compute the incompressible rod width for a rhythmic event.
-fn event_rod(has_accidental: bool, dots: u8, config: &MeasureLayoutConfig) -> f64 {
-    config.min_rod_padding
-        + config.notehead_rod
-        + if has_accidental {
-            config.accidental_rod
-        } else {
-            0.0
-        }
-        + dots as f64 * config.dot_rod
+/// Compute the incompressible rod width for a rhythmic event whose engraved
+/// accidentals extend `accidental_extent` to the left of its noteheads.
+fn event_rod(accidental_extent: f64, dots: u8, config: &MeasureLayoutConfig) -> f64 {
+    config.min_rod_padding + config.notehead_rod + accidental_extent + dots as f64 * config.dot_rod
 }
 
-fn grouped_member_has_accidental(note: &NoteEvent) -> bool {
-    note.annotations
-        .grouped_chord
-        .as_ref()
-        .is_some_and(|chord| chord.accidentals.iter().any(Option::is_some))
-        || note.accidental.is_some()
+/// Estimated rod width of one engraved accidental, including its parentheses.
+fn accidental_rod_width(accidental: ResolvedAccidental, config: &MeasureLayoutConfig) -> f64 {
+    if accidental.parenthesized {
+        config.accidental_rod + config.accidental_parens_rod
+    } else {
+        config.accidental_rod
+    }
+}
+
+/// Estimated leftward extent of the accidentals engraved on one notehead
+/// column: a lone accidental's rod width (parentheses included), or the
+/// stacked chord accidental columns' extent when several are engraved.
+///
+/// `accidentals` is parallel to `staff_positions`.
+fn accidental_left_extent(
+    staff_positions: &[StaffPosition],
+    accidentals: &[Option<ResolvedAccidental>],
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    let mut engraved =
+        staff_positions
+            .iter()
+            .zip(accidentals)
+            .filter_map(|(&position, accidental)| {
+                accidental.map(|accidental| (position, accidental_rod_width(accidental, config)))
+            });
+    let Some(first) = engraved.next() else {
+        return 0.0;
+    };
+    let Some(second) = engraved.next() else {
+        return first.1;
+    };
+    let mut stacked = vec![first, second];
+    stacked.extend(engraved);
+    layout_accidental_columns(&stacked, config.accidental_column_gap).extent
+}
+
+fn note_accidental_extent(note: &NoteEvent, config: &MeasureLayoutConfig) -> f64 {
+    match &note.annotations.grouped_chord {
+        Some(chord) => accidental_left_extent(&chord.staff_positions, &chord.accidentals, config),
+        None => accidental_left_extent(
+            std::slice::from_ref(&note.staff_position),
+            std::slice::from_ref(&note.accidental),
+            config,
+        ),
+    }
+}
+
+/// Estimated extent of the accidentals left of an element's first notehead
+/// column (zero for non-rhythmic elements, rests, and unaltered notes).
+fn element_left_extent(element: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
+    match element {
+        MeasureElement::Note(note) => note_accidental_extent(note, config),
+        MeasureElement::Chord(chord) => {
+            accidental_left_extent(&chord.staff_positions, &chord.accidentals, config)
+        }
+        MeasureElement::BeamGroup(group) => group
+            .notes
+            .first()
+            .map_or(0.0, |note| note_accidental_extent(note, config)),
+        MeasureElement::TupletGroup(tuplet) => tuplet
+            .beam_group
+            .notes
+            .first()
+            .map_or(0.0, |note| note_accidental_extent(note, config)),
+        _ => 0.0,
+    }
 }
 
 /// Lay out a sequence of measure elements with horizontal positions.
@@ -588,9 +657,16 @@ fn grouped_member_has_accidental(note: &NoteEvent) -> bool {
 /// chords, beam/tuplet groups) decompose into a Gourlay rod (notehead +
 /// accidental + dot + padding) and a duration-driven spring. The system layer
 /// later scales springs only to fit a target width.
+///
+/// Accidentals sit left of their notehead column, so each event's accidental
+/// extent (stacked columns and parentheses included) is reserved as an
+/// incompressible gap *before* the event — including a measure-initial event,
+/// whose accidentals would otherwise cross the preceding barline. Accidentals
+/// of later members of a beam or tuplet group stay in the group's rod.
 pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig) -> MeasureLayout {
     let mut positioned = Vec::with_capacity(elements.len());
     let mut x = 0.0;
+    let mut reserved_accidental_gaps = 0.0;
 
     // Find the shortest written duration. Tuplet ratios scale their springs
     // below, preserving both the established Gourlay baseline and performed
@@ -627,79 +703,100 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     for elem in elements {
         // Each arm yields (rod, spring, trailing_padding). Prefix elements use
         // trailing padding (e.g. clef_padding) that sits outside the element's
-        // own width; rhythmic elements fold all spacing into rod + spring.
-        let (rod, spr, trailing) = match elem {
-            MeasureElement::Clef(_) => (config.clef_width, 0.0, config.clef_padding),
-            MeasureElement::KeySignature(key) => {
-                let count = match key {
-                    KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
-                    KeySignature::Open => 0.0,
-                };
-                let w = count * config.key_sig_accidental_width;
-                let trailing = if w > 0.0 { config.key_sig_padding } else { 0.0 };
-                (w, 0.0, trailing)
-            }
-            MeasureElement::TimeSignature(_) => {
-                (config.time_sig_width, 0.0, config.time_sig_padding)
-            }
-            MeasureElement::Note(n) => (
-                event_rod(n.accidental.is_some(), n.dots, config),
-                spring(n.duration_log2, 1.0),
-                0.0,
-            ),
-            MeasureElement::Rest(r) => {
-                // A rest has no notehead/accidental, but reuse the notehead rod
-                // as the glyph-extent estimate; dots still apply.
-                (
-                    event_rod(false, r.dots, config),
-                    spring(r.duration_log2, 1.0),
+        // own width; rhythmic elements fold all spacing into rod + spring
+        // except their leading accidental extent, reserved before them below.
+        let (rod, spr, trailing) =
+            match elem {
+                MeasureElement::Clef(_) => (config.clef_width, 0.0, config.clef_padding),
+                MeasureElement::KeySignature(key) => {
+                    let count = match key {
+                        KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
+                        KeySignature::Open => 0.0,
+                    };
+                    let w = count * config.key_sig_accidental_width;
+                    let trailing = if w > 0.0 { config.key_sig_padding } else { 0.0 };
+                    (w, 0.0, trailing)
+                }
+                MeasureElement::TimeSignature(_) => {
+                    (config.time_sig_width, 0.0, config.time_sig_padding)
+                }
+                MeasureElement::Note(n) => (
+                    event_rod(0.0, n.dots, config),
+                    spring(n.duration_log2, 1.0),
                     0.0,
-                )
-            }
-            MeasureElement::Chord(c) => {
-                // A chord shares one stem column (one notehead rod). Accidentals
-                // stack leftward; estimate the cluster as one accidental rod when
-                // any note carries one.
-                let has_acc = c.accidentals.iter().any(|a| a.is_some());
-                (
-                    event_rod(has_acc, c.dots, config),
-                    spring(c.duration_log2, 1.0),
-                    0.0,
-                )
-            }
-            MeasureElement::BeamGroup(bg) => {
-                // Each inner note contributes its own rod + spring; the group's
-                // rod/spring are the sums (inner x-offsets come from
-                // `beam_group_note_x_offsets` fed the group's total width).
-                let (rod, spr) = bg.notes.iter().fold((0.0, 0.0), |(r, s), n| {
+                ),
+                MeasureElement::Rest(r) => {
+                    // A rest has no notehead/accidental, but reuse the notehead rod
+                    // as the glyph-extent estimate; dots still apply.
                     (
-                        r + event_rod(grouped_member_has_accidental(n), n.dots, config),
-                        s + spring(n.duration_log2, 1.0),
+                        event_rod(0.0, r.dots, config),
+                        spring(r.duration_log2, 1.0),
+                        0.0,
                     )
-                });
-                (rod, spr, 0.0)
-            }
-            MeasureElement::TupletGroup(tg) => {
-                let time_scale = tuplet_time_scale(tg);
-                let (rod, spr) = tg.beam_group.notes.iter().fold((0.0, 0.0), |(r, s), n| {
+                }
+                MeasureElement::Chord(c) => {
+                    // A chord shares one stem column (one notehead rod); its stacked
+                    // accidental columns are its leading accidental extent.
                     (
-                        r + event_rod(grouped_member_has_accidental(n), n.dots, config),
-                        s + spring(n.duration_log2, time_scale),
+                        event_rod(0.0, c.dots, config),
+                        spring(c.duration_log2, 1.0),
+                        0.0,
                     )
-                });
-                (rod, spr, 0.0)
-            }
-            MeasureElement::MultiMeasureRest { .. } => {
-                // Occupies the full rhythmic width of the measure as an
-                // incompressible block; the renderer draws the H-bar (or
-                // church-rest cluster) spanning to the barline. Use whole-note
-                // (longest) spring length as the block allocation, but treat it
-                // as rod so it neither compresses nor stretches.
-                (event_rod(false, 0, config) + spring(0, 1.0), 0.0, 0.0)
-            }
-            MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
-        };
+                }
+                MeasureElement::BeamGroup(bg) => {
+                    // Each inner note contributes its own rod + spring; the group's
+                    // rod/spring are the sums (inner x-offsets come from
+                    // `beam_group_note_x_offsets` fed the group's total width). The
+                    // first member's accidentals are the group's leading extent.
+                    let (rod, spr) =
+                        bg.notes
+                            .iter()
+                            .enumerate()
+                            .fold((0.0, 0.0), |(r, s), (i, n)| {
+                                let extent = if i == 0 {
+                                    0.0
+                                } else {
+                                    note_accidental_extent(n, config)
+                                };
+                                (
+                                    r + event_rod(extent, n.dots, config),
+                                    s + spring(n.duration_log2, 1.0),
+                                )
+                            });
+                    (rod, spr, 0.0)
+                }
+                MeasureElement::TupletGroup(tg) => {
+                    let time_scale = tuplet_time_scale(tg);
+                    let (rod, spr) = tg.beam_group.notes.iter().enumerate().fold(
+                        (0.0, 0.0),
+                        |(r, s), (i, n)| {
+                            let extent = if i == 0 {
+                                0.0
+                            } else {
+                                note_accidental_extent(n, config)
+                            };
+                            (
+                                r + event_rod(extent, n.dots, config),
+                                s + spring(n.duration_log2, time_scale),
+                            )
+                        },
+                    );
+                    (rod, spr, 0.0)
+                }
+                MeasureElement::MultiMeasureRest { .. } => {
+                    // Occupies the full rhythmic width of the measure as an
+                    // incompressible block; the renderer draws the H-bar (or
+                    // church-rest cluster) spanning to the barline. Use whole-note
+                    // (longest) spring length as the block allocation, but treat it
+                    // as rod so it neither compresses nor stretches.
+                    (event_rod(0.0, 0, config) + spring(0, 1.0), 0.0, 0.0)
+                }
+                MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
+            };
 
+        let leading = element_left_extent(elem, config);
+        x += leading;
+        reserved_accidental_gaps += leading;
         let width = rod + spr;
         positioned.push(PositionedElement {
             x,
@@ -716,7 +813,8 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             .iter()
             .zip(elements.iter())
             .map(|(_p, e)| trailing_padding(e, config))
-            .sum::<f64>();
+            .sum::<f64>()
+        + reserved_accidental_gaps;
     let total_spring: f64 = positioned.iter().map(|p| p.spring).sum();
 
     MeasureLayout {
@@ -781,7 +879,7 @@ mod tests {
         // Single note: it is the shortest, so duration = 1.0 and spring = k.
         // Width = rod + spring; rod is the bare notehead rod (no accidental/dots).
         let el = &layout.elements[0];
-        let expected_rod = event_rod(false, 0, &cfg);
+        let expected_rod = event_rod(0.0, 0, &cfg);
         let expected_spring = cfg.spring_constant;
         assert!((el.rod - expected_rod).abs() < f64::EPSILON, "rod");
         assert!((el.spring - expected_spring).abs() < f64::EPSILON, "spring");
@@ -1084,7 +1182,7 @@ mod tests {
                 staff_position: 4,
                 duration_log2: 2,
                 dots: 1,
-                accidental: Some(smufl::Glyph::AccidentalSharp),
+                accidental: Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp)),
                 stem_direction: None,
                 annotations: NoteAnnotations::default(),
             }),
@@ -1135,7 +1233,7 @@ mod tests {
     }
 
     #[test]
-    fn accidental_and_dots_widen_only_the_rod() {
+    fn accidental_reserves_space_before_the_note_and_dots_widen_its_rod() {
         let cfg = test_config();
         let plain = layout_measure(
             &[MeasureElement::Note(NoteEvent {
@@ -1153,7 +1251,7 @@ mod tests {
                 staff_position: 0,
                 duration_log2: 2,
                 dots: 2,
-                accidental: Some(smufl::Glyph::AccidentalFlat),
+                accidental: Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalFlat)),
                 stem_direction: None,
                 annotations: NoteAnnotations::default(),
             })],
@@ -1161,12 +1259,18 @@ mod tests {
         );
         // Same duration (and it is the only/shortest note in each) → same spring.
         assert!((plain.elements[0].spring - adorned.elements[0].spring).abs() < f64::EPSILON);
-        // Accidental + 2 dots widen the rod by exactly accidental_rod + 2·dot_rod.
-        let expected_delta = cfg.accidental_rod + 2.0 * cfg.dot_rod;
+        // The accidental sits left of the notehead: the note starts after it…
+        assert_eq!(plain.elements[0].x, 0.0);
+        assert_eq!(adorned.elements[0].x, cfg.accidental_rod);
+        // …while only the dots widen the note's own rod.
         assert!(
-            ((adorned.elements[0].rod - plain.elements[0].rod) - expected_delta).abs()
+            ((adorned.elements[0].rod - plain.elements[0].rod) - 2.0 * cfg.dot_rod).abs()
                 < f64::EPSILON,
         );
+        // Both are incompressible measure rod.
+        let expected_delta = cfg.accidental_rod + 2.0 * cfg.dot_rod;
+        assert!(((adorned.total_rod - plain.total_rod) - expected_delta).abs() < 1e-9);
+        assert!(((adorned.total_width - plain.total_width) - expected_delta).abs() < 1e-9);
     }
 
     #[test]
@@ -1228,7 +1332,7 @@ mod tests {
         // case the system layer can produce. Collision avoidance therefore
         // does not depend on the tuning of c or k.
         let cfg = MeasureLayoutConfig::from_staff_space(250.0);
-        let per_event_rod = event_rod(false, 0, &cfg);
+        let per_event_rod = event_rod(0.0, 0, &cfg);
         assert!(
             per_event_rod > cfg.notehead_rod,
             "rod ({per_event_rod}) must exceed notehead width ({}) so fully \

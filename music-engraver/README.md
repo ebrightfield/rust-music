@@ -39,7 +39,14 @@ std::fs::write("score.svg", &svg).unwrap();
 - **Font-agnostic architecture** -- glyph lookup by SMuFL canonical name, not
   hard-coded to Bravura. Adding Petaluma or Leland requires no layout/render changes.
 - **Proportional spacing** using a Gourlay-style power-of-ratio model
-- **Smart accidentals** that suppress redundant accidentals matching the key signature
+- **Accidentals as measure state**: each pitch is compared with the alteration in force
+  for its letter and octave (the in-measure override, else the key signature), so
+  cancelling naturals, reinstated key-signature accidentals, and suppressed repeats all
+  follow one rule; voices on a staff are resolved in onset order. `AccidentalDisplay::Force`
+  and `AccidentalDisplay::Cautionary` (parenthesized) override display per pitch
+  (`note_with_accidental`, `chord_with_accidentals`, `beam_group_with_accidentals`,
+  `tuplet_ratio_with_accidentals`). Chord accidentals stack into non-colliding columns, and
+  every accidental's width is reserved to the left of its note.
 - **Multi-system page layout** with configurable measures-per-system and justification
 
 ## Running examples

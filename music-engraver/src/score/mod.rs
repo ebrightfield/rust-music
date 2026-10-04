@@ -31,6 +31,7 @@ pub mod guitar;
 pub mod multi_staff;
 pub mod tab;
 
+#[cfg(test)]
 use std::collections::HashMap;
 
 use music::notation::clef::Clef;
@@ -42,6 +43,9 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
+use crate::layout::accidental::AccidentalDisplay;
+#[cfg(test)]
+use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
@@ -68,12 +72,12 @@ use crate::layout::trill_extension::TrillWiggleSpeed;
 use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use crate::render::page_renderer::draw_page;
 
-use event::{convert_event, AccidentalTracker, ScoreEvent};
 #[cfg(test)]
 use event::{
-    duration_kind_to_log2, effective_accidental, note_altered_in_key, note_key, resolve_accidental,
-    should_show_accidental,
+    convert_event, duration_kind_to_log2, note_altered_in_key, note_key, resolve_accidental,
+    should_show_accidental, AccidentalTracker,
 };
+use event::{convert_resolved_event, resolve_measure_accidentals, ScoreEvent};
 
 /// A completed measure: voiced events, barline style, and optional volta annotation.
 pub(crate) type CompletedMeasure = (Vec<(u8, ScoreEvent)>, BarlineStyle, Option<VoltaAnnotation>);
@@ -259,6 +263,46 @@ impl ScoreBuilder {
             },
         ));
         self
+    }
+
+    /// Add a note whose accidental follows an explicit [`AccidentalDisplay`]
+    /// policy instead of automatic resolution.
+    ///
+    /// [`AccidentalDisplay::Force`] always engraves the plain accidental (a
+    /// natural on an unaltered letter included); [`AccidentalDisplay::Cautionary`]
+    /// always engraves it in parentheses. Either way the pitch's alteration
+    /// becomes the measure's accidental state for its letter and octave.
+    /// [`AccidentalDisplay::Auto`] is identical to [`Self::note`].
+    ///
+    /// # Example
+    /// ```no_run
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::note::Note;
+    /// use music::note::pitch::Pitch;
+    /// use music_engraver::layout::accidental::AccidentalDisplay;
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// let svg = ScoreBuilder::new()
+    ///     .note(Pitch::new(Note::Fis, 4), Duration::QTR)
+    ///     // Restate the sharp the measure already carries, in parentheses.
+    ///     .note_with_accidental(Pitch::new(Note::Fis, 4), Duration::QTR, AccidentalDisplay::Cautionary)
+    ///     .end_barline()
+    ///     .render_svg();
+    /// ```
+    pub fn note_with_accidental(
+        self,
+        pitch: Pitch,
+        duration: Duration,
+        display: AccidentalDisplay,
+    ) -> Self {
+        self.note_annotated(
+            pitch,
+            duration,
+            NoteAnnotations {
+                accidental_displays: vec![display],
+                ..NoteAnnotations::default()
+            },
+        )
     }
 
     /// Mark the most recently added note as tied forward to the next note at the
@@ -1356,6 +1400,27 @@ impl ScoreBuilder {
         self
     }
 
+    /// Add a chord with one [`AccidentalDisplay`] policy per pitch.
+    ///
+    /// `displays` is parallel to `pitches`; missing entries are
+    /// [`AccidentalDisplay::Auto`]. Engraved accidentals, parenthesized ones
+    /// included, stack into non-colliding columns left of the chord.
+    pub fn chord_with_accidentals(
+        self,
+        pitches: Vec<Pitch>,
+        duration: Duration,
+        displays: Vec<AccidentalDisplay>,
+    ) -> Self {
+        self.chord_annotated(
+            pitches,
+            duration,
+            NoteAnnotations {
+                accidental_displays: displays,
+                ..NoteAnnotations::default()
+            },
+        )
+    }
+
     pub(crate) fn note_annotated(
         mut self,
         pitch: Pitch,
@@ -1418,6 +1483,35 @@ impl ScoreBuilder {
         self
     }
 
+    /// Add a beam group whose notes each carry an [`AccidentalDisplay`] policy.
+    ///
+    /// Identical to [`Self::beam_group`] for [`AccidentalDisplay::Auto`] members.
+    pub fn beam_group_with_accidentals(
+        self,
+        notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
+    ) -> Self {
+        self.styled_beam_group(Self::accidental_display_members(notes))
+    }
+
+    /// One styled single-pitch group member per note, carrying its display policy.
+    fn accidental_display_members(
+        notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
+    ) -> Vec<(Vec<Pitch>, Duration, NoteAnnotations)> {
+        notes
+            .into_iter()
+            .map(|(pitch, duration, display)| {
+                (
+                    vec![pitch],
+                    duration,
+                    NoteAnnotations {
+                        accidental_displays: vec![display],
+                        ..NoteAnnotations::default()
+                    },
+                )
+            })
+            .collect()
+    }
+
     pub(crate) fn styled_beam_group(
         mut self,
         members: Vec<(Vec<Pitch>, Duration, NoteAnnotations)>,
@@ -1473,6 +1567,23 @@ impl ScoreBuilder {
             },
         ));
         self
+    }
+
+    /// Add a `tuplet_number:in_time_of` tuplet whose notes each carry an
+    /// [`AccidentalDisplay`] policy.
+    ///
+    /// Identical to [`Self::tuplet_ratio`] for [`AccidentalDisplay::Auto`] members.
+    pub fn tuplet_ratio_with_accidentals(
+        self,
+        tuplet_number: u32,
+        in_time_of: u32,
+        notes: Vec<(Pitch, Duration, AccidentalDisplay)>,
+    ) -> Self {
+        self.styled_tuplet_ratio(
+            tuplet_number,
+            in_time_of,
+            Self::accidental_display_members(notes),
+        )
     }
 
     pub(crate) fn styled_tuplet_ratio(
@@ -1657,11 +1768,12 @@ impl ScoreBuilder {
 
     /// Convert accumulated `ScoreEvent`s into `MeasureContent`s suitable for layout.
     ///
-    /// Each measure's accidentals are tracked independently (courtesy naturals,
-    /// suppression of redundant accidentals within a measure). When multiple
-    /// voices are present, voice 0 goes in `events` and voices 1+ go in
-    /// `additional_voices`. Multi-voice measures force stem directions:
-    /// voice 0 = stems up, voice 1 = stems down.
+    /// Each measure's accidentals are resolved staff-wide in musical order
+    /// across all voices (see `resolve_measure_accidentals`), against the key
+    /// signature and the measure's own accidental state, which resets at
+    /// every barline. When multiple voices are present, voice 0 goes in
+    /// `events` and voices 1+ go in `additional_voices`. Multi-voice measures
+    /// force stem directions: voice 0 = stems up, voice 1 = stems down.
     pub(crate) fn build_measure_contents(&self) -> Vec<MeasureContent> {
         let clef = self.clef.to_clef();
         self.measures
@@ -1671,14 +1783,15 @@ impl ScoreBuilder {
                 let max_voice = voiced_events.iter().map(|(v, _)| *v).max().unwrap_or(0);
                 let is_multi_voice = max_voice > 0;
 
-                let mut seen: AccidentalTracker = HashMap::new();
+                let resolved = resolve_measure_accidentals(voiced_events, &self.key_sig);
+                let mut accidentals = resolved.iter();
 
                 // Separate events by voice.
                 let mut voice_buckets: Vec<Vec<MeasureEvent>> =
                     (0..=max_voice).map(|_| Vec::new()).collect();
 
                 for (voice, event) in voiced_events {
-                    let mut me = convert_event(event, &clef, &self.key_sig, Some(&mut seen));
+                    let mut me = convert_resolved_event(event, &clef, &mut accidentals);
                     if is_multi_voice {
                         force_stem_direction(&mut me, *voice);
                     }
@@ -1882,3 +1995,5 @@ impl Default for ScoreBuilder {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_accidentals;

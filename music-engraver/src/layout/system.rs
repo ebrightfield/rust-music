@@ -205,28 +205,33 @@ pub fn layout_system(
             // Additional voices share the barline with the primary voice
             elems.push(MeasureElement::Barline(measure.barline));
             let mut voice_layout = layout_measure(&elems, config);
-            if i == 0 {
-                let leading_prefix_width = layouts[0]
-                    .elements
-                    .iter()
-                    .find(|element| {
-                        matches!(
-                            element.element,
-                            MeasureElement::Note(_)
-                                | MeasureElement::Rest(_)
-                                | MeasureElement::Chord(_)
-                                | MeasureElement::BeamGroup(_)
-                                | MeasureElement::TupletGroup(_)
-                                | MeasureElement::MultiMeasureRest { .. }
-                        )
-                    })
-                    .map(|element| element.x)
-                    .unwrap_or(0.0);
+            // Start each additional voice at the primary voice's first
+            // rhythmic event: past the system prefix in the first measure,
+            // and past the primary's leading accidental reservation anywhere.
+            let primary_first = layouts[i]
+                .elements
+                .iter()
+                .find(|element| {
+                    matches!(
+                        element.element,
+                        MeasureElement::Note(_)
+                            | MeasureElement::Rest(_)
+                            | MeasureElement::Chord(_)
+                            | MeasureElement::BeamGroup(_)
+                            | MeasureElement::TupletGroup(_)
+                            | MeasureElement::MultiMeasureRest { .. }
+                    )
+                })
+                .map(|element| element.x);
+            if let (Some(primary_first), Some(voice_first)) =
+                (primary_first, voice_layout.elements.first().map(|e| e.x))
+            {
+                let leading = primary_first - voice_first;
                 for element in &mut voice_layout.elements {
-                    element.x += leading_prefix_width;
+                    element.x += leading;
                 }
-                voice_layout.total_rod += leading_prefix_width;
-                voice_layout.total_width += leading_prefix_width;
+                voice_layout.total_rod += leading;
+                voice_layout.total_width += leading;
             }
             // Spring-only scale to match the primary voice's width, so temporal
             // positions align at measure ends without compressing this voice's

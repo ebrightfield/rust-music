@@ -1,13 +1,14 @@
+use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::staff::StaffPosition;
 use crate::layout::stem::StemDirection;
 
-/// A single note within a chord, carrying its staff position and optional accidental glyph.
+/// A single note within a chord, carrying its staff position and optional resolved accidental.
 #[derive(Clone, Debug)]
 pub struct ChordNote {
     /// Staff position (bottom line = 0).
     pub staff_position: StaffPosition,
-    /// Accidental glyph to display, if any.
-    pub accidental: Option<smufl::Glyph>,
+    /// Resolved accidental to display, if any.
+    pub accidental: Option<ResolvedAccidental>,
     /// Duration-resolved semantic notehead shape.
     pub notehead_style: crate::layout::measure::NoteheadStyle,
     /// Whether the notehead is enclosed by SMuFL notehead parentheses.
@@ -24,8 +25,8 @@ pub struct ChordNoteLayout {
     /// For stem-up: offset means to the right of the stem.
     /// For stem-down: offset means to the left of the stem.
     pub offset: bool,
-    /// Accidental glyph, if any.
-    pub accidental: Option<smufl::Glyph>,
+    /// Resolved accidental, if any.
+    pub accidental: Option<ResolvedAccidental>,
     /// Duration-resolved semantic notehead shape.
     pub notehead_style: crate::layout::measure::NoteheadStyle,
     /// Whether the notehead is enclosed by SMuFL notehead parentheses.
@@ -139,6 +140,16 @@ pub fn notehead_x_offset(offset: bool, direction: StemDirection) -> f64 {
     }
 }
 
+/// Horizontal offset, in notehead widths, of a chord's leftmost notehead from
+/// its stem-side column: `-1.0` when a stem-down chord displaces a second to
+/// the left of the stem, `0.0` otherwise. Accidentals stack left of this edge.
+pub fn chord_left_notehead_offset(layouts: &[ChordNoteLayout], direction: StemDirection) -> f64 {
+    layouts
+        .iter()
+        .map(|note| notehead_x_offset(note.offset, direction))
+        .fold(0.0, f64::min)
+}
+
 /// Check whether any note in the chord has an offset notehead,
 /// which affects the overall width of the chord column.
 pub fn chord_has_offsets(layouts: &[ChordNoteLayout]) -> bool {
@@ -172,7 +183,7 @@ mod tests {
     fn note_with_acc(pos: StaffPosition, acc: smufl::Glyph) -> ChordNote {
         ChordNote {
             staff_position: pos,
-            accidental: Some(acc),
+            accidental: Some(ResolvedAccidental::plain(acc)),
             notehead_style: crate::layout::measure::NoteheadStyle::Normal,
             parenthesized: false,
         }
@@ -331,7 +342,10 @@ mod tests {
     fn accidentals_carried_through() {
         let notes = vec![note_with_acc(2, smufl::Glyph::AccidentalSharp), note(4)];
         let result = layout_chord_noteheads(&notes, StemDirection::Up);
-        assert_eq!(result[0].accidental, Some(smufl::Glyph::AccidentalSharp));
+        assert_eq!(
+            result[0].accidental,
+            Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp))
+        );
         assert_eq!(result[1].accidental, None);
     }
 

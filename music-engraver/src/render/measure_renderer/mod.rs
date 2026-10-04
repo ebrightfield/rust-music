@@ -1,9 +1,12 @@
 use music::notation::clef::Clef;
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::articulation::layout_articulation_stack;
 use crate::layout::beam::{layout_beam_group, BeamGroupLayout, BeamedNote};
-use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
+use crate::layout::chord::{
+    chord_left_notehead_offset, layout_chord_noteheads, notehead_x_offset, ChordNote,
+};
 use crate::layout::dot::dot_staff_position;
 use crate::layout::expression::layout_expression;
 use crate::layout::grace::layout_grace_note;
@@ -25,6 +28,7 @@ use crate::layout::tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,
 };
+use crate::render::accidental_renderer::{chord_accidental_column_offsets, draw_accidental};
 use crate::render::articulation_renderer::draw_articulation;
 use crate::render::barline_renderer::draw_barline;
 use crate::render::beam_renderer::draw_beam_group_with_advances;
@@ -354,15 +358,9 @@ fn draw_note_event(
         }
     }
 
-    // Draw accidental (pre-resolved glyph) to the left of notehead
-    if let Some(acc_glyph) = note.accidental {
-        let outline = font.glyph_outline(acc_glyph)?;
-        let acc_advance = outline.advance_width as f64;
-        let padding = 0.12 * staff.staff_space;
-        let acc_x = x - acc_advance - padding;
-        let acc_y = staff.y_of(position);
-        let transform = format!("translate({acc_x}, {acc_y})");
-        svg.add_path(&outline.path_data, "black", Some(&transform));
+    // Draw accidental (pre-resolved) to the left of notehead
+    if let Some(accidental) = note.accidental {
+        draw_accidental(svg, staff, font, x, 0.0, position, accidental)?;
     }
 
     // Draw notehead
@@ -600,20 +598,26 @@ fn draw_chord_event(
             .map(|width| widest.max(width))
     })?;
 
+    // Accidentals stack in columns left of the chord's leftmost notehead.
+    let accidental_anchor = x + chord_left_notehead_offset(&layouts, direction) * advance;
+    let accidental_columns = chord_accidental_column_offsets(font, staff, &layouts)?;
+
     // Draw each notehead (with offset for seconds)
-    for note_layout in &layouts {
+    for (note_layout, &column_offset) in layouts.iter().zip(&accidental_columns) {
         let x_off = notehead_x_offset(note_layout.offset, direction) * advance;
         let note_x = x + x_off;
 
         // Draw accidental
-        if let Some(acc_glyph) = note_layout.accidental {
-            let acc_outline = font.glyph_outline(acc_glyph)?;
-            let acc_advance = acc_outline.advance_width as f64;
-            let padding = 0.12 * staff.staff_space;
-            let acc_x = note_x - acc_advance - padding;
-            let acc_y = staff.y_of(note_layout.staff_position);
-            let transform = format!("translate({acc_x}, {acc_y})");
-            svg.add_path(&acc_outline.path_data, "black", Some(&transform));
+        if let Some(accidental) = note_layout.accidental {
+            draw_accidental(
+                svg,
+                staff,
+                font,
+                accidental_anchor,
+                column_offset,
+                note_layout.staff_position,
+                accidental,
+            )?;
         }
 
         let note_advance = draw_styled_notehead(
@@ -849,7 +853,7 @@ fn grouped_member_positions(note: &NoteEvent) -> &[i8] {
     )
 }
 
-fn grouped_member_accidentals(note: &NoteEvent) -> &[Option<smufl::Glyph>] {
+fn grouped_member_accidentals(note: &NoteEvent) -> &[Option<ResolvedAccidental>] {
     note.annotations.grouped_chord.as_ref().map_or_else(
         || std::slice::from_ref(&note.accidental),
         |chord| chord.accidentals.as_slice(),
@@ -934,17 +938,23 @@ fn draw_beam_group_event_with_offsets(
                 .map(|advance| widest.max(advance))
         })?;
 
-        for layout in &layouts {
+        let accidental_anchor =
+            drawn_x + chord_left_notehead_offset(&layouts, direction) * widest_advance;
+        let accidental_columns = chord_accidental_column_offsets(font, staff, &layouts)?;
+
+        for (layout, &accidental_column) in layouts.iter().zip(&accidental_columns) {
             let column_offset = notehead_x_offset(layout.offset, direction) * widest_advance;
             let note_x = drawn_x + column_offset;
             if let Some(accidental) = layout.accidental {
-                let outline = font.glyph_outline(accidental)?;
-                let accidental_x = note_x - outline.advance_width as f64 - 0.12 * staff.staff_space;
-                let transform = format!(
-                    "translate({accidental_x}, {})",
-                    staff.y_of(layout.staff_position)
-                );
-                svg.add_path(&outline.path_data, "black", Some(&transform));
+                draw_accidental(
+                    svg,
+                    staff,
+                    font,
+                    accidental_anchor,
+                    accidental_column,
+                    layout.staff_position,
+                    accidental,
+                )?;
             }
             let advance = draw_styled_notehead(
                 svg,

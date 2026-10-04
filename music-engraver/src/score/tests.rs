@@ -524,14 +524,17 @@ fn resolve_accidental_with_tracking_suppresses_repeated_sharp() {
     let pitch = Pitch::new(Note::Fis, 4);
 
     // First occurrence: show sharp
-    let first = resolve_accidental(&pitch, &key, Some(&seen));
-    assert_eq!(first, Some(smufl::Glyph::AccidentalSharp));
+    let first = resolve_accidental(&pitch, &key, AccidentalDisplay::Auto, Some(&seen));
+    assert_eq!(
+        first,
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp))
+    );
 
     // Record it
     seen.insert(note_key(&pitch), Accidental::Sharp);
 
     // Second occurrence: suppress (same accidental already shown)
-    let second = resolve_accidental(&pitch, &key, Some(&seen));
+    let second = resolve_accidental(&pitch, &key, AccidentalDisplay::Auto, Some(&seen));
     assert_eq!(second, None, "repeated sharp should be suppressed");
 }
 
@@ -541,11 +544,14 @@ fn resolve_accidental_with_tracking_suppresses_repeated_flat() {
     let mut seen: AccidentalTracker = HashMap::new();
     let pitch = Pitch::new(Note::Bes, 4);
 
-    let first = resolve_accidental(&pitch, &key, Some(&seen));
-    assert_eq!(first, Some(smufl::Glyph::AccidentalFlat));
+    let first = resolve_accidental(&pitch, &key, AccidentalDisplay::Auto, Some(&seen));
+    assert_eq!(
+        first,
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalFlat))
+    );
     seen.insert(note_key(&pitch), Accidental::Flat);
 
-    let second = resolve_accidental(&pitch, &key, Some(&seen));
+    let second = resolve_accidental(&pitch, &key, AccidentalDisplay::Auto, Some(&seen));
     assert_eq!(second, None, "repeated flat should be suppressed");
 }
 
@@ -560,10 +566,10 @@ fn resolve_accidental_shows_courtesy_natural_after_sharp() {
     seen.insert(note_key(&sharp_pitch), Accidental::Sharp);
 
     // F4 natural should show a courtesy natural
-    let result = resolve_accidental(&natural_pitch, &key, Some(&seen));
+    let result = resolve_accidental(&natural_pitch, &key, AccidentalDisplay::Auto, Some(&seen));
     assert_eq!(
         result,
-        Some(smufl::Glyph::AccidentalNatural),
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalNatural)),
         "natural should show after sharp on same letter+octave"
     );
 }
@@ -577,10 +583,10 @@ fn resolve_accidental_shows_courtesy_natural_after_flat() {
 
     seen.insert(note_key(&flat_pitch), Accidental::Flat);
 
-    let result = resolve_accidental(&natural_pitch, &key, Some(&seen));
+    let result = resolve_accidental(&natural_pitch, &key, AccidentalDisplay::Auto, Some(&seen));
     assert_eq!(
         result,
-        Some(smufl::Glyph::AccidentalNatural),
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalNatural)),
         "natural should show after flat on same letter+octave"
     );
 }
@@ -596,10 +602,10 @@ fn resolve_accidental_different_octaves_independent() {
     seen.insert(note_key(&fis4), Accidental::Sharp);
 
     // F#5 is a different octave — should still show sharp
-    let result = resolve_accidental(&fis5, &key, Some(&seen));
+    let result = resolve_accidental(&fis5, &key, AccidentalDisplay::Auto, Some(&seen));
     assert_eq!(
         result,
-        Some(smufl::Glyph::AccidentalSharp),
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp)),
         "sharp on different octave should not be suppressed"
     );
 }
@@ -664,7 +670,7 @@ fn convert_event_with_tracking_shows_natural_after_sharp() {
         MeasureEvent::Note(n) => {
             assert_eq!(
                 n.accidental,
-                Some(smufl::Glyph::AccidentalNatural),
+                Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalNatural)),
                 "F natural after F# should show courtesy natural"
             );
         }
@@ -725,27 +731,6 @@ fn tracking_within_measure_suppresses_duplicate() {
         1,
         "adding duplicate F# should add only 1 path (notehead), not 2 (notehead+sharp)"
     );
-}
-
-#[test]
-fn effective_accidental_natural_on_altered() {
-    let pitch = Pitch::new(Note::F, 4);
-    let eff = effective_accidental(&pitch, &KeySignature::Sharps(1));
-    assert_eq!(eff, Some(Accidental::Natural));
-}
-
-#[test]
-fn effective_accidental_natural_on_unaltered() {
-    let pitch = Pitch::new(Note::C, 4);
-    let eff = effective_accidental(&pitch, &KeySignature::Open);
-    assert_eq!(eff, None);
-}
-
-#[test]
-fn effective_accidental_sharp() {
-    let pitch = Pitch::new(Note::Fis, 4);
-    let eff = effective_accidental(&pitch, &KeySignature::Open);
-    assert_eq!(eff, Some(Accidental::Sharp));
 }
 
 #[test]

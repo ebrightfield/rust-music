@@ -7730,3 +7730,33 @@
   - `GOLDEN_UPDATE=1 cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
   - `cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
   - `cargo run -p music-engraver --example advanced_guitar_vocabulary`
+
+## 2026-10-04 — RM-MN-002/007: accidental state, display policy, cautionary accidentals
+- Did: Replaced the per-arm suppression in `score/event.rs::resolve_accidental`
+  with one comparison: the requested alteration against the active one (the
+  in-measure override for letter+octave, else the key signature). This
+  reinstates key-signature accidentals after an in-measure natural or opposing
+  accidental (G major F♮→F♯ now shows the sharp). `resolve_measure_accidentals`
+  resolves each measure staff-wide in onset order (per-voice tick clocks with
+  dots and exact tuplet ratios; ties broken by voice index, then builder order),
+  so builder voice order no longer changes output.
+- Added `layout::accidental::{AccidentalDisplay, ResolvedAccidental}`:
+  `NoteAnnotations::accidental_displays` (parallel to pitches) carries
+  `Auto`/`Force`/`Cautionary`; `NoteEvent::accidental`,
+  `ChordEvent::accidentals`, and `GroupedChordMember::accidentals` carry
+  `ResolvedAccidental { glyph, parenthesized }`. Public builders:
+  `note_with_accidental`, `chord_with_accidentals`,
+  `beam_group_with_accidentals`, `tuplet_ratio_with_accidentals`.
+- Rendering: `render::draw_accidental` draws resolved accidentals, wrapping
+  cautionaries in `AccidentalParensLeft`/`Right`; chord and grouped-chord
+  accidentals stack into Gould-ordered columns (`layout_accidental_columns`)
+  left of the chord's leftmost notehead.
+- Spacing: `layout_measure` reserves each event's accidental extent
+  (columns + parentheses, `accidental_parens_rod`) as incompressible space
+  before the event, including measure-initial events (no more accidentals
+  over barlines/time signatures); `layout_system` aligns every additional
+  voice's first event with the primary voice's.
+- Goldens: `chord_symbols_with_accidentals` regenerated (accidentals now clear
+  the time signature and barline). `advanced_guitar_vocabulary` was already
+  drifting at 8eaf21a and is left for the integrator; this change also moves
+  its seven-string chord's sharps into two columns.
