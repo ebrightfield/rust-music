@@ -5,7 +5,7 @@ use crate::render::SvgWriter;
 
 /// Draw a rest glyph centered on the staff.
 ///
-/// `log2_duration`: 0 = whole, 1 = half, 2 = quarter, 3 = eighth, etc.
+/// `log2_duration`: -1 = breve, 0 = whole, 1 = half, 2 = quarter, 3 = eighth, etc.
 /// `x`: horizontal position for the rest.
 ///
 /// Returns `Ok(advance_width)` if drawn, or `Ok(0.0)` if `log2_duration`
@@ -15,7 +15,7 @@ pub fn draw_rest(
     staff: &StaffLayout,
     font: &MusicFont,
     x: f64,
-    log2_duration: u8,
+    log2_duration: i8,
 ) -> Result<f64, FontError> {
     draw_rest_displaced(svg, staff, font, x, log2_duration, 0.0)
 }
@@ -30,7 +30,7 @@ pub fn draw_rest_displaced(
     staff: &StaffLayout,
     font: &MusicFont,
     x: f64,
-    log2_duration: u8,
+    log2_duration: i8,
     y_displacement: f64,
 ) -> Result<f64, FontError> {
     let glyph = match rest_glyph(log2_duration) {
@@ -114,7 +114,7 @@ mod tests {
     fn each_rest_duration_produces_distinct_path() {
         let (font, staff) = setup();
         let mut svgs: Vec<String> = Vec::new();
-        for d in 0..=7 {
+        for d in -1..=7 {
             let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2500.0);
             draw_rest(&mut svg, &staff, &font, 0.0, d).unwrap();
             svgs.push(svg.to_svg());

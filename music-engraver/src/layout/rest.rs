@@ -4,10 +4,11 @@ use smufl::Glyph;
 
 /// Maps a rest duration to its SMuFL glyph.
 ///
-/// `log2_duration`: 0 = whole, 1 = half, 2 = quarter, 3 = eighth,
+/// `log2_duration`: -1 = breve, 0 = whole, 1 = half, 2 = quarter, 3 = eighth,
 /// 4 = sixteenth, 5 = 32nd, 6 = 64th, 7 = 128th.
-pub fn rest_glyph(log2_duration: u8) -> Option<Glyph> {
+pub fn rest_glyph(log2_duration: i8) -> Option<Glyph> {
     match log2_duration {
+        -1 => Some(Glyph::RestDoubleWhole),
         0 => Some(Glyph::RestWhole),
         1 => Some(Glyph::RestHalf),
         2 => Some(Glyph::RestQuarter),
@@ -22,11 +23,16 @@ pub fn rest_glyph(log2_duration: u8) -> Option<Glyph> {
 
 /// Default staff position for a rest glyph.
 ///
-/// Rests are vertically centered on the staff. Whole and half rests have
-/// special positions (whole hangs from 4th line, half sits on 3rd line);
-/// all others are centered at the middle line.
-pub fn rest_staff_position(log2_duration: u8) -> StaffPosition {
+/// Rests are vertically centered on the staff. Breve, whole, and half rests
+/// have special positions (breve fills the 3rd space between the 3rd and 4th
+/// lines, whole hangs from 4th line, half sits on 3rd line); all others are
+/// centered at the middle line.
+pub fn rest_staff_position(log2_duration: i8) -> StaffPosition {
     match log2_duration {
+        // Breve rest: SMuFL `restDoubleWhole` rises one staff space from its
+        // origin, so anchoring on the 3rd line (position 4) fills the space up
+        // to the 4th line.
+        -1 => 4,
         // Whole rest hangs from the 4th line (position 6)
         0 => 6,
         // Half rest sits on the 3rd line (position 4)
@@ -40,7 +46,7 @@ pub fn rest_staff_position(log2_duration: u8) -> StaffPosition {
 ///
 /// Uses the staff's coordinate mapping to translate the rest's default
 /// staff position to a y-coordinate.
-pub fn rest_y(staff: &StaffLayout, log2_duration: u8) -> f64 {
+pub fn rest_y(staff: &StaffLayout, log2_duration: i8) -> f64 {
     let pos = rest_staff_position(log2_duration);
     staff.y_of(pos)
 }
@@ -49,6 +55,12 @@ pub fn rest_y(staff: &StaffLayout, log2_duration: u8) -> f64 {
 mod tests {
     use super::*;
     use crate::font::bravura_font;
+
+    #[test]
+    fn rest_glyph_breve_is_double_whole_rest() {
+        assert_eq!(rest_glyph(-1), Some(Glyph::RestDoubleWhole));
+        assert_ne!(rest_glyph(-1), rest_glyph(0));
+    }
 
     #[test]
     fn rest_glyph_whole() {
@@ -93,18 +105,33 @@ mod tests {
     #[test]
     fn rest_glyph_invalid_returns_none() {
         assert_eq!(rest_glyph(8), None);
-        assert_eq!(rest_glyph(255), None);
+        assert_eq!(rest_glyph(i8::MAX), None);
+        assert_eq!(rest_glyph(-2), None);
     }
 
     #[test]
     fn all_rest_glyphs_are_distinct() {
-        let glyphs: Vec<Glyph> = (0..=7).filter_map(rest_glyph).collect();
-        assert_eq!(glyphs.len(), 8);
+        let glyphs: Vec<Glyph> = (-1..=7).filter_map(rest_glyph).collect();
+        assert_eq!(glyphs.len(), 9);
         for i in 0..glyphs.len() {
             for j in (i + 1)..glyphs.len() {
                 assert_ne!(glyphs[i], glyphs[j]);
             }
         }
+    }
+
+    #[test]
+    fn breve_rest_fills_space_between_third_and_fourth_lines() {
+        let font = bravura_font();
+        let config = font.engraving_config();
+        let staff = crate::layout::staff::StaffLayout::from_config(0.0, 0.0, 5000.0, &config);
+        let bbox = font
+            .glyph_bbox_design_units(Glyph::RestDoubleWhole)
+            .expect("Bravura provides restDoubleWhole metrics");
+        let origin_y = rest_y(&staff, -1);
+        assert_eq!(rest_staff_position(-1), 4);
+        assert!((origin_y + bbox.y_bottom - staff.y_of(4)).abs() < 1e-9);
+        assert!((origin_y + bbox.y_top - staff.y_of(6)).abs() < 1e-9);
     }
 
     #[test]
@@ -142,7 +169,7 @@ mod tests {
     #[test]
     fn all_rest_glyphs_exist_in_bravura() {
         let font = bravura_font();
-        for d in 0..=7 {
+        for d in -1..=7 {
             let glyph = rest_glyph(d).unwrap();
             assert!(
                 font.glyph_outline(glyph).is_ok(),

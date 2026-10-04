@@ -3143,7 +3143,7 @@ pub(crate) fn draw_guitar_tab_system(
                         vec![group_x + notation_center_offset(font, event)?]
                     }
                     GuitarGroup::Beam(events) | GuitarGroup::Tuplet { events, .. } => {
-                        let durations: Vec<u8> = events
+                        let durations: Vec<i8> = events
                             .iter()
                             .map(|event| super::event::duration_kind_to_log2(event.duration.kind()))
                             .collect();

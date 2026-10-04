@@ -84,7 +84,7 @@ fn chord_notehead_style(
 
 pub(crate) fn widest_notehead_advance(
     font: &MusicFont,
-    duration_log2: u8,
+    duration_log2: i8,
     styles: &[NoteheadStyle],
     notehead_count: usize,
 ) -> Result<f64, FontError> {
@@ -104,7 +104,7 @@ pub(crate) fn widest_notehead_advance(
 /// its own custom notehead and can be tied independently.
 pub(crate) fn collect_note_positions(
     system: &SystemLayout,
-) -> Vec<(f64, i8, u8, NoteheadStyle, bool, Option<StemDirection>)> {
+) -> Vec<(f64, i8, i8, NoteheadStyle, bool, Option<StemDirection>)> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
@@ -284,7 +284,7 @@ fn draw_system_ties(
 pub(crate) struct SlurNoteInfo {
     pub(crate) x: f64,
     pub(crate) staff_position: i8,
-    pub(crate) duration_log2: u8,
+    pub(crate) duration_log2: i8,
     pub(crate) notehead_style: NoteheadStyle,
     pub(crate) stem_direction: Option<StemDirection>,
     pub(crate) slur_start: bool,
@@ -388,7 +388,7 @@ fn draw_system_slurs(
 /// Positional info for a note relevant to hairpin drawing.
 pub(crate) struct HairpinNoteInfo<'a> {
     pub(crate) x: f64,
-    pub(crate) duration_log2: u8,
+    pub(crate) duration_log2: i8,
     pub(crate) notehead_styles: &'a [NoteheadStyle],
     pub(crate) notehead_count: usize,
     pub(crate) hairpin_start: Option<HairpinType>,
@@ -502,7 +502,7 @@ fn draw_system_hairpins(
 /// paths share the same collection/draw structure.
 pub(crate) struct CrescTextNoteInfo<'a> {
     pub(crate) x: f64,
-    pub(crate) duration_log2: u8,
+    pub(crate) duration_log2: i8,
     pub(crate) notehead_styles: &'a [NoteheadStyle],
     pub(crate) notehead_count: usize,
     pub(crate) cresc_text_start: Option<CrescTextKind>,
@@ -741,7 +741,7 @@ fn draw_system_volta_brackets(
 /// Positional info for a note relevant to ottava bracket drawing.
 pub(crate) struct OttavaNoteInfo<'a> {
     pub(crate) x: f64,
-    pub(crate) duration_log2: u8,
+    pub(crate) duration_log2: i8,
     pub(crate) notehead_styles: &'a [NoteheadStyle],
     pub(crate) notehead_count: usize,
     pub(crate) ottava_start: Option<OttavaKind>,

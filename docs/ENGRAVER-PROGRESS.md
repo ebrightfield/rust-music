@@ -7745,3 +7745,25 @@
   2 6 3 7 4 8 5), tenor flats are the treble shape half a line higher.
 - Note: this supersedes the earlier sub-brackets note that the viola line had
   to use `Clef::Treble` because no alto clef existed; that golden is unchanged.
+
+## 2026-10-04 — RM-MN-008 breve notes, chords, and rests
+
+- Did: Breves no longer collapse to whole notes. The layout duration code
+  `duration_log2` is now `i8` with `-1 = breve` (`0` whole, `1` half, …) on
+  `NoteEvent`, `ChordEvent`, `RestEvent`, `BeamedNote`, `TabBeamedNote`,
+  `TabRhythmLayout`, the TAB builder (`TabScoreBuilder::duration(i8)`), and
+  every helper that consumes it (`NoteheadStyle::glyph`, `rest_glyph`,
+  `rest_staff_position`, `rest_y`, `draw_rest`, `notehead_advance`,
+  `beam_group_note_x_offsets`, `tab_flag_count`, `needs_stem`,
+  `layout_tab_rhythm`). Flag/beam counts clamp below zero instead of wrapping.
+- Glyphs: breve noteheads use `noteheadDoubleWhole` (and the diamond, X,
+  circled-X, and slash double-whole variants; square percussion heads fall
+  back to `noteheadSquareWhite` because SMuFL has no square double-whole).
+  `NoteheadKind::DoubleWhole` was added. Breve rests use `restDoubleWhole`
+  anchored on the 3rd line so they fill the space up to the 4th line. Breves
+  stay stemless, flagless, and unbeamed.
+- Spacing: the Gourlay spring treats a breve as one duration doubling beyond a
+  whole note for notes, rests, chords, and beam/tuplet members.
+- Tests: replaced `log2_breve_is_0` (which pinned the defect); added glyph,
+  rest-position, spacing, beam-level, conversion, guitar-projection, and public
+  `ScoreBuilder`/`GuitarScore` SVG regressions, plus dotted-breve tick math.

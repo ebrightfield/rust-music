@@ -10,7 +10,7 @@ pub struct BeamedNote {
     pub staff_position: StaffPosition,
     /// Log2 of the duration: 3=eighth, 4=sixteenth, 5=32nd, etc.
     /// Must be >= 3 to participate in beaming.
-    pub duration_log2: u8,
+    pub duration_log2: i8,
 }
 
 /// A computed beam group ready for rendering.
@@ -68,6 +68,12 @@ pub fn beam_group_stem_direction(notes: &[BeamedNote]) -> StemDirection {
     }
 }
 
+/// Beam lines a duration wants: eighth=1, sixteenth=2, etc. Breve through
+/// quarter (`duration_log2 <= 2`) want none.
+fn beam_level(duration_log2: i8) -> u8 {
+    u8::try_from(duration_log2.saturating_sub(2)).unwrap_or(0)
+}
+
 /// Compute how many beam lines each note needs on its left and right.
 ///
 /// Rules:
@@ -85,15 +91,12 @@ pub fn compute_beam_counts(notes: &[BeamedNote]) -> (Vec<u8>, Vec<u8>) {
     }
     if n == 1 {
         // A single beamed note gets a fractional beam on the left
-        let level = notes[0].duration_log2.saturating_sub(2);
+        let level = beam_level(notes[0].duration_log2);
         return (vec![level], vec![0]);
     }
 
     // beam_level: how many beams this note "wants" (eighth=1, 16th=2, etc.)
-    let levels: Vec<u8> = notes
-        .iter()
-        .map(|n| n.duration_log2.saturating_sub(2))
-        .collect();
+    let levels: Vec<u8> = notes.iter().map(|n| beam_level(n.duration_log2)).collect();
 
     let mut beams_left = vec![0u8; n];
     let mut beams_right = vec![0u8; n];
@@ -159,7 +162,7 @@ pub fn layout_beam_group(
     // Max beam level determines extra stem length needed
     let max_beam_level = notes
         .iter()
-        .map(|n| n.duration_log2.saturating_sub(2))
+        .map(|n| beam_level(n.duration_log2))
         .max()
         .unwrap_or(1)
         .max(1);
@@ -284,7 +287,7 @@ const BEAM_GROUP_SPACING_RATIO: f64 = 1.6;
 /// This helper exists so both the rendering path and the cross-voice
 /// collision detector compute identical per-note absolute x-coordinates;
 /// any divergence would silently misalign collision offsets.
-pub fn beam_group_note_x_offsets(durations: &[u8], total_width: f64) -> Vec<f64> {
+pub fn beam_group_note_x_offsets(durations: &[i8], total_width: f64) -> Vec<f64> {
     let n = durations.len();
     if n == 0 {
         return Vec::new();
@@ -322,7 +325,7 @@ mod tests {
     const SS: f64 = 250.0; // standard Bravura staff space
     const HS: f64 = 125.0;
 
-    fn make_notes(positions: &[(f64, StaffPosition, u8)]) -> Vec<BeamedNote> {
+    fn make_notes(positions: &[(f64, StaffPosition, i8)]) -> Vec<BeamedNote> {
         positions
             .iter()
             .map(|&(x, pos, dur)| BeamedNote {
@@ -447,6 +450,18 @@ mod tests {
         let (left, right) = compute_beam_counts(&notes);
         assert_eq!(right[0], 3);
         assert_eq!(left[1], 3);
+    }
+
+    #[test]
+    fn breve_member_wants_no_beams_and_does_not_wrap() {
+        // Breves (-1) sit below the beamable range; their beam level must
+        // clamp to zero rather than wrap through an unsigned conversion.
+        let notes = make_notes(&[(0.0, 2, -1), (250.0, 4, 4)]);
+        let (left, right) = compute_beam_counts(&notes);
+        assert_eq!(right[0], 1, "only the primary beam reaches the breve");
+        assert_eq!(left[1], 2);
+        let single = make_notes(&[(0.0, 2, -1)]);
+        assert_eq!(compute_beam_counts(&single), (vec![0], vec![0]));
     }
 
     // --- layout_beam_group ---
@@ -694,7 +709,7 @@ mod tests {
         // Independent reimplementation of the renderer's spacing logic to
         // assert byte-identical behaviour. Any drift in the helper would
         // break this and silently misalign collision detection from rendering.
-        let durations = vec![3u8, 3, 3];
+        let durations = vec![3i8, 3, 3];
         let total_width = 750.0;
         let shortest = *durations.iter().max().unwrap();
         let factors: Vec<f64> = durations

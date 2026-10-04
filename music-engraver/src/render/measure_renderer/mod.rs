@@ -287,9 +287,10 @@ fn per_note_shifts_for_group(
     shifts
 }
 
-/// Notehead kind from log2 duration: 0=whole, 1=half, 2+=filled.
-fn notehead_kind_from_log2(duration_log2: u8) -> NoteheadKind {
+/// Notehead kind from log2 duration: -1=breve, 0=whole, 1=half, 2+=filled.
+fn notehead_kind_from_log2(duration_log2: i8) -> NoteheadKind {
     match duration_log2 {
+        ..=-1 => NoteheadKind::DoubleWhole,
         0 => NoteheadKind::Whole,
         1 => NoteheadKind::Half,
         _ => NoteheadKind::Filled,
@@ -312,9 +313,10 @@ fn parenthesized_notehead(annotations: &NoteAnnotations, index: usize) -> bool {
         .unwrap_or(false)
 }
 
-/// Number of flags from log2 duration: 0–2 have no flags, 3=one flag, 4=two, etc.
-fn flag_count_from_log2(duration_log2: u8) -> u8 {
-    duration_log2.saturating_sub(2)
+/// Number of flags from log2 duration: breve through quarter (≤ 2) have no
+/// flags, 3=one flag, 4=two, etc.
+fn flag_count_from_log2(duration_log2: i8) -> u8 {
+    u8::try_from(duration_log2.saturating_sub(2)).unwrap_or(0)
 }
 
 /// Draw a complete note event: accidental + notehead + ledger lines + stem + flag + dots.
@@ -897,7 +899,7 @@ fn draw_beam_group_event_with_offsets(
         "per_note_x_shift length must match beam group member count"
     );
 
-    let durations: Vec<u8> = bg.notes.iter().map(|note| note.duration_log2).collect();
+    let durations: Vec<i8> = bg.notes.iter().map(|note| note.duration_log2).collect();
     let local_offsets = crate::layout::beam::beam_group_note_x_offsets(&durations, total_width);
     let positions: Vec<i8> = bg
         .notes

@@ -1884,3 +1884,5 @@ impl Default for ScoreBuilder {
 mod tests;
 #[cfg(test)]
 mod tests_c_clefs;
+#[cfg(test)]
+mod tests_breve;
