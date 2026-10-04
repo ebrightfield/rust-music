@@ -118,6 +118,9 @@ pub enum ArticulationKind {
     /// either side; without an explicit placement it goes opposite the stem
     /// and stacks like an ordinary articulation.
     Custom(Glyph),
+    /// Source-derived broad mark: a long horizontal bar with a short thick
+    /// block under its centre (`mn-c12-r009`'s `\broadMark` markup).
+    BroadMark,
 }
 
 /// One articulation-like mark on a note or chord: what it draws, on which
@@ -157,6 +160,17 @@ impl ArticulationMark {
         }
     }
 
+    /// The broad mark printed in mn-c12-r009: a thin horizontal line with
+    /// a thick, centred block hanging below it, placed opposite the stem
+    /// unless `.above()` / `.below()` is requested.
+    pub fn broad_mark() -> Self {
+        Self {
+            kind: ArticulationKind::BroadMark,
+            placement: None,
+            parenthesized: false,
+        }
+    }
+
     /// Force the mark above the note.
     pub fn above(self) -> Self {
         Self {
@@ -185,7 +199,7 @@ impl ArticulationMark {
     pub fn resolved_placement(self, stem_dir: StemDirection) -> ArticulationPlacement {
         self.placement.unwrap_or(match self.kind {
             ArticulationKind::Standard(articulation) => articulation.default_placement(stem_dir),
-            ArticulationKind::Custom(_) => match stem_dir {
+            ArticulationKind::Custom(_) | ArticulationKind::BroadMark => match stem_dir {
                 StemDirection::Up => ArticulationPlacement::Below,
                 StemDirection::Down => ArticulationPlacement::Above,
             },
@@ -197,6 +211,7 @@ impl ArticulationMark {
         match self.kind {
             ArticulationKind::Standard(articulation) => articulation.glyph(placement),
             ArticulationKind::Custom(glyph) => glyph,
+            ArticulationKind::BroadMark => Glyph::ArticTenutoAbove,
         }
     }
 
@@ -332,7 +347,10 @@ pub struct ArticulationLayout {
     pub x: f64,
     /// Y-coordinate of the articulation glyph anchor.
     pub y: f64,
-    /// The SMuFL glyph to render.
+    /// The source kind; [`ArticulationKind::BroadMark`] adds a centred
+    /// block to the stretched tenuto glyph.
+    pub kind: ArticulationKind,
+    /// The SMuFL glyph that supplies the mark's outline.
     pub glyph: Glyph,
     /// Whether the articulation is placed above or below.
     pub placement: ArticulationPlacement,
@@ -389,6 +407,7 @@ pub fn layout_articulation(
         x: notehead_x,
         y: side_base_y(placement, note_staff_position, staff),
         glyph: mark.glyph(placement),
+        kind: mark.kind,
         placement,
         parenthesized: mark.parenthesized,
     }

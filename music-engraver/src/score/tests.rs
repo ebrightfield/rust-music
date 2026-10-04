@@ -10935,3 +10935,22 @@ fn c12_r009_slashed_grace_connects_to_its_principal_by_slur() {
         "only the requested slur adds a filled curved path"
     );
 }
+
+#[test]
+fn c12_r009_broad_mark_has_long_bar_and_hanging_block_above_note() {
+    use crate::layout::articulation::ArticulationMark;
+    let font = bravura_font();
+    let bar = font
+        .glyph_outline(smufl::Glyph::ArticTenutoAbove)
+        .unwrap()
+        .path_data;
+    let svg = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .note(Pitch::new(Note::B, 3), Duration::EIGHTH)
+        .articulation_mark(ArticulationMark::broad_mark().above())
+        .end_barline()
+        .render_svg();
+    assert!(svg.contains(&bar), "the broad mark's bar uses a real glyph");
+    assert!(svg.contains("scale(2.5,1)"), "the bar spans several noteheads");
+    assert!(svg.contains("<rect"), "a solid block hangs under the bar");
+}

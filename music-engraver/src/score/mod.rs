@@ -651,9 +651,10 @@ impl ScoreBuilder {
     }
 
     /// Attach an articulation-like mark to the most recently added note or
-    /// chord: a built-in [`Articulation`] or a custom SMuFL glyph
-    /// ([`ArticulationMark::custom`]), optionally forced above or below and
-    /// optionally parenthesized (e.g. a parenthesized fermata).
+    /// chord: a built-in [`Articulation`], a custom SMuFL glyph
+    /// ([`ArticulationMark::custom`]), or the broad line-and-block mark
+    /// from mn-c12-r009 ([`ArticulationMark::broad_mark`]). Placement can be
+    /// forced above/below, and marks may be parenthesized (e.g. a fermata).
     ///
     /// Marks on one side stack outward with the note's other articulations:
     /// ordinary and custom marks in the order attached, then bow strokes,

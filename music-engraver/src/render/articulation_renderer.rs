@@ -2,12 +2,18 @@ use smufl::Glyph;
 
 use crate::font::FontError;
 use crate::font::MusicFont;
-use crate::layout::articulation::ArticulationLayout;
+use crate::layout::articulation::{ArticulationKind, ArticulationLayout, ArticulationPlacement};
 use crate::render::SvgWriter;
 
 /// Gap between a parenthesized mark's ink and each parenthesis, in staff
 /// spaces.
 const MARK_PARENTHESIS_GAP_SS: f64 = 0.1;
+
+/// Proportions of the horizontal stroke and suspended block in Schönberg's
+/// broad mark (mn-c12-r009), relative to Bravura's tenuto and a staff space.
+const BROAD_MARK_BAR_SCALE: f64 = 2.5;
+const BROAD_MARK_BLOCK_WIDTH_SS: f64 = 1.4;
+const BROAD_MARK_BLOCK_HEIGHT_SS: f64 = 0.22;
 
 /// Draw an articulation glyph at the position computed by `layout_articulation`,
 /// enclosed in parentheses when the layout asks for it.
@@ -19,10 +25,40 @@ pub fn draw_articulation(
     layout: &ArticulationLayout,
 ) -> Result<(), FontError> {
     let outline = font.glyph_outline(layout.glyph)?;
-    let transform = format!("translate({},{})", layout.x, layout.y);
-    writer.add_path(&outline.path_data, "black", Some(&transform));
-    if layout.parenthesized {
-        draw_mark_parentheses(writer, font, layout.glyph, layout.x, layout.y)?;
+    if layout.kind == ArticulationKind::BroadMark {
+        let ss = f64::from(font.units_per_em()) / 4.0;
+        let width = outline.advance_width as f64 * BROAD_MARK_BAR_SCALE;
+        writer.add_path(
+            &outline.path_data,
+            "black",
+            Some(&format!(
+                "translate({},{}) scale({BROAD_MARK_BAR_SCALE},1)",
+                layout.x - width / 2.0,
+                layout.y
+            )),
+        );
+        let block_width = BROAD_MARK_BLOCK_WIDTH_SS * ss;
+        let block_height = BROAD_MARK_BLOCK_HEIGHT_SS * ss;
+        let block_y = match layout.placement {
+            ArticulationPlacement::Above => layout.y,
+            ArticulationPlacement::Below => layout.y - block_height,
+        };
+        writer.add_rect(layout.x - block_width / 2.0, block_y, block_width, block_height, "black");
+        if layout.parenthesized {
+            draw_mark_parentheses_around(
+                writer,
+                font,
+                layout.x - width / 2.0,
+                layout.x + width / 2.0,
+                layout.y + block_height / 2.0,
+            )?;
+        }
+    } else {
+        let transform = format!("translate({},{})", layout.x, layout.y);
+        writer.add_path(&outline.path_data, "black", Some(&transform));
+        if layout.parenthesized {
+            draw_mark_parentheses(writer, font, layout.glyph, layout.x, layout.y)?;
+        }
     }
     Ok(())
 }
@@ -38,8 +74,6 @@ pub(crate) fn draw_mark_parentheses(
     x: f64,
     y: f64,
 ) -> Result<(), FontError> {
-    let staff_space = f64::from(font.units_per_em()) / 4.0;
-    let gap = MARK_PARENTHESIS_GAP_SS * staff_space;
     let (left, right, center) = match font.glyph_bbox_design_units(glyph) {
         Some(bbox) => (
             x + bbox.x_left,
@@ -48,6 +82,17 @@ pub(crate) fn draw_mark_parentheses(
         ),
         None => (x, x + font.glyph_advance(glyph)? as f64, y),
     };
+    draw_mark_parentheses_around(writer, font, left, right, center)
+}
+
+fn draw_mark_parentheses_around(
+    writer: &mut SvgWriter,
+    font: &MusicFont,
+    left: f64,
+    right: f64,
+    center: f64,
+) -> Result<(), FontError> {
+    let gap = MARK_PARENTHESIS_GAP_SS * f64::from(font.units_per_em()) / 4.0;
     let open = font.glyph_outline(Glyph::AccidentalParensLeft)?;
     let open_x = left - gap - open.advance_width as f64;
     writer.add_path(
