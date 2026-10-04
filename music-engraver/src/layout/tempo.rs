@@ -1,457 +1,504 @@
-/// Tempo marking layout — metronome marks and tempo text above the staff.
-///
-/// Standard engraving convention: tempo markings appear above the staff,
-/// left-aligned with the beat they apply to. Two common forms:
-/// - Text only: "Allegro", "Andante", etc. (bold)
-/// - Metronome mark: "♩ = 120" or combined "Allegro ♩ = 120"
-///
-/// For metronome marks, the note symbol is rendered as a SMuFL glyph
-/// (noteheadBlack + stem) at the appropriate size, with " = BPM" as text.
-use crate::layout::staff::StaffLayout;
+//! Tempo marks above the staff: tempo words, metronome marks and
+//! note = note equations.
+//!
+//! A [`TempoMark`] composes up to three lines' worth of content on the
+//! LilyPond model of `\tempo \markup { ... }`:
+//!
+//! - an optional text before the metronome ("Allegro", "Vals"),
+//! - an optional [`MetronomeMark`]: a note value, "=", then a BPM, a BPM
+//!   range ("116-112"), or a second note value (a metric-modulation
+//!   equation "♩ = ♩"); optionally approximate ("c. 60") and parenthesized,
+//! - optional text after it on the same line ("( Agitato)", "Monodia"),
+//! - an optional text stacked below it ("Alla gavotta").
+//!
+//! Text is bold by default (LilyPond's tempo font); note values are SMuFL
+//! `metNote*` glyphs scaled to the text, with `metAugmentationDot` dots.
 
-/// The kind of note value used in a metronome mark.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use smufl::Glyph;
+
+use crate::font::{FontError, MusicFont};
+use crate::layout::staff::StaffLayout;
+use crate::layout::text_script::{layout_text_line, LineItem, TextFont, TextLineLayout};
+
+/// The note value printed in a metronome mark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MetronomeNoteKind {
+    /// Whole note.
     Whole,
+    /// Half note.
     Half,
+    /// Quarter note.
     Quarter,
+    /// Eighth note.
     Eighth,
+    /// Sixteenth note.
     Sixteenth,
+    /// Thirty-second note.
+    ThirtySecond,
 }
 
-/// A tempo marking specification.
+impl MetronomeNoteKind {
+    /// SMuFL metronome glyph (stem up) for this note value.
+    pub fn notehead_glyph(self) -> Glyph {
+        match self {
+            Self::Whole => Glyph::MetNoteWhole,
+            Self::Half => Glyph::MetNoteHalfUp,
+            Self::Quarter => Glyph::MetNoteQuarterUp,
+            Self::Eighth => Glyph::MetNote8thUp,
+            Self::Sixteenth => Glyph::MetNote16thUp,
+            Self::ThirtySecond => Glyph::MetNote32ndUp,
+        }
+    }
+}
+
+/// A (possibly dotted) note value in a metronome mark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MetronomeUnit {
+    /// The note value.
+    pub kind: MetronomeNoteKind,
+    /// Augmentation dots (0 for an undotted value).
+    pub dots: u8,
+}
+
+impl MetronomeUnit {
+    /// An undotted note value.
+    pub fn new(kind: MetronomeNoteKind) -> Self {
+        Self { kind, dots: 0 }
+    }
+
+    /// A single-dotted note value ("♩.").
+    pub fn dotted(kind: MetronomeNoteKind) -> Self {
+        Self { kind, dots: 1 }
+    }
+}
+
+impl From<MetronomeNoteKind> for MetronomeUnit {
+    fn from(kind: MetronomeNoteKind) -> Self {
+        Self::new(kind)
+    }
+}
+
+/// The right-hand side of a metronome mark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MetronomeValue {
+    /// Beats per minute ("= 120").
+    Bpm(u16),
+    /// A range of beats per minute, printed as written ("= 116-112").
+    Range(u16, u16),
+    /// Another note value: a metric-modulation equation ("♩ = ♩.").
+    Unit(MetronomeUnit),
+}
+
+/// A metronome mark: `unit = value`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MetronomeMark {
+    /// The note value on the left of "=".
+    pub unit: MetronomeUnit,
+    /// The right-hand side.
+    pub value: MetronomeValue,
+    /// Prefix a BPM value with "c." (circa).
+    pub approximate: bool,
+    /// Enclose the whole mark in parentheses.
+    pub parenthesized: bool,
+}
+
+impl MetronomeMark {
+    /// `unit = bpm`.
+    pub fn bpm(unit: impl Into<MetronomeUnit>, bpm: u16) -> Self {
+        Self {
+            unit: unit.into(),
+            value: MetronomeValue::Bpm(bpm),
+            approximate: false,
+            parenthesized: false,
+        }
+    }
+
+    /// `unit = from-to`.
+    pub fn range(unit: impl Into<MetronomeUnit>, from: u16, to: u16) -> Self {
+        Self {
+            value: MetronomeValue::Range(from, to),
+            ..Self::bpm(unit, from)
+        }
+    }
+
+    /// `left = right` (metric modulation).
+    pub fn equation(left: impl Into<MetronomeUnit>, right: impl Into<MetronomeUnit>) -> Self {
+        Self {
+            unit: left.into(),
+            value: MetronomeValue::Unit(right.into()),
+            approximate: false,
+            parenthesized: false,
+        }
+    }
+
+    /// Mark the BPM as approximate ("c. 60").
+    pub fn approx(mut self) -> Self {
+        self.approximate = true;
+        self
+    }
+
+    /// Enclose the mark in parentheses ("(♩ = 60)").
+    pub fn parenthesized(mut self) -> Self {
+        self.parenthesized = true;
+        self
+    }
+}
+
+/// A run of tempo text with its typeface style (bold by default).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TempoText {
+    /// The words.
+    pub text: String,
+    /// Typeface style.
+    pub font: TextFont,
+}
+
+impl TempoText {
+    /// Bold tempo text (LilyPond's default tempo font).
+    pub fn bold(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            font: TextFont::Bold,
+        }
+    }
+
+    /// Roman tempo text (LilyPond `\normal-text`).
+    pub fn upright(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            font: TextFont::Upright,
+        }
+    }
+}
+
+impl From<&str> for TempoText {
+    fn from(text: &str) -> Self {
+        Self::bold(text)
+    }
+}
+
+impl From<String> for TempoText {
+    fn from(text: String) -> Self {
+        Self::bold(text)
+    }
+}
+
+/// A tempo marking: words, a metronome mark, or both.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct TempoMark {
+    /// Text before the metronome mark on its line ("Allegro").
+    pub text: Option<TempoText>,
+    /// The metronome mark or note = note equation.
+    pub metronome: Option<MetronomeMark>,
+    /// Text after the metronome mark on its line ("Monodia").
+    pub text_after: Option<TempoText>,
+    /// Text on a line of its own below ("Alla gavotta").
+    pub text_below: Option<TempoText>,
+}
+
+impl TempoMark {
+    /// Words only ("Allegro").
+    pub fn text(text: impl Into<TempoText>) -> Self {
+        Self {
+            text: Some(text.into()),
+            ..Self::default()
+        }
+    }
+
+    /// A metronome mark only.
+    pub fn metronome(mark: MetronomeMark) -> Self {
+        Self {
+            metronome: Some(mark),
+            ..Self::default()
+        }
+    }
+
+    /// Set the text before the metronome mark.
+    pub fn with_text(mut self, text: impl Into<TempoText>) -> Self {
+        self.text = Some(text.into());
+        self
+    }
+
+    /// Set the text after the metronome mark.
+    pub fn with_text_after(mut self, text: impl Into<TempoText>) -> Self {
+        self.text_after = Some(text.into());
+        self
+    }
+
+    /// Set the text stacked below.
+    pub fn with_text_below(mut self, text: impl Into<TempoText>) -> Self {
+        self.text_below = Some(text.into());
+        self
+    }
+}
+
+/// One positioned line of a tempo mark.
 #[derive(Debug, Clone, PartialEq)]
-pub enum TempoMark {
-    /// Text-only tempo indication (e.g. "Allegro").
-    Text(String),
-    /// Metronome mark only (e.g. ♩ = 120).
-    Metronome {
-        note_kind: MetronomeNoteKind,
-        /// Whether the note value is dotted.
-        dotted: bool,
-        bpm: u16,
-    },
-    /// Combined text and metronome (e.g. "Allegro ♩ = 120").
-    TextWithMetronome {
-        text: String,
-        note_kind: MetronomeNoteKind,
-        dotted: bool,
-        bpm: u16,
-    },
+pub struct TempoLine {
+    /// The composed line.
+    pub line: TextLineLayout,
+    /// Absolute baseline y.
+    pub baseline_y: f64,
 }
 
 /// Result of laying out a tempo marking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TempoMarkLayout {
-    /// Left x-position of the tempo marking.
+    /// Left edge of every line.
     pub x_left: f64,
-    /// Baseline y-position (above the staff).
-    pub y_baseline: f64,
-    /// Font size for the text, in font design units.
-    pub font_size: f64,
-    /// The text to render (e.g. "Allegro", or "= 120" when a glyph precedes it).
-    pub text: String,
-    /// Whether to render bold text.
-    pub bold: bool,
-    /// Optional metronome glyph info: (notehead_glyph, has_stem, has_flag, dotted, x_offset, text_after).
-    /// The note symbol is drawn at the left edge, then the "= BPM" text follows.
-    pub metronome: Option<MetronomeInfo>,
+    /// Lines from top to bottom.
+    pub lines: Vec<TempoLine>,
 }
 
-/// Info for rendering a metronome note symbol.
-#[derive(Debug, Clone)]
-pub struct MetronomeInfo {
-    /// The SMuFL glyph for the notehead.
-    pub notehead_glyph: smufl::Glyph,
-    /// Whether to draw a stem on the notehead.
-    pub has_stem: bool,
-    /// Number of flags (0 for quarter/half/whole, 1 for eighth, 2 for sixteenth).
-    pub flag_count: u8,
-    /// Whether the note symbol is dotted.
-    pub dotted: bool,
-    /// X-position of the note symbol.
-    pub note_x: f64,
-    /// The "= BPM" text that follows the note symbol.
-    pub eq_text: String,
-    /// X-position for the "= BPM" text (after the note symbol).
-    pub eq_text_x: f64,
-}
-
-/// Distance above the top staff line for tempo marking placement, in staff spaces.
-const TEMPO_ABOVE_STAFF_SS: f64 = 2.8;
-
-/// Font size for tempo text, in staff spaces.
-const TEMPO_FONT_SIZE_SS: f64 = 1.6;
-
-/// Approximate width of one character in the tempo font, as a fraction of font_size.
-const CHAR_WIDTH_RATIO: f64 = 0.55;
-
-/// Width of the note symbol area (notehead + stem + optional flag), in staff spaces.
-const NOTE_SYMBOL_WIDTH_SS: f64 = 1.4;
-
-/// Spacing between text and metronome symbol, in staff spaces.
-const TEXT_METRONOME_GAP_SS: f64 = 0.4;
-
-impl MetronomeNoteKind {
-    /// SMuFL glyph for the notehead at this duration.
-    pub fn notehead_glyph(self) -> smufl::Glyph {
-        match self {
-            MetronomeNoteKind::Whole => smufl::Glyph::MetNoteWhole,
-            MetronomeNoteKind::Half => smufl::Glyph::MetNoteHalfUp,
-            MetronomeNoteKind::Quarter => smufl::Glyph::MetNoteQuarterUp,
-            MetronomeNoteKind::Eighth => smufl::Glyph::MetNote8thUp,
-            MetronomeNoteKind::Sixteenth => smufl::Glyph::MetNote16thUp,
-        }
+impl TempoMarkLayout {
+    /// Topmost y reached by the mark (SVG y-down: the smallest y).
+    pub fn top_y(&self) -> f64 {
+        self.lines
+            .iter()
+            .map(|l| l.baseline_y - l.line.ascent)
+            .fold(f64::INFINITY, f64::min)
     }
 }
 
-/// Lay out a tempo marking above the staff.
-///
-/// `x_left` is the left-edge horizontal position (aligned with the note/beat it applies to).
-/// `staff` provides vertical reference for placement above the top staff line.
-/// `staff_space` is the staff space size in font design units.
+/// Distance above the top staff line of the bottom line's baseline, in
+/// staff spaces.
+pub const TEMPO_ABOVE_STAFF_SS: f64 = 2.8;
+
+/// Font size for tempo text, in staff spaces.
+pub const TEMPO_FONT_SIZE_SS: f64 = 1.6;
+
+/// Scale of metronome note glyphs relative to staff size (LilyPond sets
+/// tempo notes `\fontsize #-2` and smaller).
+pub const METRONOME_NOTE_SCALE: f64 = 0.7;
+
+/// Gap between a note glyph and its augmentation dot, in staff spaces.
+const METRONOME_DOT_GAP_SS: f64 = 0.15;
+
+/// Gap between tempo words and the metronome mark, in staff spaces.
+pub const TEXT_METRONOME_GAP_SS: f64 = 0.5;
+
+/// Line spacing of stacked tempo text, as a multiple of the font size.
+const TEMPO_LINE_SPACING: f64 = 1.2;
+
+/// Default baseline of a tempo mark's bottom line above `staff`.
+pub fn tempo_baseline(staff: &StaffLayout, staff_space: f64) -> f64 {
+    staff.y_of(8) - TEMPO_ABOVE_STAFF_SS * staff_space
+}
+
+fn text_item(text: &TempoText, font_size: f64) -> LineItem {
+    LineItem::Text {
+        text: text.text.clone(),
+        font: text.font,
+        font_size,
+    }
+}
+
+fn unit_items(unit: MetronomeUnit, staff_space: f64, items: &mut Vec<LineItem>) {
+    items.push(LineItem::Glyph {
+        glyph: unit.kind.notehead_glyph(),
+        scale: METRONOME_NOTE_SCALE,
+        dy: 0.0,
+    });
+    for _ in 0..unit.dots {
+        items.push(LineItem::Gap(METRONOME_DOT_GAP_SS * staff_space));
+        items.push(LineItem::Glyph {
+            glyph: Glyph::MetAugmentationDot,
+            scale: METRONOME_NOTE_SCALE,
+            dy: 0.0,
+        });
+    }
+}
+
+/// Line items of a metronome mark, in bold at `font_size`.
+fn metronome_items(mark: &MetronomeMark, font_size: f64, staff_space: f64) -> Vec<LineItem> {
+    let bold = |text: String| LineItem::Text {
+        text,
+        font: TextFont::Bold,
+        font_size,
+    };
+    let mut items = Vec::new();
+    if mark.parenthesized {
+        items.push(bold("(".into()));
+    }
+    unit_items(mark.unit, staff_space, &mut items);
+    let approx = if mark.approximate { "c. " } else { "" };
+    let close = if mark.parenthesized { ")" } else { "" };
+    match mark.value {
+        MetronomeValue::Bpm(bpm) => items.push(bold(format!(" = {approx}{bpm}{close}"))),
+        MetronomeValue::Range(from, to) => {
+            items.push(bold(format!(" = {approx}{from}-{to}{close}")))
+        }
+        MetronomeValue::Unit(right) => {
+            items.push(bold(" = ".into()));
+            unit_items(right, staff_space, &mut items);
+            if mark.parenthesized {
+                items.push(bold(")".into()));
+            }
+        }
+    }
+    items
+}
+
+/// Lay out a tempo marking with its left edge at `x_left` and its bottom
+/// line's baseline at `bottom_baseline_y` (see [`tempo_baseline`]).
 pub fn layout_tempo_mark(
     mark: &TempoMark,
     x_left: f64,
-    staff: &StaffLayout,
+    bottom_baseline_y: f64,
+    font: &MusicFont,
     staff_space: f64,
-) -> TempoMarkLayout {
+) -> Result<TempoMarkLayout, FontError> {
     let font_size = TEMPO_FONT_SIZE_SS * staff_space;
-    let above_offset = TEMPO_ABOVE_STAFF_SS * staff_space;
-    let top_line_y = staff.y_of(8);
-    let y_baseline = top_line_y - above_offset;
+    let gap = TEXT_METRONOME_GAP_SS * staff_space;
 
-    match mark {
-        TempoMark::Text(text) => TempoMarkLayout {
-            x_left,
-            y_baseline,
-            font_size,
-            text: text.clone(),
-            bold: true,
-            metronome: None,
-        },
-        TempoMark::Metronome {
-            note_kind,
-            dotted,
-            bpm,
-        } => {
-            let note_width = NOTE_SYMBOL_WIDTH_SS * staff_space;
-            let eq_text = format!(" = {bpm}");
-            let eq_text_x = x_left + note_width;
-
-            TempoMarkLayout {
-                x_left,
-                y_baseline,
-                font_size,
-                text: String::new(),
-                bold: true,
-                metronome: Some(MetronomeInfo {
-                    notehead_glyph: note_kind.notehead_glyph(),
-                    has_stem: !matches!(note_kind, MetronomeNoteKind::Whole),
-                    flag_count: match note_kind {
-                        MetronomeNoteKind::Eighth => 1,
-                        MetronomeNoteKind::Sixteenth => 2,
-                        _ => 0,
-                    },
-                    dotted: *dotted,
-                    note_x: x_left,
-                    eq_text,
-                    eq_text_x,
-                }),
-            }
-        }
-        TempoMark::TextWithMetronome {
-            text,
-            note_kind,
-            dotted,
-            bpm,
-        } => {
-            let text_width = text.len() as f64 * font_size * CHAR_WIDTH_RATIO;
-            let gap = TEXT_METRONOME_GAP_SS * staff_space;
-            let note_x = x_left + text_width + gap;
-            let note_width = NOTE_SYMBOL_WIDTH_SS * staff_space;
-            let eq_text = format!(" = {bpm}");
-            let eq_text_x = note_x + note_width;
-
-            TempoMarkLayout {
-                x_left,
-                y_baseline,
-                font_size,
-                text: text.clone(),
-                bold: true,
-                metronome: Some(MetronomeInfo {
-                    notehead_glyph: note_kind.notehead_glyph(),
-                    has_stem: !matches!(note_kind, MetronomeNoteKind::Whole),
-                    flag_count: match note_kind {
-                        MetronomeNoteKind::Eighth => 1,
-                        MetronomeNoteKind::Sixteenth => 2,
-                        _ => 0,
-                    },
-                    dotted: *dotted,
-                    note_x,
-                    eq_text,
-                    eq_text_x,
-                }),
-            }
-        }
+    let mut main = Vec::new();
+    if let Some(text) = &mark.text {
+        main.push(text_item(text, font_size));
     }
+    if let Some(metronome) = &mark.metronome {
+        if !main.is_empty() {
+            main.push(LineItem::Gap(gap));
+        }
+        main.extend(metronome_items(metronome, font_size, staff_space));
+    }
+    if let Some(text) = &mark.text_after {
+        if !main.is_empty() {
+            main.push(LineItem::Gap(gap));
+        }
+        main.push(text_item(text, font_size));
+    }
+
+    let mut lines = Vec::new();
+    if !main.is_empty() {
+        lines.push(layout_text_line(&main, font)?);
+    }
+    if let Some(text) = &mark.text_below {
+        lines.push(layout_text_line(&[text_item(text, font_size)], font)?);
+    }
+
+    let line_step = TEMPO_LINE_SPACING * font_size;
+    let count = lines.len();
+    let lines = lines
+        .into_iter()
+        .enumerate()
+        .map(|(i, line)| TempoLine {
+            line,
+            baseline_y: bottom_baseline_y - (count - 1 - i) as f64 * line_step,
+        })
+        .collect();
+    Ok(TempoMarkLayout { x_left, lines })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::staff::StaffLayout;
+    use crate::font::bravura_font;
+    use crate::layout::text_script::PlacedLineItem;
 
-    fn test_staff() -> StaffLayout {
-        StaffLayout::new(0.0, 0.0, 4000.0, 250.0)
+    const SS: f64 = 250.0;
+
+    fn glyphs(line: &TextLineLayout) -> Vec<Glyph> {
+        line.items
+            .iter()
+            .filter_map(|i| match i {
+                PlacedLineItem::Glyph { glyph, .. } => Some(*glyph),
+                PlacedLineItem::Text { .. } => None,
+            })
+            .collect()
+    }
+
+    fn texts(line: &TextLineLayout) -> Vec<String> {
+        line.items
+            .iter()
+            .filter_map(|i| match i {
+                PlacedLineItem::Text { text, .. } => Some(text.clone()),
+                PlacedLineItem::Glyph { .. } => None,
+            })
+            .collect()
     }
 
     #[test]
-    fn text_only_has_no_metronome() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Text("Allegro".into()),
-            100.0,
-            &test_staff(),
-            250.0,
+    fn parenthesized_approximate_dotted_range_composes_in_source_order() {
+        let font = bravura_font();
+        let mark = TempoMark::metronome(
+            MetronomeMark::range(MetronomeUnit::dotted(MetronomeNoteKind::Quarter), 58, 56)
+                .approx()
+                .parenthesized(),
         );
-        assert!(layout.metronome.is_none());
-        assert_eq!(layout.text, "Allegro");
-        assert!(layout.bold);
+        let layout = layout_tempo_mark(&mark, 100.0, -700.0, &font, SS).unwrap();
+        assert_eq!(layout.lines.len(), 1);
+        let line = &layout.lines[0].line;
+        // "(" ♩ . "= c. 58-56)"
+        let order: Vec<String> = line
+            .items
+            .iter()
+            .map(|i| match i {
+                PlacedLineItem::Text { text, .. } => text.clone(),
+                PlacedLineItem::Glyph { glyph, .. } => format!("{glyph:?}"),
+            })
+            .collect();
+        assert_eq!(
+            order,
+            ["(", "MetNoteQuarterUp", "MetAugmentationDot", "= c. 58-56)"]
+        );
+        // Strictly increasing x: the dot sits right of the note, the text
+        // right of the dot.
+        let xs: Vec<f64> = line
+            .items
+            .iter()
+            .map(|i| match i {
+                PlacedLineItem::Text { x, .. } | PlacedLineItem::Glyph { x, .. } => *x,
+            })
+            .collect();
+        assert!(xs.windows(2).all(|w| w[0] <= w[1]), "{xs:?}");
+        assert_eq!(layout.lines[0].baseline_y, -700.0);
     }
 
     #[test]
-    fn metronome_only_has_empty_text() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 120,
-            },
-            100.0,
-            &test_staff(),
-            250.0,
+    fn equation_has_two_note_glyphs_and_no_bpm() {
+        let font = bravura_font();
+        let mark = TempoMark::metronome(MetronomeMark::equation(
+            MetronomeNoteKind::Quarter,
+            MetronomeNoteKind::Quarter,
+        ));
+        let layout = layout_tempo_mark(&mark, 0.0, 0.0, &font, SS).unwrap();
+        let line = &layout.lines[0].line;
+        assert_eq!(
+            glyphs(line),
+            [Glyph::MetNoteQuarterUp, Glyph::MetNoteQuarterUp]
         );
-        assert!(layout.text.is_empty());
-        assert!(layout.metronome.is_some());
-        let m = layout.metronome.unwrap();
-        assert_eq!(m.eq_text, " = 120");
-        assert!(m.has_stem);
-        assert_eq!(m.flag_count, 0);
-        assert!(!m.dotted);
+        assert_eq!(texts(line), ["="]);
     }
 
     #[test]
-    fn combined_text_and_metronome() {
-        let layout = layout_tempo_mark(
-            &TempoMark::TextWithMetronome {
-                text: "Allegro".into(),
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 132,
-            },
-            50.0,
-            &test_staff(),
-            250.0,
-        );
-        assert_eq!(layout.text, "Allegro");
-        assert!(layout.metronome.is_some());
-        let m = layout.metronome.unwrap();
-        assert_eq!(m.eq_text, " = 132");
-        // Note symbol should be to the right of the text
-        assert!(
-            m.note_x > 50.0,
-            "note_x {} should be right of x_left 50",
-            m.note_x
-        );
+    fn text_after_and_text_below_stack_with_the_bottom_line_on_the_baseline() {
+        let font = bravura_font();
+        let mark = TempoMark::metronome(
+            MetronomeMark::bpm(MetronomeNoteKind::Half, 100)
+                .approx()
+                .parenthesized(),
+        )
+        .with_text_after(TempoText::upright("Monodia"))
+        .with_text_below("Alla gavotta");
+        let layout = layout_tempo_mark(&mark, 0.0, -700.0, &font, SS).unwrap();
+        assert_eq!(layout.lines.len(), 2);
+        assert_eq!(texts(&layout.lines[0].line), ["(", "= c. 100)", "Monodia"]);
+        assert_eq!(texts(&layout.lines[1].line), ["Alla gavotta"]);
+        assert_eq!(layout.lines[1].baseline_y, -700.0);
+        let step = 1.2 * TEMPO_FONT_SIZE_SS * SS;
+        assert!((layout.lines[0].baseline_y - (-700.0 - step)).abs() < 1e-9);
+        let PlacedLineItem::Text { font: f, .. } = layout.lines[0].line.items.last().unwrap() else {
+            panic!()
+        };
+        assert_eq!(*f, TextFont::Upright);
     }
 
     #[test]
-    fn baseline_above_top_staff_line() {
-        let staff = test_staff();
-        let top_y = staff.y_of(8);
-        let layout = layout_tempo_mark(&TempoMark::Text("Allegro".into()), 0.0, &staff, 250.0);
-        assert!(
-            layout.y_baseline < top_y,
-            "baseline {} should be above top line {}",
-            layout.y_baseline,
-            top_y
+    fn every_note_kind_has_a_metronome_glyph() {
+        assert_eq!(
+            MetronomeNoteKind::ThirtySecond.notehead_glyph(),
+            Glyph::MetNote32ndUp
         );
-    }
-
-    #[test]
-    fn x_left_preserved() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Text("Presto".into()),
-            777.0,
-            &test_staff(),
-            250.0,
-        );
-        assert_eq!(layout.x_left, 777.0);
-    }
-
-    #[test]
-    fn font_size_scales_with_staff_space() {
-        let small = layout_tempo_mark(&TempoMark::Text("A".into()), 0.0, &test_staff(), 125.0);
-        let large = layout_tempo_mark(&TempoMark::Text("A".into()), 0.0, &test_staff(), 250.0);
-        assert!(
-            (large.font_size - 2.0 * small.font_size).abs() < 0.01,
-            "font size should scale linearly with staff_space"
-        );
-    }
-
-    #[test]
-    fn eighth_note_has_one_flag() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Eighth,
-                dotted: false,
-                bpm: 88,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let m = layout.metronome.unwrap();
-        assert_eq!(m.flag_count, 1);
-        assert!(m.has_stem);
-    }
-
-    #[test]
-    fn sixteenth_note_has_two_flags() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Sixteenth,
-                dotted: false,
-                bpm: 100,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let m = layout.metronome.unwrap();
-        assert_eq!(m.flag_count, 2);
-    }
-
-    #[test]
-    fn whole_note_has_no_stem() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Whole,
-                dotted: false,
-                bpm: 60,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let m = layout.metronome.unwrap();
-        assert!(!m.has_stem);
-        assert_eq!(m.flag_count, 0);
-    }
-
-    #[test]
-    fn dotted_flag_preserved() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: true,
-                bpm: 72,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let m = layout.metronome.unwrap();
-        assert!(m.dotted);
-    }
-
-    #[test]
-    fn eq_text_x_is_right_of_note_x() {
-        let layout = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 120,
-            },
-            100.0,
-            &test_staff(),
-            250.0,
-        );
-        let m = layout.metronome.unwrap();
-        assert!(
-            m.eq_text_x > m.note_x,
-            "eq_text_x {} should be right of note_x {}",
-            m.eq_text_x,
-            m.note_x
-        );
-    }
-
-    #[test]
-    fn different_bpm_produces_different_eq_text() {
-        let a = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 60,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let b = layout_tempo_mark(
-            &TempoMark::Metronome {
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 120,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        assert_ne!(a.metronome.unwrap().eq_text, b.metronome.unwrap().eq_text);
-    }
-
-    #[test]
-    fn different_note_kinds_produce_different_glyphs() {
-        let q = MetronomeNoteKind::Quarter.notehead_glyph();
-        let h = MetronomeNoteKind::Half.notehead_glyph();
-        let e = MetronomeNoteKind::Eighth.notehead_glyph();
-        assert_ne!(q, h);
-        assert_ne!(q, e);
-        assert_ne!(h, e);
-    }
-
-    #[test]
-    fn combined_note_x_shifts_with_longer_text() {
-        let short = layout_tempo_mark(
-            &TempoMark::TextWithMetronome {
-                text: "A".into(),
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 120,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let long = layout_tempo_mark(
-            &TempoMark::TextWithMetronome {
-                text: "Allegro molto".into(),
-                note_kind: MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 120,
-            },
-            0.0,
-            &test_staff(),
-            250.0,
-        );
-        let short_x = short.metronome.unwrap().note_x;
-        let long_x = long.metronome.unwrap().note_x;
-        assert!(
-            long_x > short_x,
-            "longer text should push note symbol further right: {} vs {}",
-            long_x,
-            short_x
-        );
+        assert_eq!(MetronomeNoteKind::Whole.notehead_glyph(), Glyph::MetNoteWhole);
     }
 }

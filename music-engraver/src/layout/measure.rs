@@ -4,8 +4,7 @@ use crate::layout::articulation::Articulation;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::clef::ClefLayout;
-use crate::layout::cresc_text::CrescTextKind;
-use crate::layout::dynamics::Dynamic;
+use crate::layout::dynamics::DynamicMark;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNoteKind;
 use crate::layout::hairpin::{HairpinType, NientePlacement};
@@ -15,10 +14,13 @@ use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::pedal::PedalMark;
+use crate::layout::placement::Placement;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::staff::StaffPosition;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::TempoMark;
+use crate::layout::text_script::TextScript;
+use crate::layout::text_spanner::TextSpanner;
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_bracket::{HookDirection, TrillBracketSide};
@@ -96,10 +98,12 @@ pub struct GroupedChordMember {
     pub accidentals: Vec<Option<ResolvedAccidental>>,
 }
 
-/// Articulation and expression annotations attached to a note or chord event.
+/// Articulation and expression annotations attached to a note, chord or rest.
 ///
-/// These fields are shared between [`NoteEvent`] and [`ChordEvent`], covering
-/// ties, slurs, hairpins, dynamics, rehearsal marks, tempo marks, and expression text.
+/// These fields are shared between [`NoteEvent`], [`ChordEvent`] and
+/// [`RestEvent`], covering ties, slurs, hairpins, dynamics, rehearsal marks,
+/// tempo marks, text scripts and text spanners. On rests only the
+/// pitch-independent fields apply (see [`RestEvent::annotations`]).
 /// All fields default to "no annotation" (`false` / `None`).
 #[derive(Clone, Debug, Default)]
 pub struct NoteAnnotations {
@@ -124,9 +128,14 @@ pub struct NoteAnnotations {
     /// staff position. The tie curve is drawn by the system renderer after
     /// all measures are laid out.
     pub tie_forward: bool,
-    /// Optional dynamic marking (e.g. pp, mf, ff) displayed below the staff,
-    /// centered on this note/chord.
-    pub dynamic: Option<Dynamic>,
+    /// Optional dynamic marking (a SMuFL dynamic such as pp, mf, ff, or a
+    /// custom words-plus-glyph dynamic such as "più p"), centered on this
+    /// event on the side given by `dynamics_placement`.
+    pub dynamic: Option<DynamicMark>,
+    /// Side of the staff for this event's dynamic and for the hairpin that
+    /// starts here (LilyPond `\dynamicUp` / `\dynamicDown`). Defaults to
+    /// below.
+    pub dynamics_placement: Placement,
     /// Whether this note/chord is the start of a slur (curved line to a following note).
     /// The slur curve is drawn by the system renderer after all measures are laid out.
     pub slur_start: bool,
@@ -172,8 +181,17 @@ pub struct NoteAnnotations {
     pub rehearsal_mark: Option<(String, RehearsalStyle)>,
     /// Optional tempo marking displayed above the staff at this note/chord's position.
     pub tempo_mark: Option<TempoMark>,
-    /// Optional expression text displayed below the staff in italic (e.g. "dolce").
-    pub expression: Option<String>,
+    /// Free text scripts above or below the staff (LilyPond `^\markup` /
+    /// `_\markup`), e.g. italic "dolce" below or "a)" above. Scripts on
+    /// the same side stack outward in order, without overlapping each other
+    /// or the event's other marks on that side.
+    pub text_scripts: Vec<TextScript>,
+    /// Marks centered on the barline that follows this event (LilyPond
+    /// `\textMark` / `\textEndMark` at a bar line), e.g. a fermata over the
+    /// final barline. Drawn above the staff at that barline; when no barline
+    /// follows the event in its measure they are centered on the event's
+    /// right edge.
+    pub text_marks: Vec<TextScript>,
     /// Articulation markings (staccato, tenuto, accent, marcato, etc.)
     /// placed near the notehead. Multiple articulations stack outward from
     /// the note (e.g., staccato + accent = portato accent).
@@ -320,19 +338,13 @@ pub struct NoteAnnotations {
     /// draw time, and the renderer falls back to no wiggle — same
     /// fail-safe as for spans too short to tile.
     pub trill_speed_ramp: Option<TrillSpeedRampSpec>,
-    /// Whether this note/chord starts a dashed-text crescendo/diminuendo
-    /// marking ("cresc.", "decresc.", "dim." followed by a dashed
-    /// continuation line). The marking is the wedgeless alternative to a
-    /// hairpin, used for long crescendi or where a wedge would be too
-    /// crowded. The dashed line extends from this note to the note with
-    /// `cresc_text_end = true`. The label is rendered in italic below
-    /// the staff at the same vertical band as hairpins/dynamics so a
-    /// section mixing hairpins and dashed-text markings reads as one
-    /// continuous dynamic axis.
-    pub cresc_text_start: Option<CrescTextKind>,
-    /// Whether this note/chord ends a dashed-text crescendo/diminuendo
-    /// marking. Pairs with a preceding `cresc_text_start`.
-    pub cresc_text_end: bool,
+    /// Text spanner starting at this event: a label ("rit.", "cresc.",
+    /// "dim") followed by a dashed, solid or no line running to the next
+    /// event with `text_spanner_end`, continuing across system breaks.
+    pub text_spanner_start: Option<TextSpanner>,
+    /// Whether this event ends the text spanner opened by a preceding
+    /// `text_spanner_start`.
+    pub text_spanner_end: bool,
 }
 
 /// A group of notes to be beamed together.
@@ -442,6 +454,12 @@ pub struct RestEvent {
     pub duration_log2: i8,
     /// Number of augmentation dots (0–3).
     pub dots: u8,
+    /// Marks attached to the rest: dynamics, hairpin and text-spanner
+    /// endpoints, tempo and rehearsal marks, text scripts, fermatas (and
+    /// other articulations, drawn above the staff), breath marks. Pitch- and
+    /// stem-bound fields (ties, slurs, lyrics, ornaments, grace notes,
+    /// tremolos, glissandi, noteheads, accidentals) do not apply to rests.
+    pub annotations: NoteAnnotations,
 }
 
 /// A positioned element within a laid-out measure.
@@ -1144,10 +1162,12 @@ mod tests {
             MeasureElement::Rest(RestEvent {
                 duration_log2: 1, // half rest
                 dots: 0,
+                annotations: Default::default(),
             }),
             MeasureElement::Rest(RestEvent {
                 duration_log2: 2, // quarter rest
                 dots: 0,
+                annotations: Default::default(),
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
@@ -1201,6 +1221,7 @@ mod tests {
             MeasureElement::Rest(RestEvent {
                 duration_log2: 3,
                 dots: 0,
+                annotations: Default::default(),
             }),
             MeasureElement::Barline(BarlineStyle::Single),
         ];
@@ -1405,6 +1426,7 @@ mod tests {
                 MeasureElement::Rest(RestEvent {
                     duration_log2,
                     dots: 0,
+                    annotations: Default::default(),
                 })
             },
             |duration_log2| {

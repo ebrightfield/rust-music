@@ -152,6 +152,7 @@ fn system_with_rests() {
             MeasureEvent::Rest(RestEvent {
                 duration_log2: 2,
                 dots: 0,
+                annotations: Default::default(),
             }),
         ],
         barline: BarlineStyle::Single,
@@ -408,6 +409,7 @@ fn collect_note_positions_skips_non_notes() {
             MeasureEvent::Rest(RestEvent {
                 duration_log2: 2,
                 dots: 0,
+                annotations: Default::default(),
             }),
             quarter_note(4),
         ],
@@ -920,9 +922,9 @@ fn hairpin_across_barline() {
 
 // --- cresc-text (dashed-text crescendo/diminuendo) rendering ---
 
-use crate::layout::cresc_text::CrescTextKind;
+use crate::layout::text_spanner::TextSpanner;
 
-fn cresc_text_start_note(pos: i8, kind: CrescTextKind) -> MeasureEvent {
+fn text_spanner_start_note(pos: i8, kind: TextSpanner) -> MeasureEvent {
     MeasureEvent::Note(NoteEvent {
         staff_position: pos,
         duration_log2: 2,
@@ -930,13 +932,13 @@ fn cresc_text_start_note(pos: i8, kind: CrescTextKind) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            cresc_text_start: Some(kind),
+            text_spanner_start: Some(kind),
             ..Default::default()
         },
     })
 }
 
-fn cresc_text_end_note(pos: i8) -> MeasureEvent {
+fn text_spanner_end_note(pos: i8) -> MeasureEvent {
     MeasureEvent::Note(NoteEvent {
         staff_position: pos,
         duration_log2: 2,
@@ -944,7 +946,7 @@ fn cresc_text_end_note(pos: i8) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            cresc_text_end: true,
+            text_spanner_end: true,
             ..Default::default()
         },
     })
@@ -966,10 +968,10 @@ fn cresc_text_within_measure_emits_label_and_dashed_line() {
     let (font, config, mcfg) = setup();
     let with_marking = vec![MeasureContent {
         events: vec![
-            cresc_text_start_note(4, CrescTextKind::Diminuendo),
+            text_spanner_start_note(4, TextSpanner::dim()),
             quarter_note(6),
             quarter_note(8),
-            cresc_text_end_note(2),
+            text_spanner_end_note(2),
         ],
         barline: BarlineStyle::Single,
         volta: None,
@@ -1029,11 +1031,11 @@ fn cresc_text_within_measure_emits_label_and_dashed_line() {
 
 #[test]
 fn no_cresc_text_without_start_flag() {
-    // A note with only cresc_text_end and no preceding cresc_text_start
+    // A note with only text_spanner_end and no preceding text_spanner_start
     // must not produce any marking — same byte output as the baseline.
     let (font, config, mcfg) = setup();
     let end_only = vec![MeasureContent {
-        events: vec![quarter_note(4), cresc_text_end_note(6)],
+        events: vec![quarter_note(4), text_spanner_end_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
@@ -1055,18 +1057,18 @@ fn no_cresc_text_without_start_flag() {
     assert_eq!(
         svg_e.to_svg(),
         svg_b.to_svg(),
-        "cresc_text_end without a preceding cresc_text_start must render identically to baseline"
+        "text_spanner_end without a preceding text_spanner_start must render identically to baseline"
     );
 }
 
 #[test]
-fn cresc_text_start_without_end_draws_nothing_extra() {
+fn text_spanner_start_without_end_draws_nothing_extra() {
     // Same orphan-start semantics as hairpins: an unresolved
-    // cresc_text_start produces no marking until a matching end appears.
+    // text_spanner_start produces no marking until a matching end appears.
     let (font, config, mcfg) = setup();
     let start_only = vec![MeasureContent {
         events: vec![
-            cresc_text_start_note(4, CrescTextKind::Crescendo),
+            text_spanner_start_note(4, TextSpanner::cresc()),
             quarter_note(6),
         ],
         barline: BarlineStyle::Single,
@@ -1090,7 +1092,7 @@ fn cresc_text_start_without_end_draws_nothing_extra() {
     assert_eq!(
         svg_s.to_svg(),
         svg_b.to_svg(),
-        "cresc_text_start without cresc_text_end must produce no extra elements"
+        "text_spanner_start without text_spanner_end must produce no extra elements"
     );
 }
 
@@ -1103,12 +1105,15 @@ fn cresc_text_kinds_differ_in_label_content() {
 
     let mut renders = Vec::new();
     for kind in [
-        CrescTextKind::Crescendo,
-        CrescTextKind::Decrescendo,
-        CrescTextKind::Diminuendo,
+        TextSpanner::cresc(),
+        TextSpanner::decresc(),
+        TextSpanner::dim(),
     ] {
         let measures = vec![MeasureContent {
-            events: vec![cresc_text_start_note(4, kind), cresc_text_end_note(6)],
+            events: vec![
+                text_spanner_start_note(4, kind.clone()),
+                text_spanner_end_note(6),
+            ],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
@@ -1169,7 +1174,7 @@ fn cresc_text_across_barline_emits_one_label_and_one_line() {
     let measures = vec![
         MeasureContent {
             events: vec![
-                cresc_text_start_note(4, CrescTextKind::Diminuendo),
+                text_spanner_start_note(4, TextSpanner::dim()),
                 quarter_note(6),
             ],
             barline: BarlineStyle::Single,
@@ -1177,7 +1182,7 @@ fn cresc_text_across_barline_emits_one_label_and_one_line() {
             additional_voices: vec![],
         },
         MeasureContent {
-            events: vec![quarter_note(7), cresc_text_end_note(2)],
+            events: vec![quarter_note(7), text_spanner_end_note(2)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
@@ -1232,10 +1237,10 @@ fn cresc_text_dashed_line_endpoints_lie_between_start_and_end_notes() {
     let (font, config, mcfg) = setup();
     let measures = vec![MeasureContent {
         events: vec![
-            cresc_text_start_note(4, CrescTextKind::Diminuendo),
+            text_spanner_start_note(4, TextSpanner::dim()),
             quarter_note(6),
             quarter_note(8),
-            cresc_text_end_note(0),
+            text_spanner_end_note(0),
         ],
         barline: BarlineStyle::Single,
         volta: None,
@@ -1254,14 +1259,14 @@ fn cresc_text_dashed_line_endpoints_lie_between_start_and_end_notes() {
     );
 
     // Pull the cresc-text info back out to derive expected endpoints.
-    let info = collect_cresc_text_note_info(&system);
+    let info = collect_text_spanner_note_info(&system);
     let start = info
         .iter()
-        .find(|n| n.cresc_text_start.is_some())
+        .find(|n| n.start.is_some())
         .expect("start note present");
     let end = info
         .iter()
-        .find(|n| n.cresc_text_end)
+        .find(|n| n.end)
         .expect("end note present");
     assert!(
         end.x > start.x,
@@ -1289,10 +1294,10 @@ fn cresc_text_renders_independently_of_a_hairpin_on_other_notes() {
         events: vec![
             cresc_start_note(4), // hairpin start
             hairpin_end_note(6), // hairpin end
-            cresc_text_start_note(8, CrescTextKind::Diminuendo),
+            text_spanner_start_note(8, TextSpanner::dim()),
             quarter_note(7),
             quarter_note(2),
-            cresc_text_end_note(0),
+            text_spanner_end_note(0),
         ],
         barline: BarlineStyle::Single,
         volta: None,

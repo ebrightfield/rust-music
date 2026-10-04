@@ -212,6 +212,7 @@ fn measure_with_rest() {
     let elements = vec![MeasureElement::Rest(RestEvent {
         duration_log2: 2,
         dots: 0,
+        annotations: Default::default(),
     })];
     let layout = layout_measure(&elements, &cfg);
     let mut svg = make_svg();
@@ -534,6 +535,7 @@ fn full_measure_with_all_element_types() {
         MeasureElement::Rest(RestEvent {
             duration_log2: 2,
             dots: 0,
+            annotations: Default::default(),
         }),
         MeasureElement::Barline(BarlineStyle::Single),
     ];
@@ -1398,7 +1400,7 @@ fn note_with_dynamic_adds_extra_path() {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            dynamic: Some(Dynamic::Forte),
+            dynamic: Some(Dynamic::Forte.into()),
             ..Default::default()
         },
     })];
@@ -1462,7 +1464,7 @@ fn chord_with_dynamic_adds_extra_path() {
         accidentals: vec![None, None],
         stem_direction: None,
         annotations: NoteAnnotations {
-            dynamic: Some(Dynamic::Pp),
+            dynamic: Some(Dynamic::Pp.into()),
             ..Default::default()
         },
     })];
@@ -1496,7 +1498,7 @@ fn dynamic_glyph_positioned_below_staff() {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            dynamic: Some(Dynamic::Mf),
+            dynamic: Some(Dynamic::Mf.into()),
             ..Default::default()
         },
     })];
@@ -1539,7 +1541,7 @@ fn different_dynamics_on_notes_produce_different_svgs() {
             accidental: None,
             stem_direction: None,
             annotations: NoteAnnotations {
-                dynamic: Some(dyn_mark),
+                dynamic: Some(dyn_mark.into()),
                 ..Default::default()
             },
         })];
@@ -2167,7 +2169,7 @@ fn note_with_tempo_mark_produces_text() {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Allegro".into())),
+            tempo_mark: Some(crate::layout::tempo::TempoMark::text("Allegro")),
             ..Default::default()
         },
     })];
@@ -2204,11 +2206,7 @@ fn note_with_metronome_tempo_produces_path_and_text() {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            tempo_mark: Some(crate::layout::tempo::TempoMark::Metronome {
-                note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 120,
-            }),
+            tempo_mark: Some(crate::layout::tempo::TempoMark::metronome(crate::layout::tempo::MetronomeMark::bpm(crate::layout::tempo::MetronomeNoteKind::Quarter, 120))),
             ..Default::default()
         },
     })];
@@ -2245,7 +2243,7 @@ fn chord_with_tempo_mark_produces_text() {
         accidentals: vec![None, None, None],
         stem_direction: None,
         annotations: NoteAnnotations {
-            tempo_mark: Some(crate::layout::tempo::TempoMark::Text("Presto".into())),
+            tempo_mark: Some(crate::layout::tempo::TempoMark::text("Presto")),
             ..Default::default()
         },
     })];
@@ -4170,12 +4168,13 @@ fn additional_voice_rest_is_displaced_downward() {
     let voice1_elements = vec![MeasureElement::Rest(RestEvent {
         duration_log2: 2,
         dots: 0,
+        annotations: Default::default(),
     })];
     let voice1_layout = layout_measure(&voice1_elements, &cfg);
 
     // Draw rest without displacement (baseline)
     let mut svg_normal = make_svg();
-    draw_rest(&mut svg_normal, &staff, &font, 100.0, 2).unwrap();
+    crate::render::rest_renderer::draw_rest(&mut svg_normal, &staff, &font, 100.0, 2).unwrap();
     let normal_svg = svg_normal.to_svg();
 
     // Draw rest via additional voices (should be displaced)

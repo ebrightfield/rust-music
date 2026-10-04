@@ -31,6 +31,7 @@ pub(crate) enum ScoreEvent {
     },
     Rest {
         duration: Duration,
+        annotations: NoteAnnotations,
     },
     Chord {
         pitches: Vec<Pitch>,
@@ -61,6 +62,24 @@ pub(crate) enum ScoreEvent {
         count: u32,
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+}
+
+impl ScoreEvent {
+    /// Whether this is a zero-duration structural event (a mark in score
+    /// order that is not itself a rhythmic event). Annotation builders skip
+    /// structural events to reach the most recent rhythmic one.
+    pub(crate) fn is_structural(&self) -> bool {
+        match self {
+            ScoreEvent::Note { .. }
+            | ScoreEvent::Rest { .. }
+            | ScoreEvent::Chord { .. }
+            | ScoreEvent::BeamGroup { .. }
+            | ScoreEvent::StyledBeamGroup { .. }
+            | ScoreEvent::TupletGroup { .. }
+            | ScoreEvent::StyledTupletGroup { .. }
+            | ScoreEvent::MultiMeasureRest { .. } => false,
+        }
+    }
 }
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
@@ -310,13 +329,17 @@ pub(crate) fn convert_resolved_event(
                 annotations: annotations.clone(),
             })
         }
-        ScoreEvent::Rest { duration } => {
+        ScoreEvent::Rest {
+            duration,
+            annotations,
+        } => {
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
 
             MeasureEvent::Rest(RestEvent {
                 duration_log2: log2,
                 dots,
+                annotations: annotations.clone(),
             })
         }
         ScoreEvent::Chord {
@@ -546,7 +569,7 @@ fn visit_pitches(
             1,
             &mut visit,
         ),
-        ScoreEvent::Rest { duration } => scaled_ticks(duration, scale, 1, 1),
+        ScoreEvent::Rest { duration, .. } => scaled_ticks(duration, scale, 1, 1),
         ScoreEvent::BeamGroup { notes } => {
             visit_members(notes.iter().map(plain_member), scale, 1, 1, &mut visit)
         }

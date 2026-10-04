@@ -176,5 +176,6 @@ fn qrest() -> MeasureEvent {
     MeasureEvent::Rest(RestEvent {
         duration_log2: 2,
         dots: 0,
+        annotations: Default::default(),
     })
 }

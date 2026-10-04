@@ -93,6 +93,28 @@ pub struct HairpinLayout {
 /// Placed slightly below dynamics text (which sits at 2.5ss below staff).
 pub const HAIRPIN_BELOW_STAFF_SS: f64 = 3.5;
 
+/// Distance from the top staff line up to the center of a hairpin placed
+/// above the staff (`\dynamicUp`), in staff spaces: level with the visual
+/// center of dynamics above the staff.
+pub const HAIRPIN_ABOVE_STAFF_SS: f64 = 1.6;
+
+/// The `staff_bottom_y` reference to pass to the hairpin layout functions so
+/// the wedge lands on `placement`'s side of `staff`: the real bottom line
+/// below, or a reference [`HAIRPIN_BELOW_STAFF_SS`] above the desired center
+/// above the staff.
+pub fn hairpin_reference_y(
+    placement: crate::layout::placement::Placement,
+    staff: &crate::layout::staff::StaffLayout,
+    staff_space: f64,
+) -> f64 {
+    match placement {
+        crate::layout::placement::Placement::Below => staff.bottom_y(),
+        crate::layout::placement::Placement::Above => {
+            staff.y_of(8) - (HAIRPIN_ABOVE_STAFF_SS + HAIRPIN_BELOW_STAFF_SS) * staff_space
+        }
+    }
+}
+
 /// Default half-opening of the hairpin at its widest, in staff spaces.
 /// A full opening of ~1 staff space is standard for engraved hairpins.
 pub const HAIRPIN_HALF_OPENING_SS: f64 = 0.5;

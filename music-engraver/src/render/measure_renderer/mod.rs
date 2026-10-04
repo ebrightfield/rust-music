@@ -2,15 +2,13 @@ use music::notation::clef::Clef;
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::accidental::ResolvedAccidental;
-use crate::layout::articulation::layout_articulation_stack;
 use crate::layout::beam::{layout_beam_group, BeamGroupLayout, BeamedNote};
 use crate::layout::chord::{
     chord_left_notehead_offset, layout_chord_noteheads, notehead_x_offset, ChordNote,
 };
 use crate::layout::dot::dot_staff_position;
-use crate::layout::expression::layout_expression;
 use crate::layout::grace::layout_grace_note;
-use crate::layout::lyric::layout_lyric;
+use crate::layout::mark_extent::element_annotations;
 use crate::layout::measure::{
     BeamGroupEvent, ChordEvent, MeasureElement, MeasureLayout, NoteAnnotations, NoteEvent,
     NoteheadStyle, TupletGroupEvent,
@@ -18,44 +16,40 @@ use crate::layout::measure::{
 use crate::layout::multi_measure_rest::{
     church_rest_supported, layout_church_rest, layout_multi_measure_rest, MultiMeasureRestStyle,
 };
-use crate::layout::rehearsal::layout_rehearsal_mark;
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{
     auto_stem_direction, auto_stem_direction_chord, stem_length_staff_spaces, StemDirection,
 };
-use crate::layout::tempo::layout_tempo_mark;
 use crate::layout::tuplet::{
     layout_tuplet_bracket, tuplet_number_glyphs, tuplet_placement_from_stem, TupletBracketLayout,
     TupletPlacement,
 };
 use crate::render::accidental_renderer::{chord_accidental_column_offsets, draw_accidental};
-use crate::render::articulation_renderer::draw_articulation;
 use crate::render::barline_renderer::draw_barline;
 use crate::render::beam_renderer::draw_beam_group_with_advances;
 use crate::render::church_rest_renderer::draw_church_rest;
 use crate::render::dot_renderer::draw_dots;
-use crate::render::dynamics_renderer::draw_dynamic;
-use crate::render::expression_renderer::draw_expression;
 use crate::render::flag_renderer::draw_flag;
 use crate::render::grace_renderer::draw_grace_note;
 use crate::render::key_sig_renderer::draw_key_signature;
-use crate::render::lyric_renderer::draw_lyric;
 use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
 use crate::render::note_renderer::{
     draw_ledger_lines, draw_styled_notehead, notehead_advance, NoteheadKind,
 };
-use crate::render::rehearsal_renderer::draw_rehearsal_mark;
-use crate::render::rest_renderer::{draw_rest, draw_rest_displaced};
 use crate::render::staff_renderer::draw_clef;
 use crate::render::stem_renderer::{draw_stem, stem_endpoints, stem_x};
-use crate::render::tempo_renderer::draw_tempo_mark;
 use crate::render::time_sig_renderer::draw_time_signature;
 use crate::render::tremolo_renderer::draw_tremolo;
 use crate::render::tuplet_renderer::draw_tuplet_bracket;
 use crate::render::SvgWriter;
 
+mod event_marks;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_rest_marks;
+
+use event_marks::{draw_event_marks, draw_rest_event, draw_text_marks, EventAnchor};
 
 /// Draw a complete laid-out measure onto an SVG writer.
 ///
@@ -72,8 +66,14 @@ pub fn draw_measure(
     x_offset: f64,
     clef_for_key_sig: &Clef,
 ) -> Result<(), FontError> {
+    // Text marks of the most recent event wait for the barline that
+    // follows it: (event x, event rod, marks).
+    let mut pending_marks: Option<(f64, f64, &[crate::layout::text_script::TextScript])> = None;
     for positioned in &layout.elements {
         let elem_x = x_offset + positioned.x;
+        if let Some(annotations) = element_annotations(&positioned.element) {
+            pending_marks = Some((elem_x, positioned.rod, &annotations.text_marks));
+        }
         match &positioned.element {
             MeasureElement::Clef(clef_layout) => {
                 draw_clef(svg, staff, clef_layout, font)?;
@@ -97,7 +97,7 @@ pub fn draw_measure(
                 draw_tuplet_group_event(svg, staff, font, config, elem_x, positioned.width, tg)?;
             }
             MeasureElement::Rest(rest) => {
-                draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
+                draw_rest_event(svg, staff, font, config, elem_x, rest, 0.0)?;
             }
             MeasureElement::MultiMeasureRest { count, style } => {
                 // The rest fills the rhythmic width allocated by layout — the
@@ -125,13 +125,20 @@ pub fn draw_measure(
                 }
             }
             MeasureElement::Barline(style) => {
-                draw_barline(svg, staff, font, elem_x, *style)?;
+                let width = draw_barline(svg, staff, font, elem_x, *style)?;
+                if let Some((_, _, marks)) = pending_marks.take() {
+                    draw_text_marks(svg, staff, font, config, marks, elem_x + width / 2.0)?;
+                }
             }
         }
+    }
+    if let Some((event_x, rod, marks)) = pending_marks {
+        draw_text_marks(svg, staff, font, config, marks, event_x + rod)?;
     }
 
     Ok(())
 }
+
 
 /// Draw additional voices for a measure at the same x-positions as the primary voice.
 ///
@@ -246,14 +253,7 @@ pub fn draw_additional_voices(
                 MeasureElement::Rest(rest) => {
                     // Rests don't get collision offset — use original x
                     let rest_x = x_offset + positioned.x;
-                    draw_rest_displaced(
-                        svg,
-                        staff,
-                        font,
-                        rest_x,
-                        rest.duration_log2,
-                        rest_displacement,
-                    )?;
+                    draw_rest_event(svg, staff, font, config, rest_x, rest, rest_displacement)?;
                 }
             }
         }
@@ -436,97 +436,18 @@ fn draw_note_event(
         draw_dots(svg, staff, font, x, advance, dot_pos, note.dots)?;
     }
 
-    // Draw articulation(s) near the notehead if present
-    if !note.annotations.articulations.is_empty() {
-        let stem_dir = direction.unwrap_or(StemDirection::Up);
-        let note_center_x = x + advance / 2.0;
-        let artic_layouts = layout_articulation_stack(
-            &note.annotations.articulations,
-            note_center_x,
-            position,
-            stem_dir,
-            staff,
-        );
-        for artic_layout in &artic_layouts {
-            draw_articulation(svg, font, artic_layout)?;
-        }
-    }
-
-    // Draw dynamic marking below the staff if present
-    if let Some(dyn_mark) = note.annotations.dynamic {
-        let note_center_x = x + advance / 2.0;
-        draw_dynamic(svg, staff, font, dyn_mark, note_center_x)?;
-    }
-
-    // Draw rehearsal mark above the staff if present
-    if let Some((ref text, style)) = note.annotations.rehearsal_mark {
-        let note_center_x = x + advance / 2.0;
-        let layout = layout_rehearsal_mark(text, note_center_x, staff, config.staff_space, style);
-        draw_rehearsal_mark(svg, &layout);
-    }
-
-    // Draw tempo mark above the staff if present
-    if let Some(ref mark) = note.annotations.tempo_mark {
-        let layout = layout_tempo_mark(mark, x, staff, config.staff_space);
-        draw_tempo_mark(svg, &layout, font);
-    }
-
-    // Draw expression text below the staff if present
-    if let Some(ref text) = note.annotations.expression {
-        let note_center_x = x + advance / 2.0;
-        let layout = layout_expression(text, note_center_x, staff, config.staff_space);
-        draw_expression(svg, &layout);
-    }
-
-    // Draw lyric syllable below the staff if present
-    if let Some(ref syllable) = note.annotations.lyric {
-        let note_center_x = x + advance / 2.0;
-        let layout = layout_lyric(syllable, note_center_x, staff, config.staff_space);
-        draw_lyric(svg, &layout);
-    }
-
-    // Draw chord symbol above the staff if present
-    if let Some(ref symbol) = note.annotations.chord_symbol {
-        let note_center_x = x + advance / 2.0;
-        let layout = crate::layout::chord_symbol::layout_chord_symbol_composite(
-            symbol,
-            note_center_x,
-            staff,
-            config.staff_space,
-            font.units_per_em(),
-            |g| font.glyph_advance(g).unwrap_or(0),
-        );
-        crate::render::chord_symbol_renderer::draw_chord_symbol_composite(svg, font, &layout)?;
-    }
-
-    // Draw ornament above the staff if present
-    if let Some(orn) = note.annotations.ornament {
-        let note_center_x = x + advance / 2.0;
-        let orn_layout =
-            crate::layout::ornament::layout_ornament(orn, note_center_x, position, staff);
-        crate::render::ornament_renderer::draw_ornament(svg, font, &orn_layout)?;
-    }
-
-    // Draw navigation sign (segno, coda) above the staff if present
-    if let Some(sign) = note.annotations.navigation_sign {
-        let note_center_x = x + advance / 2.0;
-        let nav_layout =
-            crate::layout::navigation::layout_navigation_sign(sign, note_center_x, staff);
-        crate::render::navigation_renderer::draw_navigation_sign(svg, font, &nav_layout)?;
-    }
-
-    // Draw pedal marking (Ped. or *) below the staff if present
-    if let Some(pedal_mark) = note.annotations.pedal {
-        let note_center_x = x + advance / 2.0;
-        crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, note_center_x)?;
-    }
-
-    // Draw breath mark above the staff, to the right of the note
-    if let Some(breath) = note.annotations.breath_mark {
-        let note_right_x = x + advance;
-        let breath_layout = crate::layout::breath::layout_breath_mark(breath, note_right_x, staff);
-        crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
-    }
+    let notehead_y = staff.y_of(position);
+    let half_head = config.staff_space / 2.0;
+    let anchor = EventAnchor {
+        left_x: x,
+        width: advance,
+        top_y: notehead_y - half_head,
+        bottom_y: notehead_y + half_head,
+        articulation_position: position,
+        stem: direction.unwrap_or(StemDirection::Up),
+        ornament_position: position,
+    };
+    draw_event_marks(svg, staff, font, config, &anchor, &note.annotations)?;
 
     Ok(())
 }
@@ -744,104 +665,24 @@ fn draw_chord_event(
         }
     }
 
-    // Draw articulation(s) near the chord if present (uses outer note position)
-    if !chord.annotations.articulations.is_empty() {
-        let chord_center_x = x + advance / 2.0;
-        // Articulation attaches to the note on the opposite side from the stem:
-        // stem-up → articulation below → use lowest note; stem-down → above → use highest
-        let attach_pos = match direction {
-            StemDirection::Up => chord.staff_positions.iter().copied().min().unwrap_or(4),
-            StemDirection::Down => chord.staff_positions.iter().copied().max().unwrap_or(4),
-        };
-        let artic_layouts = layout_articulation_stack(
-            &chord.annotations.articulations,
-            chord_center_x,
-            attach_pos,
-            direction,
-            staff,
-        );
-        for artic_layout in &artic_layouts {
-            draw_articulation(svg, font, artic_layout)?;
-        }
-    }
-
-    // Draw dynamic marking below the staff if present
-    if let Some(dyn_mark) = chord.annotations.dynamic {
-        let chord_center_x = x + advance / 2.0;
-        draw_dynamic(svg, staff, font, dyn_mark, chord_center_x)?;
-    }
-
-    // Draw rehearsal mark above the staff if present
-    if let Some((ref text, style)) = chord.annotations.rehearsal_mark {
-        let chord_center_x = x + advance / 2.0;
-        let layout = layout_rehearsal_mark(text, chord_center_x, staff, config.staff_space, style);
-        draw_rehearsal_mark(svg, &layout);
-    }
-
-    // Draw tempo mark above the staff if present
-    if let Some(ref mark) = chord.annotations.tempo_mark {
-        let layout = layout_tempo_mark(mark, x, staff, config.staff_space);
-        draw_tempo_mark(svg, &layout, font);
-    }
-
-    // Draw expression text below the staff if present
-    if let Some(ref text) = chord.annotations.expression {
-        let chord_center_x = x + advance / 2.0;
-        let layout = layout_expression(text, chord_center_x, staff, config.staff_space);
-        draw_expression(svg, &layout);
-    }
-
-    // Draw lyric syllable below the staff if present
-    if let Some(ref syllable) = chord.annotations.lyric {
-        let chord_center_x = x + advance / 2.0;
-        let layout = layout_lyric(syllable, chord_center_x, staff, config.staff_space);
-        draw_lyric(svg, &layout);
-    }
-
-    // Draw chord symbol above the staff if present
-    if let Some(ref symbol) = chord.annotations.chord_symbol {
-        let chord_center_x = x + advance / 2.0;
-        let layout = crate::layout::chord_symbol::layout_chord_symbol_composite(
-            symbol,
-            chord_center_x,
-            staff,
-            config.staff_space,
-            font.units_per_em(),
-            |g| font.glyph_advance(g).unwrap_or(0),
-        );
-        crate::render::chord_symbol_renderer::draw_chord_symbol_composite(svg, font, &layout)?;
-    }
-
-    // Draw ornament above the staff if present
-    if let Some(orn) = chord.annotations.ornament {
-        let chord_center_x = x + advance / 2.0;
-        // Use topmost note for ornament positioning (ornaments always above)
-        let top_pos = chord.staff_positions.iter().copied().max().unwrap_or(4);
-        let orn_layout =
-            crate::layout::ornament::layout_ornament(orn, chord_center_x, top_pos, staff);
-        crate::render::ornament_renderer::draw_ornament(svg, font, &orn_layout)?;
-    }
-
-    // Draw navigation sign (segno, coda) above the staff if present
-    if let Some(sign) = chord.annotations.navigation_sign {
-        let chord_center_x = x + advance / 2.0;
-        let nav_layout =
-            crate::layout::navigation::layout_navigation_sign(sign, chord_center_x, staff);
-        crate::render::navigation_renderer::draw_navigation_sign(svg, font, &nav_layout)?;
-    }
-
-    // Draw pedal marking (Ped. or *) below the staff if present
-    if let Some(pedal_mark) = chord.annotations.pedal {
-        let chord_center_x = x + advance / 2.0;
-        crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, chord_center_x)?;
-    }
-
-    // Draw breath mark above the staff, to the right of the chord
-    if let Some(breath) = chord.annotations.breath_mark {
-        let chord_right_x = x + advance;
-        let breath_layout = crate::layout::breath::layout_breath_mark(breath, chord_right_x, staff);
-        crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
-    }
+    // Articulations attach to the note on the opposite side from the stem:
+    // stem-up → below → lowest note; stem-down → above → highest note.
+    let top_pos = chord.staff_positions.iter().copied().max().unwrap_or(4);
+    let bottom_pos = chord.staff_positions.iter().copied().min().unwrap_or(4);
+    let half_head = config.staff_space / 2.0;
+    let anchor = EventAnchor {
+        left_x: x,
+        width: advance,
+        top_y: staff.y_of(top_pos) - half_head,
+        bottom_y: staff.y_of(bottom_pos) + half_head,
+        articulation_position: match direction {
+            StemDirection::Up => bottom_pos,
+            StemDirection::Down => top_pos,
+        },
+        stem: direction,
+        ornament_position: top_pos,
+    };
+    draw_event_marks(svg, staff, font, config, &anchor, &chord.annotations)?;
 
     Ok(())
 }

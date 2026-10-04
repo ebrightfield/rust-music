@@ -7797,3 +7797,10 @@
   the time signature and barline). `advanced_guitar_vocabulary` was already
   drifting at 8eaf21a and is left for the integrator; this change also moves
   its seven-string chord's sharps into two columns.
+
+## 2026-10-04 — Modus Novus rest marks, text scripts/spanners, dynamics and tempo
+- Rests now carry `NoteAnnotations`, so tempo, dynamics, hairpin endpoints, articulations (including fermata), rehearsal marks and text scripts attach to the rest glyph. Pitch-specific builders (ties, slurs, grace notes, ornaments, lyrics) remain note/chord-only.
+- `TextScript` renders stacked above/below styled text and inline SMuFL glyphs on events and barlines; the old expression channel is replaced by italic scripts. General `TextSpanner` replaces `CrescText`, preserving cresc./decresc. and adding configurable rit./dim. with dashed, solid or no continuation line across systems.
+- Custom dynamics mix italic words and SMuFL dynamic glyphs; dynamics and hairpins support above/below placement via `ScoreBuilder::dynamics_placement` and per-mark `dynamic_placed`.
+- Composable tempo marks support dotted values, 32nd notes, c. prefixes, BPM ranges, parenthesized marks, text before/after/below, and note = note equations.
+- Focused score/renderer position tests and SVG golden tests cover these marks. Visual PNG smokes were compared against the mn-c11-r015 and mn-c03-m008 LilyPond reference PDFs; the demo smokes select representative bars, not a complete transcription of either piece. `golden_advanced_guitar_vocabulary` remains the known baseline mismatch.

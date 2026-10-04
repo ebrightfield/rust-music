@@ -18,7 +18,7 @@ use music::note::pitch::Pitch;
 use music_engraver::layout::arpeggio::ArpeggioDirection;
 use music_engraver::layout::articulation::Articulation;
 use music_engraver::layout::breath::BreathMark;
-use music_engraver::layout::cresc_text::CrescTextKind;
+use music_engraver::layout::text_spanner::TextSpanner;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::glissando::GlissandoStyle;
 use music_engraver::layout::grace::GraceNoteKind;
@@ -31,7 +31,8 @@ use music_engraver::layout::navigation::NavigationSign;
 use music_engraver::layout::ornament::Ornament;
 use music_engraver::layout::ottava::OttavaKind;
 use music_engraver::layout::rehearsal::RehearsalStyle;
-use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
+use music_engraver::layout::tempo::{MetronomeMark, MetronomeNoteKind, TempoMark};
+use music_engraver::layout::text_script::TextScript;
 use music_engraver::layout::tremolo::TremoloCount;
 use music_engraver::score::guitar::{
     BendGesture, BendPitch, BendRelease, GuitarMoment, GuitarScore,
@@ -827,14 +828,9 @@ fn build_annotations() -> String {
         .time_signature(4, 4)
         .note(p("C", 4), Duration::QTR)
         .rehearsal_mark("A".to_string(), RehearsalStyle::Boxed)
-        .tempo(TempoMark::TextWithMetronome {
-            text: "Allegro".to_string(),
-            note_kind: MetronomeNoteKind::Quarter,
-            dotted: false,
-            bpm: 120,
-        })
+        .tempo(TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Quarter, 120)).with_text("Allegro"))
         .note(p("D", 4), Duration::QTR)
-        .expression("dolce".to_string())
+        .text_script(TextScript::below("dolce").italic().centered())
         .note(p("E", 4), Duration::HALF)
         .end_barline()
         .render_svg()
@@ -1220,7 +1216,7 @@ fn build_cresc_text() -> String {
         .note(p("D", 4), Duration::QTR)
         .note(p("E", 4), Duration::QTR)
         .note(p("F", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .barline()
         // Measure 2: decresc. spans notes 1..4
         .note(p("G", 4), Duration::QTR)
@@ -1228,7 +1224,7 @@ fn build_cresc_text() -> String {
         .note(p("F", 4), Duration::QTR)
         .note(p("E", 4), Duration::QTR)
         .note(p("D", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .barline()
         // Measure 3: dim. spans notes 1..4
         .note(p("C", 4), Duration::QTR)
@@ -1236,7 +1232,7 @@ fn build_cresc_text() -> String {
         .note(p("B", 3), Duration::QTR)
         .note(p("A", 3), Duration::QTR)
         .note(p("G", 3), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .end_barline()
         .render_svg()
 }
@@ -1289,7 +1285,7 @@ fn build_cross_system_cresc_text() -> String {
         .measures_per_system(2)
         // System 1, measure 1: cresc. starts here
         .note(p("C", 4), Duration::QTR)
-        .cresc_text_start(CrescTextKind::Crescendo)
+        .text_spanner_start(TextSpanner::cresc())
         .note(p("D", 4), Duration::QTR)
         .note(p("E", 4), Duration::QTR)
         .note(p("F", 4), Duration::QTR)
@@ -1300,7 +1296,7 @@ fn build_cross_system_cresc_text() -> String {
         .barline()
         // System 2, measure 3: cresc. ends on the first note
         .note(p("B", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .note(p("A", 4), Duration::QTR)
         .note(p("G", 4), Duration::QTR)
         .note(p("F", 4), Duration::QTR)
@@ -1314,7 +1310,7 @@ fn build_cross_system_cresc_text() -> String {
 }
 
 /// Same notes/structure as `build_cross_system_cresc_text` but with the
-/// `cresc_text_start` / `cresc_text_end` calls removed. Used as a delta
+/// `text_spanner_start` / `text_spanner_end` calls removed. Used as a delta
 /// baseline so the cross-system cresc-text golden can pin the exact
 /// label / dashed-line contribution of the cross-system path.
 fn build_cross_system_cresc_text_baseline() -> String {
@@ -1453,10 +1449,10 @@ fn build_expression_text() -> String {
         .key_signature(KeySignature::Open)
         .time_signature(4, 4)
         .note(p("E", 4), Duration::QTR)
-        .expression("dolce".to_string())
+        .text_script(TextScript::below("dolce").italic().centered())
         .note(p("F", 4), Duration::QTR)
         .note(p("G", 4), Duration::HALF)
-        .expression("cantabile".to_string())
+        .text_script(TextScript::below("cantabile").italic().centered())
         .end_barline()
         .render_svg()
 }

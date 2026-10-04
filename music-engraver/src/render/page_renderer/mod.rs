@@ -1,9 +1,14 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::cresc_text::{layout_cresc_text, layout_cresc_text_continuation, CrescTextKind};
 use crate::layout::glissando::{
     layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle,
 };
-use crate::layout::hairpin::{layout_hairpin_styled, HairpinType, NientePlacement};
+use crate::layout::hairpin::{
+    hairpin_reference_y, layout_hairpin_styled, HairpinType, NientePlacement,
+};
+use crate::layout::placement::Placement;
+use crate::layout::text_spanner::{
+    layout_text_spanner, layout_text_spanner_continuation, TextSpanner,
+};
 use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
@@ -23,18 +28,20 @@ use crate::layout::trill_extension::{
     layout_trill_extension_multi_speed, layout_trill_extension_with_glyph,
     trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
 };
-use crate::render::cresc_text_renderer::draw_cresc_text;
+use crate::render::text_spanner_renderer::draw_text_spanner;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
 use crate::render::note_renderer::notehead_advance;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
+use crate::layout::mark_extent::{annotation_extent_ss, element_annotations};
 use crate::render::system_renderer::{
-    collect_cresc_text_note_info, collect_glissando_note_info, collect_hairpin_note_info,
+    collect_glissando_note_info, collect_hairpin_note_info, collect_text_spanner_note_info,
     collect_lyric_note_info, collect_note_positions, collect_ottava_note_info,
     collect_slur_note_info, collect_trill_extension_note_info, draw_system, layout_trill_end_hook,
-    widest_notehead_advance, TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
+    span_event_advance, widest_notehead_advance, TRILL_BRACKET_HOOK_LENGTH_SS,
+    TRILL_EXTENSION_NOTE_GAP_SS,
 };
 use crate::render::tie_renderer::draw_tie;
 use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_bracket_hooks};
@@ -78,6 +85,9 @@ struct IncomingTieTarget {
 /// converts them through the same `y_of` mapping the renderers use. Used to size
 /// the viewBox so ledger-line passages are not clipped.
 ///
+/// Tempo marks, text scripts and above-staff dynamics extend it by their
+/// estimated height ([`annotation_extent_ss`]).
+///
 /// Only content that leaves the staff extends the box: notes *inside* the staff
 /// already have their stems and beams covered by the page margins, so counting
 /// them would inflate the canvas for ordinary scores — which shrinks everything
@@ -99,6 +109,16 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
                 std::iter::once(&measure.layout).chain(measure.additional_voice_layouts.iter());
             for voice in voices {
                 for positioned in &voice.elements {
+                    if let Some(annotations) = element_annotations(&positioned.element) {
+                        let (above, below) = annotation_extent_ss(annotations);
+                        let ss = config.staff_space;
+                        if above > 0.0 {
+                            top = top.min(ps.y - above * ss);
+                        }
+                        if below > 0.0 {
+                            bottom = bottom.max(ps.y + 4.0 * ss + below * ss);
+                        }
+                    }
                     let positions: Vec<i8> = match &positioned.element {
                         MeasureElement::Note(n) => vec![n.staff_position],
                         MeasureElement::Chord(c) => c.staff_positions.clone(),
@@ -217,12 +237,9 @@ pub fn draw_page(
     // Draw cross-system hairpins between adjacent systems
     draw_cross_system_hairpins(&mut svg, font, config, &page.systems)?;
 
-    // Draw cross-system dashed-text crescendo/diminuendo markings between
-    // adjacent systems. Conceptually parallel to draw_cross_system_hairpins —
-    // the wedgeless alternative — but with the label always landing on the
-    // source system (where the start flag lives) and the incoming half on
-    // the target system being label-suppressed (dashed line only).
-    draw_cross_system_cresc_texts(&mut svg, font, config, &page.systems)?;
+    // Draw cross-system text spanners: label and line on the source system,
+    // a label-less continuation on the next.
+    draw_cross_system_text_spanners(&mut svg, font, config, &page.systems)?;
 
     // Draw cross-system lyric extender lines between adjacent systems
     draw_cross_system_lyric_extenders(&mut svg, config, &page.systems);
@@ -615,8 +632,10 @@ struct UnresolvedHairpin {
     kind: HairpinType,
     /// Right edge of the system's staff lines (absolute x).
     staff_right: f64,
-    /// Y of the bottom staff line (absolute).
-    staff_bottom_y: f64,
+    /// The source system's staff.
+    staff: StaffLayout,
+    /// Side of the staff the hairpin is drawn on.
+    placement: Placement,
     /// Mirror of `HairpinNoteInfo::hairpin_dashed`. When `true`, the trailing
     /// half of the wedge on the source system is drawn dashed so the
     /// continuation reads consistently with the within-system dashed style.
@@ -654,8 +673,8 @@ struct IncomingHairpinTarget {
     x_left: f64,
     /// Left edge of the system's note area (after prefix).
     staff_left: f64,
-    /// Y of the bottom staff line (absolute).
-    staff_bottom_y: f64,
+    /// The target system's staff.
+    staff: StaffLayout,
 }
 
 /// Find notes with `hairpin_start` at the end of a system that have no
@@ -688,21 +707,15 @@ fn find_unresolved_hairpins(
             continue; // Resolved within the system
         }
 
-        let advance = widest_notehead_advance(
-            font,
-            info.duration_log2,
-            info.notehead_styles,
-            info.notehead_count,
-        )?;
-
-        // Match the 0.3ss padding used in system_renderer for hairpin start
-        let x_right = page_system.x + info.x + advance + 0.3 * config.staff_space;
+        // Same start as the within-system pass.
+        let x_right = page_system.x + info.hairpin_start_x(font, config.staff_space)?;
 
         unresolved.push(UnresolvedHairpin {
             x_right,
             kind: hairpin_type,
             staff_right: page_system.x + system.staff_width,
-            staff_bottom_y: staff.bottom_y(),
+            staff: staff.clone(),
+            placement: info.placement,
             dashed: info.hairpin_dashed,
             niente: info.hairpin_niente,
         });
@@ -712,11 +725,13 @@ fn find_unresolved_hairpins(
 }
 
 /// Find the first note with `hairpin_end = true` in a system (candidate for
-/// incoming cross-system hairpin).
+/// incoming cross-system hairpin on `side` of the staff).
 fn find_incoming_hairpin_targets(
+    font: &MusicFont,
     config: &EngravingConfig,
     page_system: &PageSystem,
-) -> Vec<IncomingHairpinTarget> {
+    side: Placement,
+) -> Result<Vec<IncomingHairpinTarget>, FontError> {
     let system = &page_system.system;
     let note_info = collect_hairpin_note_info(system);
     let staff = StaffLayout::new(
@@ -739,20 +754,20 @@ fn find_incoming_hairpin_targets(
             continue;
         }
 
-        // Match the 0.3ss padding used in system_renderer for hairpin end
-        let x_left = page_system.x + info.x - 0.3 * config.staff_space;
+        // Same end as the within-system pass.
+        let x_left = page_system.x + info.hairpin_end_x(font, config.staff_space, side)?;
 
         targets.push(IncomingHairpinTarget {
             x_left,
             staff_left: first_measure_x,
-            staff_bottom_y: staff.bottom_y(),
+            staff: staff.clone(),
         });
 
         // Only need the first hairpin_end target
         break;
     }
 
-    targets
+    Ok(targets)
 }
 
 /// Draw cross-system hairpins between adjacent systems.
@@ -775,9 +790,9 @@ pub(crate) fn draw_cross_system_hairpins(
             continue;
         }
 
-        let targets = find_incoming_hairpin_targets(config, &systems[i + 1]);
-
         for hp_src in &unresolved {
+            let targets =
+                find_incoming_hairpin_targets(font, config, &systems[i + 1], hp_src.placement)?;
             // Niente "o" placement on a cross-system wedge: the circle sits
             // at exactly one tip of the full wedge. That tip belongs to one
             // half — the other half gets no circle. The `trailing_half_owns_niente`
@@ -803,7 +818,7 @@ pub(crate) fn draw_cross_system_hairpins(
                 hp_src.kind,
                 hp_src.x_right,
                 hp_src.staff_right,
-                hp_src.staff_bottom_y,
+                hairpin_reference_y(hp_src.placement, &hp_src.staff, config.staff_space),
                 config.staff_space,
                 stroke_width,
                 trailing_niente,
@@ -823,7 +838,7 @@ pub(crate) fn draw_cross_system_hairpins(
                     hp_src.kind,
                     tgt.staff_left,
                     tgt.x_left,
-                    tgt.staff_bottom_y,
+                    hairpin_reference_y(hp_src.placement, &tgt.staff, config.staff_space),
                     config.staff_space,
                     stroke_width,
                     incoming_niente,
@@ -837,142 +852,85 @@ pub(crate) fn draw_cross_system_hairpins(
     Ok(())
 }
 
-/// A note at the end of a system with an unresolved `cresc_text_start`.
-///
-/// Conceptually parallel to [`UnresolvedHairpin`] — the dashed-text dynamic
-/// is the wedgeless alternative to a hairpin. Both share the same shape of
-/// "start flag here, end flag missing on this system" splitter logic, so the
-/// page-renderer carries both unresolved markings through symmetric paths.
-struct UnresolvedCrescText {
-    /// Absolute x where the cresc-text marking's label should sit on the
-    /// source system (i.e. just right of the start notehead, with the same
-    /// 0.3ss padding `draw_system_cresc_texts` uses for the within-system
-    /// path).
+/// An event at the end of a system whose text spanner has no end on that
+/// system.
+struct UnresolvedTextSpanner {
+    /// Absolute x of the label (start event's right edge plus 0.3ss, as in
+    /// the within-system pass).
     x_start: f64,
-    /// Which marking (Crescendo / Decrescendo / Diminuendo). Drives the
-    /// label string.
-    kind: CrescTextKind,
-    /// Right edge of the system's staff lines (absolute x). The dashed
-    /// continuation on the source side runs from `x_start + label_width`
-    /// to this value.
+    /// The spanner.
+    spanner: TextSpanner,
+    /// Right edge of the system's staff lines (absolute x).
     staff_right: f64,
 }
 
-/// A note at the start of the next system that has `cresc_text_end = true`.
-struct IncomingCrescTextTarget {
-    /// Absolute x where the incoming dashed continuation should end
-    /// (the note's left edge minus the same 0.3ss padding the
-    /// within-system path uses for the end side).
+/// The first event on a system that ends a text spanner.
+struct IncomingTextSpannerTarget {
+    /// Absolute x where the continuation line ends (event left edge minus
+    /// 0.3ss).
     x_end: f64,
-    /// Left edge of the system's note area (after prefix). The dashed
-    /// continuation on the target side starts here.
+    /// Left edge of the system's note area (after the prefix).
     staff_left: f64,
 }
 
-/// Find notes with `cresc_text_start` at the end of a system that have no
-/// matching `cresc_text_end` within the same system.
-fn find_unresolved_cresc_texts(
+/// Find text spanners starting on `page_system` without an end there.
+fn find_unresolved_text_spanners(
     font: &MusicFont,
     config: &EngravingConfig,
     page_system: &PageSystem,
-) -> Result<Vec<UnresolvedCrescText>, FontError> {
+) -> Result<Vec<UnresolvedTextSpanner>, FontError> {
     let system = &page_system.system;
-    let note_info = collect_cresc_text_note_info(system);
-
+    let note_info = collect_text_spanner_note_info(system);
     let mut unresolved = Vec::new();
-
     for (i, info) in note_info.iter().enumerate() {
-        let Some(kind) = info.cresc_text_start else {
+        let Some(spanner) = info.start else {
             continue;
         };
-
-        // Check if there's a matching cresc_text_end within this system
-        let has_end = note_info[i + 1..].iter().any(|n| n.cresc_text_end);
-
-        if has_end {
-            continue; // Resolved within the system
+        if note_info[i + 1..].iter().any(|n| n.end) {
+            continue;
         }
-
-        let advance = widest_notehead_advance(
+        let advance = span_event_advance(
             font,
             info.duration_log2,
             info.notehead_styles,
             info.notehead_count,
+            info.is_rest,
         )?;
-
-        // Match the same start-side padding draw_system_cresc_texts uses
-        // (notehead_right + 0.3ss). Keeps a within-system cresc-text and a
-        // cross-system cresc-text starting on the same note pixel-aligned.
-        let x_start = page_system.x + info.x + advance + 0.3 * config.staff_space;
-
-        unresolved.push(UnresolvedCrescText {
-            x_start,
-            kind,
+        unresolved.push(UnresolvedTextSpanner {
+            x_start: page_system.x + info.x + advance + 0.3 * config.staff_space,
+            spanner: spanner.clone(),
             staff_right: page_system.x + system.staff_width,
         });
     }
-
     Ok(unresolved)
 }
 
-/// Find the first note with `cresc_text_end = true` in a system (candidate
-/// for incoming cross-system cresc-text continuation).
-fn find_incoming_cresc_text_targets(
+/// The first event on `page_system` that ends a text spanner.
+fn find_incoming_text_spanner_target(
     config: &EngravingConfig,
     page_system: &PageSystem,
-) -> Vec<IncomingCrescTextTarget> {
+) -> Option<IncomingTextSpannerTarget> {
     let system = &page_system.system;
-    let note_info = collect_cresc_text_note_info(system);
-
     let first_measure_x = system
         .measures
         .first()
         .map(|m| page_system.x + m.x_offset)
         .unwrap_or(page_system.x);
-
-    let mut targets = Vec::new();
-
-    for info in &note_info {
-        if !info.cresc_text_end {
-            continue;
-        }
-
-        // Match the 0.3ss padding draw_system_cresc_texts uses for the
-        // end side.
-        let x_end = page_system.x + info.x - 0.3 * config.staff_space;
-
-        targets.push(IncomingCrescTextTarget {
-            x_end,
+    collect_text_spanner_note_info(system)
+        .iter()
+        .find(|info| info.end)
+        .map(|info| IncomingTextSpannerTarget {
+            x_end: page_system.x + info.x - 0.3 * config.staff_space,
             staff_left: first_measure_x,
-        });
-
-        // Only the first cresc_text_end on the target system is the
-        // continuation target.
-        break;
-    }
-
-    targets
+        })
 }
 
-/// Draw cross-system dashed-text crescendo/diminuendo markings between
-/// adjacent systems.
+/// Draw text spanners that cross from one system to the next.
 ///
-/// For each unresolved `cresc_text_start` at the end of system N, finds the
-/// first `cresc_text_end` note at the start of system N+1 and draws:
-///   1. a trailing half on system N: the italic label ("cresc.", "decresc.",
-///      "dim.") at the start position followed by a dashed line running to
-///      the system's right edge (via [`layout_cresc_text`]), and
-///   2. an incoming half on system N+1: a dashed-only continuation
-///      (label suppressed) from the system's left edge to just before the
-///      `cresc_text_end` note (via [`layout_cresc_text_continuation`]).
-///
-/// The label always lives on the source system because that's where the
-/// `cresc_text_start` annotation logically lands — the continuation half
-/// on the next system reads as "this is the same marking continuing", so
-/// repeating the label would be redundant. Mirrors the dashed-incoming-half
-/// convention used by [`draw_cross_system_hairpins`] and the
-/// cross-system ottava-bracket / trill-extension paths.
-pub(crate) fn draw_cross_system_cresc_texts(
+/// The source system keeps the label and its line runs to the system's right
+/// edge; the next system carries a label-less continuation from its left
+/// edge to just before the first event ending a spanner.
+pub(crate) fn draw_cross_system_text_spanners(
     svg: &mut SvgWriter,
     font: &MusicFont,
     config: &EngravingConfig,
@@ -980,14 +938,12 @@ pub(crate) fn draw_cross_system_cresc_texts(
 ) -> Result<(), FontError> {
     for i in 0..systems.len().saturating_sub(1) {
         let src_system = &systems[i];
-        let unresolved = find_unresolved_cresc_texts(font, config, src_system)?;
+        let unresolved = find_unresolved_text_spanners(font, config, src_system)?;
         if unresolved.is_empty() {
             continue;
         }
-
         let tgt_system = &systems[i + 1];
-        let targets = find_incoming_cresc_text_targets(config, tgt_system);
-
+        let target = find_incoming_text_spanner_target(config, tgt_system);
         let src_staff = StaffLayout::new(
             src_system.x,
             src_system.y,
@@ -1000,37 +956,27 @@ pub(crate) fn draw_cross_system_cresc_texts(
             tgt_system.system.staff_width,
             config.staff_space,
         );
-
         for src in &unresolved {
-            // Trailing half on the source system: label + dashed line to
-            // system right edge. Uses layout_cresc_text (not the continuation
-            // variant) because the start flag lives on this system, so the
-            // label appears here.
-            let right_layout = layout_cresc_text(
-                src.kind,
+            let head = layout_text_spanner(
+                &src.spanner,
                 src.x_start,
                 src.staff_right,
                 &src_staff,
                 config.staff_space,
             );
-            draw_cresc_text(svg, &right_layout);
-
-            // Incoming half on the target system: dashed-only continuation.
-            // layout_cresc_text_continuation sets has_label = false so the
-            // renderer emits only the dashed line.
-            if let Some(tgt) = targets.first() {
-                let left_layout = layout_cresc_text_continuation(
-                    src.kind,
+            draw_text_spanner(svg, &head);
+            if let Some(tgt) = &target {
+                let tail = layout_text_spanner_continuation(
+                    &src.spanner,
                     tgt.staff_left,
                     tgt.x_end,
                     &tgt_staff,
                     config.staff_space,
                 );
-                draw_cresc_text(svg, &left_layout);
+                draw_text_spanner(svg, &tail);
             }
         }
     }
-
     Ok(())
 }
 

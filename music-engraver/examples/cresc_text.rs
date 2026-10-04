@@ -1,30 +1,28 @@
 /// Renders dashed-text dynamic markings ("cresc. - - -", "decresc. - - -",
 /// "dim. - - -") below treble-clef staves with notes. Demonstrates:
-///   1. plain `layout_cresc_text` with the italic label + dashed continuation,
-///      one staff per kind so the three labels are visually side-by-side,
-///   2. `layout_cresc_text_continuation` (label suppressed) on a fourth staff,
-///      mirroring the cross-system continuation convention used by hairpins
-///      and trill extensions.
+///   1. plain `layout_text_spanner` with the italic label + dashed line,
+///      one staff per preset so the three labels are visually side-by-side,
+///   2. `layout_text_spanner_continuation` (label suppressed) on a fourth
+///      staff, mirroring the cross-system continuation convention used by
+///      hairpins and trill extensions.
 ///
 /// Outputs SVG to `examples/output/cresc_text.svg`.
 ///
-/// This example exercises the layout/renderer pair directly because the
-/// dashed-text marking has not yet been plumbed through `ScoreBuilder`. A
-/// follow-up will wire `cresc.` / `decresc.` / `dim.` builder methods so
-/// callers can request a dashed-text marking instead of a hairpin.
+/// This example exercises the layout/renderer pair directly; `ScoreBuilder`
+/// exposes the same spanners through `text_spanner_start` / `cresc_text`.
 use music::notation::clef::Clef;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
 
 use music_engraver::font::bravura_font;
 use music_engraver::layout::clef::ClefLayout;
-use music_engraver::layout::cresc_text::{
-    layout_cresc_text, layout_cresc_text_continuation, CrescTextKind,
+use music_engraver::layout::text_spanner::{
+    layout_text_spanner, layout_text_spanner_continuation, TextSpanner,
 };
 use music_engraver::layout::note_placement::pitch_to_staff_position;
 use music_engraver::layout::staff::StaffLayout;
 use music_engraver::layout::stem::auto_stem_direction;
-use music_engraver::render::cresc_text_renderer::draw_cresc_text;
+use music_engraver::render::text_spanner_renderer::draw_text_spanner;
 use music_engraver::render::note_renderer::{draw_stemmed_note, NoteheadKind};
 use music_engraver::render::{draw_clef, draw_staff_lines, SvgWriter};
 
@@ -75,18 +73,18 @@ fn main() {
     let viewbox_h = 4.0 * ROW_SPACING_FU + 2000.0;
     let mut svg = SvgWriter::new(1200.0, 600.0, -100.0, -500.0, 11000.0, viewbox_h);
 
-    // Row layouts: one CrescTextKind each on rows 0–2, a continuation on row 3.
+    // Row layouts: one spanner preset each on rows 0–2, a continuation on row 3.
     let kinds = [
-        Some(CrescTextKind::Crescendo),
-        Some(CrescTextKind::Decrescendo),
-        Some(CrescTextKind::Diminuendo),
+        Some(TextSpanner::cresc()),
+        Some(TextSpanner::decresc()),
+        Some(TextSpanner::dim()),
         None, // row 3 uses the continuation (label-suppressed) variant
     ];
 
     let mut total_cresc_lines = 0usize;
     let mut total_label_text_elements = 0usize;
 
-    for (row_idx, &kind_opt) in kinds.iter().enumerate() {
+    for (row_idx, kind_opt) in kinds.iter().enumerate() {
         let y_origin = row_ys[row_idx];
         let staff = StaffLayout::from_config(0.0, y_origin, 10000.0, &config);
 
@@ -121,17 +119,17 @@ fn main() {
 
         match kind_opt {
             Some(kind) => {
-                let layout = layout_cresc_text(kind, x_start, x_end, &staff, staff.staff_space);
+                let layout = layout_text_spanner(kind, x_start, x_end, &staff, staff.staff_space);
                 // The plain layout sets has_label = true → renderer emits the
                 // italic <text> label AND the dashed continuation line.
                 assert!(layout.has_label, "plain layout must emit the label");
-                draw_cresc_text(&mut svg, &layout);
+                draw_text_spanner(&mut svg, &layout);
                 total_label_text_elements += 1;
                 total_cresc_lines += 1;
             }
             None => {
-                let layout = layout_cresc_text_continuation(
-                    CrescTextKind::Crescendo,
+                let layout = layout_text_spanner_continuation(
+                    &TextSpanner::cresc(),
                     x_start,
                     x_end,
                     &staff,
@@ -140,7 +138,7 @@ fn main() {
                 // Continuation suppresses the label → renderer emits ONLY the
                 // dashed line, mirroring the cross-system convention.
                 assert!(!layout.has_label, "continuation must suppress the label");
-                draw_cresc_text(&mut svg, &layout);
+                draw_text_spanner(&mut svg, &layout);
                 total_cresc_lines += 1;
             }
         }
