@@ -4702,6 +4702,36 @@ mod tests {
     }
 
     #[test]
+    fn guitar_clef_in_secondary_voice_changes_other_voices_at_the_same_onset() {
+        use crate::layout::system::MeasureEvent;
+
+        let mut guitar = GuitarScore::standard();
+        guitar.set_time_signature(2, 4);
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.set_voice(1);
+        guitar.note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0).unwrap();
+        guitar.clef_change(Clef::Bass);
+        guitar.note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0).unwrap();
+        guitar.end_barline().unwrap();
+
+        let contents = guitar.notation_builder().build_measure_contents().unwrap();
+        let positions = contents[0].events.iter().filter_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.staff_position),
+            _ => None,
+        }).collect::<Vec<_>>();
+        assert_eq!(
+            positions,
+            [
+                pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba),
+                pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass),
+            ]
+        );
+        assert!(matches!(contents[0].events[1],
+            MeasureEvent::ClefChange(change) if change.clef == ClefKind::Bass));
+    }
+
+    #[test]
     fn guitar_mid_score_clef_and_meter_keep_earlier_measure_and_written_pitch() {
         use crate::layout::measure_meta::MeasureLength;
         use crate::layout::system::MeasureEvent;
