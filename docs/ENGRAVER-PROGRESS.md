@@ -7730,3 +7730,18 @@
   - `GOLDEN_UPDATE=1 cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
   - `cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
   - `cargo run -p music-engraver --example advanced_guitar_vocabulary`
+
+## 2026-10-04 — RM-MN-003, alto and tenor C clefs
+
+- Did: Added `Clef::Alto` and `Clef::Tenor` to the `music` crate (bounds,
+  middle line, LilyPond `\clef alto` / `\clef tenor`, serde) and carried them
+  through `ClefKind`, `ClefLayout` (`Glyph::CClef` centered on C4: alto staff
+  position 4, tenor 6), `pitch_to_staff_position`, guitar unpitched placement,
+  music-ron snippet clef names, and the slonimsky `--clef alto|tenor` flag
+  (previously rejected).
+- Did: Key signatures use the conventional C-clef patterns from VexFlow
+  `KeySignature::convertAccLines` — alto is the treble shape half a line lower;
+  tenor sharps use VexFlow's custom list so F♯3 sits low (positions
+  2 6 3 7 4 8 5), tenor flats are the treble shape half a line higher.
+- Note: this supersedes the earlier sub-brackets note that the viola line had
+  to use `Clef::Treble` because no alto clef existed; that golden is unchanged.

@@ -339,13 +339,13 @@ fn g_harmonic_minor_difficulty_4() {
 // ==================== clef validation and exit codes ====================
 // Regression tests for docs/slonimsky-cli-bugs.md §7 and §9.
 
-/// An unsupported or unknown `--clef` must fail with a non-zero exit code, and
-/// must do so whether or not `-o` was passed — the clef used to be parsed only
-/// inside the output branch, so `--clef alto` printed a normal text sheet and
-/// exited 0. Callers that shell out check the exit status.
+/// An unknown `--clef` must fail with a non-zero exit code, and must do so
+/// whether or not `-o` was passed — the clef used to be parsed only inside the
+/// output branch, so a rejected clef printed a normal text sheet and exited 0.
+/// Callers that shell out check the exit status.
 #[test]
 fn bad_clef_exits_nonzero_without_output_file() {
-    for clef in ["alto", "tenor", "bogus"] {
+    for clef in ["bogus", "soprano"] {
         let out = slonimsky()
             .args(["sight-reading", "--measures", "1", "--clef", clef])
             .output()
@@ -365,7 +365,9 @@ fn bad_clef_exits_nonzero_without_output_file() {
 
 #[test]
 fn supported_clefs_succeed() {
-    for clef in ["treble", "treble-8", "treble8", "guitar", "bass"] {
+    for clef in [
+        "treble", "treble-8", "treble8", "guitar", "bass", "alto", "tenor",
+    ] {
         let out = slonimsky()
             .args(["sight-reading", "--measures", "1", "--clef", clef])
             .output()

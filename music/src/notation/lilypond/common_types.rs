@@ -49,6 +49,8 @@ impl ToLilypondString for Clef {
             Clef::Treble8va => "treble^8",
             Clef::Treble8ba => "treble_8",
             Clef::Bass => "bass",
+            Clef::Alto => "alto",
+            Clef::Tenor => "tenor",
         }
         .to_string()
     }

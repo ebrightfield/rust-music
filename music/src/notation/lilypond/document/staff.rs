@@ -84,6 +84,20 @@ mod tests {
         let staff = LilypondStaff::new().add_voice(voice);
         assert_eq!(staff.voices().len(), 1);
     }
+
+    #[test]
+    fn c_clefs_emit_lilypond_clef_commands() {
+        use crate::notation::clef::Clef;
+        for (clef, expected) in [(Clef::Alto, "\\clef alto"), (Clef::Tenor, "\\clef tenor")] {
+            let pitch = Pitch::from_midi(60).unwrap();
+            let event = RhythmicNotatedEvent::pitch(pitch, Duration::new(DurationKind::Qtr, 0));
+            let staff = LilypondStaff::new()
+                .clef(Some(clef))
+                .add_voice(vec![LilypondVoiceElement::Common(event)]);
+            let out = staff.to_lilypond_string();
+            assert!(out.contains(expected), "{clef:?}: {out}");
+        }
+    }
 }
 
 impl<'a> ToLilypondString for LilypondStaff<'a> {

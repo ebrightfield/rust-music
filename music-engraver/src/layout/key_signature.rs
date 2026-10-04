@@ -38,10 +38,22 @@ pub struct KeySignatureLayout {
 /// Treble clef sharp positions: F5(8), C5(5), G5(9), D5(6), A4(3), E5(7), B4(4)
 /// Treble8va/8ba use same visual positions as treble (same staff-line mapping).
 /// Bass clef sharp positions:   F3(6), C3(3), G3(7), D3(4), A2(1), E3(5), B2(2)
+/// Alto clef sharp positions:   F4(7), C4(4), G4(8), D4(5), A3(2), E4(6), B3(3)
+/// Tenor clef sharp positions:  F3(2), C4(6), G3(3), D4(7), A3(4), E4(8), B3(5)
+///
+/// The C-clef patterns follow VexFlow `KeySignature::convertAccLines`
+/// (src/keysignature.ts): alto is the treble shape shifted down half a line
+/// (`offset = 0.5`), while tenor sharps use VexFlow's custom line list
+/// `[3, 1, 2.5, 0.5, 2, 0, 1.5]` — the conventional tenor pattern whose first
+/// sharp (F♯3) sits low in the staff rather than on a ledger line above it.
+/// VexFlow lines count down from the top line in whole-line units, so
+/// `staff_position = 8 - 2 * line`.
 fn sharp_positions(clef: &Clef) -> [i8; 7] {
     match clef {
         Clef::Treble | Clef::Treble8va | Clef::Treble8ba => [8, 5, 9, 6, 3, 7, 4],
         Clef::Bass => [6, 3, 7, 4, 1, 5, 2],
+        Clef::Alto => [7, 4, 8, 5, 2, 6, 3],
+        Clef::Tenor => [2, 6, 3, 7, 4, 8, 5],
     }
 }
 
@@ -51,10 +63,19 @@ fn sharp_positions(clef: &Clef) -> [i8; 7] {
 /// Treble clef flat positions: Bb4(4), Eb5(7), Ab4(3), Db5(6), Gb4(2), Cb5(5), Fb4(1)
 /// Treble8va/8ba use same visual positions as treble (same staff-line mapping).
 /// Bass clef flat positions:   Bb2(2), Eb3(5), Ab2(1), Db3(4), Gb2(0), Cb3(3), Fb2(-1)
+/// Alto clef flat positions:   Bb3(3), Eb4(6), Ab3(2), Db4(5), Gb3(1), Cb4(4), Fb3(0)
+/// Tenor clef flat positions:  Bb3(5), Eb4(8), Ab3(4), Db4(7), Gb3(3), Cb4(6), Fb3(2)
+///
+/// The C-clef patterns follow VexFlow `KeySignature::convertAccLines`
+/// (src/keysignature.ts): both are the treble flat shape shifted by a
+/// constant (alto `offset = 0.5`, tenor `offset = -0.5` lines), converted with
+/// `staff_position = 8 - 2 * line`.
 fn flat_positions(clef: &Clef) -> [i8; 7] {
     match clef {
         Clef::Treble | Clef::Treble8va | Clef::Treble8ba => [4, 7, 3, 6, 2, 5, 1],
         Clef::Bass => [2, 5, 1, 4, 0, 3, -1],
+        Clef::Alto => [3, 6, 2, 5, 1, 4, 0],
+        Clef::Tenor => [5, 8, 4, 7, 3, 6, 2],
     }
 }
 
@@ -308,6 +329,111 @@ mod tests {
             assert!(
                 (gap - SS).abs() < f64::EPSILON,
                 "spacing should be 1 staff space"
+            );
+        }
+    }
+
+    fn positions_of(key: KeySignature, clef: Clef) -> Vec<i8> {
+        key_signature_layout(&key, &clef, fixed_advance, SS)
+            .accidentals
+            .iter()
+            .map(|a| a.staff_position)
+            .collect()
+    }
+
+    /// Positions pinned to VexFlow `convertAccLines` (see `sharp_positions`).
+    #[test]
+    fn alto_clef_seven_sharps_and_flats() {
+        // F#4 C#4 G#4 D#4 A#3 E#4 B#3
+        assert_eq!(
+            positions_of(KeySignature::Sharps(7), Clef::Alto),
+            vec![7, 4, 8, 5, 2, 6, 3]
+        );
+        // Bb3 Eb4 Ab3 Db4 Gb3 Cb4 Fb3
+        assert_eq!(
+            positions_of(KeySignature::Flats(7), Clef::Alto),
+            vec![3, 6, 2, 5, 1, 4, 0]
+        );
+    }
+
+    #[test]
+    fn tenor_clef_seven_sharps_and_flats() {
+        // F#3 C#4 G#3 D#4 A#3 E#4 B#3 — first sharp low, not on a ledger line.
+        assert_eq!(
+            positions_of(KeySignature::Sharps(7), Clef::Tenor),
+            vec![2, 6, 3, 7, 4, 8, 5]
+        );
+        // Bb3 Eb4 Ab3 Db4 Gb3 Cb4 Fb3
+        assert_eq!(
+            positions_of(KeySignature::Flats(7), Clef::Tenor),
+            vec![5, 8, 4, 7, 3, 6, 2]
+        );
+    }
+
+    /// Every C-clef key-signature accidental sits on the staff degree of the
+    /// written pitch it alters, as placed by `pitch_to_staff_position`, so the
+    /// table and the clef reference cannot drift apart. Natural letters are
+    /// used because placement ignores the accidental (and C♭/B♯ carry an
+    /// octave convention that is irrelevant to this check).
+    #[test]
+    fn c_clef_key_signatures_agree_with_note_placement() {
+        use crate::layout::note_placement::pitch_to_staff_position;
+        use music::note::note::Note;
+        use music::note::pitch::Pitch;
+
+        let sharps = |f, c, g, d, a, e, b| {
+            [
+                (Note::F, f),
+                (Note::C, c),
+                (Note::G, g),
+                (Note::D, d),
+                (Note::A, a),
+                (Note::E, e),
+                (Note::B, b),
+            ]
+        };
+        let flats = |b, e, a, d, g, c, f| {
+            [
+                (Note::B, b),
+                (Note::E, e),
+                (Note::A, a),
+                (Note::D, d),
+                (Note::G, g),
+                (Note::C, c),
+                (Note::F, f),
+            ]
+        };
+        let cases = [
+            (
+                Clef::Alto,
+                KeySignature::Sharps(7),
+                sharps(4, 4, 4, 4, 3, 4, 3),
+            ),
+            (
+                Clef::Alto,
+                KeySignature::Flats(7),
+                flats(3, 4, 3, 4, 3, 4, 3),
+            ),
+            (
+                Clef::Tenor,
+                KeySignature::Sharps(7),
+                sharps(3, 4, 3, 4, 3, 4, 3),
+            ),
+            (
+                Clef::Tenor,
+                KeySignature::Flats(7),
+                flats(3, 4, 3, 4, 3, 4, 3),
+            ),
+        ];
+        for (clef, key, pitches) in cases {
+            let expected: Vec<i8> = pitches
+                .iter()
+                .map(|&(note, octave)| pitch_to_staff_position(&Pitch::new(note, octave), &clef))
+                .collect();
+            assert_eq!(
+                positions_of(key.clone(), clef),
+                expected,
+                "{clef:?} {key:?}"
             );
         }
     }

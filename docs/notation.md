@@ -282,9 +282,11 @@ use music::notation::clef::Clef;
 
 pub enum Clef {
     Treble,
+    Treble8va,
+    Treble8ba,
     Bass,
-    Alto,
-    Tenor,
+    Alto,  // C clef, C4 on the middle line (LilyPond `\clef alto`)
+    Tenor, // C clef, C4 on the fourth line (LilyPond `\clef tenor`)
 }
 
 // Get the pitch bounds for a clef

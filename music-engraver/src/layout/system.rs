@@ -68,6 +68,8 @@ pub enum ClefKind {
     Treble8va,
     Treble8ba,
     Bass,
+    Alto,
+    Tenor,
 }
 
 impl ClefKind {
@@ -78,6 +80,8 @@ impl ClefKind {
             Clef::Treble8va => Self::Treble8va,
             Clef::Treble8ba => Self::Treble8ba,
             Clef::Bass => Self::Bass,
+            Clef::Alto => Self::Alto,
+            Clef::Tenor => Self::Tenor,
         }
     }
 
@@ -88,6 +92,8 @@ impl ClefKind {
             Self::Treble8va => Clef::Treble8va,
             Self::Treble8ba => Clef::Treble8ba,
             Self::Bass => Clef::Bass,
+            Self::Alto => Clef::Alto,
+            Self::Tenor => Clef::Tenor,
         }
     }
 }

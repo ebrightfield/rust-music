@@ -51,7 +51,14 @@ fn duration_kind_roundtrips() {
 
 #[test]
 fn clef_roundtrips() {
-    for c in [Clef::Treble, Clef::Bass, Clef::Treble8va, Clef::Treble8ba] {
+    for c in [
+        Clef::Treble,
+        Clef::Bass,
+        Clef::Treble8va,
+        Clef::Treble8ba,
+        Clef::Alto,
+        Clef::Tenor,
+    ] {
         let s = serde_json::to_string(&c).unwrap();
         let back: Clef = serde_json::from_str(&s).unwrap();
         assert_eq!(c, back);

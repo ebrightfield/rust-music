@@ -1,4 +1,4 @@
-//! Renders a staff with treble and bass clefs to SVG files.
+//! Renders a staff with treble, bass, alto, and tenor clefs to SVG files.
 
 use music::notation::clef::Clef;
 use music_engraver::font::bravura_font;
@@ -38,4 +38,6 @@ fn render_staff_with_clef(clef: Clef, filename: &str) {
 fn main() {
     render_staff_with_clef(Clef::Treble, "staff_treble_clef.svg");
     render_staff_with_clef(Clef::Bass, "staff_bass_clef.svg");
+    render_staff_with_clef(Clef::Alto, "staff_alto_clef.svg");
+    render_staff_with_clef(Clef::Tenor, "staff_tenor_clef.svg");
 }

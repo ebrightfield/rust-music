@@ -28,6 +28,8 @@ fn absolute_diatonic(letter: Letter, octave: i8) -> i16 {
 ///
 /// Treble: G4 sits on staff position 2 (second line from bottom).
 /// Bass: F3 sits on staff position 6 (fourth line from bottom).
+/// Alto: C4 sits on staff position 4 (middle line).
+/// Tenor: C4 sits on staff position 6 (fourth line from bottom).
 ///
 /// Octave-transposing clefs (`treble8va`, `treble8ba`) are *notational*
 /// transpositions: the `8` marks that written pitch sounds an octave away, so
@@ -40,6 +42,8 @@ fn clef_reference(clef: &Clef) -> (Letter, i8, StaffPosition) {
     match clef {
         Clef::Treble | Clef::Treble8va | Clef::Treble8ba => (Letter::G, 4, 2),
         Clef::Bass => (Letter::F, 3, 6),
+        Clef::Alto => (Letter::C, 4, 4),
+        Clef::Tenor => (Letter::C, 4, 6),
     }
 }
 
@@ -161,6 +165,94 @@ mod tests {
     fn bass_middle_line_is_d3() {
         // D3: diatonic = 3*7+1=22, F3=24, diff=-2, pos=6-2=4
         assert_eq!(pitch_to_staff_position(&p(Note::D, 3), &Clef::Bass), 4);
+    }
+
+    // --- Alto clef (C4 on the middle line) ---
+
+    #[test]
+    fn alto_middle_c_is_on_middle_line() {
+        assert_eq!(pitch_to_staff_position(&p(Note::C, 4), &Clef::Alto), 4);
+    }
+
+    #[test]
+    fn alto_lines_are_f3_a3_c4_e4_g4() {
+        let lines = [
+            (Note::F, 3),
+            (Note::A, 3),
+            (Note::C, 4),
+            (Note::E, 4),
+            (Note::G, 4),
+        ];
+        for (i, (note, octave)) in lines.into_iter().enumerate() {
+            assert_eq!(
+                pitch_to_staff_position(&p(note, octave), &Clef::Alto),
+                2 * i as i8,
+                "{note:?}{octave} must sit on alto line {i}"
+            );
+        }
+        // Spaces: G3, B3, D4, F4.
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 3), &Clef::Alto), 1);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 3), &Clef::Alto), 3);
+        assert_eq!(pitch_to_staff_position(&p(Note::D, 4), &Clef::Alto), 5);
+        assert_eq!(pitch_to_staff_position(&p(Note::F, 4), &Clef::Alto), 7);
+    }
+
+    #[test]
+    fn alto_ledger_lines_above_and_below() {
+        // B4: first ledger line above; D3: first ledger line below.
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 4), &Clef::Alto), 10);
+        assert_eq!(pitch_to_staff_position(&p(Note::D, 3), &Clef::Alto), -2);
+    }
+
+    // --- Tenor clef (C4 on the fourth line) ---
+
+    #[test]
+    fn tenor_middle_c_is_on_fourth_line() {
+        assert_eq!(pitch_to_staff_position(&p(Note::C, 4), &Clef::Tenor), 6);
+    }
+
+    #[test]
+    fn tenor_lines_are_d3_f3_a3_c4_e4() {
+        let lines = [
+            (Note::D, 3),
+            (Note::F, 3),
+            (Note::A, 3),
+            (Note::C, 4),
+            (Note::E, 4),
+        ];
+        for (i, (note, octave)) in lines.into_iter().enumerate() {
+            assert_eq!(
+                pitch_to_staff_position(&p(note, octave), &Clef::Tenor),
+                2 * i as i8,
+                "{note:?}{octave} must sit on tenor line {i}"
+            );
+        }
+        // Spaces: E3, G3, B3, D4.
+        assert_eq!(pitch_to_staff_position(&p(Note::E, 3), &Clef::Tenor), 1);
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 3), &Clef::Tenor), 3);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 3), &Clef::Tenor), 5);
+        assert_eq!(pitch_to_staff_position(&p(Note::D, 4), &Clef::Tenor), 7);
+    }
+
+    #[test]
+    fn tenor_ledger_lines_above_and_below() {
+        // G4: first ledger line above; B2: first ledger line below.
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 4), &Clef::Tenor), 10);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 2), &Clef::Tenor), -2);
+    }
+
+    #[test]
+    fn c_clef_bounds_match_staff_placement() {
+        for clef in [Clef::Alto, Clef::Tenor] {
+            let (bottom, top) = clef.bounds();
+            assert_eq!(pitch_to_staff_position(&bottom, &clef), 0, "{clef:?}");
+            assert_eq!(pitch_to_staff_position(&top, &clef), 8, "{clef:?}");
+            assert_eq!(
+                pitch_to_staff_position(&clef.middle(), &clef),
+                4,
+                "{clef:?}"
+            );
+        }
     }
 
     // --- Octave-transposing clefs ---

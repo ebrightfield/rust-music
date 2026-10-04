@@ -13,6 +13,10 @@ pub enum Clef {
     Treble8va,
     Treble8ba,
     Bass,
+    /// C clef on the middle (third) line: C4 sits on the middle line.
+    Alto,
+    /// C clef on the fourth line: C4 sits on the second line from the top.
+    Tenor,
 }
 
 impl Clef {
@@ -23,6 +27,8 @@ impl Clef {
             Clef::Treble8va => (Pitch::new(Note::E, 5), Pitch::new(Note::F, 6)),
             Clef::Treble8ba => (Pitch::new(Note::E, 3), Pitch::new(Note::F, 4)),
             Clef::Bass => (Pitch::new(Note::G, 2), Pitch::new(Note::A, 3)),
+            Clef::Alto => (Pitch::new(Note::F, 3), Pitch::new(Note::G, 4)),
+            Clef::Tenor => (Pitch::new(Note::D, 3), Pitch::new(Note::E, 4)),
         }
     }
 
@@ -33,6 +39,8 @@ impl Clef {
             Clef::Treble8va => Pitch::new(Note::B, 5),
             Clef::Treble8ba => Pitch::new(Note::B, 3),
             Clef::Bass => Pitch::new(Note::D, 3),
+            Clef::Alto => Pitch::new(Note::C, 4),
+            Clef::Tenor => Pitch::new(Note::A, 3),
         }
     }
 }
