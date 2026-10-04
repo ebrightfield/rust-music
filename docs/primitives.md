@@ -173,7 +173,24 @@ assert_eq!(pitch!(fis, 4), Pitch::new(Note::Fis, 4).unwrap());
 
 ### MIDI Mapping
 
-Middle C = C4 = MIDI note 60. The formula is: `midi_note = (octave + 1) * 12 + pc`
+Middle C = C4 = MIDI note 60. `octave` is the scientific octave of the *written* letter, and the formula is:
+`midi_note = (octave + 1) * 12 + natural letter semitone + alteration`
+(C=0, D=2, E=4, F=5, G=7, A=9, B=11; ♭ = −1, ♯ = +1, double accidentals ±2).
+
+Spellings that cross the C boundary therefore sound in the neighbouring MIDI octave block:
+
+```rust
+assert_eq!(Pitch::new(Note::Ces, 4).midi_note, 59); // C♭4 sounds as B3
+assert_eq!(Pitch::new(Note::Bis, 3).midi_note, 60); // B♯3 sounds as C4
+assert_eq!(Pitch::new(Note::Ces, 4).to_string(), "Cb4");
+
+// Conversions from MIDI derive the octave from the chosen spelling
+assert_eq!(Pitch::from_midi_as(71, Note::Ces).unwrap(), Pitch::new(Note::Ces, 5));
+assert_eq!(Pitch::from_midi_spelled_as(60, &vec![Note::Bis]).unwrap().octave, 3);
+```
+
+`try_new` accepts octaves -1..=9 and rejects any pitch outside MIDI 0..=127 (e.g. C♭-1).
+LilyPond (`ces'` = C♭4), VexTab, staff placement, and `Display` all use this written octave directly.
 
 ### Navigation
 

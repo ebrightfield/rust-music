@@ -28,6 +28,8 @@ fn absolute_diatonic(letter: Letter, octave: i8) -> i16 {
 ///
 /// Treble: G4 sits on staff position 2 (second line from bottom).
 /// Bass: F3 sits on staff position 6 (fourth line from bottom).
+/// Alto: C4 sits on staff position 4 (middle line).
+/// Tenor: C4 sits on staff position 6 (fourth line from bottom).
 ///
 /// Octave-transposing clefs (`treble8va`, `treble8ba`) are *notational*
 /// transpositions: the `8` marks that written pitch sounds an octave away, so
@@ -40,6 +42,8 @@ fn clef_reference(clef: &Clef) -> (Letter, i8, StaffPosition) {
     match clef {
         Clef::Treble | Clef::Treble8va | Clef::Treble8ba => (Letter::G, 4, 2),
         Clef::Bass => (Letter::F, 3, 6),
+        Clef::Alto => (Letter::C, 4, 4),
+        Clef::Tenor => (Letter::C, 4, 6),
     }
 }
 
@@ -48,7 +52,8 @@ fn clef_reference(clef: &Clef) -> (Letter, i8, StaffPosition) {
 /// Staff position 0 = bottom line, 8 = top line. Each step is one
 /// diatonic half-space (line to adjacent space or vice versa).
 /// Accidentals do not affect vertical position — C♯4 and C♭4 both
-/// sit at the same staff position as C4.
+/// sit at the same staff position as C4. `pitch.octave` is the written octave
+/// of the letter, so C♭4 (MIDI 59, sounding B3) still sits with C4.
 pub fn pitch_to_staff_position(pitch: &Pitch, clef: &Clef) -> StaffPosition {
     let spelling = Spelling::from(&pitch.note);
     let pitch_diatonic = absolute_diatonic(spelling.letter, pitch.octave);
@@ -163,6 +168,94 @@ mod tests {
         assert_eq!(pitch_to_staff_position(&p(Note::D, 3), &Clef::Bass), 4);
     }
 
+    // --- Alto clef (C4 on the middle line) ---
+
+    #[test]
+    fn alto_middle_c_is_on_middle_line() {
+        assert_eq!(pitch_to_staff_position(&p(Note::C, 4), &Clef::Alto), 4);
+    }
+
+    #[test]
+    fn alto_lines_are_f3_a3_c4_e4_g4() {
+        let lines = [
+            (Note::F, 3),
+            (Note::A, 3),
+            (Note::C, 4),
+            (Note::E, 4),
+            (Note::G, 4),
+        ];
+        for (i, (note, octave)) in lines.into_iter().enumerate() {
+            assert_eq!(
+                pitch_to_staff_position(&p(note, octave), &Clef::Alto),
+                2 * i as i8,
+                "{note:?}{octave} must sit on alto line {i}"
+            );
+        }
+        // Spaces: G3, B3, D4, F4.
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 3), &Clef::Alto), 1);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 3), &Clef::Alto), 3);
+        assert_eq!(pitch_to_staff_position(&p(Note::D, 4), &Clef::Alto), 5);
+        assert_eq!(pitch_to_staff_position(&p(Note::F, 4), &Clef::Alto), 7);
+    }
+
+    #[test]
+    fn alto_ledger_lines_above_and_below() {
+        // B4: first ledger line above; D3: first ledger line below.
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 4), &Clef::Alto), 10);
+        assert_eq!(pitch_to_staff_position(&p(Note::D, 3), &Clef::Alto), -2);
+    }
+
+    // --- Tenor clef (C4 on the fourth line) ---
+
+    #[test]
+    fn tenor_middle_c_is_on_fourth_line() {
+        assert_eq!(pitch_to_staff_position(&p(Note::C, 4), &Clef::Tenor), 6);
+    }
+
+    #[test]
+    fn tenor_lines_are_d3_f3_a3_c4_e4() {
+        let lines = [
+            (Note::D, 3),
+            (Note::F, 3),
+            (Note::A, 3),
+            (Note::C, 4),
+            (Note::E, 4),
+        ];
+        for (i, (note, octave)) in lines.into_iter().enumerate() {
+            assert_eq!(
+                pitch_to_staff_position(&p(note, octave), &Clef::Tenor),
+                2 * i as i8,
+                "{note:?}{octave} must sit on tenor line {i}"
+            );
+        }
+        // Spaces: E3, G3, B3, D4.
+        assert_eq!(pitch_to_staff_position(&p(Note::E, 3), &Clef::Tenor), 1);
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 3), &Clef::Tenor), 3);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 3), &Clef::Tenor), 5);
+        assert_eq!(pitch_to_staff_position(&p(Note::D, 4), &Clef::Tenor), 7);
+    }
+
+    #[test]
+    fn tenor_ledger_lines_above_and_below() {
+        // G4: first ledger line above; B2: first ledger line below.
+        assert_eq!(pitch_to_staff_position(&p(Note::G, 4), &Clef::Tenor), 10);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 2), &Clef::Tenor), -2);
+    }
+
+    #[test]
+    fn c_clef_bounds_match_staff_placement() {
+        for clef in [Clef::Alto, Clef::Tenor] {
+            let (bottom, top) = clef.bounds();
+            assert_eq!(pitch_to_staff_position(&bottom, &clef), 0, "{clef:?}");
+            assert_eq!(pitch_to_staff_position(&top, &clef), 8, "{clef:?}");
+            assert_eq!(
+                pitch_to_staff_position(&clef.middle(), &clef),
+                4,
+                "{clef:?}"
+            );
+        }
+    }
+
     // --- Octave-transposing clefs ---
     //
     // These are notational transpositions: the written note keeps the base
@@ -221,16 +314,56 @@ mod tests {
         assert_eq!(pitch_to_staff_position(&p(Note::C, 7), &Clef::Treble), 19);
     }
 
+    /// `Pitch::octave` is the written octave, so placement reads it directly:
+    /// B♯3 and C4 are both MIDI 60 but B♯3 sits on the B3 position.
     #[test]
-    fn enharmonic_spellings_have_different_positions() {
-        // B#3 and C4 are enharmonic but on different lines
-        let b_sharp = pitch_to_staff_position(&p(Note::Bis, 3), &Clef::Treble);
-        let c_nat = pitch_to_staff_position(&p(Note::C, 4), &Clef::Treble);
-        // B#3 diatonic: octave 3, letter B(6) → 3*7+6 = 27; G4=32; diff=-5; pos=2-5=-3
-        // C4 diatonic: octave 4, letter C(0) → 4*7+0 = 28; G4=32; diff=-4; pos=2-4=-2
-        assert_eq!(b_sharp, -3);
-        assert_eq!(c_nat, -2);
-        assert_ne!(b_sharp, c_nat);
+    fn b_sharp_shares_midi_with_c_but_sits_on_its_written_b() {
+        let b_sharp = p(Note::Bis, 3);
+        let c_nat = p(Note::C, 4);
+        assert_eq!(b_sharp.midi_note, 60);
+        assert_eq!(c_nat.midi_note, 60);
+        // B♯3 diatonic: 3*7+6 = 27; G4 = 32; pos = 2-5 = -3.
+        // C4 diatonic: 4*7+0 = 28; G4 = 32; pos = 2-4 = -2.
+        assert_eq!(pitch_to_staff_position(&b_sharp, &Clef::Treble), -3);
+        assert_eq!(pitch_to_staff_position(&c_nat, &Clef::Treble), -2);
+        // MIDI 60 spelled as B♯ lands on the same written position.
+        let from_midi = Pitch::from_midi_spelled_as(60, &vec![Note::Bis]).unwrap();
+        assert_eq!(pitch_to_staff_position(&from_midi, &Clef::Treble), -3);
+    }
+
+    #[test]
+    fn c_flat_shares_midi_with_b_but_sits_on_its_written_c_in_treble() {
+        // C♭5 = MIDI 71 (sounds B4) sits in the C5 space, not on the B4 line.
+        let c_flat = p(Note::Ces, 5);
+        assert_eq!(c_flat.midi_note, 71);
+        assert_eq!(p(Note::B, 4).midi_note, 71);
+        assert_eq!(pitch_to_staff_position(&c_flat, &Clef::Treble), 5);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 4), &Clef::Treble), 4);
+        let from_midi = Pitch::from_midi_spelled_as(71, &vec![Note::Ces]).unwrap();
+        assert_eq!(pitch_to_staff_position(&from_midi, &Clef::Treble), 5);
+        // C♭4 = MIDI 59 sits on the middle-C ledger line.
+        assert_eq!(p(Note::Ces, 4).midi_note, 59);
+        assert_eq!(pitch_to_staff_position(&p(Note::Ces, 4), &Clef::Treble), -2);
+    }
+
+    #[test]
+    fn c_flat_and_b_sharp_sit_on_their_written_letters_in_bass() {
+        // C♭4 = MIDI 59 on the middle-C ledger line above the bass staff (B3 is 9).
+        let c_flat4 = p(Note::Ces, 4);
+        assert_eq!(c_flat4.midi_note, 59);
+        assert_eq!(pitch_to_staff_position(&c_flat4, &Clef::Bass), 10);
+        let from_midi = Pitch::from_midi_spelled_as(59, &vec![Note::Ces]).unwrap();
+        assert_eq!(pitch_to_staff_position(&from_midi, &Clef::Bass), 10);
+        // C♭3 = MIDI 47 in the C3 space; B2 (also MIDI 47) is on the line below.
+        let c_flat3 = p(Note::Ces, 3);
+        assert_eq!(c_flat3.midi_note, 47);
+        assert_eq!(pitch_to_staff_position(&c_flat3, &Clef::Bass), 3);
+        assert_eq!(pitch_to_staff_position(&p(Note::B, 2), &Clef::Bass), 2);
+        // B♯2 = MIDI 48 on the B2 line; C3 (also MIDI 48) is in the space above.
+        let b_sharp2 = p(Note::Bis, 2);
+        assert_eq!(b_sharp2.midi_note, 48);
+        assert_eq!(pitch_to_staff_position(&b_sharp2, &Clef::Bass), 2);
+        assert_eq!(pitch_to_staff_position(&p(Note::C, 3), &Clef::Bass), 3);
     }
 
     #[test]

@@ -49,14 +49,14 @@ fn collect_voice_positions(layout: &MeasureLayout) -> Vec<(f64, Vec<StaffPositio
     for elem in &layout.elements {
         match &elem.element {
             MeasureElement::BeamGroup(bg) => {
-                let durations: Vec<u8> = bg.notes.iter().map(|n| n.duration_log2).collect();
+                let durations: Vec<i8> = bg.notes.iter().map(|n| n.duration_log2).collect();
                 let offsets = beam_group_note_x_offsets(&durations, elem.width);
                 for (i, note) in bg.notes.iter().enumerate() {
                     result.push((elem.x + offsets[i], grouped_member_positions(note).to_vec()));
                 }
             }
             MeasureElement::TupletGroup(tg) => {
-                let durations: Vec<u8> = tg
+                let durations: Vec<i8> = tg
                     .beam_group
                     .notes
                     .iter()
@@ -189,7 +189,7 @@ pub fn compute_voice_collision_offsets(
     for (elem_idx, elem) in additional.elements.iter().enumerate() {
         match &elem.element {
             MeasureElement::BeamGroup(bg) => {
-                let durations: Vec<u8> = bg.notes.iter().map(|n| n.duration_log2).collect();
+                let durations: Vec<i8> = bg.notes.iter().map(|n| n.duration_log2).collect();
                 let local_offsets = beam_group_note_x_offsets(&durations, elem.width);
                 // Resolve direction once: auto-resolution applies the same
                 // farthest-from-middle-line rule the renderer uses, so the
@@ -212,7 +212,7 @@ pub fn compute_voice_collision_offsets(
                 }
             }
             MeasureElement::TupletGroup(tg) => {
-                let durations: Vec<u8> = tg
+                let durations: Vec<i8> = tg
                     .beam_group
                     .notes
                     .iter()

@@ -10,6 +10,8 @@ use smufl::Glyph;
 /// Which notehead glyph to use, determined by duration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoteheadKind {
+    /// Breve (double whole) notehead.
+    DoubleWhole,
     Whole,
     Half,
     Filled,
@@ -19,6 +21,7 @@ impl NoteheadKind {
     /// Map to the corresponding SMuFL glyph.
     pub fn glyph(self) -> Glyph {
         match self {
+            NoteheadKind::DoubleWhole => Glyph::NoteheadDoubleWhole,
             NoteheadKind::Whole => Glyph::NoteheadWhole,
             NoteheadKind::Half => Glyph::NoteheadHalf,
             NoteheadKind::Filled => Glyph::NoteheadBlack,
@@ -26,8 +29,9 @@ impl NoteheadKind {
     }
 
     /// Representative log2 duration used by duration-aware notehead styles.
-    pub fn duration_log2(self) -> u8 {
+    pub fn duration_log2(self) -> i8 {
         match self {
+            Self::DoubleWhole => -1,
             Self::Whole => 0,
             Self::Half => 1,
             Self::Filled => 2,
@@ -89,7 +93,7 @@ pub fn draw_notehead(
 /// Return the actual font advance for a duration-aware semantic notehead.
 pub fn notehead_advance(
     font: &MusicFont,
-    duration_log2: u8,
+    duration_log2: i8,
     style: NoteheadStyle,
 ) -> Result<f64, FontError> {
     Ok(font
@@ -152,7 +156,7 @@ pub fn draw_note(
 
 /// Draw a complete note with stem: notehead + ledger lines + stem.
 ///
-/// Whole notes have no stem; pass `None` for direction to skip the stem,
+/// Breves and whole notes have no stem; pass `None` for direction to skip the stem,
 /// or this function will draw one regardless of kind when direction is `Some`.
 ///
 /// Returns the advance width of the notehead.
@@ -196,6 +200,18 @@ mod tests {
     #[test]
     fn notehead_kind_half_maps_to_correct_glyph() {
         assert_eq!(NoteheadKind::Half.glyph(), Glyph::NoteheadHalf);
+    }
+
+    #[test]
+    fn notehead_kind_double_whole_maps_to_breve_glyph() {
+        assert_eq!(
+            NoteheadKind::DoubleWhole.glyph(),
+            Glyph::NoteheadDoubleWhole
+        );
+        assert_eq!(
+            NoteheadStyle::Normal.glyph(NoteheadKind::DoubleWhole.duration_log2()),
+            Glyph::NoteheadDoubleWhole
+        );
     }
 
     #[test]

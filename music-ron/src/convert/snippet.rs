@@ -33,6 +33,8 @@ fn resolve_clef(name: &str, path: &str) -> Result<Clef, MusicRonError> {
         "treble8va" => Ok(Clef::Treble8va),
         "treble8ba" => Ok(Clef::Treble8ba),
         "bass" => Ok(Clef::Bass),
+        "alto" => Ok(Clef::Alto),
+        "tenor" => Ok(Clef::Tenor),
         other => Err(MusicRonError::UnknownClef {
             name: other.into(),
             path: path.into(),
@@ -165,6 +167,12 @@ mod tests {
     #[test]
     fn resolve_clef_bass() {
         assert_eq!(resolve_clef("bass", "x").unwrap(), Clef::Bass);
+    }
+
+    #[test]
+    fn resolve_c_clefs() {
+        assert_eq!(resolve_clef("alto", "x").unwrap(), Clef::Alto);
+        assert_eq!(resolve_clef("tenor", "x").unwrap(), Clef::Tenor);
     }
 
     #[test]

@@ -143,45 +143,48 @@ impl NoteSet {
 
         let len = self.0.len() as i32;
 
-        // Walk one note at a time, tracking the octave by detecting crossings of
-        // the C boundary (the convention `Pitch` uses: the octave number
-        // increments going B→C and decrements going C→B). We cannot infer the
-        // octave from how many times the array index wraps, because the set may
-        // be anchored to any root (e.g. a Bb-rooted scale is ordered
-        // [Bb, C, D, …]); the C boundary then falls *inside* the array, not at
-        // the wrap point. See `test_pitch_n_steps_from_non_c_root`.
+        // Walk one note at a time in MIDI space, then spell the arrival with
+        // its set note so the written octave follows that spelling (a C♭
+        // reached from B♭4 is C♭5 = MIDI 71; a B♯ reached from A♯3 is
+        // B♯3 = MIDI 60). Each step moves to the next occurrence of the
+        // neighbouring note's pitch class — a full octave when it repeats the
+        // current one. The walk starts from `from_note` in `from`'s sounding
+        // octave block (MIDI C..B), which is `from` itself whenever its pitch
+        // class is in the set. Indices are not used for octave tracking
+        // because the set may be anchored to any root (e.g. a Bb-rooted scale
+        // is ordered [Bb, C, D, …]); see `test_pitch_n_steps_from_non_c_root`.
         let mut cur = pos as i32;
-        let mut octave = from.octave as i32;
+        let mut midi =
+            i16::from(from.midi_note / 12 * 12) + i16::from(u8::from(&Pc::from(from_note)));
         if steps > 0 {
             for _ in 0..steps {
                 let next = cur + 1;
-                let next_idx = next.rem_euclid(len) as usize;
-                let cur_idx = cur.rem_euclid(len) as usize;
-                // Moving up: we crossed into a new octave if the next note's
-                // pitch class is not strictly higher than the current one.
-                if Pc::from(&self.0[next_idx]) <= Pc::from(&self.0[cur_idx]) {
-                    octave += 1;
-                }
+                let cur_pc = Pc::from(&self.0[cur.rem_euclid(len) as usize]);
+                let next_pc = Pc::from(&self.0[next.rem_euclid(len) as usize]);
+                let up = cur_pc.distance_up_to(&next_pc);
+                midi += i16::from(if up == 0 { 12 } else { up });
                 cur = next;
             }
         } else {
             for _ in 0..(-steps) {
                 let prev = cur - 1;
-                let prev_idx = prev.rem_euclid(len) as usize;
-                let cur_idx = cur.rem_euclid(len) as usize;
-                // Moving down: we crossed into a lower octave if the previous
-                // note's pitch class is not strictly lower than the current one.
-                if Pc::from(&self.0[prev_idx]) >= Pc::from(&self.0[cur_idx]) {
-                    octave -= 1;
-                }
+                let cur_pc = Pc::from(&self.0[cur.rem_euclid(len) as usize]);
+                let prev_pc = Pc::from(&self.0[prev.rem_euclid(len) as usize]);
+                let down = cur_pc.distance_down_to(&prev_pc);
+                midi -= i16::from(if down == 0 { 12 } else { down });
                 cur = prev;
             }
         }
 
-        let new_note = &self.0[cur.rem_euclid(len) as usize];
-        let new_octave =
-            i8::try_from(octave).map_err(|_| MusicSemanticsError::OctaveTooHigh(u8::MAX))?;
-        Pitch::try_new(*new_note, new_octave)
+        let new_note = self.0[cur.rem_euclid(len) as usize];
+        let midi = u8::try_from(midi).map_err(|_| {
+            if midi < 0 {
+                MusicSemanticsError::OutOfBoundsLower(from.midi_note)
+            } else {
+                MusicSemanticsError::OutOfBoundsUpper(from.midi_note)
+            }
+        })?;
+        Pitch::from_midi_as(midi, new_note)
     }
 
     /// Find the note in this set closest (by pitch class distance) to the given pitch.
@@ -482,6 +485,60 @@ mod tests {
         assert_eq!(a4.note, Note::A);
         assert_eq!(a4.octave, 4);
         assert_eq!(a4.midi_note, 69);
+    }
+
+    #[test]
+    fn test_pitch_n_steps_from_spells_c_flat_in_its_written_octave() {
+        use crate::note::pitch::Pitch;
+
+        // G♭ major contains C♭. Stepping up from B♭4 (70) reaches MIDI 71,
+        // which is written C♭5 — not C♭4 (MIDI 59).
+        let g_flat_major = NoteSet::new(vec![
+            Note::Ges,
+            Note::Aes,
+            Note::Bes,
+            Note::Ces,
+            Note::Des,
+            Note::Ees,
+            Note::F,
+        ]);
+        let bes4 = Pitch::new(Note::Bes, 4);
+        let ces5 = g_flat_major.pitch_n_steps_from(&bes4, 1).unwrap();
+        assert_eq!((ces5.note, ces5.octave, ces5.midi_note), (Note::Ces, 5, 71));
+        let des5 = g_flat_major.pitch_n_steps_from(&bes4, 2).unwrap();
+        assert_eq!((des5.note, des5.octave, des5.midi_note), (Note::Des, 5, 73));
+
+        // Starting on C♭5 itself and stepping both ways.
+        let up = g_flat_major.pitch_n_steps_from(&ces5, 1).unwrap();
+        assert_eq!((up.note, up.octave, up.midi_note), (Note::Des, 5, 73));
+        let down = g_flat_major.pitch_n_steps_from(&ces5, -1).unwrap();
+        assert_eq!((down.note, down.octave, down.midi_note), (Note::Bes, 4, 70));
+        let back = g_flat_major.pitch_n_steps_from(&des5, -1).unwrap();
+        assert_eq!(back, ces5);
+    }
+
+    #[test]
+    fn test_pitch_n_steps_from_spells_b_sharp_in_its_written_octave() {
+        use crate::note::pitch::Pitch;
+
+        // C♯ major contains B♯. Stepping up from A♯3 (58) reaches MIDI 60,
+        // which is written B♯3 — not B♯4 (MIDI 72).
+        let c_sharp_major = NoteSet::new(vec![
+            Note::Cis,
+            Note::Dis,
+            Note::Eis,
+            Note::Fis,
+            Note::Gis,
+            Note::Ais,
+            Note::Bis,
+        ]);
+        let ais3 = Pitch::new(Note::Ais, 3);
+        let bis3 = c_sharp_major.pitch_n_steps_from(&ais3, 1).unwrap();
+        assert_eq!((bis3.note, bis3.octave, bis3.midi_note), (Note::Bis, 3, 60));
+        let cis4 = c_sharp_major.pitch_n_steps_from(&bis3, 1).unwrap();
+        assert_eq!((cis4.note, cis4.octave, cis4.midi_note), (Note::Cis, 4, 61));
+        let back = c_sharp_major.pitch_n_steps_from(&cis4, -1).unwrap();
+        assert_eq!(back, bis3);
     }
 
     #[test]

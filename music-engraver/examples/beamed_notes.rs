@@ -117,7 +117,7 @@ fn main() {
         Pitch::new(Note::A, 4),
     ];
     let group3_start_x = 5500.0;
-    let group3_durs: [u8; 3] = [3, 4, 4]; // eighth, 16th, 16th
+    let group3_durs: [i8; 3] = [3, 4, 4]; // eighth, 16th, 16th
 
     let group3_notes: Vec<BeamedNote> = group3_pitches
         .iter()

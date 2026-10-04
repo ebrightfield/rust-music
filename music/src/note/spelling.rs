@@ -21,6 +21,17 @@ impl Accidental {
         *self == Accidental::DoubleFlat || *self == Accidental::DoubleSharp
     }
 
+    /// Chromatic alteration in semitones: ♭ = −1, ♯ = +1, 𝄫 = −2, 𝄪 = +2.
+    pub fn alteration(&self) -> i8 {
+        match self {
+            Accidental::Natural => 0,
+            Accidental::Sharp => 1,
+            Accidental::Flat => -1,
+            Accidental::DoubleSharp => 2,
+            Accidental::DoubleFlat => -2,
+        }
+    }
+
     /// Returns the Unicode representation of the accidental.
     /// Uses proper music symbols: ♯, ♭, 𝄪 (double sharp), 𝄫 (double flat).
     pub fn to_unicode(&self) -> &'static str {
@@ -106,6 +117,20 @@ impl Letter {
             Letter::E => Letter::D,
             Letter::F => Letter::E,
             Letter::G => Letter::F,
+        }
+    }
+
+    /// Semitones from C up to this natural letter within one written octave
+    /// (C = 0, D = 2, E = 4, F = 5, G = 7, A = 9, B = 11).
+    pub fn natural_semitone(&self) -> i8 {
+        match self {
+            Letter::C => 0,
+            Letter::D => 2,
+            Letter::E => 4,
+            Letter::F => 5,
+            Letter::G => 7,
+            Letter::A => 9,
+            Letter::B => 11,
         }
     }
 

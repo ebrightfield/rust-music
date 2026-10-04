@@ -63,6 +63,24 @@ mod tests {
     }
 
     #[test]
+    fn c_flat_and_b_sharp_octaves_are_written_octaves() {
+        // "ces4" is C♭4 = MIDI 59 (sounds B3); "bs3" is B♯3 = MIDI 60 (sounds C4).
+        let ces4 = resolve(&OwnedPitch::Shorthand("ces4".into()), "p").unwrap();
+        assert_eq!((ces4.note, ces4.octave, ces4.midi_note), (Note::Ces, 4, 59));
+        let bis3 = resolve(&OwnedPitch::Shorthand("bs3".into()), "p").unwrap();
+        assert_eq!((bis3.note, bis3.octave, bis3.midi_note), (Note::Bis, 3, 60));
+        // C♭-1 would be MIDI -1.
+        let long = OwnedPitch::Long {
+            note: Note::Ces,
+            octave: -1,
+        };
+        assert!(matches!(
+            resolve(&long, "p"),
+            Err(MusicRonError::OctaveOutOfRange { got: -1, .. })
+        ));
+    }
+
+    #[test]
     fn octave_out_of_range_high() {
         let owned = OwnedPitch::Long {
             note: Note::C,

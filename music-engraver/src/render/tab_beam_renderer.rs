@@ -157,7 +157,7 @@ mod tests {
         SvgWriter::new(800.0, 600.0, -200.0, -400.0, 6000.0, 3000.0)
     }
 
-    fn make_notes(xs: &[f64], dur: u8) -> Vec<TabBeamedNote> {
+    fn make_notes(xs: &[f64], dur: i8) -> Vec<TabBeamedNote> {
         xs.iter()
             .map(|&x| TabBeamedNote {
                 x,

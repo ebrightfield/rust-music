@@ -1997,3 +1997,9 @@ impl Default for ScoreBuilder {
 mod tests;
 #[cfg(test)]
 mod tests_accidentals;
+#[cfg(test)]
+mod tests_breve;
+#[cfg(test)]
+mod tests_c_clefs;
+#[cfg(test)]
+mod tests_written_octave;

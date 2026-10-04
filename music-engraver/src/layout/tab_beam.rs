@@ -13,7 +13,7 @@ pub struct TabBeamedNote {
     /// X-coordinate of the note/fret number position.
     pub x: f64,
     /// Duration log2 (3=eighth, 4=sixteenth, etc.). Must be >= 3 for beaming.
-    pub duration_log2: u8,
+    pub duration_log2: i8,
 }
 
 /// Computed layout for a tab beam group.
@@ -149,7 +149,7 @@ mod tests {
         TabStaffLayout::guitar(0.0, 500.0, 5000.0, &config)
     }
 
-    fn make_notes(xs: &[f64], dur: u8) -> Vec<TabBeamedNote> {
+    fn make_notes(xs: &[f64], dur: i8) -> Vec<TabBeamedNote> {
         xs.iter()
             .map(|&x| TabBeamedNote {
                 x,

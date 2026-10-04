@@ -41,7 +41,7 @@ const SS: f64 = 250.0;
 /// measure. Defaults were `min_note_spacing = 1.5·ss`, `ratio = 1.6`.
 /// Notably it added **no** dot or accidental allowance — dots and accidentals
 /// got no extra room, which is precisely the crowding the rod model fixes.
-fn legacy_width(durations: &[u8]) -> f64 {
+fn legacy_width(durations: &[i8]) -> f64 {
     const RATIO: f64 = 1.6;
     const MIN_NOTE_SPACING: f64 = 1.5 * SS;
     let shortest = durations.iter().copied().max().unwrap_or(2);
@@ -57,14 +57,14 @@ fn legacy_width(durations: &[u8]) -> f64 {
 /// One corpus entry: a bare sequence of rhythmic events.
 struct Case {
     name: &'static str,
-    /// `duration_log2` per event (0=whole, 1=half, 2=quarter, 3=eighth, 4=16th).
-    durations: Vec<u8>,
+    /// `duration_log2` per event (-1=breve, 0=whole, 1=half, 2=quarter, 3=eighth, 4=16th).
+    durations: Vec<i8>,
     dots: Vec<u8>,
     accidentals: Vec<bool>,
 }
 
 fn corpus() -> Vec<Case> {
-    let n = |durs: Vec<u8>| {
+    let n = |durs: Vec<i8>| {
         let len = durs.len();
         (durs, vec![0; len], vec![false; len])
     };

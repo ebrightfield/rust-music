@@ -258,7 +258,7 @@ pub fn run(args: SightReadingArgs) -> Result<()> {
 
     // Validate every argument before generating anything, so a bad `--clef`
     // fails whether or not `-o` was passed. Deferring this to the output branch
-    // let `--clef alto` print a normal text sheet and exit 0.
+    // let an unsupported clef print a normal text sheet and exit 0.
     let clef = ClefChoice::from_str_opt(args.clef.as_deref())?;
 
     // Notes per measure: assume 4/4 time, difficulty affects density

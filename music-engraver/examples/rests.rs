@@ -1,4 +1,4 @@
-/// Renders all 8 rest durations (whole through 128th) on a treble-clef staff.
+/// Renders all 9 rest durations (breve through 128th) on a treble-clef staff.
 /// Outputs SVG to `examples/output/`.
 use music::notation::clef::Clef;
 
@@ -21,18 +21,18 @@ fn main() {
     let start_x = 1500.0;
     let spacing = 1100.0;
 
-    // Draw all 8 rest durations: whole(0), half(1), quarter(2), 8th(3),
-    // 16th(4), 32nd(5), 64th(6), 128th(7)
+    // Draw all 9 rest durations: breve(-1), whole(0), half(1), quarter(2),
+    // 8th(3), 16th(4), 32nd(5), 64th(6), 128th(7)
     let labels = [
-        "whole", "half", "quarter", "8th", "16th", "32nd", "64th", "128th",
+        "breve", "whole", "half", "quarter", "8th", "16th", "32nd", "64th", "128th",
     ];
-    for log2 in 0..=7u8 {
-        let x = start_x + log2 as f64 * spacing;
+    for (index, log2) in (-1..=7i8).enumerate() {
+        let x = start_x + index as f64 * spacing;
         let advance = draw_rest(&mut svg, &staff, &font, x, log2).unwrap();
         assert!(
             advance > 0.0,
             "{} rest advance should be positive",
-            labels[log2 as usize]
+            labels[index]
         );
     }
 
@@ -51,9 +51,9 @@ fn main() {
         line_count,
     );
 
-    // Expected: 1 clef + 8 rests = 9 paths
+    // Expected: 1 clef + 9 rests = 10 paths
     // Expected: 5 staff lines
-    assert_eq!(path_count, 9, "Expected 9 paths (1 clef + 8 rests)");
+    assert_eq!(path_count, 10, "Expected 10 paths (1 clef + 9 rests)");
     assert_eq!(line_count, 5, "Expected 5 lines (staff lines only)");
-    println!("Expected: 9 paths (1 clef + 8 rests), 5 lines (staff)");
+    println!("Expected: 10 paths (1 clef + 9 rests), 5 lines (staff)");
 }

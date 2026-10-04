@@ -2,6 +2,7 @@
 //! and verify the data matches.
 
 use lilypond_parser::{parse, Event, Item};
+use music::notation::clef::Clef;
 use music::notation::lilypond::ToLilypondString;
 use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::{Note, Pitch};
@@ -46,8 +47,55 @@ fn ces_bis_roundtrip() {
             Item::Event(Event::Note(p, _)) => {
                 assert_eq!(p.note, note, "note mismatch for {}", src);
                 assert_eq!(p.octave, octave, "octave mismatch for {}", src);
+                assert_eq!(p.midi_note, pitch.midi_note, "midi mismatch for {}", src);
             }
             other => panic!("{:?}", other),
+        }
+    }
+}
+
+/// LilyPond octave marks are written octaves, so `ces'` (C♭4) sounds B3 and
+/// `bis` (B♯3) sounds C4 — through both output and input.
+#[test]
+fn ces_bis_marks_carry_written_octave_and_midi() {
+    let dur = Duration::new(DurationKind::Qtr, 0);
+    for (note, octave, midi, src) in [
+        (Note::Ces, 4, 59, "ces'4"),
+        (Note::Ces, 5, 71, "ces''4"),
+        (Note::Bis, 3, 60, "bis4"),
+        (Note::Bis, 4, 72, "bis'4"),
+    ] {
+        let pitch = Pitch::new(note, octave);
+        assert_eq!(pitch.midi_note, midi, "{note:?}{octave}");
+        assert_eq!(render_pitch(&pitch, &dur), src);
+        match &parse(src).unwrap()[0] {
+            Item::Event(Event::Note(p, _)) => assert_eq!(*p, pitch, "parsing {src}"),
+            other => panic!("expected note for {src:?}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn c_clef_roundtrip() {
+    for (clef, name) in [(Clef::Alto, "alto"), (Clef::Tenor, "tenor")] {
+        let dur = Duration::new(DurationKind::Qtr, 0);
+        let src = format!(
+            "\\clef {} {}",
+            clef.to_lilypond_string(),
+            render_pitch(&Pitch::new(Note::C, 4), &dur)
+        );
+        let items = parse(&src).unwrap_or_else(|e| panic!("parse {:?}: {:?}", src, e));
+        assert!(
+            matches!(&items[0], Item::Clef(s) if s == name),
+            "{src}: {:?}",
+            items[0]
+        );
+        match &items[1] {
+            Item::Event(Event::Note(p, d)) => {
+                assert_eq!((p.note, p.octave), (Note::C, 4), "{src}");
+                assert_eq!(*d, dur);
+            }
+            other => panic!("expected note after clef in {src}, got {other:?}"),
         }
     }
 }

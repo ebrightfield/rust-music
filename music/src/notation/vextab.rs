@@ -130,3 +130,21 @@ pub mod barline {
     pub const DOUBLE_REPEAT: &str = "=::";
     pub const END_BAR: &str = "=|=";
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::note::note::Note;
+
+    /// VexTab keys name the written letter's octave, so a MIDI note spelled
+    /// C♭ or B♯ carries the octave of that spelling, not of its sounding C..B
+    /// block.
+    #[test]
+    fn pitch_keys_use_the_written_octave() {
+        let c_flat_5 = Pitch::from_midi_spelled_as(71, &vec![Note::Ces]).unwrap();
+        assert_eq!(c_flat_5.to_vextab(), "C@/5");
+        let b_sharp_3 = Pitch::from_midi_spelled_as(60, &vec![Note::Bis]).unwrap();
+        assert_eq!(b_sharp_3.to_vextab(), "B#/3");
+        assert_eq!(Pitch::new(Note::Bes, 4).to_vextab(), "B@/4");
+    }
+}

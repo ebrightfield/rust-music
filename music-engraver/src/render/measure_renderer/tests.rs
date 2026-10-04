@@ -484,6 +484,7 @@ fn x_offset_shifts_elements() {
 
 #[test]
 fn notehead_kind_from_log2_mapping() {
+    assert_eq!(notehead_kind_from_log2(-1), NoteheadKind::DoubleWhole);
     assert_eq!(notehead_kind_from_log2(0), NoteheadKind::Whole);
     assert_eq!(notehead_kind_from_log2(1), NoteheadKind::Half);
     assert_eq!(notehead_kind_from_log2(2), NoteheadKind::Filled);
@@ -493,6 +494,7 @@ fn notehead_kind_from_log2_mapping() {
 
 #[test]
 fn flag_count_from_log2_mapping() {
+    assert_eq!(flag_count_from_log2(-1), 0); // breve
     assert_eq!(flag_count_from_log2(0), 0); // whole
     assert_eq!(flag_count_from_log2(1), 0); // half
     assert_eq!(flag_count_from_log2(2), 0); // quarter

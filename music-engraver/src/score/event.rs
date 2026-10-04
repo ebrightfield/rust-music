@@ -65,12 +65,12 @@ pub(crate) enum ScoreEvent {
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
 ///
-/// Layout uses: 0=whole, 1=half, 2=quarter, 3=eighth, etc.
-/// Breve (double whole) maps to 0 as well since the layout engine doesn't
-/// distinguish breves from wholes for spacing purposes.
-pub(crate) fn duration_kind_to_log2(kind: DurationKind) -> u8 {
+/// Layout uses: -1=breve (double whole), 0=whole, 1=half, 2=quarter,
+/// 3=eighth, etc. The breve keeps its own value so glyph selection, stem
+/// rules, and spacing never confuse it with a whole note.
+pub(crate) fn duration_kind_to_log2(kind: DurationKind) -> i8 {
     match kind {
-        DurationKind::Breve => 0,
+        DurationKind::Breve => -1,
         DurationKind::Whole => 0,
         DurationKind::Half => 1,
         DurationKind::Qtr => 2,

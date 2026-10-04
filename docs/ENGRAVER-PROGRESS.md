@@ -7731,6 +7731,43 @@
   - `cargo test -p music-engraver --test golden_svg golden_advanced_guitar_vocabulary`
   - `cargo run -p music-engraver --example advanced_guitar_vocabulary`
 
+## 2026-10-04 — RM-MN-003, alto and tenor C clefs
+
+- Did: Added `Clef::Alto` and `Clef::Tenor` to the `music` crate (bounds,
+  middle line, LilyPond `\clef alto` / `\clef tenor`, serde) and carried them
+  through `ClefKind`, `ClefLayout` (`Glyph::CClef` centered on C4: alto staff
+  position 4, tenor 6), `pitch_to_staff_position`, guitar unpitched placement,
+  music-ron snippet clef names, and the slonimsky `--clef alto|tenor` flag
+  (previously rejected).
+- Did: Key signatures use the conventional C-clef patterns from VexFlow
+  `KeySignature::convertAccLines` — alto is the treble shape half a line lower;
+  tenor sharps use VexFlow's custom list so F♯3 sits low (positions
+  2 6 3 7 4 8 5), tenor flats are the treble shape half a line higher.
+- Note: this supersedes the earlier sub-brackets note that the viola line had
+  to use `Clef::Treble` because no alto clef existed; that golden is unchanged.
+
+## 2026-10-04 — RM-MN-008 breve notes, chords, and rests
+
+- Did: Breves no longer collapse to whole notes. The layout duration code
+  `duration_log2` is now `i8` with `-1 = breve` (`0` whole, `1` half, …) on
+  `NoteEvent`, `ChordEvent`, `RestEvent`, `BeamedNote`, `TabBeamedNote`,
+  `TabRhythmLayout`, the TAB builder (`TabScoreBuilder::duration(i8)`), and
+  every helper that consumes it (`NoteheadStyle::glyph`, `rest_glyph`,
+  `rest_staff_position`, `rest_y`, `draw_rest`, `notehead_advance`,
+  `beam_group_note_x_offsets`, `tab_flag_count`, `needs_stem`,
+  `layout_tab_rhythm`). Flag/beam counts clamp below zero instead of wrapping.
+- Glyphs: breve noteheads use `noteheadDoubleWhole` (and the diamond, X,
+  circled-X, and slash double-whole variants; square percussion heads fall
+  back to `noteheadSquareWhite` because SMuFL has no square double-whole).
+  `NoteheadKind::DoubleWhole` was added. Breve rests use `restDoubleWhole`
+  anchored on the 3rd line so they fill the space up to the 4th line. Breves
+  stay stemless, flagless, and unbeamed.
+- Spacing: the Gourlay spring treats a breve as one duration doubling beyond a
+  whole note for notes, rests, chords, and beam/tuplet members.
+- Tests: replaced `log2_breve_is_0` (which pinned the defect); added glyph,
+  rest-position, spacing, beam-level, conversion, guitar-projection, and public
+  `ScoreBuilder`/`GuitarScore` SVG regressions, plus dotted-breve tick math.
+
 ## 2026-10-04 — RM-MN-002/007: accidental state, display policy, cautionary accidentals
 - Did: Replaced the per-arm suppression in `score/event.rs::resolve_accidental`
   with one comparison: the requested alteration against the active one (the

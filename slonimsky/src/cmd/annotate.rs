@@ -106,19 +106,11 @@ fn parse_chord_voicing(s: &str) -> Result<Vec<Pitch>> {
     Ok(pitches)
 }
 
-/// MIDI note number for a Pitch (C4 = 60).
-fn midi_number(p: &Pitch) -> i32 {
-    use music::note::pitch_class::Pc;
-    let pc: Pc = (&p.note).into();
-    let pc_val = pc as i32;
-    pc_val + (p.octave as i32) * 12
-}
-
 /// Compute per-voice semitone motion (signed).
 fn voice_paths(from: &[Pitch], to: &[Pitch]) -> Vec<i32> {
     from.iter()
         .zip(to.iter())
-        .map(|(f, t)| midi_number(t) - midi_number(f))
+        .map(|(f, t)| i32::from(t.midi_note) - i32::from(f.midi_note))
         .collect()
 }
 
@@ -137,8 +129,8 @@ fn count_crossings(from: &[Pitch], to: &[Pitch]) -> usize {
     let mut crossings = 0;
     for i in 0..from.len() {
         for j in (i + 1)..from.len() {
-            let from_order = midi_number(&from[i]).cmp(&midi_number(&from[j]));
-            let to_order = midi_number(&to[i]).cmp(&midi_number(&to[j]));
+            let from_order = from[i].midi_note.cmp(&from[j].midi_note);
+            let to_order = to[i].midi_note.cmp(&to[j].midi_note);
             if from_order != to_order
                 && from_order != std::cmp::Ordering::Equal
                 && to_order != std::cmp::Ordering::Equal
@@ -458,6 +450,19 @@ mod tests {
         let paths = voice_paths(&from, &to);
         assert_eq!(paths[0], 0); // common tone
         assert_eq!(paths[1], 1); // E→F = +1
+    }
+
+    #[test]
+    fn voice_paths_measure_c_flat_and_b_sharp_by_sounding_pitch() {
+        // C♭4 sounds as B3 and B♯3 sounds as C4: both voices hold common tones.
+        let from = vec![Pitch::new(Note::B, 3), Pitch::new(Note::C, 4)];
+        let to = vec![Pitch::new(Note::Ces, 4), Pitch::new(Note::Bis, 3)];
+        assert_eq!(voice_paths(&from, &to), vec![0, 0]);
+        // C♭5 is an octave above B3.
+        assert_eq!(
+            voice_paths(&from[..1], &[Pitch::new(Note::Ces, 5)]),
+            vec![12]
+        );
     }
 
     #[test]

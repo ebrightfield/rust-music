@@ -47,26 +47,38 @@ pub enum NoteheadStyle {
 }
 
 impl NoteheadStyle {
-    /// Resolve this shape for `duration_log2` (`0` whole, `1` half, `2+` filled).
-    pub fn glyph(self, duration_log2: u8) -> smufl::Glyph {
+    /// Resolve this shape for `duration_log2` (`-1` breve, `0` whole, `1` half,
+    /// `2+` filled).
+    ///
+    /// Every style uses its SMuFL double-whole variant for breves except
+    /// [`Self::Square`]: SMuFL defines no double-whole square percussion head,
+    /// so a square breve falls back to the open `NoteheadSquareWhite` shared
+    /// with whole and half notes (its breve duration still drives spacing and
+    /// stem suppression).
+    pub fn glyph(self, duration_log2: i8) -> smufl::Glyph {
         use smufl::Glyph;
         match (self, duration_log2) {
+            (Self::Normal, ..=-1) => Glyph::NoteheadDoubleWhole,
             (Self::Normal, 0) => Glyph::NoteheadWhole,
             (Self::Normal, 1) => Glyph::NoteheadHalf,
             (Self::Normal, _) => Glyph::NoteheadBlack,
+            (Self::Diamond, ..=-1) => Glyph::NoteheadDiamondDoubleWhole,
             (Self::Diamond, 0) => Glyph::NoteheadDiamondWhole,
             (Self::Diamond, 1) => Glyph::NoteheadDiamondHalf,
             (Self::Diamond, _) => Glyph::NoteheadDiamondBlack,
+            (Self::X, ..=-1) => Glyph::NoteheadXDoubleWhole,
             (Self::X, 0) => Glyph::NoteheadXWhole,
             (Self::X, 1) => Glyph::NoteheadXHalf,
             (Self::X, _) => Glyph::NoteheadXBlack,
+            (Self::CircleX, ..=-1) => Glyph::NoteheadCircleXDoubleWhole,
             (Self::CircleX, 0) => Glyph::NoteheadCircleXWhole,
             (Self::CircleX, 1) => Glyph::NoteheadCircleXHalf,
             (Self::CircleX, _) => Glyph::NoteheadCircleX,
+            (Self::Slash, ..=-1) => Glyph::NoteheadSlashWhiteDoubleWhole,
             (Self::Slash, 0) => Glyph::NoteheadSlashWhiteWhole,
             (Self::Slash, 1) => Glyph::NoteheadSlashWhiteHalf,
             (Self::Slash, _) => Glyph::NoteheadSlashVerticalEnds,
-            (Self::Square, 0 | 1) => Glyph::NoteheadSquareWhite,
+            (Self::Square, ..=1) => Glyph::NoteheadSquareWhite,
             (Self::Square, _) => Glyph::NoteheadSquareBlack,
         }
     }
@@ -357,9 +369,9 @@ pub struct ChordEvent {
     /// Staff positions of notes in the chord (bottom line = 0), in any order.
     /// Will be sorted during layout.
     pub staff_positions: Vec<i8>,
-    /// Log2 of the duration denominator: 0=whole, 1=half, 2=quarter, 3=eighth, etc.
+    /// Log2 of the duration denominator: -1=breve, 0=whole, 1=half, 2=quarter, 3=eighth, etc.
     /// All notes in a chord share the same duration.
-    pub duration_log2: u8,
+    pub duration_log2: i8,
     /// Number of augmentation dots (0–3).
     pub dots: u8,
     /// Resolved accidentals to display, parallel to `staff_positions`.
@@ -384,7 +396,7 @@ pub enum MeasureElement {
     /// A note event: staff position, notehead kind, stem direction, flag count, dot count,
     /// optional accidental glyph (already resolved to SMuFL glyph).
     Note(NoteEvent),
-    /// A rest event: log2 duration (0=whole, 1=half, 2=quarter, etc.), dot count.
+    /// A rest event: log2 duration (-1=breve, 0=whole, 1=half, 2=quarter, etc.), dot count.
     Rest(RestEvent),
     /// A chord (multiple simultaneous notes).
     Chord(ChordEvent),
@@ -410,8 +422,8 @@ pub enum MeasureElement {
 pub struct NoteEvent {
     /// Staff position (bottom line = 0).
     pub staff_position: i8,
-    /// Log2 of the duration denominator: 0=whole, 1=half, 2=quarter, 3=eighth, etc.
-    pub duration_log2: u8,
+    /// Log2 of the duration denominator: -1=breve, 0=whole, 1=half, 2=quarter, 3=eighth, etc.
+    pub duration_log2: i8,
     /// Number of augmentation dots (0–3).
     pub dots: u8,
     /// Accidental to display (if any), already resolved against the key
@@ -426,8 +438,8 @@ pub struct NoteEvent {
 /// A rest to be laid out within a measure.
 #[derive(Clone, Debug)]
 pub struct RestEvent {
-    /// Log2 of the duration denominator: 0=whole, 1=half, 2=quarter, etc.
-    pub duration_log2: u8,
+    /// Log2 of the duration denominator: -1=breve, 0=whole, 1=half, 2=quarter, etc.
+    pub duration_log2: i8,
     /// Number of augmentation dots (0–3).
     pub dots: u8,
 }
@@ -557,12 +569,12 @@ impl MeasureLayoutConfig {
 /// caller so an explicit ratio changes the group's advance relative to
 /// ordinary events without changing its internal proportions.
 fn spring_rest_length(
-    duration_log2: u8,
-    shortest_log2: u8,
+    duration_log2: i8,
+    shortest_log2: i8,
     spring_constant: f64,
     spacing_exponent: f64,
 ) -> f64 {
-    let steps = shortest_log2 as f64 - duration_log2 as f64;
+    let steps = f64::from(shortest_log2) - f64::from(duration_log2);
     let duration = 2.0_f64.powf(steps);
     spring_constant * duration.powf(spacing_exponent)
 }
@@ -691,7 +703,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
         .max()
         .unwrap_or(2);
 
-    let spring = |duration_log2: u8, time_scale: f64| {
+    let spring = |duration_log2: i8, time_scale: f64| {
         spring_rest_length(
             duration_log2,
             shortest_log2,
@@ -1371,13 +1383,102 @@ mod tests {
     }
 
     #[test]
+    fn breve_advance_is_one_duration_doubling_beyond_whole() {
+        // A breve lasts twice a whole note. With identical rods, its spring
+        // must be the spacing model's duration function evaluated one doubling
+        // further, pushing the following event right by exactly the extra
+        // spring — for notes, rests, chords, and tuplet members alike.
+        let cfg = test_config();
+        fn note(duration_log2: i8) -> MeasureElement {
+            MeasureElement::Note(NoteEvent {
+                staff_position: 2,
+                duration_log2,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            })
+        }
+        let makers: [fn(i8) -> MeasureElement; 4] = [
+            note,
+            |duration_log2| {
+                MeasureElement::Rest(RestEvent {
+                    duration_log2,
+                    dots: 0,
+                })
+            },
+            |duration_log2| {
+                MeasureElement::Chord(ChordEvent {
+                    staff_positions: vec![2, 4, 6],
+                    duration_log2,
+                    dots: 0,
+                    accidentals: vec![None; 3],
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                })
+            },
+            |duration_log2| {
+                let member = NoteEvent {
+                    staff_position: 2,
+                    duration_log2,
+                    dots: 0,
+                    accidental: None,
+                    stem_direction: None,
+                    annotations: NoteAnnotations::default(),
+                };
+                MeasureElement::TupletGroup(TupletGroupEvent {
+                    beam_group: BeamGroupEvent {
+                        notes: vec![member.clone(), member.clone(), member],
+                        stem_direction: None,
+                    },
+                    tuplet_number: 3,
+                    in_time_of: 2,
+                })
+            },
+        ];
+        let doubling = 2.0_f64.powf(cfg.spacing_exponent);
+        for make in makers {
+            let breve = layout_measure(&[make(-1), note(2)], &cfg);
+            let whole = layout_measure(&[make(0), note(2)], &cfg);
+            let (breve_event, whole_event) = (&breve.elements[0], &whole.elements[0]);
+            assert!((breve_event.rod - whole_event.rod).abs() < 1e-9);
+            assert!(
+                (breve_event.spring / whole_event.spring - doubling).abs() < 1e-9,
+                "breve spring {} must be whole spring {} times 2^exponent",
+                breve_event.spring,
+                whole_event.spring
+            );
+            let breve_next_x = breve.elements[1].x;
+            let whole_next_x = whole.elements[1].x;
+            assert!(breve_next_x > whole_next_x);
+            assert!(
+                ((breve_next_x - whole_next_x) - (breve_event.spring - whole_event.spring)).abs()
+                    < 1e-9
+            );
+        }
+        let breve_note = layout_measure(&[note(-1), note(2)], &cfg);
+        let expected = spring_rest_length(-1, 2, cfg.spring_constant, cfg.spacing_exponent);
+        assert!((breve_note.elements[0].spring - expected).abs() < 1e-9);
+    }
+
+    #[test]
     fn semantic_notehead_styles_resolve_to_exact_duration_glyphs() {
         use smufl::Glyph;
 
         let cases = [
             (
+                NoteheadStyle::Normal,
+                [
+                    Glyph::NoteheadDoubleWhole,
+                    Glyph::NoteheadWhole,
+                    Glyph::NoteheadHalf,
+                    Glyph::NoteheadBlack,
+                ],
+            ),
+            (
                 NoteheadStyle::Diamond,
                 [
+                    Glyph::NoteheadDiamondDoubleWhole,
                     Glyph::NoteheadDiamondWhole,
                     Glyph::NoteheadDiamondHalf,
                     Glyph::NoteheadDiamondBlack,
@@ -1386,6 +1487,7 @@ mod tests {
             (
                 NoteheadStyle::X,
                 [
+                    Glyph::NoteheadXDoubleWhole,
                     Glyph::NoteheadXWhole,
                     Glyph::NoteheadXHalf,
                     Glyph::NoteheadXBlack,
@@ -1394,6 +1496,7 @@ mod tests {
             (
                 NoteheadStyle::CircleX,
                 [
+                    Glyph::NoteheadCircleXDoubleWhole,
                     Glyph::NoteheadCircleXWhole,
                     Glyph::NoteheadCircleXHalf,
                     Glyph::NoteheadCircleX,
@@ -1402,6 +1505,7 @@ mod tests {
             (
                 NoteheadStyle::Slash,
                 [
+                    Glyph::NoteheadSlashWhiteDoubleWhole,
                     Glyph::NoteheadSlashWhiteWhole,
                     Glyph::NoteheadSlashWhiteHalf,
                     Glyph::NoteheadSlashVerticalEnds,
@@ -1410,13 +1514,16 @@ mod tests {
             (
                 NoteheadStyle::Square,
                 [
+                    // SMuFL has no double-whole square percussion head.
+                    Glyph::NoteheadSquareWhite,
                     Glyph::NoteheadSquareWhite,
                     Glyph::NoteheadSquareWhite,
                     Glyph::NoteheadSquareBlack,
                 ],
             ),
         ];
-        for (style, [whole, half, filled]) in cases {
+        for (style, [breve, whole, half, filled]) in cases {
+            assert_eq!(style.glyph(-1), breve);
             assert_eq!(style.glyph(0), whole);
             assert_eq!(style.glyph(1), half);
             assert_eq!(style.glyph(2), filled);

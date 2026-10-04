@@ -32,8 +32,12 @@ fn log2_128th_is_7() {
 }
 
 #[test]
-fn log2_breve_is_0() {
-    assert_eq!(duration_kind_to_log2(DurationKind::Breve), 0);
+fn log2_breve_is_minus_1_distinct_from_whole() {
+    assert_eq!(duration_kind_to_log2(DurationKind::Breve), -1);
+    assert_ne!(
+        duration_kind_to_log2(DurationKind::Breve),
+        duration_kind_to_log2(DurationKind::Whole)
+    );
 }
 
 // --- note_altered_in_key ---
