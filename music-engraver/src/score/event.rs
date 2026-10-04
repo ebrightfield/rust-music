@@ -13,6 +13,7 @@ use music::note::pitch::Pitch;
 use music::note::spelling::{Accidental, Spelling};
 
 use crate::layout::accidental::{accidental_glyph, AccidentalDisplay, ResolvedAccidental};
+use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
     BeamGroupEvent, ChordEvent, GroupedChordMember, NoteAnnotations, NoteEvent, RestEvent,
@@ -61,6 +62,9 @@ pub(crate) enum ScoreEvent {
         count: u32,
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// Zero-duration inline barline inside the measure. It does not end the
+    /// measure, advance the measure number, or reset accidental state.
+    Barline(BarlineStyle),
 }
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
@@ -420,6 +424,7 @@ pub(crate) fn convert_resolved_event(
             count: *count,
             style: *style,
         },
+        ScoreEvent::Barline(style) => MeasureEvent::Barline(*style),
     }
 }
 
@@ -575,7 +580,7 @@ fn visit_pitches(
             *in_time_of,
             &mut visit,
         ),
-        ScoreEvent::MultiMeasureRest { .. } => 0,
+        ScoreEvent::MultiMeasureRest { .. } | ScoreEvent::Barline(_) => 0,
     }
 }
 

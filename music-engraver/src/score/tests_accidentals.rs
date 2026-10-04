@@ -52,7 +52,9 @@ fn voice_accidentals(events: &[MeasureEvent]) -> Vec<Option<ResolvedAccidental>>
                 .iter()
                 .flat_map(member_accidentals)
                 .collect(),
-            MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => Vec::new(),
+            MeasureEvent::Rest(_)
+            | MeasureEvent::MultiMeasureRest { .. }
+            | MeasureEvent::Barline(_) => Vec::new(),
         })
         .collect()
 }

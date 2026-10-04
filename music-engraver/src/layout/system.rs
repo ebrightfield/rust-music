@@ -30,7 +30,8 @@ pub struct MeasureContent {
     pub meta: MeasureMeta,
 }
 
-/// A rhythmic event within a measure — a note, rest, chord, or beam group.
+/// An event within a measure: a rhythmic note, rest, chord, or group, or a
+/// zero-duration inline barline.
 #[derive(Clone, Debug)]
 pub enum MeasureEvent {
     Note(NoteEvent),
@@ -49,6 +50,10 @@ pub enum MeasureEvent {
         /// Visual style (H-bar or church-rest).
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// A zero-duration barline inside the measure (LilyPond `\bar` between
+    /// bar checks). It neither ends the measure nor resets its accidentals;
+    /// the measure's closing barline is [`MeasureContent::barline`].
+    Barline(BarlineStyle),
 }
 
 /// Describes the frontmatter (clef, key, time sig) that appears at the start of a system.
@@ -376,6 +381,7 @@ pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
             count: *count,
             style: *style,
         },
+        MeasureEvent::Barline(style) => MeasureElement::Barline(*style),
     }
 }
 

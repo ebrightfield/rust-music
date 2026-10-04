@@ -6,15 +6,17 @@
 use std::collections::HashMap;
 
 use crate::font::bravura_font;
-use crate::layout::measure::MeasureLayoutConfig;
+use crate::layout::barline::BarlineStyle;
+use crate::layout::line_break::LineBreakPlan;
+use crate::layout::measure::{MeasureElement, MeasureLayoutConfig};
 use crate::layout::multi_staff::{layout_multi_staff, ConnectorKind, StaffGroup, SubBracket};
-use crate::layout::page::{
-    break_measures_auto, break_measures_optimal, PageSystem, SystemBreaking,
-};
+use crate::layout::page::{break_into_systems, PageSystem, SystemBreaking};
 use crate::layout::staff::StaffLayout;
-use crate::layout::system::{layout_system, SystemLayout};
+use crate::layout::system::{layout_system, MeasureContent, SystemLayout, SystemPrefix};
 use crate::layout::tab::TabStaffLayout;
-use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
+use crate::render::multi_staff_renderer::{
+    draw_joined_barline, draw_joined_dashed_barline, draw_multi_staff_connectors,
+};
 use crate::render::page_renderer::{
     draw_cross_system_glissandos, draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
     draw_cross_system_ottava_brackets, draw_cross_system_slurs, draw_cross_system_ties,
@@ -30,6 +32,9 @@ use super::guitar::{
     GUITAR_BARLINE_WIDTH_SS, GUITAR_TAB_GAP_SS,
 };
 use super::ScoreBuilder;
+
+/// One stave's measure contents (explicit line breaks applied) and prefix.
+pub(crate) type StaveData = (Vec<MeasureContent>, SystemPrefix);
 
 /// A multi-staff score combining multiple [`ScoreBuilder`] staves with a
 /// visual connector (brace, bracket, or none) and optionally joined barlines.
@@ -77,6 +82,8 @@ pub struct MultiStaffScore {
     auto_breaks: bool,
     /// When true, use optimal (Knuth-Plass DP) line breaking.
     optimal_breaks: bool,
+    /// When true, break systems only at explicit `system_break()`s.
+    explicit_breaks: bool,
     /// Display measure numbers above the start of each system.
     show_measure_numbers: bool,
     /// Optional tablature derived from the same semantic guitar timeline.
@@ -103,6 +110,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
+            explicit_breaks: false,
             show_measure_numbers: false,
             tab_stave: None,
             sub_brackets: Vec::new(),
@@ -119,6 +127,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
+            explicit_breaks: false,
             show_measure_numbers: false,
             tab_stave: None,
             sub_brackets: Vec::new(),
@@ -135,6 +144,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
+            explicit_breaks: false,
             show_measure_numbers: false,
             tab_stave: None,
             sub_brackets: Vec::new(),
@@ -158,6 +168,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
+            explicit_breaks: false,
             show_measure_numbers: false,
             tab_stave: Some(guitar),
             sub_brackets: Vec::new(),
@@ -173,23 +184,27 @@ impl MultiStaffScore {
     /// Set the number of measures per system.
     ///
     /// Calling this disables auto line breaks if previously enabled.
+    /// Explicit `system_break()`s on any stave still apply.
     pub fn measures_per_system(mut self, n: usize) -> Self {
         self.measures_per_system = n;
         self.auto_breaks = false;
         self.optimal_breaks = false;
+        self.explicit_breaks = false;
         self
     }
 
     /// Enable automatic width-based line breaking.
     ///
     /// Measures are greedily packed onto systems until the natural width
-    /// exceeds the target system width. Uses the first stave's content for
-    /// width estimation.
+    /// exceeds the target system width. Uses the stave with the most visual
+    /// measure pieces for width estimation, so a break inside one stave's
+    /// logical measure is represented on every stave.
     ///
     /// Calling this overrides a previous `measures_per_system` setting.
     pub fn auto_line_breaks(mut self) -> Self {
         self.auto_breaks = true;
         self.optimal_breaks = false;
+        self.explicit_breaks = false;
         self
     }
 
@@ -202,6 +217,19 @@ impl MultiStaffScore {
     pub fn optimal_line_breaks(mut self) -> Self {
         self.optimal_breaks = true;
         self.auto_breaks = false;
+        self.explicit_breaks = false;
+        self
+    }
+
+    /// Break systems only at explicit `system_break()`s, requested on any
+    /// stave (see [`ScoreBuilder::explicit_line_breaks`]).
+    ///
+    /// Overrides any previous `measures_per_system`, `auto_line_breaks`, or
+    /// `optimal_line_breaks` setting.
+    pub fn explicit_line_breaks(mut self) -> Self {
+        self.explicit_breaks = true;
+        self.auto_breaks = false;
+        self.optimal_breaks = false;
         self
     }
 
@@ -251,6 +279,55 @@ impl MultiStaffScore {
     pub fn with_sub_brackets(mut self, sub_brackets: Vec<SubBracket>) -> Self {
         self.sub_brackets = sub_brackets;
         self
+    }
+
+    /// Each stave's measure contents and prefix, and the `(start, end)`
+    /// content ranges of the systems they break into.
+    ///
+    /// Every stave's explicit line breaks apply to all staves, so the staves
+    /// break — and split measures at mid-measure breaks — together. Widths
+    /// for width-based policies come from the stave with the most contents
+    /// (the first such stave on a tie), so no stave's measures fall outside
+    /// the ranges.
+    pub(crate) fn staves_into_systems(
+        &self,
+        measure_config: &MeasureLayoutConfig,
+        sys_width: f64,
+        measures_per_system: usize,
+    ) -> (Vec<StaveData>, Vec<(usize, usize)>) {
+        let logical: Vec<_> = self
+            .staves
+            .iter()
+            .map(ScoreBuilder::build_measure_contents)
+            .collect();
+        let mut line_breaks = LineBreakPlan::default();
+        for (stave, contents) in self.staves.iter().zip(&logical) {
+            line_breaks.merge(&stave.line_break_plan(contents));
+        }
+        let stave_data: Vec<StaveData> = self
+            .staves
+            .iter()
+            .zip(logical)
+            .map(|(stave, contents)| (line_breaks.apply(contents), stave.build_prefix()))
+            .collect();
+
+        let breaking = if self.explicit_breaks || self.staves.iter().any(|s| s.explicit_breaks) {
+            SystemBreaking::Explicit
+        } else if self.optimal_breaks || self.staves.iter().any(|s| s.optimal_breaks) {
+            SystemBreaking::Optimal
+        } else if self.auto_breaks || self.staves.iter().any(|s| s.auto_breaks) {
+            SystemBreaking::Auto
+        } else {
+            SystemBreaking::Fixed(measures_per_system)
+        };
+        let chunks = stave_data
+            .iter()
+            .rev()
+            .max_by_key(|(contents, _)| contents.len())
+            .map_or_else(Vec::new, |(contents, prefix)| {
+                break_into_systems(prefix, contents, measure_config, sys_width, &breaking)
+            });
+        (stave_data, chunks)
     }
 
     /// Render the multi-staff score to an SVG string.
@@ -337,26 +414,7 @@ impl MultiStaffScore {
             ));
         }
 
-        // Build measure contents and prefixes for each stave (needed early for auto breaking)
-        let stave_data: Vec<_> = self
-            .staves
-            .iter()
-            .map(|s| (s.build_measure_contents(), s.build_prefix()))
-            .collect();
-
-        // Break measures into system chunks
-        let use_optimal = self.optimal_breaks || self.staves.iter().any(|s| s.optimal_breaks);
-        let use_auto = self.auto_breaks || self.staves.iter().any(|s| s.auto_breaks);
-        let chunks = if use_optimal && !stave_data.is_empty() {
-            let (ref contents, ref prefix) = stave_data[0];
-            break_measures_optimal(prefix, contents, &measure_config, sys_width)
-        } else if use_auto && !stave_data.is_empty() {
-            let (ref contents, ref prefix) = stave_data[0];
-            break_measures_auto(prefix, contents, &measure_config, sys_width)
-        } else {
-            let breaking = SystemBreaking::Fixed(mps);
-            break_measures(max_measures, &breaking)
-        };
+        let (stave_data, chunks) = self.staves_into_systems(&measure_config, sys_width, mps);
 
         // Build the multi-staff geometry for standard notation staves only.
         // Tab stave is positioned below with a separate gap.
@@ -609,19 +667,25 @@ impl MultiStaffScore {
             let total_stave_count =
                 self.staves.len() + if self.tab_stave.is_some() { 1 } else { 0 };
             if self.joined_barlines && total_stave_count >= 2 {
-                let y_top = ms_layout.staff_y_origins[0];
-                let y_bottom = if let Some(ref _tab) = self.tab_stave {
-                    let tab_y = if self.staves.is_empty() {
-                        group_y
-                    } else {
-                        let last_y = ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1];
-                        last_y + staff_space * 4.0 + tab_gap
+                // Vertical extent of every stave, top to bottom.
+                let mut stave_spans: Vec<(f64, f64)> = ms_layout
+                    .staff_y_origins
+                    .iter()
+                    .map(|&y| (y, y + staff_space * 4.0))
+                    .collect();
+                if self.tab_stave.is_some() {
+                    let tab_y = match stave_spans.last() {
+                        Some(&(_, notation_bottom)) => notation_bottom + tab_gap,
+                        None => group_y,
                     };
-                    tab_y + tab_staff_height
-                } else {
-                    ms_layout.staff_y_origins[ms_layout.staff_y_origins.len() - 1]
-                        + staff_space * 4.0
-                };
+                    stave_spans.push((tab_y, tab_y + tab_staff_height));
+                }
+                let y_top = stave_spans[0].0;
+                let y_bottom = stave_spans[stave_spans.len() - 1].1;
+                let gaps: Vec<(f64, f64)> = stave_spans
+                    .windows(2)
+                    .map(|pair| (pair[0].1, pair[1].0))
+                    .collect();
 
                 draw_joined_barline(
                     &mut svg,
@@ -633,14 +697,32 @@ impl MultiStaffScore {
 
                 if let Some(first_system) = stave_systems.first() {
                     for measure in &first_system.measures {
-                        let barline_x = left_margin + measure.x_offset + measure.layout.total_width;
-                        draw_joined_barline(
-                            &mut svg,
-                            barline_x,
-                            y_top,
-                            y_bottom,
-                            config.thin_barline_thickness_fu(),
-                        );
+                        // Join at the first stave's closing barline (the
+                        // measure's last `Barline` element), in its style.
+                        let Some((barline_x, style)) = measure
+                            .layout
+                            .elements
+                            .iter()
+                            .rev()
+                            .find_map(|element| match element.element {
+                                MeasureElement::Barline(style) => Some((element.x, style)),
+                                _ => None,
+                            })
+                        else {
+                            continue;
+                        };
+                        let barline_x = left_margin + measure.x_offset + barline_x;
+                        if style == BarlineStyle::Dashed {
+                            draw_joined_dashed_barline(&mut svg, &config, barline_x, &gaps);
+                        } else if style.spans_staff_gaps() {
+                            draw_joined_barline(
+                                &mut svg,
+                                barline_x,
+                                y_top,
+                                y_bottom,
+                                config.thin_barline_thickness_fu(),
+                            );
+                        }
                     }
                 }
             }
@@ -758,41 +840,6 @@ impl MultiStaffScore {
         let bytes = self.try_render_png(scale)?;
         std::fs::write(path, bytes)?;
         Ok(())
-    }
-}
-
-/// Break `total` measures into chunks per the breaking strategy.
-fn break_measures(total: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
-    match breaking {
-        SystemBreaking::Fixed(n) => {
-            let n = (*n).max(1);
-            let mut chunks = Vec::new();
-            let mut start = 0;
-            while start < total {
-                let end = (start + n).min(total);
-                chunks.push((start, end));
-                start = end;
-            }
-            chunks
-        }
-        SystemBreaking::Manual(breaks) => {
-            let mut chunks = Vec::new();
-            let mut start = 0;
-            for &b in breaks {
-                if b > start && b <= total {
-                    chunks.push((start, b));
-                    start = b;
-                }
-            }
-            if start < total {
-                chunks.push((start, total));
-            }
-            chunks
-        }
-        // Auto and Optimal are handled by caller; this path is a fallback.
-        SystemBreaking::Auto | SystemBreaking::Optimal => {
-            break_measures(total, &SystemBreaking::Fixed(4))
-        }
     }
 }
 
@@ -1186,30 +1233,6 @@ mod tests {
             MultiStaffScore::section(vec![simple_treble(), simple_bass()]).render_svg();
         // Brace vs bracket produce different visual output
         assert_ne!(svg_grand, svg_bracket);
-    }
-
-    #[test]
-    fn break_measures_fixed() {
-        let chunks = break_measures(7, &SystemBreaking::Fixed(3));
-        assert_eq!(chunks, vec![(0, 3), (3, 6), (6, 7)]);
-    }
-
-    #[test]
-    fn break_measures_fixed_exact() {
-        let chunks = break_measures(6, &SystemBreaking::Fixed(3));
-        assert_eq!(chunks, vec![(0, 3), (3, 6)]);
-    }
-
-    #[test]
-    fn break_measures_manual() {
-        let chunks = break_measures(8, &SystemBreaking::Manual(vec![3, 6]));
-        assert_eq!(chunks, vec![(0, 3), (3, 6), (6, 8)]);
-    }
-
-    #[test]
-    fn break_measures_empty() {
-        let chunks = break_measures(0, &SystemBreaking::Fixed(4));
-        assert!(chunks.is_empty());
     }
 
     /// Build a multi-measure treble stave for auto-breaking tests.

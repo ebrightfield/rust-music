@@ -413,7 +413,8 @@ pub enum MeasureElement {
         /// Visual style (H-bar or church-rest).
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
-    /// Barline at the end of the measure.
+    /// A barline: the measure's closing barline (the last `Barline` element),
+    /// or an inline barline inside the measure that does not end it.
     Barline(BarlineStyle),
 }
 
@@ -803,6 +804,9 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     // as rod so it neither compresses nor stretches.
                     (event_rod(0.0, 0, config) + spring(0, 1.0), 0.0, 0.0)
                 }
+                // An invisible barline marks a position (a break point or an
+                // unmarked end) without taking any space.
+                MeasureElement::Barline(style) if !style.is_visible() => (0.0, 0.0, 0.0),
                 MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
             };
 

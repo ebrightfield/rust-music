@@ -21,6 +21,8 @@
 
 use crate::font::{bravura_font, EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
+use crate::layout::measure_meta::LineBreak;
+use crate::layout::page::{break_by_directives, SystemBreaking};
 use crate::layout::tab::{layout_fret_number, layout_muted_string, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
@@ -73,11 +75,13 @@ pub(crate) enum TabEvent {
     BeamGroup { events: Vec<(Vec<(u8, u8)>, i8)> },
 }
 
-/// A completed tab measure: events + ending barline style.
+/// A completed tab measure: events, ending barline style, and the line-break
+/// permission after it.
 #[derive(Clone, Debug)]
 pub(crate) struct TabMeasure {
     pub(crate) events: Vec<TabEvent>,
     pub(crate) barline: BarlineStyle,
+    pub(crate) line_break: LineBreak,
 }
 
 /// Builder for constructing tablature scores and rendering to SVG.
@@ -122,6 +126,8 @@ pub struct TabScoreBuilder {
     pending_let_ring: bool,
     /// Accumulated muted string numbers for the current event.
     current_muted: Vec<u8>,
+    /// Line-break request for the barline closing the current measure.
+    pending_line_break: LineBreak,
 }
 
 impl TabScoreBuilder {
@@ -145,6 +151,7 @@ impl TabScoreBuilder {
             pending_palm_mute: false,
             pending_let_ring: false,
             current_muted: Vec::new(),
+            pending_line_break: LineBreak::Auto,
         }
     }
 
@@ -428,46 +435,63 @@ impl TabScoreBuilder {
 
     /// End the current measure with a single barline.
     pub fn barline(mut self) -> Self {
-        self.flush_frets();
-        let events = std::mem::take(&mut self.current_events);
-        self.measures.push(TabMeasure {
-            events,
-            barline: BarlineStyle::Single,
-        });
+        self.close_measure(BarlineStyle::Single);
         self
     }
 
     /// End the current measure with a final (double) barline.
     pub fn end_barline(mut self) -> Self {
-        self.flush_frets();
-        let events = std::mem::take(&mut self.current_events);
-        self.measures.push(TabMeasure {
-            events,
-            barline: BarlineStyle::Final,
-        });
+        self.close_measure(BarlineStyle::Final);
         self
     }
 
     /// End the current measure with a specific barline style.
     pub fn barline_style(mut self, style: BarlineStyle) -> Self {
+        self.close_measure(style);
+        self
+    }
+
+    /// Force a system break at the next barline (LilyPond `\break`): right
+    /// after `barline()` it falls on that barline; inside a measure, on the
+    /// barline that closes it (TAB-only scores carry no rhythmic onsets to
+    /// break at mid-measure). Breaks restart the measures-per-system count.
+    /// A call before any music has no effect.
+    pub fn system_break(self) -> Self {
+        self.request_line_break(LineBreak::Force)
+    }
+
+    /// Forbid a system break at the next barline (LilyPond `\noBreak`),
+    /// positioned like [`system_break`](Self::system_break).
+    pub fn no_break(self) -> Self {
+        self.request_line_break(LineBreak::Forbid)
+    }
+
+    fn request_line_break(mut self, kind: LineBreak) -> Self {
+        let measure_open =
+            !self.current_events.is_empty() || !self.current_frets.is_empty() || self.in_beam_group;
+        if measure_open {
+            self.pending_line_break = kind;
+        } else if let Some(measure) = self.measures.last_mut() {
+            measure.line_break = kind;
+        }
+        self
+    }
+
+    fn close_measure(&mut self, barline: BarlineStyle) {
         self.flush_frets();
         let events = std::mem::take(&mut self.current_events);
         self.measures.push(TabMeasure {
             events,
-            barline: style,
+            barline,
+            line_break: std::mem::take(&mut self.pending_line_break),
         });
-        self
     }
 
     /// Flush any pending events as a final measure.
     pub(crate) fn flush_pending(&mut self) {
         self.flush_frets();
         if !self.current_events.is_empty() {
-            let events = std::mem::take(&mut self.current_events);
-            self.measures.push(TabMeasure {
-                events,
-                barline: BarlineStyle::Final,
-            });
+            self.close_measure(BarlineStyle::Final);
         }
     }
 
@@ -516,7 +540,7 @@ impl TabScoreBuilder {
         let mps = self.effective_mps();
 
         // Break measures into system chunks
-        let chunks = break_tab_measures(self.measures.len(), mps);
+        let chunks = break_tab_measures(&self.measures, mps);
 
         // TAB clef occupies ~2.5 staff spaces + 0.5 padding
         let clef_width = 3.0 * staff_space;
@@ -654,17 +678,11 @@ impl Default for TabScoreBuilder {
     }
 }
 
-/// Break N measures into system chunks of `mps` measures each.
-fn break_tab_measures(total: usize, mps: usize) -> Vec<(usize, usize)> {
-    let mps = mps.max(1);
-    let mut chunks = Vec::new();
-    let mut start = 0;
-    while start < total {
-        let end = (start + mps).min(total);
-        chunks.push((start, end));
-        start = end;
-    }
-    chunks
+/// Break the measures into system chunks of `mps` measures each, honoring
+/// their explicit line-break directives.
+fn break_tab_measures(measures: &[TabMeasure], mps: usize) -> Vec<(usize, usize)> {
+    let directives: Vec<LineBreak> = measures.iter().map(|measure| measure.line_break).collect();
+    break_by_directives(&directives, &SystemBreaking::Fixed(mps), &[], (0.0, 0.0))
 }
 
 /// Draw a single tab measure: fret numbers at evenly spaced positions + barline.
@@ -1092,6 +1110,26 @@ pub(crate) fn draw_measure_barline(
             svg.add_line(x, y_top, x, y_bottom, "black", thin);
             svg.add_line(x + sep, y_top, x + sep, y_bottom, "black", thick);
         }
+        BarlineStyle::Dashed => {
+            let dash = config.to_font_units(config.dashed_barline_dash_length);
+            let gap = config.to_font_units(config.dashed_barline_gap_length);
+            svg.add_dashed_line(
+                x,
+                y_top,
+                x,
+                y_bottom,
+                "black",
+                config.to_font_units(config.dashed_barline_thickness),
+                &format!("{dash},{gap}"),
+            );
+        }
+        BarlineStyle::Tick => {
+            // A short stroke through the top line, half a staff space each
+            // way (the extent of SMuFL's `barlineTick` on a five-line staff).
+            let half = tab_staff.staff_space / 2.0;
+            svg.add_line(x, y_top - half, x, y_top + half, "black", thin);
+        }
+        BarlineStyle::Invisible => {}
     }
     Ok(())
 }
@@ -1359,22 +1397,51 @@ mod tests {
         );
     }
 
+    fn plain_measures(count: usize) -> Vec<TabMeasure> {
+        (0..count)
+            .map(|_| TabMeasure {
+                events: Vec::new(),
+                barline: BarlineStyle::Single,
+                line_break: LineBreak::Auto,
+            })
+            .collect()
+    }
+
     #[test]
     fn break_tab_measures_splits_correctly() {
-        let chunks = break_tab_measures(7, 3);
+        let chunks = break_tab_measures(&plain_measures(7), 3);
         assert_eq!(chunks, vec![(0, 3), (3, 6), (6, 7)]);
     }
 
     #[test]
     fn break_tab_measures_single_system() {
-        let chunks = break_tab_measures(3, 4);
+        let chunks = break_tab_measures(&plain_measures(3), 4);
         assert_eq!(chunks, vec![(0, 3)]);
     }
 
     #[test]
     fn break_tab_measures_empty() {
-        let chunks = break_tab_measures(0, 4);
+        let chunks = break_tab_measures(&[], 4);
         assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn tab_system_break_restarts_the_count_and_no_break_joins() {
+        let builder = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .barline()
+            .system_break()
+            .fret(1, 2)
+            .no_break()
+            .barline()
+            .fret(1, 3)
+            .barline()
+            .fret(1, 5)
+            .barline();
+        assert_eq!(
+            break_tab_measures(&builder.measures, 1),
+            vec![(0, 1), (1, 3), (3, 4)]
+        );
     }
 
     #[test]

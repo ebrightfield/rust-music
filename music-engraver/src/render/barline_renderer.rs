@@ -49,8 +49,17 @@ fn render_barline_layout(
         svg.add_path(&outline.path_data, "black", Some(&lower_transform));
     }
 
+    if let Some(glyph) = &layout.glyph {
+        let outline = font.glyph_outline(glyph.glyph)?;
+        let transform = format!("translate({}, {})", glyph.x, glyph.y);
+        svg.add_path(&outline.path_data, "black", Some(&transform));
+    }
+
     Ok(layout.width)
 }
+
+#[cfg(test)]
+mod tests_styles;
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,6 @@
 use crate::font::EngravingConfig;
 use crate::layout::staff::StaffLayout;
+use smufl::Glyph;
 
 /// Visual style of a barline.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +15,33 @@ pub enum BarlineStyle {
     StartRepeat,
     /// End repeat: thin then thick, with dots.
     EndRepeat,
+    /// Dashed barline (LilyPond `\bar "!"`), drawn with the SMuFL
+    /// `barlineDashed` glyph. Commonly subdivides a long bar.
+    Dashed,
+    /// Invisible barline (LilyPond `\bar ""`): draws nothing and takes no
+    /// horizontal space. Ends a piece without a final barline, or marks a
+    /// mid-measure point where a system may break.
+    Invisible,
+    /// Tick barline (LilyPond `\bar "'"`), a short stroke through the top
+    /// staff line drawn with the SMuFL `barlineTick` glyph.
+    Tick,
+}
+
+impl BarlineStyle {
+    /// Whether a barline of this style draws anything.
+    pub fn is_visible(self) -> bool {
+        self != Self::Invisible
+    }
+
+    /// Whether this style continues across the gaps between the staves of a
+    /// group with joined barlines.
+    ///
+    /// Follows LilyPond's span-bar definitions: invisible and tick barlines
+    /// stay within each staff; every other style spans the gaps (a dashed
+    /// barline as a dashed line).
+    pub fn spans_staff_gaps(self) -> bool {
+        !matches!(self, Self::Invisible | Self::Tick)
+    }
 }
 
 /// Describes one vertical stroke in a barline group.
@@ -40,19 +68,34 @@ pub struct RepeatDots {
     pub y_lower: f64,
 }
 
+/// A barline drawn as a single SMuFL glyph.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BarlineGlyph {
+    /// The SMuFL glyph.
+    pub glyph: Glyph,
+    /// X-coordinate of the glyph origin (its left edge).
+    pub x: f64,
+    /// Y-coordinate of the glyph origin: the bottom staff line, which SMuFL
+    /// barline glyphs are designed to sit on.
+    pub y: f64,
+}
+
 /// Full description of a barline's visual components.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BarlineLayout {
     pub strokes: Vec<BarlineStroke>,
     pub dots: Option<RepeatDots>,
+    /// Glyph-drawn barline (dashed, tick); `None` for stroke-drawn styles.
+    pub glyph: Option<BarlineGlyph>,
     /// Total advance width of the barline group.
     pub width: f64,
 }
 
 /// Compute the layout of a barline at the given x position.
 ///
-/// Returns strokes (thin/thick lines) and optional repeat dots,
-/// all in font design units.
+/// Returns strokes (thin/thick lines), optional repeat dots, or a single
+/// SMuFL glyph (dashed, tick), all in font design units. An invisible
+/// barline has no components and zero width.
 pub fn barline_layout(
     style: BarlineStyle,
     x: f64,
@@ -77,6 +120,7 @@ pub fn barline_layout(
             BarlineLayout {
                 strokes: vec![stroke],
                 dots: None,
+                glyph: None,
                 width: thin,
             }
         }
@@ -97,6 +141,7 @@ pub fn barline_layout(
             BarlineLayout {
                 strokes: vec![s1, s2],
                 dots: None,
+                glyph: None,
                 width,
             }
         }
@@ -118,6 +163,7 @@ pub fn barline_layout(
             BarlineLayout {
                 strokes: vec![s1, s2],
                 dots: None,
+                glyph: None,
                 width,
             }
         }
@@ -143,6 +189,7 @@ pub fn barline_layout(
             BarlineLayout {
                 strokes: vec![s1, s2],
                 dots,
+                glyph: None,
                 width,
             }
         }
@@ -167,9 +214,38 @@ pub fn barline_layout(
             BarlineLayout {
                 strokes: vec![s1, s2],
                 dots,
+                glyph: None,
                 width,
             }
         }
+        BarlineStyle::Dashed => glyph_barline(
+            Glyph::BarlineDashed,
+            x,
+            y_bottom,
+            config.to_font_units(config.dashed_barline_thickness),
+        ),
+        BarlineStyle::Tick => glyph_barline(Glyph::BarlineTick, x, y_bottom, thin),
+        BarlineStyle::Invisible => BarlineLayout {
+            strokes: Vec::new(),
+            dots: None,
+            glyph: None,
+            width: 0.0,
+        },
+    }
+}
+
+/// A barline drawn as one SMuFL glyph whose stroke is `thickness` wide,
+/// centred on `x` like the thin stroke of a single barline.
+fn glyph_barline(glyph: Glyph, x: f64, y_bottom: f64, thickness: f64) -> BarlineLayout {
+    BarlineLayout {
+        strokes: Vec::new(),
+        dots: None,
+        glyph: Some(BarlineGlyph {
+            glyph,
+            x: x - thickness / 2.0,
+            y: y_bottom,
+        }),
+        width: thickness,
     }
 }
 
