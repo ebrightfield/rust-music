@@ -109,6 +109,8 @@ pub struct TabScoreBuilder {
     system_width: f64,
     /// Which measures print their number.
     measure_numbering: MeasureNumbering,
+    /// Number assigned to the first measure (default 1).
+    first_measure_number: i32,
     /// When true, we are accumulating events for a beam group.
     in_beam_group: bool,
     /// Accumulated beam group sub-events: (frets, duration_log2).
@@ -141,6 +143,7 @@ impl TabScoreBuilder {
             measures_per_system: 4,
             system_width: 0.0,
             measure_numbering: MeasureNumbering::Hidden,
+            first_measure_number: 1,
             in_beam_group: false,
             beam_group_events: Vec::new(),
             pending_slide: false,
@@ -175,9 +178,15 @@ impl TabScoreBuilder {
         self
     }
 
-    /// Choose which measures print their number (1-based) above the staff.
+    /// Choose which measures print their number above the staff.
     pub fn measure_numbering(mut self, numbering: MeasureNumbering) -> Self {
         self.measure_numbering = numbering;
+        self
+    }
+
+    /// Number of the first TAB measure, for event-numbered exercises.
+    pub fn first_measure_number(mut self, number: i32) -> Self {
+        self.first_measure_number = number;
         self
     }
 
@@ -580,7 +589,9 @@ impl TabScoreBuilder {
             let numbers = layout_bar_numbers(
                 self.measure_numbering,
                 (*start..*end).map(|index| BarNumberSlot {
-                    number: i32::try_from(index + 1).unwrap_or(i32::MAX),
+                    number: self.first_measure_number.saturating_add(
+                        i32::try_from(index).unwrap_or(i32::MAX),
+                    ),
                     x: clef_width + (index - start) as f64 * measure_width,
                     system_start: index == *start,
                     numbered: true,
@@ -1287,6 +1298,33 @@ mod tests {
             .end_barline()
             .render_svg();
         assert!(svg.contains(">1</text>"), "should show measure number 1");
+    }
+
+    #[test]
+    fn every_bar_numbers_use_the_configured_start_and_not_the_tab_clef() {
+        let svg = TabScoreBuilder::guitar()
+            .measure_numbering(MeasureNumbering::EveryBar)
+            .first_measure_number(27)
+            .fret(1, 0)
+            .barline()
+            .fret(1, 2)
+            .end_barline()
+            .render_svg();
+        assert!(svg.contains(">27</text>") && svg.contains(">28</text>"));
+        assert!(!svg.contains(">29</text>"));
+        let number_x = svg
+            .lines()
+            .find(|line| line.contains(">27</text>"))
+            .unwrap()
+            .split("x=\"")
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
+        assert_eq!(number_x, 3.0 * 250.0, "bar number must follow the TAB clef");
     }
 
     #[test]

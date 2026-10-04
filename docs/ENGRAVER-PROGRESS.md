@@ -7806,7 +7806,8 @@
 - Per-measure metadata records logical number, meter visibility, nominal and
   actual lengths, pickups, and cadenza; `partial`, `measure_length`, and
   `spacer` expose unprinted bar structure without rejecting incomplete bars.
-  System-start/every-bar numbering shares placement across score renderers.
+  System-start/every-bar numbering shares placement across score renderers;
+  `first_measure_number` also sets a standalone TAB score's start value.
 - Clef advance/bbox controls key-signature spacing and page bounds so alto,
   tenor, and high accidentals remain inside the SVG viewBox.
 - Verified: 22 structure regressions and 2,942 engraver library tests passed;
