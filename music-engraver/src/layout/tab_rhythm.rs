@@ -24,24 +24,24 @@ pub struct TabRhythmLayout {
     pub y_tip: f64,
     /// Stem stroke width in font design units.
     pub stem_width: f64,
-    /// Duration log2 (0=whole, 1=half, 2=quarter, 3=eighth, etc.)
-    pub duration_log2: u8,
+    /// Duration log2 (-1=breve, 0=whole, 1=half, 2=quarter, 3=eighth, etc.)
+    pub duration_log2: i8,
     /// Number of flags (0 for quarter and longer, 1 for eighth, 2 for sixteenth, etc.)
     pub flag_count: u8,
 }
 
 /// Compute the number of flags for a given duration_log2.
 ///
-/// 0 (whole) → 0, 1 (half) → 0, 2 (quarter) → 0, 3 (eighth) → 1,
-/// 4 (sixteenth) → 2, 5 (32nd) → 3, etc.
-pub fn tab_flag_count(duration_log2: u8) -> u8 {
-    duration_log2.saturating_sub(2)
+/// -1 (breve) → 0, 0 (whole) → 0, 1 (half) → 0, 2 (quarter) → 0,
+/// 3 (eighth) → 1, 4 (sixteenth) → 2, 5 (32nd) → 3, etc.
+pub fn tab_flag_count(duration_log2: i8) -> u8 {
+    u8::try_from(duration_log2.saturating_sub(2)).unwrap_or(0)
 }
 
 /// Whether a duration_log2 needs a stem drawn.
 ///
-/// Whole notes (0) have no stem. Half notes and shorter have stems.
-pub fn needs_stem(duration_log2: u8) -> bool {
+/// Breves (-1) and whole notes (0) have no stem. Half notes and shorter have stems.
+pub fn needs_stem(duration_log2: i8) -> bool {
     duration_log2 >= 1
 }
 
@@ -52,11 +52,11 @@ pub fn needs_stem(duration_log2: u8) -> bool {
 /// and the tip extends `STEM_LENGTH_SS` staff spaces above that (in negative
 /// y direction since SVG y increases downward).
 ///
-/// Returns `None` for whole notes (duration_log2 = 0), which have no stem.
+/// Returns `None` for breves and whole notes (duration_log2 <= 0), which have no stem.
 pub fn layout_tab_rhythm(
     tab_staff: &TabStaffLayout,
     note_x: f64,
-    duration_log2: u8,
+    duration_log2: i8,
     stem_width: f64,
 ) -> Option<TabRhythmLayout> {
     if !needs_stem(duration_log2) {
@@ -89,6 +89,11 @@ mod tests {
     }
 
     #[test]
+    fn tab_flag_count_breve_is_zero() {
+        assert_eq!(tab_flag_count(-1), 0);
+    }
+
+    #[test]
     fn tab_flag_count_whole() {
         assert_eq!(tab_flag_count(0), 0);
     }
@@ -116,6 +121,13 @@ mod tests {
     #[test]
     fn tab_flag_count_thirty_second() {
         assert_eq!(tab_flag_count(5), 3);
+    }
+
+    #[test]
+    fn breve_has_no_tab_rhythm_stem() {
+        let staff = guitar_staff();
+        assert!(!needs_stem(-1));
+        assert!(layout_tab_rhythm(&staff, 1000.0, -1, 5.0).is_none());
     }
 
     #[test]

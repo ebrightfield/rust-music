@@ -56,7 +56,7 @@ pub(crate) enum TabEvent {
     /// `muted_strings`: strings displayed as "x" (dead/muted) instead of fret numbers.
     Fret {
         frets: Vec<(u8, u8)>,
-        duration_log2: Option<u8>,
+        duration_log2: Option<i8>,
         slide_out: bool,
         legato_out: Option<LegatoKind>,
         vibrato: Option<VibratoKind>,
@@ -67,10 +67,10 @@ pub(crate) enum TabEvent {
     },
     /// A rest (blank space — no fret numbers).
     /// `duration_log2`: optional rhythm for rest stem display.
-    Rest { duration_log2: Option<u8> },
+    Rest { duration_log2: Option<i8> },
     /// A beam group: multiple fret events connected by beam lines above the staff.
     /// Each sub-event is (frets, duration_log2).
-    BeamGroup { events: Vec<(Vec<(u8, u8)>, u8)> },
+    BeamGroup { events: Vec<(Vec<(u8, u8)>, i8)> },
 }
 
 /// A completed tab measure: events + ending barline style.
@@ -93,7 +93,7 @@ pub struct TabScoreBuilder {
     /// `.fret()` pushes here; `.fret()` on a different beat or `.rest()` flushes.
     current_frets: Vec<(u8, u8)>,
     /// Pending duration for the next event (set by `.duration()`).
-    pending_duration: Option<u8>,
+    pending_duration: Option<i8>,
     /// Events accumulated for the current in-progress measure.
     current_events: Vec<TabEvent>,
     /// Completed measures.
@@ -107,7 +107,7 @@ pub struct TabScoreBuilder {
     /// When true, we are accumulating events for a beam group.
     in_beam_group: bool,
     /// Accumulated beam group sub-events: (frets, duration_log2).
-    beam_group_events: Vec<(Vec<(u8, u8)>, u8)>,
+    beam_group_events: Vec<(Vec<(u8, u8)>, i8)>,
     /// When true, the next flushed Fret event gets `slide_out = true`.
     pending_slide: bool,
     /// When Some, the next flushed Fret event gets `legato_out` set.
@@ -230,11 +230,11 @@ impl TabScoreBuilder {
 
     /// Set the duration for the next event (fret or rest).
     ///
-    /// `duration_log2`: 0=whole, 1=half, 2=quarter, 3=eighth, 4=sixteenth, etc.
+    /// `duration_log2`: -1=breve, 0=whole, 1=half, 2=quarter, 3=eighth, 4=sixteenth, etc.
     /// The duration is consumed by the next `.fret()` flush or `.rest()` call.
     /// When set, a rhythm stem (and flag for eighths and shorter) is drawn
     /// above the tab staff.
-    pub fn duration(mut self, duration_log2: u8) -> Self {
+    pub fn duration(mut self, duration_log2: i8) -> Self {
         self.pending_duration = Some(duration_log2);
         self
     }
@@ -997,7 +997,7 @@ fn draw_tab_beam_group_event(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
     tab_staff: &TabStaffLayout,
-    events: &[(Vec<(u8, u8)>, u8)],
+    events: &[(Vec<(u8, u8)>, i8)],
     start_x: f64,
     group_width: f64,
     stem_width: f64,

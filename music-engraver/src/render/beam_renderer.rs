@@ -332,7 +332,7 @@ mod tests {
         (config, staff)
     }
 
-    fn make_notes(positions: &[(f64, i8, u8)]) -> Vec<BeamedNote> {
+    fn make_notes(positions: &[(f64, i8, i8)]) -> Vec<BeamedNote> {
         positions
             .iter()
             .map(|&(x, pos, dur)| BeamedNote {

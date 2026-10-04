@@ -224,6 +224,19 @@ mod tests {
     }
 
     #[test]
+    fn breve_is_twice_whole_and_dots_geometrically() {
+        let breve = Duration::new(DurationKind::Breve, 0);
+        assert_eq!(breve.ticks(), 256);
+        assert_eq!(breve.ticks(), 2 * Duration::WHOLE.ticks());
+        assert_eq!(Duration::new(DurationKind::Breve, 1).ticks(), 384);
+        assert_eq!(Duration::new(DurationKind::Breve, 2).ticks(), 448);
+        assert_eq!(
+            Duration::try_from_ticks(384),
+            Some(Duration::new(DurationKind::Breve, 1))
+        );
+    }
+
+    #[test]
     fn durations_from_ticks() {
         let d = Duration::try_from_ticks(32);
         assert_eq!(d, Some(Duration::new(DurationKind::Qtr, 0)));
