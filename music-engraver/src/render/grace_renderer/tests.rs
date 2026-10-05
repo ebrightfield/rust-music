@@ -3,9 +3,7 @@ use super::*;
 #[test]
 fn c12_r009_group_engravings_include_grace_flat_beam_slash_and_slur() {
     use crate::layout::accidental::ResolvedAccidental;
-    use crate::layout::grace::{
-        layout_grace_group, GraceGroup, GraceNoteEvent, GraceNoteKind,
-    };
+    use crate::layout::grace::{layout_grace_group, GraceGroup, GraceNoteEvent, GraceNoteKind};
     let font = crate::font::bravura_font();
     let config = font.engraving_config();
     let staff = StaffLayout::from_config(0.0, 0.0, 6000.0, &config);

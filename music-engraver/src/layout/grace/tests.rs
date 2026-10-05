@@ -9,9 +9,8 @@ fn group(kind: GraceNoteKind, accidentals: bool) -> GraceGroup {
                 staff_position: 0,
                 duration_log2: 3,
                 dots: 0,
-                accidental: accidentals.then_some(ResolvedAccidental::plain(
-                    smufl::Glyph::AccidentalFlat,
-                )),
+                accidental: accidentals
+                    .then_some(ResolvedAccidental::plain(smufl::Glyph::AccidentalFlat)),
             },
             GraceNoteEvent {
                 staff_position: -2,
@@ -33,17 +32,14 @@ fn c12_r009_beamed_graces_reserve_accidental_width_before_principal() {
     let principal_x = 1200.0;
     let extent = grace_group_extent(&altered, StemDirection::Up, staff.staff_space);
     assert!(extent > grace_group_extent(&plain, StemDirection::Up, staff.staff_space));
-    let layout = layout_grace_group(
-        &altered,
-        principal_x,
-        StemDirection::Up,
-        &staff,
-        &config,
-    );
+    let layout = layout_grace_group(&altered, principal_x, StemDirection::Up, &staff, &config);
     assert_eq!(layout.left_x, principal_x - extent);
     assert_eq!(layout.notes.len(), 2);
     assert_eq!(layout.beams.len(), 1, "two eighths share one beam");
-    assert!(layout.notes.iter().all(|note| note.flags == 0 && note.stem.is_some()));
+    assert!(layout
+        .notes
+        .iter()
+        .all(|note| note.flags == 0 && note.stem.is_some()));
     let slashed = layout_grace_group(
         &group(GraceNoteKind::Acciaccatura, false),
         principal_x,
@@ -52,5 +48,13 @@ fn c12_r009_beamed_graces_reserve_accidental_width_before_principal() {
         &config,
     );
     assert!(slashed.slashed);
-    assert!(layout_grace_slur(&slashed, principal_x + 100.0, 2, StemDirection::Up, &staff, &config).is_some());
+    assert!(layout_grace_slur(
+        &slashed,
+        principal_x + 100.0,
+        2,
+        StemDirection::Up,
+        &staff,
+        &config
+    )
+    .is_some());
 }

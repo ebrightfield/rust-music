@@ -10,8 +10,8 @@ use crate::layout::articulation::Articulation;
 use crate::layout::barline::{barline_layout, BarlineStyle};
 use crate::layout::dynamics::{CustomDynamic, Dynamic, DYNAMIC_TEXT_GAP_SS};
 use crate::layout::measure::{
-    layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteAnnotations,
-    NoteEvent, RestEvent,
+    layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteAnnotations, NoteEvent,
+    RestEvent,
 };
 use crate::layout::placement::Placement;
 use crate::layout::staff::StaffLayout;
@@ -41,9 +41,21 @@ fn render(elements: Vec<MeasureElement>) -> Rendered {
     let font = bravura_font();
     let config = font.engraving_config();
     let staff = StaffLayout::from_config(0.0, 0.0, 5000.0, &config);
-    let layout = layout_measure(&elements, &MeasureLayoutConfig::from_staff_space(config.staff_space));
+    let layout = layout_measure(
+        &elements,
+        &MeasureLayoutConfig::from_staff_space(config.staff_space),
+    );
     let mut svg = SvgWriter::new(800.0, 200.0, -500.0, -2000.0, 8000.0, 5000.0);
-    draw_measure(&mut svg, &staff, &font, &config, &layout, 0.0, &Clef::Treble).unwrap();
+    draw_measure(
+        &mut svg,
+        &staff,
+        &font,
+        &config,
+        &layout,
+        0.0,
+        &Clef::Treble,
+    )
+    .unwrap();
     Rendered {
         svg: svg.to_svg(),
         layout,
@@ -92,7 +104,10 @@ fn dynamic_on_rest_is_centered_on_the_rest_below_or_above() {
         assert_close(rest.x, rest_x);
         let p = glyph(&r.svg, &r.font, Glyph::DynamicPiano);
         let rest_center = rest_x + advance(&r.font, Glyph::RestQuarter) / 2.0;
-        assert_close(p.x, rest_center - advance(&r.font, Glyph::DynamicPiano) / 2.0);
+        assert_close(
+            p.x,
+            rest_center - advance(&r.font, Glyph::DynamicPiano) / 2.0,
+        );
         let expected_y = match expected_y_ss {
             None => r.staff.bottom_y() + 2.5 * r.ss(),
             Some(()) => r.staff.y_of(8) - 1.3 * r.ss(),
@@ -109,7 +124,10 @@ fn fermata_on_rest_sits_above_the_staff_over_the_rest() {
     })]);
     let rest_x = r.layout.elements[0].x;
     let fermata = glyph(&r.svg, &r.font, Glyph::FermataAbove);
-    assert_close(fermata.x, rest_x + advance(&r.font, Glyph::RestQuarter) / 2.0);
+    assert_close(
+        fermata.x,
+        rest_x + advance(&r.font, Glyph::RestQuarter) / 2.0,
+    );
     let bbox = r.font.glyph_bbox_design_units(Glyph::FermataAbove).unwrap();
     assert!(
         fermata.y + bbox.y_bottom <= r.staff.y_of(8),
@@ -194,7 +212,11 @@ fn text_scripts_stack_outward_on_each_side() {
     // past it only if needed, the second stacks under the first.
     let forte = glyph(&r.svg, &r.font, Glyph::DynamicForte);
     assert_close(forte.y, r.staff.bottom_y() + 2.5 * ss);
-    let forte_bottom = forte.y + r.font.glyph_bbox_design_units(Glyph::DynamicForte).unwrap().y_bottom;
+    let forte_bottom = forte.y
+        + r.font
+            .glyph_bbox_design_units(Glyph::DynamicForte)
+            .unwrap()
+            .y_bottom;
     let gliss = text(&r.svg, "gliss.");
     assert_eq!(gliss.style, "italic");
     let gliss_y = (r.staff.bottom_y() + 4.0 * ss)
@@ -224,7 +246,11 @@ fn ledger_line_note_pushes_its_dynamic_clear_of_the_notehead() {
     )]);
     let ss = r.ss();
     let p = glyph(&r.svg, &r.font, Glyph::DynamicPiano);
-    let top = r.font.glyph_bbox_design_units(Glyph::DynamicPiano).unwrap().y_top;
+    let top = r
+        .font
+        .glyph_bbox_design_units(Glyph::DynamicPiano)
+        .unwrap()
+        .y_top;
     assert_close(
         p.y + top,
         r.staff.y_of(-2) + 0.5 * ss + TEXT_SCRIPT_PADDING_SS * ss,
@@ -240,7 +266,10 @@ fn piu_p_centers_the_dynamic_glyph_and_sets_the_words_to_its_left() {
     })]);
     let rest_center = r.layout.elements[0].x + advance(&r.font, Glyph::RestQuarter) / 2.0;
     let p = glyph(&r.svg, &r.font, Glyph::DynamicPiano);
-    assert_close(p.x, rest_center - advance(&r.font, Glyph::DynamicPiano) / 2.0);
+    assert_close(
+        p.x,
+        rest_center - advance(&r.font, Glyph::DynamicPiano) / 2.0,
+    );
     let words = text(&r.svg, "più");
     assert_eq!(words.style, "italic");
     assert_eq!(words.anchor, "end");

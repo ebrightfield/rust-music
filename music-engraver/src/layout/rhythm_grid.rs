@@ -52,7 +52,9 @@ fn length(element: &MeasureElement) -> MeasureLength {
         MeasureElement::Note(n) => written_length(n.duration_log2, n.dots),
         MeasureElement::Rest(r) => written_length(r.duration_log2, r.dots),
         MeasureElement::Chord(c) => written_length(c.duration_log2, c.dots),
-        MeasureElement::Spacer(s) => s.duration_log2.map_or(MeasureLength::ZERO, |log2| written_length(log2, s.dots)),
+        MeasureElement::Spacer(s) => s
+            .duration_log2
+            .map_or(MeasureLength::ZERO, |log2| written_length(log2, s.dots)),
         _ => MeasureLength::ZERO,
     }
 }
@@ -174,7 +176,11 @@ fn structural_before(
     spans: &mut Vec<Span>,
     spring_factor: f64,
 ) {
-    let VoiceTiming { start, first_onset, end } = timing;
+    let VoiceTiming {
+        start,
+        first_onset,
+        end,
+    } = timing;
     let mut current_tick = start;
     let mut prefix = 0.0;
     let mut previous_end = 0.0;
@@ -220,7 +226,11 @@ fn position_voice(
     timing: VoiceTiming,
     placement: &GridPlacement<'_>,
 ) {
-    let VoiceTiming { start, first_onset, end } = timing;
+    let VoiceTiming {
+        start,
+        first_onset,
+        end,
+    } = timing;
     let columns = placement.columns;
     let scale = placement.scale;
     let total_rod = placement.rod;
@@ -283,7 +293,8 @@ fn position_voice(
         let col = &columns[&at];
         if is_rhythmic(&positioned.element) {
             positioned.x = col.x + col.prefix.max(col.left);
-            if matches!(&positioned.element, MeasureElement::Spacer(s) if s.duration_log2.is_none()) {
+            if matches!(&positioned.element, MeasureElement::Spacer(s) if s.duration_log2.is_none())
+            {
                 positioned.spring = 0.0;
                 positioned.rod = 0.0;
                 positioned.width = 0.0;
@@ -416,7 +427,11 @@ pub(crate) fn align_shared_grid(
                 structural_before(
                     layout,
                     config,
-                    VoiceTiming { start, first_onset: first, end },
+                    VoiceTiming {
+                        start,
+                        first_onset: first,
+                        end,
+                    },
                     &mut columns,
                     &mut spans,
                     factor,
@@ -490,7 +505,11 @@ pub(crate) fn align_shared_grid(
                 position_voice(
                     &mut measure.layout,
                     config,
-                    VoiceTiming { start, first_onset: first, end },
+                    VoiceTiming {
+                        start,
+                        first_onset: first,
+                        end,
+                    },
                     &placement,
                 );
                 for (index, layout) in measure.additional_voice_layouts.iter_mut().enumerate() {
@@ -503,7 +522,11 @@ pub(crate) fn align_shared_grid(
                     position_voice(
                         layout,
                         config,
-                        VoiceTiming { start, first_onset: first, end },
+                        VoiceTiming {
+                            start,
+                            first_onset: first,
+                            end,
+                        },
                         &placement,
                     );
                 }

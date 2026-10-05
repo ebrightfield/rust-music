@@ -896,14 +896,11 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             }
             // Timed spacers occupy rest-like room; instantaneous anchors
             // introduce neither a phantom glyph nor a phantom spacing rod.
-            MeasureElement::Spacer(spacer) => spacer.duration_log2.map_or(
-                (0.0, 0.0, 0.0),
-                |log2| (
-                    event_rod(0.0, spacer.dots, config),
-                    spring(log2, 1.0),
-                    0.0,
-                ),
-            ),
+            MeasureElement::Spacer(spacer) => {
+                spacer.duration_log2.map_or((0.0, 0.0, 0.0), |log2| {
+                    (event_rod(0.0, spacer.dots, config), spring(log2, 1.0), 0.0)
+                })
+            }
             MeasureElement::Chord(c) => {
                 // A chord shares one stem column (one notehead rod); its stacked
                 // accidental columns are its leading accidental extent.
@@ -1023,7 +1020,9 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     if spacer_only {
         let spacer_width: f64 = positioned
             .iter()
-            .filter(|p| matches!(&p.element, MeasureElement::Spacer(s) if s.duration_log2.is_some()))
+            .filter(
+                |p| matches!(&p.element, MeasureElement::Spacer(s) if s.duration_log2.is_some()),
+            )
             .map(|p| p.width)
             .sum();
         let deficit = config.empty_measure_min_width - spacer_width;

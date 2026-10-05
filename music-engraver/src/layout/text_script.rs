@@ -504,20 +504,36 @@ mod tests {
     #[test]
     fn text_before_glyph_is_end_anchored_on_the_glyph_origin() {
         let font = bravura_font();
-        let line =
-            layout_text_line(&[text("("), glyph(Glyph::MetNoteQuarterUp), text(" = 60)")], &font)
-                .unwrap();
-        let PlacedLineItem::Text { x: paren_x, anchor_end, .. } = &line.items[0] else {
+        let line = layout_text_line(
+            &[text("("), glyph(Glyph::MetNoteQuarterUp), text(" = 60)")],
+            &font,
+        )
+        .unwrap();
+        let PlacedLineItem::Text {
+            x: paren_x,
+            anchor_end,
+            ..
+        } = &line.items[0]
+        else {
             panic!("first item must be text: {:?}", line.items);
         };
         let PlacedLineItem::Glyph { x: glyph_x, .. } = &line.items[1] else {
             panic!("second item must be the glyph: {:?}", line.items);
         };
         assert!(*anchor_end);
-        assert_eq!(paren_x, glyph_x, "\"(\" must end exactly where the note starts");
+        assert_eq!(
+            paren_x, glyph_x,
+            "\"(\" must end exactly where the note starts"
+        );
         // The leading space of " = 60)" becomes an exact gap after the glyph.
         let advance = f64::from(font.glyph_advance(Glyph::MetNoteQuarterUp).unwrap());
-        let PlacedLineItem::Text { x: eq_x, text, anchor_end, .. } = &line.items[2] else {
+        let PlacedLineItem::Text {
+            x: eq_x,
+            text,
+            anchor_end,
+            ..
+        } = &line.items[2]
+        else {
             panic!("third item must be text: {:?}", line.items);
         };
         assert!(!anchor_end);
@@ -530,8 +546,12 @@ mod tests {
         let font = bravura_font();
         let normal = TextScript::above("8").layout(&font, 250.0).unwrap();
         let tiny = TextScript::above("8").tiny().layout(&font, 250.0).unwrap();
-        let PlacedLineItem::Text { font_size: n, .. } = &normal.items[0] else { panic!() };
-        let PlacedLineItem::Text { font_size: t, .. } = &tiny.items[0] else { panic!() };
+        let PlacedLineItem::Text { font_size: n, .. } = &normal.items[0] else {
+            panic!()
+        };
+        let PlacedLineItem::Text { font_size: t, .. } = &tiny.items[0] else {
+            panic!()
+        };
         assert!((n - TEXT_SCRIPT_FONT_SIZE_SS * 250.0).abs() < 1e-9);
         assert!((t / n - 2f64.powf(-2.0 / 6.0)).abs() < 1e-9);
     }
@@ -541,7 +561,12 @@ mod tests {
         let font = bravura_font();
         let line = TextScript::above("a tempo").layout(&font, 250.0).unwrap();
         assert_eq!(line.left_for(TextAlign::Left, 100.0, 300.0), 100.0);
-        assert!((line.left_for(TextAlign::Center, 100.0, 300.0) - (250.0 - line.width / 2.0)).abs() < 1e-9);
-        assert!((line.left_for(TextAlign::Right, 100.0, 300.0) - (400.0 - line.width)).abs() < 1e-9);
+        assert!(
+            (line.left_for(TextAlign::Center, 100.0, 300.0) - (250.0 - line.width / 2.0)).abs()
+                < 1e-9
+        );
+        assert!(
+            (line.left_for(TextAlign::Right, 100.0, 300.0) - (400.0 - line.width)).abs() < 1e-9
+        );
     }
 }

@@ -487,7 +487,8 @@ mod tests {
         assert_eq!(layout.lines[1].baseline_y, -700.0);
         let step = 1.2 * TEMPO_FONT_SIZE_SS * SS;
         assert!((layout.lines[0].baseline_y - (-700.0 - step)).abs() < 1e-9);
-        let PlacedLineItem::Text { font: f, .. } = layout.lines[0].line.items.last().unwrap() else {
+        let PlacedLineItem::Text { font: f, .. } = layout.lines[0].line.items.last().unwrap()
+        else {
             panic!()
         };
         assert_eq!(*f, TextFont::Upright);
@@ -499,6 +500,9 @@ mod tests {
             MetronomeNoteKind::ThirtySecond.notehead_glyph(),
             Glyph::MetNote32ndUp
         );
-        assert_eq!(MetronomeNoteKind::Whole.notehead_glyph(), Glyph::MetNoteWhole);
+        assert_eq!(
+            MetronomeNoteKind::Whole.notehead_glyph(),
+            Glyph::MetNoteWhole
+        );
     }
 }

@@ -85,7 +85,11 @@ fn main() {
 
     // 3. Combined: "Andante" dotted quarter = 72 above third note
     let l3 = layout_tempo_mark(
-        &TempoMark::metronome(MetronomeMark::bpm(MetronomeUnit::dotted(MetronomeNoteKind::Quarter), 72)).with_text("Andante"),
+        &TempoMark::metronome(MetronomeMark::bpm(
+            MetronomeUnit::dotted(MetronomeNoteKind::Quarter),
+            72,
+        ))
+        .with_text("Andante"),
         notes[2].2,
         tempo_baseline(&staff, staff_space),
         &font,

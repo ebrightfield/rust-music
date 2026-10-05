@@ -136,9 +136,13 @@ fn note_equals_note_equation_and_stacked_text() {
         )))
         .note(pitch(Note::C, 5), Duration::QTR)
         .tempo(
-            TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Half, 100).approx().parenthesized())
-                .with_text_after(TempoText::upright("Monodia"))
-                .with_text_below("Alla gavotta"),
+            TempoMark::metronome(
+                MetronomeMark::bpm(MetronomeNoteKind::Half, 100)
+                    .approx()
+                    .parenthesized(),
+            )
+            .with_text_after(TempoText::upright("Monodia"))
+            .with_text_below("Alla gavotta"),
         )
         .end_barline());
     let f = font();
@@ -159,7 +163,10 @@ fn note_equals_note_equation_and_stacked_text() {
     // line one line-step (1.2 × 1.6 ss) above it, left-aligned together.
     assert_close(gavotta.y, quarter.y);
     assert_close(half.y, gavotta.y - 1.2 * 1.6 * SS);
-    assert_close(gavotta.x, text(&out, "(").x - estimate_text_width("(", 1.6 * SS, TextFont::Bold));
+    assert_close(
+        gavotta.x,
+        text(&out, "(").x - estimate_text_width("(", 1.6 * SS, TextFont::Bold),
+    );
 }
 
 #[test]
@@ -259,7 +266,10 @@ fn rit_text_spanner_crosses_a_system_break() {
         .end_barline());
     let rit = text(&out, "rit.");
     assert_eq!(rit.style, "italic");
-    assert_eq!(texts(&out).iter().filter(|t| t.content == "rit.").count(), 1);
+    assert_eq!(
+        texts(&out).iter().filter(|t| t.content == "rit.").count(),
+        1
+    );
     let dashed: Vec<SvgLine> = lines(&out).into_iter().filter(|l| l.dashed).collect();
     assert_eq!(dashed.len(), 2, "{dashed:?}");
     let (head, tail) = (&dashed[0], &dashed[1]);
@@ -272,7 +282,10 @@ fn rit_text_spanner_crosses_a_system_break() {
         .into_iter()
         .filter(|l| !l.dashed && l.y1 == l.y2 && l.x2 - l.x1 > 20.0 * SS)
         .collect();
-    let first_top = staff_lines.iter().map(|l| l.y1).fold(f64::INFINITY, f64::min);
+    let first_top = staff_lines
+        .iter()
+        .map(|l| l.y1)
+        .fold(f64::INFINITY, f64::min);
     let second_top = staff_lines
         .iter()
         .map(|l| l.y1)
@@ -319,7 +332,11 @@ fn dim_text_spanner_follows_the_dynamics_placement() {
 fn solid_and_lineless_spanners_from_the_builder() {
     let out = svg(ScoreBuilder::new()
         .note(pitch(Note::B, 4), Duration::QTR)
-        .text_spanner_start(TextSpanner::new("secco", SpannerLine::None, Placement::Below))
+        .text_spanner_start(TextSpanner::new(
+            "secco",
+            SpannerLine::None,
+            Placement::Below,
+        ))
         .note(pitch(Note::A, 4), Duration::QTR)
         .text_spanner_end()
         .end_barline());
@@ -343,7 +360,10 @@ fn text_scripts_and_marks_attach_to_rests_and_barlines() {
     let MeasureEvent::Note(first) = &contents[0].events[0] else {
         panic!("first event must be the note");
     };
-    assert_eq!(first.annotations.text_scripts, vec![TextScript::above("1").small()]);
+    assert_eq!(
+        first.annotations.text_scripts,
+        vec![TextScript::above("1").small()]
+    );
     assert_eq!(
         first.annotations.text_marks,
         vec![TextScript::glyph(Glyph::FermataAbove, Placement::Above)]

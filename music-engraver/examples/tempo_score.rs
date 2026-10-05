@@ -30,7 +30,10 @@ fn main() {
         .measures_per_system(2)
         // Measure 1 — "Allegro" text tempo at start + metronome ♩=120
         .note(p("C", 4), Duration::QTR)
-        .tempo(TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Quarter, 132)).with_text("Allegro"))
+        .tempo(
+            TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Quarter, 132))
+                .with_text("Allegro"),
+        )
         .note(p("D", 4), Duration::QTR)
         .note(p("E", 4), Duration::QTR)
         .note(p("F", 4), Duration::QTR)
@@ -50,7 +53,10 @@ fn main() {
         .barline()
         // Measure 4 — metronome only: dotted quarter = 72
         .note(p("E", 4), Duration::QTR)
-        .tempo(TempoMark::metronome(MetronomeMark::bpm(MetronomeUnit::dotted(MetronomeNoteKind::Quarter), 72)))
+        .tempo(TempoMark::metronome(MetronomeMark::bpm(
+            MetronomeUnit::dotted(MetronomeNoteKind::Quarter),
+            72,
+        )))
         .note(p("D", 4), Duration::QTR)
         .rest(Duration::HALF)
         .end_barline()

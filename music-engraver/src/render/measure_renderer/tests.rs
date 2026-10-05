@@ -1,12 +1,10 @@
 use super::*;
 use crate::font::bravura_font;
+use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::clef::ClefLayout;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::accidental::ResolvedAccidental;
-use crate::layout::measure::{
-    layout_measure, MeasureLayoutConfig, NoteAnnotations, RestEvent,
-};
+use crate::layout::measure::{layout_measure, MeasureLayoutConfig, NoteAnnotations, RestEvent};
 use crate::layout::time_signature::TimeSignatureKind;
 use crate::render::staff_renderer::draw_staff_lines;
 use smufl::Glyph;
@@ -1179,7 +1177,6 @@ fn different_dynamics_on_notes_produce_different_svgs() {
 
 // --- tuplet group rendering ---
 
-
 // --- Rehearsal mark integration in measure renderer ---
 
 #[test]
@@ -1453,7 +1450,12 @@ fn note_with_metronome_tempo_produces_path_and_text() {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            tempo_mark: Some(crate::layout::tempo::TempoMark::metronome(crate::layout::tempo::MetronomeMark::bpm(crate::layout::tempo::MetronomeNoteKind::Quarter, 120))),
+            tempo_mark: Some(crate::layout::tempo::TempoMark::metronome(
+                crate::layout::tempo::MetronomeMark::bpm(
+                    crate::layout::tempo::MetronomeNoteKind::Quarter,
+                    120,
+                ),
+            )),
             ..Default::default()
         },
     })];
@@ -3439,5 +3441,3 @@ fn no_collision_at_third_no_offset() {
         "notes a third apart should not be offset (no collision)"
     );
 }
-
-

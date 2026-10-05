@@ -62,7 +62,15 @@ pub fn draw_grace_group(
             NoteheadStyle::Normal,
             scale,
         )?;
-        draw_ledger_lines(svg, staff, config, note.x, advance, note.staff_position, scale);
+        draw_ledger_lines(
+            svg,
+            staff,
+            config,
+            note.x,
+            advance,
+            note.staff_position,
+            scale,
+        );
         draw_dots(
             svg,
             staff,
@@ -75,7 +83,14 @@ pub fn draw_grace_group(
             false,
         )?;
         if let Some(stem) = note.stem {
-            svg.add_line(stem.x, stem.y_notehead, stem.x, stem.y_tip, "black", thickness);
+            svg.add_line(
+                stem.x,
+                stem.y_notehead,
+                stem.x,
+                stem.y_tip,
+                "black",
+                thickness,
+            );
             draw_flag(
                 svg,
                 font,

@@ -66,7 +66,8 @@ mod tests {
     fn draw_flag_eighth_down_produces_path() {
         let (font, _, _) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -200.0, -500.0, 6000.0, 2500.0);
-        let result = draw_flag(&mut svg, &font, 515.0, 1875.0, 1, StemDirection::Down, 1.0).unwrap();
+        let result =
+            draw_flag(&mut svg, &font, 515.0, 1875.0, 1, StemDirection::Down, 1.0).unwrap();
         assert!(result);
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 1);
@@ -106,7 +107,16 @@ mod tests {
         draw_flag(&mut svg_up, &font, 780.0, 125.0, 1, StemDirection::Up, 1.0).unwrap();
 
         let mut svg_down = SvgWriter::new(800.0, 200.0, -200.0, -500.0, 6000.0, 2500.0);
-        draw_flag(&mut svg_down, &font, 780.0, 125.0, 1, StemDirection::Down, 1.0).unwrap();
+        draw_flag(
+            &mut svg_down,
+            &font,
+            780.0,
+            125.0,
+            1,
+            StemDirection::Down,
+            1.0,
+        )
+        .unwrap();
 
         assert_ne!(
             svg_up.to_svg(),
@@ -128,7 +138,8 @@ mod tests {
     fn draw_flag_64th_down_produces_path() {
         let (font, _, _) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -200.0, -500.0, 6000.0, 2500.0);
-        let result = draw_flag(&mut svg, &font, 515.0, 1875.0, 4, StemDirection::Down, 1.0).unwrap();
+        let result =
+            draw_flag(&mut svg, &font, 515.0, 1875.0, 4, StemDirection::Down, 1.0).unwrap();
         assert!(result);
         assert_eq!(svg.to_svg().matches("<path ").count(), 1);
     }

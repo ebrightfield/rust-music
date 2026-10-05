@@ -135,8 +135,13 @@ pub fn layout_glissando_between_staves(
     style: GlissandoStyle,
 ) -> Option<GlissandoLayout> {
     let mut line = layout_glissando(
-        x_source, staff_pos_source, x_target, staff_pos_target,
-        source_staff, style, None,
+        x_source,
+        staff_pos_source,
+        x_target,
+        staff_pos_target,
+        source_staff,
+        style,
+        None,
     )?;
     let source_y = source_staff.y_of(staff_pos_source);
     let target_y = target_staff.y_of(staff_pos_target);
@@ -266,9 +271,9 @@ mod tests {
     fn cross_staff_dashed_endpoints_use_both_page_space_origins() {
         let upper = StaffLayout::new(0.0, 0.0, 5000.0, 250.0);
         let lower = StaffLayout::new(0.0, 2500.0, 5000.0, 250.0);
-        let down = layout_glissando_between_staves(
-            X1, 4, X2, 4, &upper, &lower, GlissandoStyle::Dashed,
-        ).unwrap();
+        let down =
+            layout_glissando_between_staves(X1, 4, X2, 4, &upper, &lower, GlissandoStyle::Dashed)
+                .unwrap();
         let source_y = upper.y_of(4);
         let target_y = lower.y_of(4);
         assert!(down.y_start > source_y && down.y_start < source_y + 125.0);
@@ -277,9 +282,9 @@ mod tests {
         assert!(down.x_end < X2);
         assert_eq!(down.style, GlissandoStyle::Dashed);
 
-        let up = layout_glissando_between_staves(
-            X1, 4, X2, 4, &lower, &upper, GlissandoStyle::Dashed,
-        ).unwrap();
+        let up =
+            layout_glissando_between_staves(X1, 4, X2, 4, &lower, &upper, GlissandoStyle::Dashed)
+                .unwrap();
         assert!(up.y_end < up.y_start);
         assert!(up.y_start < lower.y_of(4) && up.y_end > upper.y_of(4));
     }

@@ -9,10 +9,10 @@ use music::note::pitch::Pitch;
 
 use crate::error::EngraverError;
 use crate::font::{EngravingConfig, MusicFont};
-use crate::layout::barline::BarlineStyle;
-use crate::layout::group::TupletSpec;
 use crate::layout::bar_number::MeasureNumbering;
+use crate::layout::barline::BarlineStyle;
 use crate::layout::bend_gesture::{BendFragment, BendSegmentLayout, BendSegmentPhase, BendView};
+use crate::layout::group::TupletSpec;
 use crate::layout::key_signature::KeySignature;
 #[cfg(test)]
 use crate::layout::measure::MeasureLayout;
@@ -1327,7 +1327,9 @@ impl GuitarScore {
             voice: self.current_voice,
             after_group: groups.map_or(0, Vec::len),
             onset: groups.map_or(Fraction::default(), |groups| {
-                groups.iter().fold(Fraction::default(), |sum, group| sum + group.effective_ticks())
+                groups.iter().fold(Fraction::default(), |sum, group| {
+                    sum + group.effective_ticks()
+                })
             }),
             clef: ClefKind::from_clef(&clef),
             after_barline,
@@ -3347,7 +3349,10 @@ pub(crate) fn draw_guitar_tab_system(
             });
             debug_assert_eq!(
                 positioned.clone().count(),
-                groups.iter().map(|group| group.events().len()).sum::<usize>()
+                groups
+                    .iter()
+                    .map(|group| group.events().len())
+                    .sum::<usize>()
             );
             for group in groups {
                 let mut xs = Vec::with_capacity(group.events().len());
@@ -3384,7 +3389,8 @@ pub(crate) fn draw_guitar_tab_system(
                 match group {
                     GuitarGroup::Event(event) => {
                         if !matches!(event.kind, GuitarEventKind::Rest) {
-                            let duration = super::event::duration_kind_to_log2(event.duration.kind());
+                            let duration =
+                                super::event::duration_kind_to_log2(event.duration.kind());
                             if let Some(layout) =
                                 layout_tab_rhythm(tab_staff, xs[0], duration, stem_width)
                             {
@@ -3396,7 +3402,9 @@ pub(crate) fn draw_guitar_tab_system(
                         // Rests have no TAB rhythm stem. An unbeamed tuplet
                         // still has individual rhythm stems and flags, just
                         // like its ordinary standard-staff members.
-                        let beam_notes: Vec<_> = events.iter().zip(&xs)
+                        let beam_notes: Vec<_> = events
+                            .iter()
+                            .zip(&xs)
                             .filter(|(event, _)| !matches!(event.kind, GuitarEventKind::Rest))
                             .map(|(event, &x)| TabBeamedNote {
                                 x,
@@ -3416,7 +3424,10 @@ pub(crate) fn draw_guitar_tab_system(
                         } else {
                             for note in &beam_notes {
                                 if let Some(layout) = layout_tab_rhythm(
-                                    tab_staff, note.x, note.duration_log2, stem_width,
+                                    tab_staff,
+                                    note.x,
+                                    note.duration_log2,
+                                    stem_width,
                                 ) {
                                     draw_tab_rhythm(svg, &layout, font)?;
                                 }
@@ -4749,19 +4760,31 @@ mod tests {
 
         let mut guitar = GuitarScore::standard();
         guitar.set_time_signature(2, 4);
-        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
-        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
+        guitar
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
         guitar.set_voice(1);
-        guitar.note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0)
+            .unwrap();
         guitar.clef_change(Clef::Bass);
-        guitar.note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0)
+            .unwrap();
         guitar.end_barline().unwrap();
 
         let contents = guitar.notation_builder().build_measure_contents().unwrap();
-        let positions = contents[0].events.iter().filter_map(|event| match event {
-            MeasureEvent::Note(note) => Some(note.staff_position),
-            _ => None,
-        }).collect::<Vec<_>>();
+        let positions = contents[0]
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                MeasureEvent::Note(note) => Some(note.staff_position),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         assert_eq!(
             positions,
             [
@@ -4782,37 +4805,71 @@ mod tests {
         guitar.set_time_signature(1, 4);
         guitar.set_measure_numbering(MeasureNumbering::EveryBar);
         guitar.set_first_measure_number(17);
-        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
         guitar.barline().unwrap();
         guitar.time_signature_change(2, 4).unwrap();
-        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
         guitar.set_clef(Clef::Bass);
-        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
         guitar.end_barline().unwrap();
 
         let contents = guitar.notation_builder().build_measure_contents().unwrap();
-        assert_eq!(contents[0].meta.nominal_length, Some(MeasureLength::new(1, 4)));
-        assert_eq!(contents[1].meta.nominal_length, Some(MeasureLength::new(1, 2)));
+        assert_eq!(
+            contents[0].meta.nominal_length,
+            Some(MeasureLength::new(1, 4))
+        );
+        assert_eq!(
+            contents[1].meta.nominal_length,
+            Some(MeasureLength::new(1, 2))
+        );
         assert_eq!((contents[0].meta.number, contents[1].meta.number), (17, 18));
-        let first = contents[0].events.iter().find_map(|event| match event {
-            MeasureEvent::Note(note) => Some(note.staff_position),
-            _ => None,
-        }).unwrap();
-        let second_notes = contents[1].events.iter().filter_map(|event| match event {
-            MeasureEvent::Note(note) => Some(note.staff_position),
-            _ => None,
-        }).collect::<Vec<_>>();
-        assert_eq!(first, pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba));
+        let first = contents[0]
+            .events
+            .iter()
+            .find_map(|event| match event {
+                MeasureEvent::Note(note) => Some(note.staff_position),
+                _ => None,
+            })
+            .unwrap();
+        let second_notes = contents[1]
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                MeasureEvent::Note(note) => Some(note.staff_position),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            first,
+            pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba)
+        );
         assert_eq!(second_notes[0], first);
-        assert_eq!(second_notes[1], pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass));
-        assert!(matches!(contents[1].events[0], MeasureEvent::TimeSignature(_)));
+        assert_eq!(
+            second_notes[1],
+            pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass)
+        );
+        assert!(matches!(
+            contents[1].events[0],
+            MeasureEvent::TimeSignature(_)
+        ));
         assert!(contents[1].events.iter().any(|event| matches!(event,
             MeasureEvent::ClefChange(change) if change.clef == ClefKind::Bass)));
         let svg = guitar.try_render_svg().unwrap();
         assert!(svg.contains(">17</text>") && svg.contains(">18</text>"));
         let path = crate::font::bravura_font()
-            .glyph_outline(Glyph::FClefChange).unwrap().path_data;
-        assert!(svg.contains(&path), "guitar path must render the change-size F clef");
+            .glyph_outline(Glyph::FClefChange)
+            .unwrap()
+            .path_data;
+        assert!(
+            svg.contains(&path),
+            "guitar path must render the change-size F clef"
+        );
     }
 
     #[test]
@@ -4820,23 +4877,34 @@ mod tests {
         use crate::layout::system::MeasureEvent;
         let mut guitar = GuitarScore::standard();
         guitar.set_time_signature(2, 4);
-        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
         guitar.clef_change(Clef::Bass);
-        guitar.beam_group(vec![
-            spec(Pitch::new(Note::E, 4), Duration::EIGHTH, 1, 0),
-            spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
-        ]).unwrap();
+        guitar
+            .beam_group(vec![
+                spec(Pitch::new(Note::E, 4), Duration::EIGHTH, 1, 0),
+                spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
+            ])
+            .unwrap();
         guitar.end_barline().unwrap();
         let contents = guitar.notation_builder().build_measure_contents().unwrap();
-        let notes: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
-            MeasureEvent::Note(note) => Some(note.staff_position),
-            _ => None,
-        }).collect();
-        assert_eq!(notes, vec![
-            pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba),
-            pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass),
-            pitch_to_staff_position(&Pitch::new(Note::Fis, 4), &Clef::Bass),
-        ]);
+        let notes: Vec<_> = contents[0]
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                MeasureEvent::Note(note) => Some(note.staff_position),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            notes,
+            vec![
+                pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba),
+                pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass),
+                pitch_to_staff_position(&Pitch::new(Note::Fis, 4), &Clef::Bass),
+            ]
+        );
     }
 
     #[test]
@@ -4966,16 +5034,25 @@ mod tests {
     fn unbeamed_guitar_quarter_triplet_keeps_tab_stems_and_member_anchors() {
         let mut score = GuitarScore::standard();
         score.set_time_signature(2, 4);
-        let ids = score.tuplet(3, 2, vec![
-            GuitarEventSpec::Slash { duration: Duration::QTR };
-            3
-        ]).unwrap();
+        let ids = score
+            .tuplet(
+                3,
+                2,
+                vec![
+                    GuitarEventSpec::Slash {
+                        duration: Duration::QTR
+                    };
+                    3
+                ],
+            )
+            .unwrap();
         score.end_barline().unwrap();
         let notation = score.notation_builder();
         let font = crate::font::bravura_font();
         let config = font.engraving_config();
         let layout = crate::layout::system::layout_system(
-            &notation.build_prefix(), &notation.build_measure_contents().unwrap(),
+            &notation.build_prefix(),
+            &notation.build_measure_contents().unwrap(),
             &crate::layout::measure::MeasureLayoutConfig::from_staff_space(config.staff_space),
             Some(10_000.0),
         );
@@ -4983,21 +5060,41 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 12_000.0, 6000.0);
         let mut anchors = HashMap::new();
         draw_guitar_tab_system(
-            &mut svg, &font, &config, &score, &score.annotation_layout(&[(0, 1)]),
-            0, 0, 1, &layout,
+            &mut svg,
+            &font,
+            &config,
+            &score,
+            &score.annotation_layout(&[(0, 1)]),
+            0,
+            0,
+            1,
+            &layout,
             &StaffLayout::new(500.0, 1000.0, 10_000.0, config.staff_space),
-            &tab, &mut anchors,
-        ).unwrap();
+            &tab,
+            &mut anchors,
+        )
+        .unwrap();
         let visual = svg.to_svg();
         let stem = layout_tab_rhythm(&tab, 0.0, 2, config.stem_thickness_fu()).unwrap();
-        let stems = visual.lines().filter(|line| line.starts_with("  <line ")
-            && line.contains(&format!("y1=\"{}\"", stem.y_base))
-            && line.contains(&format!("y2=\"{}\"", stem.y_tip))).count();
+        let stems = visual
+            .lines()
+            .filter(|line| {
+                line.starts_with("  <line ")
+                    && line.contains(&format!("y1=\"{}\"", stem.y_base))
+                    && line.contains(&format!("y2=\"{}\"", stem.y_tip))
+            })
+            .count();
         assert_eq!(stems, 3, "quarter triplet needs three individual TAB stems");
-        assert_eq!(visual.matches("<polygon ").count(), 0, "quarter triplet must not beam TAB");
+        assert_eq!(
+            visual.matches("<polygon ").count(),
+            0,
+            "quarter triplet must not beam TAB"
+        );
         let members = rhythmic_anchor_xs(&layout.measures[0].layout);
         for (id, &x) in ids.iter().zip(&members) {
-            let expected = tab.x + layout.measures[0].x_offset + x
+            let expected = tab.x
+                + layout.measures[0].x_offset
+                + x
                 + notation_center_offset(&font, score.event(*id).unwrap()).unwrap();
             assert!((anchors[id].x - expected).abs() < 1e-9);
         }
@@ -5007,20 +5104,35 @@ mod tests {
     fn grouped_guitar_rest_keeps_standard_and_tab_slots_without_a_rest_stem() {
         let mut score = GuitarScore::standard();
         score.set_time_signature(1, 4);
-        let ids = score.tuplet(3, 2, vec![
-            GuitarEventSpec::Rest { duration: Duration::EIGHTH },
-            spec(Pitch::new(Note::E, 4), Duration::EIGHTH, 1, 0),
-            spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
-        ]).unwrap();
+        let ids = score
+            .tuplet(
+                3,
+                2,
+                vec![
+                    GuitarEventSpec::Rest {
+                        duration: Duration::EIGHTH,
+                    },
+                    spec(Pitch::new(Note::E, 4), Duration::EIGHTH, 1, 0),
+                    spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
+                ],
+            )
+            .unwrap();
         score.end_barline().unwrap();
         let notation = score.notation_builder();
         let contents = notation.build_measure_contents().unwrap();
-        assert_eq!(contents[0].events.iter().filter(|event|
-            matches!(event, crate::layout::system::MeasureEvent::Rest(_))).count(), 1);
+        assert_eq!(
+            contents[0]
+                .events
+                .iter()
+                .filter(|event| matches!(event, crate::layout::system::MeasureEvent::Rest(_)))
+                .count(),
+            1
+        );
         let font = crate::font::bravura_font();
         let config = font.engraving_config();
         let layout = crate::layout::system::layout_system(
-            &notation.build_prefix(), &contents,
+            &notation.build_prefix(),
+            &contents,
             &crate::layout::measure::MeasureLayoutConfig::from_staff_space(config.staff_space),
             Some(10_000.0),
         );
@@ -5028,19 +5140,41 @@ mod tests {
         let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 12_000.0, 6000.0);
         let mut anchors = HashMap::new();
         draw_guitar_tab_system(
-            &mut svg, &font, &config, &score, &score.annotation_layout(&[(0, 1)]),
-            0, 0, 1, &layout,
+            &mut svg,
+            &font,
+            &config,
+            &score,
+            &score.annotation_layout(&[(0, 1)]),
+            0,
+            0,
+            1,
+            &layout,
             &StaffLayout::new(500.0, 1000.0, 10_000.0, config.staff_space),
-            &tab, &mut anchors,
-        ).unwrap();
+            &tab,
+            &mut anchors,
+        )
+        .unwrap();
         let visual = svg.to_svg();
         let stem = layout_tab_rhythm(&tab, 0.0, 3, config.stem_thickness_fu()).unwrap();
-        let stems = visual.lines().filter(|line| line.starts_with("  <line ")
-            && line.contains(&format!("y1=\"{}\"", stem.y_base))
-            && line.contains(&format!("y2=\"{}\"", stem.y_tip))).count();
-        assert_eq!(stems, 2, "only the two sounding members receive TAB beam stems");
-        assert!(visual.contains("<polygon "), "their TAB beam continues across the rest slot");
-        assert!(ids.windows(2).all(|pair| anchors[&pair[0]].x < anchors[&pair[1]].x));
+        let stems = visual
+            .lines()
+            .filter(|line| {
+                line.starts_with("  <line ")
+                    && line.contains(&format!("y1=\"{}\"", stem.y_base))
+                    && line.contains(&format!("y2=\"{}\"", stem.y_tip))
+            })
+            .count();
+        assert_eq!(
+            stems, 2,
+            "only the two sounding members receive TAB beam stems"
+        );
+        assert!(
+            visual.contains("<polygon "),
+            "their TAB beam continues across the rest slot"
+        );
+        assert!(ids
+            .windows(2)
+            .all(|pair| anchors[&pair[0]].x < anchors[&pair[1]].x));
     }
 
     #[test]
@@ -5540,10 +5674,16 @@ mod tests {
 
             let notation = score.notation_builder();
             let contents = notation.build_measure_contents().unwrap();
-            let tuplet = contents[0].events.iter().find_map(|event| match event {
-                crate::layout::system::MeasureEvent::GroupMark(crate::layout::group::GroupMark::TupletStart { spec, .. }) => Some(spec),
-                _ => None,
-            }).expect("expected tuplet span");
+            let tuplet = contents[0]
+                .events
+                .iter()
+                .find_map(|event| match event {
+                    crate::layout::system::MeasureEvent::GroupMark(
+                        crate::layout::group::GroupMark::TupletStart { spec, .. },
+                    ) => Some(spec),
+                    _ => None,
+                })
+                .expect("expected tuplet span");
             let config = crate::layout::measure::MeasureLayoutConfig::from_staff_space(
                 crate::font::bravura_font().engraving_config().staff_space,
             );
@@ -6107,11 +6247,17 @@ mod tests {
         score.end_barline().unwrap();
 
         let contents = score.notation_builder().build_measure_contents().unwrap();
-        let members: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
-            crate::layout::system::MeasureEvent::Note(n) => Some((1, &n.annotations)),
-            crate::layout::system::MeasureEvent::Chord(c) => Some((c.staff_positions.len(), &c.annotations)),
-            _ => None,
-        }).collect();
+        let members: Vec<_> = contents[0]
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                crate::layout::system::MeasureEvent::Note(n) => Some((1, &n.annotations)),
+                crate::layout::system::MeasureEvent::Chord(c) => {
+                    Some((c.staff_positions.len(), &c.annotations))
+                }
+                _ => None,
+            })
+            .collect();
         assert_eq!(members.len(), 5);
         assert_eq!(members[0].0, 2, "dead attack retains both standard heads");
         assert_eq!(members[0].1.notehead_styles, vec![NoteheadStyle::X; 2]);
@@ -6390,9 +6536,17 @@ mod tests {
         score.end_barline().unwrap();
 
         let contents = score.notation_builder().build_measure_contents().unwrap();
-        let members: Vec<_> = contents[0].events.iter().filter(|event| {
-            matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
-        }).collect();
+        let members: Vec<_> = contents[0]
+            .events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    crate::layout::system::MeasureEvent::Note(_)
+                        | crate::layout::system::MeasureEvent::Chord(_)
+                )
+            })
+            .collect();
         let crate::layout::system::MeasureEvent::Chord(first) = members[0] else {
             panic!("realized chord remains a chord inside the beam");
         };
@@ -6626,9 +6780,17 @@ mod tests {
             panic!("multi-string dead attack projects as a chord");
         };
         assert!(dead_chord.accidentals.iter().all(Option::is_none));
-        let projected: Vec<_> = contents[0].events.iter().filter(|event| {
-            matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
-        }).collect();
+        let projected: Vec<_> = contents[0]
+            .events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    crate::layout::system::MeasureEvent::Note(_)
+                        | crate::layout::system::MeasureEvent::Chord(_)
+                )
+            })
+            .collect();
         let crate::layout::system::MeasureEvent::Chord(group_chord) = projected[2] else {
             panic!("dead attack remains a chord in the beam");
         };
@@ -6664,10 +6826,21 @@ mod tests {
             .note(Pitch::new(Note::B, 4), Duration::QTR, 1, 7)
             .unwrap();
         flat_key.end_barline().unwrap();
-        let flat_contents = flat_key.notation_builder().build_measure_contents().unwrap();
-        let projected: Vec<_> = flat_contents[0].events.iter().filter(|event| {
-            matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
-        }).collect();
+        let flat_contents = flat_key
+            .notation_builder()
+            .build_measure_contents()
+            .unwrap();
+        let projected: Vec<_> = flat_contents[0]
+            .events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    crate::layout::system::MeasureEvent::Note(_)
+                        | crate::layout::system::MeasureEvent::Chord(_)
+                )
+            })
+            .collect();
         assert_eq!(projected.len(), 5);
         for event in &projected[..4] {
             let crate::layout::system::MeasureEvent::Note(note) = event else {

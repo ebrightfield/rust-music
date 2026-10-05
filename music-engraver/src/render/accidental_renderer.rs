@@ -240,8 +240,10 @@ mod tests {
     fn column_offset_moves_the_accidental_left_by_exactly_the_offset() {
         let (font, _, staff) = setup();
         let sharp = ResolvedAccidental::plain(Glyph::AccidentalSharp);
-        let near = draw_accidental(&mut writer(), &staff, &font, 500.0, 0.0, 4, sharp, 1.0).unwrap();
-        let far = draw_accidental(&mut writer(), &staff, &font, 500.0, 274.0, 4, sharp, 1.0).unwrap();
+        let near =
+            draw_accidental(&mut writer(), &staff, &font, 500.0, 0.0, 4, sharp, 1.0).unwrap();
+        let far =
+            draw_accidental(&mut writer(), &staff, &font, 500.0, 274.0, 4, sharp, 1.0).unwrap();
         assert_eq!(near - far, 274.0);
     }
 

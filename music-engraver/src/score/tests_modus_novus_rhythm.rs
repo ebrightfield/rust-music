@@ -1101,9 +1101,13 @@ fn mn_c11_r029_spacer_end_uses_exact_intra_note_onset() {
     let bars = measures(&score);
     assert_eq!(bars[0].meta.actual_length, length(1, 1));
     let secondary = &bars[0].additional_voices[0];
-    let MeasureEvent::Spacer(prelude) = &secondary[1] else { panic!("first eighth") };
+    let MeasureEvent::Spacer(prelude) = &secondary[1] else {
+        panic!("first eighth")
+    };
     assert!(!prelude.annotations.hairpin_end);
-    let MeasureEvent::Spacer(end) = &secondary[2] else { panic!("second eighth ends span") };
+    let MeasureEvent::Spacer(end) = &secondary[2] else {
+        panic!("second eighth ends span")
+    };
     assert_eq!(end.duration_log2, Some(3));
     assert!(end.annotations.hairpin_end && end.annotations.text_spanner_end);
 
@@ -1118,31 +1122,63 @@ fn mn_c11_r029_spacer_end_uses_exact_intra_note_onset() {
     let page = page(&score);
     let system = &page.systems[0].system;
     let primary = &system.measures[0].layout.elements;
-    let last_note_x = primary.iter().filter_map(|e| matches!(e.element, MeasureElement::Note(_)).then_some(e.x)).last().unwrap();
+    let last_note_x = primary
+        .iter()
+        .filter_map(|e| matches!(e.element, MeasureElement::Note(_)).then_some(e.x))
+        .last()
+        .unwrap();
     let secondary = &system.measures[0].additional_voice_layouts[0].elements;
-    let spacer_x = secondary.iter().find_map(|e| match &e.element {
-        MeasureElement::Spacer(s) if s.annotations.hairpin_end => Some(e.x),
-        _ => None,
-    }).unwrap();
+    let spacer_x = secondary
+        .iter()
+        .find_map(|e| match &e.element {
+            MeasureElement::Spacer(s) if s.annotations.hairpin_end => Some(e.x),
+            _ => None,
+        })
+        .unwrap();
     let barline_x = system.measures[0].layout.closing_barline_x();
-    assert!(last_note_x < spacer_x && spacer_x < barline_x, "the 7/8 stop precedes bar end");
+    assert!(
+        last_note_x < spacer_x && spacer_x < barline_x,
+        "the 7/8 stop precedes bar end"
+    );
     let hp = collect_hairpin_note_info(system);
     let text = collect_text_spanner_note_info(system);
-    assert_eq!(hp.iter().find(|e| e.hairpin_end).unwrap().x, system.measures[0].x_offset + spacer_x);
-    assert_eq!(text.iter().find(|e| e.end).unwrap().x, system.measures[0].x_offset + spacer_x);
+    assert_eq!(
+        hp.iter().find(|e| e.hairpin_end).unwrap().x,
+        system.measures[0].x_offset + spacer_x
+    );
+    assert_eq!(
+        text.iter().find(|e| e.end).unwrap().x,
+        system.measures[0].x_offset + spacer_x
+    );
 
     let svg = score.render_svg();
-    assert!(svg.contains(">dim</text>") || svg.contains(">dim.</text>"), "text span label");
-    let x2 = svg.lines().filter(|line| line.contains("<line ") && line.contains(" x2=\""))
+    assert!(
+        svg.contains(">dim</text>") || svg.contains(">dim.</text>"),
+        "text span label"
+    );
+    let x2 = svg
+        .lines()
+        .filter(|line| line.contains("<line ") && line.contains(" x2=\""))
         .filter_map(|line| {
             let x1 = line_attr(line, "x1");
             let x2 = line_attr(line, "x2");
             (x1 < x2 && line_attr(line, "y1") != line_attr(line, "y2")).then_some(x2)
-        }).next().expect("rendered wedge");
+        })
+        .next()
+        .expect("rendered wedge");
     let expected = page.systems[0].x + hp.iter().find(|e| e.hairpin_end).unwrap().x - 0.3 * 250.0;
-    assert!((x2 - expected).abs() < 0.02, "wedge SVG endpoint {x2} vs 7/8 onset {expected}");
-    let rest = crate::font::bravura_font().glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data;
-    assert!(!svg.contains(&rest), "invisible eighths must not render as eighth rests");
+    assert!(
+        (x2 - expected).abs() < 0.02,
+        "wedge SVG endpoint {x2} vs 7/8 onset {expected}"
+    );
+    let rest = crate::font::bravura_font()
+        .glyph_outline(smufl::Glyph::Rest8th)
+        .unwrap()
+        .path_data;
+    assert!(
+        !svg.contains(&rest),
+        "invisible eighths must not render as eighth rests"
+    );
     #[cfg(feature = "png")]
     if let Ok(path) = std::env::var("SPANNER_ANCHOR_VISUAL_OUT") {
         let mut renderer = crate::render::png::PngRenderer::new(1.5);
@@ -1162,26 +1198,43 @@ fn mn_c11_r015_zero_duration_final_anchor_is_not_a_note_or_rest() {
         .time_signature(3, 4)
         .note(p(Note::D, 4), dotted(DurationKind::Half))
         .decresc()
-        .spanner_anchor().hairpin_end()
+        .spanner_anchor()
+        .hairpin_end()
         .end_barline();
     let bars = measures(&score);
     assert_eq!(bars[0].meta.actual_length, length(3, 4));
-    let MeasureEvent::Spacer(anchor) = &bars[0].events[1] else { panic!("zero-duration endpoint") };
+    let MeasureEvent::Spacer(anchor) = &bars[0].events[1] else {
+        panic!("zero-duration endpoint")
+    };
     assert_eq!(anchor.duration_log2, None);
     assert!(anchor.annotations.hairpin_end);
     let ticks = event::measure_timeline(&score.measures[0].events, &[], Some(length(3, 4)));
     assert_eq!(ticks.to_length(ticks.onsets[1]), length(3, 4));
     let page = page(&score);
     let layout = &page.systems[0].system.measures[0].layout;
-    let spacer = layout.elements.iter().find(|el| matches!(el.element, MeasureElement::Spacer(_))).unwrap();
+    let spacer = layout
+        .elements
+        .iter()
+        .find(|el| matches!(el.element, MeasureElement::Spacer(_)))
+        .unwrap();
     assert_eq!((spacer.width, spacer.rod, spacer.spring), (0.0, 0.0, 0.0));
     let info = collect_hairpin_note_info(&page.systems[0].system);
     assert!(info[1].is_spacer && info[1].x > info[0].x);
     let svg = score.render_svg();
     let font = crate::font::bravura_font();
-    let head = font.glyph_outline(smufl::Glyph::NoteheadHalf).unwrap().path_data;
-    let rest = font.glyph_outline(smufl::Glyph::RestHalf).unwrap().path_data;
-    assert_eq!(svg.matches(&head).count(), 1, "only the actual sounding half notehead");
+    let head = font
+        .glyph_outline(smufl::Glyph::NoteheadHalf)
+        .unwrap()
+        .path_data;
+    let rest = font
+        .glyph_outline(smufl::Glyph::RestHalf)
+        .unwrap()
+        .path_data;
+    assert_eq!(
+        svg.matches(&head).count(),
+        1,
+        "only the actual sounding half notehead"
+    );
     assert!(!svg.contains(&rest), "anchor must not draw a rest");
 }
 
@@ -1192,12 +1245,19 @@ fn intra_quarter_hairpin_end_differs_from_next_note_shared_column() {
     let build = |on_spacer: bool| {
         let mut score = ScoreBuilder::new()
             .time_signature(2, 4)
-            .note(p(Note::E, 5), Duration::QTR).cresc()
+            .note(p(Note::E, 5), Duration::QTR)
+            .cresc()
             .note(p(Note::F, 5), Duration::QTR);
-        if !on_spacer { score = score.hairpin_end(); }
-        score = score.voice(1).spacer(Duration::EIGHTH)
+        if !on_spacer {
+            score = score.hairpin_end();
+        }
+        score = score
+            .voice(1)
+            .spacer(Duration::EIGHTH)
             .spacer(Duration::EIGHTH);
-        if on_spacer { score = score.hairpin_end(); }
+        if on_spacer {
+            score = score.hairpin_end();
+        }
         score.spacer(Duration::QTR).end_barline()
     };
     let inside = build(true);
@@ -1206,22 +1266,44 @@ fn intra_quarter_hairpin_end_differs_from_next_note_shared_column() {
     let b = page(&next_note);
     let sa = &a.systems[0].system;
     let sb = &b.systems[0].system;
-    let a_end = collect_hairpin_note_info(sa).into_iter().find(|e| e.hairpin_end).unwrap();
-    let b_end = collect_hairpin_note_info(sb).into_iter().find(|e| e.hairpin_end).unwrap();
+    let a_end = collect_hairpin_note_info(sa)
+        .into_iter()
+        .find(|e| e.hairpin_end)
+        .unwrap();
+    let b_end = collect_hairpin_note_info(sb)
+        .into_iter()
+        .find(|e| e.hairpin_end)
+        .unwrap();
     assert!(a_end.is_spacer && !b_end.is_spacer);
-    let a_next_x = sa.measures[0].layout.elements.iter()
+    let a_next_x = sa.measures[0]
+        .layout
+        .elements
+        .iter()
         .filter_map(|e| matches!(e.element, MeasureElement::Note(_)).then_some(e.x))
-        .nth(1).unwrap() + sa.measures[0].x_offset;
+        .nth(1)
+        .unwrap()
+        + sa.measures[0].x_offset;
     assert!(a_end.x < a_next_x, "1/8 is inside sustained quarter");
-    assert_eq!(b_end.x, sb.measures[0].layout.elements.iter()
-        .filter_map(|e| matches!(e.element, MeasureElement::Note(_)).then_some(e.x))
-        .nth(1).unwrap() + sb.measures[0].x_offset);
+    assert_eq!(
+        b_end.x,
+        sb.measures[0]
+            .layout
+            .elements
+            .iter()
+            .filter_map(|e| matches!(e.element, MeasureElement::Note(_)).then_some(e.x))
+            .nth(1)
+            .unwrap()
+            + sb.measures[0].x_offset
+    );
     let font = crate::font::bravura_font();
     let padding = 0.3 * 250.0;
     let a_target = a_end.hairpin_end_x(&font, 250.0, Placement::Below).unwrap();
     let b_target = b_end.hairpin_end_x(&font, 250.0, Placement::Below).unwrap();
     assert!((a_target - (a_end.x - padding)).abs() < 1e-9);
-    assert!(a_target < b_target, "shared-column endpoints must be numerically distinct");
+    assert!(
+        a_target < b_target,
+        "shared-column endpoints must be numerically distinct"
+    );
     let svg = inside.render_svg();
     let rest = font.glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data;
     assert!(!svg.contains(&rest));
@@ -1242,7 +1324,8 @@ fn invisible_onset_endings_survive_system_break_with_visible_marks_only() {
         .text_spanner_start(TextSpanner::rit())
         .barline()
         .spacer(Duration::EIGHTH)
-        .hairpin_end().text_spanner_end()
+        .hairpin_end()
+        .text_spanner_end()
         .dynamic(Dynamic::Piano)
         .text_script(crate::layout::text_script::TextScript::above("fine"))
         .note(p(Note::C, 5), Duration::QTR)
@@ -1255,29 +1338,55 @@ fn invisible_onset_endings_survive_system_break_with_visible_marks_only() {
     let text = collect_text_spanner_note_info(target);
     assert!(hp[0].is_spacer && hp[0].hairpin_end);
     assert!(text[0].is_spacer && text[0].end);
-    let x = target.measures[0].layout.elements.iter()
-        .find_map(|e| matches!(e.element, MeasureElement::Spacer(_)).then_some(e.x)).unwrap()
+    let x = target.measures[0]
+        .layout
+        .elements
+        .iter()
+        .find_map(|e| matches!(e.element, MeasureElement::Spacer(_)).then_some(e.x))
+        .unwrap()
         + target.measures[0].x_offset;
     assert_eq!(hp[0].x, x);
     assert_eq!(text[0].x, x);
     let svg = score.render_svg();
     assert!(svg.contains(">fine</text>") && svg.contains(">rit.</text>"));
-    assert_eq!(svg.matches("stroke-dasharray").count(), 4, "text line on both systems and dashed incoming hairpin");
-    let dashed: Vec<_> = svg.lines()
+    assert_eq!(
+        svg.matches("stroke-dasharray").count(),
+        4,
+        "text line on both systems and dashed incoming hairpin"
+    );
+    let dashed: Vec<_> = svg
+        .lines()
         .filter(|line| line.contains("<line ") && line.contains("stroke-dasharray"))
         .collect();
-    let text_end = dashed.iter()
+    let text_end = dashed
+        .iter()
         .filter(|line| line_attr(line, "y1") == line_attr(line, "y2"))
-        .map(|line| line_attr(line, "x2")).last().unwrap();
-    let hairpin_end = dashed.iter()
+        .map(|line| line_attr(line, "x2"))
+        .last()
+        .unwrap();
+    let hairpin_end = dashed
+        .iter()
         .filter(|line| line_attr(line, "y1") != line_attr(line, "y2"))
-        .map(|line| line_attr(line, "x2")).last().unwrap();
+        .map(|line| line_attr(line, "x2"))
+        .last()
+        .unwrap();
     let expected_text = page.systems[1].x + x - 0.3 * 250.0;
     let expected_hairpin = page.systems[1].x
-        + hp[0].hairpin_end_x(&crate::font::bravura_font(), 250.0, Placement::Below).unwrap();
-    assert!((text_end - expected_text).abs() < 0.02, "text continuation ends at spacer onset");
-    assert!((hairpin_end - expected_hairpin).abs() < 0.02, "wedge clears spacer dynamic at same onset");
-    let rest = crate::font::bravura_font().glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data;
+        + hp[0]
+            .hairpin_end_x(&crate::font::bravura_font(), 250.0, Placement::Below)
+            .unwrap();
+    assert!(
+        (text_end - expected_text).abs() < 0.02,
+        "text continuation ends at spacer onset"
+    );
+    assert!(
+        (hairpin_end - expected_hairpin).abs() < 0.02,
+        "wedge clears spacer dynamic at same onset"
+    );
+    let rest = crate::font::bravura_font()
+        .glyph_outline(smufl::Glyph::Rest8th)
+        .unwrap()
+        .path_data;
     assert!(!svg.contains(&rest));
 }
 
@@ -1302,33 +1411,55 @@ fn tupled_invisible_stop_preserves_performed_rational_onsets() {
         .begin_tuplet(TupletSpec::new(3, 2))
         .note(p(Note::B, 4), Duration::QTR)
         .text_spanner_start(TextSpanner::dim())
-        .spacer(Duration::EIGHTH).text_spanner_end()
+        .spacer(Duration::EIGHTH)
+        .text_spanner_end()
         .spacer(Duration::EIGHTH)
         .end_tuplet()
         .note(p(Note::C, 5), Duration::QTR)
         .end_barline();
     assert_eq!(measures(&score)[0].meta.actual_length, length(7, 12));
     let ticks = event::measure_timeline(&score.measures[0].events, &[], Some(length(7, 12)));
-    let actual = score.measures[0].events.iter().zip(ticks.onsets.iter())
-        .find_map(|((_, event), &tick)| matches!(event,
+    let actual = score.measures[0]
+        .events
+        .iter()
+        .zip(ticks.onsets.iter())
+        .find_map(|((_, event), &tick)| {
+            matches!(event,
             event::ScoreEvent::Spacer { annotations, .. } if annotations.text_spanner_end)
-            .then_some(ticks.to_length(tick))).unwrap();
+            .then_some(ticks.to_length(tick))
+        })
+        .unwrap();
     assert_eq!(actual, length(1, 6));
     let page = page(&score);
     let layout = &page.systems[0].system.measures[0].layout;
-    let stop_x = layout.elements.iter().find_map(|e| match &e.element {
-        MeasureElement::Spacer(s) if s.annotations.text_spanner_end => Some(e.x),
-        _ => None,
-    }).unwrap();
-    let next_note_x = layout.elements.iter().filter_map(|e|
-        matches!(e.element, MeasureElement::Note(_)).then_some(e.x)).nth(1).unwrap();
+    let stop_x = layout
+        .elements
+        .iter()
+        .find_map(|e| match &e.element {
+            MeasureElement::Spacer(s) if s.annotations.text_spanner_end => Some(e.x),
+            _ => None,
+        })
+        .unwrap();
+    let next_note_x = layout
+        .elements
+        .iter()
+        .filter_map(|e| matches!(e.element, MeasureElement::Note(_)).then_some(e.x))
+        .nth(1)
+        .unwrap();
     assert!(stop_x < next_note_x);
     let scan = scan_groups(layout.elements.iter().map(|e| &e.element));
-    let note_index = layout.elements.iter().enumerate()
+    let note_index = layout
+        .elements
+        .iter()
+        .enumerate()
         .filter(|(_, e)| matches!(e.element, MeasureElement::Note(_)))
-        .map(|(i, _)| i).nth(1).unwrap();
-    assert!((scan.onsets[note_index] - 1.0 / 3.0).abs() < 1e-9,
-        "the following note starts at performed third despite invisible tuplet members");
+        .map(|(i, _)| i)
+        .nth(1)
+        .unwrap();
+    assert!(
+        (scan.onsets[note_index] - 1.0 / 3.0).abs() < 1e-9,
+        "the following note starts at performed third despite invisible tuplet members"
+    );
 }
 
 #[test]

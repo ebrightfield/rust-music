@@ -48,14 +48,20 @@ use super::guitar::{
 use super::ScoreBuilder;
 #[path = "cross_staff.rs"]
 mod cross_staff;
-use cross_staff::{draw_cross_staff_glissandos, distribute_voice, CrossStaffGlissando};
+use cross_staff::{distribute_voice, draw_cross_staff_glissandos, CrossStaffGlissando};
 
 /// Invalid placement of a continuous voice among the score's staves.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum CrossStaffError {
     /// An event targets a stave that does not exist.
-    #[error("cross-staff event {event} targets stave {staff}, but this score has {staff_count} staves")]
-    InvalidStaff { event: usize, staff: usize, staff_count: usize },
+    #[error(
+        "cross-staff event {event} targets stave {staff}, but this score has {staff_count} staves"
+    )]
+    InvalidStaff {
+        event: usize,
+        staff: usize,
+        staff_count: usize,
+    },
     /// Only one continuous (primary) voice may be routed across staves.
     #[error("cross-staff event {event} uses voice {voice}; expected voice 0")]
     InvalidVoice { event: usize, voice: u8 },
@@ -609,7 +615,9 @@ impl MultiStaffScore {
             .zip(&laid_out_systems)
             .map(|(system_gaps, systems)| {
                 // The shared grid assigns the same staff width to every stave.
-                let width = systems.first().map_or(sys_width, |system| system.staff_width);
+                let width = systems
+                    .first()
+                    .map_or(sys_width, |system| system.staff_width);
                 layout_multi_staff_with_gaps(&group, 0.0, staff_space, width, system_gaps)
             })
             .collect();
@@ -718,15 +726,23 @@ impl MultiStaffScore {
                 .filter_map(|staves| staves.last().map(|&(_, below)| below))
                 .fold(0.0_f64, f64::max);
             let first_notes = if self.cross_staff_breaks.is_some() {
-                laid_out_systems.iter().filter_map(|s| s.first())
+                laid_out_systems
+                    .iter()
+                    .filter_map(|s| s.first())
                     .map(|s| cross_staff::outer_note_extent_ss(s).0)
                     .fold(0.0_f64, f64::max)
-            } else { 0.0 };
+            } else {
+                0.0
+            };
             let last_notes = if self.cross_staff_breaks.is_some() {
-                laid_out_systems.iter().filter_map(|s| s.last())
+                laid_out_systems
+                    .iter()
+                    .filter_map(|s| s.last())
                     .map(|s| cross_staff::outer_note_extent_ss(s).1)
                     .fold(0.0_f64, f64::max)
-            } else { 0.0 };
+            } else {
+                0.0
+            };
             let numbers = if self.measure_numbering == MeasureNumbering::Hidden {
                 0.0
             } else {

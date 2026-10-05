@@ -192,7 +192,9 @@ mod tests {
         // Position 12 (two ledger lines above), stem down:
         // default tip = 12-7=5, which is > 4, so needs extension
         // need tip at 4: length = (12-4)/2 = 4.0 staff spaces
-        assert!((stem_length_staff_spaces(12, StemDirection::Down, 1.0) - 4.0).abs() < f64::EPSILON);
+        assert!(
+            (stem_length_staff_spaces(12, StemDirection::Down, 1.0) - 4.0).abs() < f64::EPSILON
+        );
     }
 
     #[test]

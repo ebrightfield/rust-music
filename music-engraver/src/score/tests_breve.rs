@@ -94,7 +94,8 @@ fn breve_members_of_a_tuplet_span_keep_breve_log2() {
     let events = &contents[0].events;
     assert_eq!(member_log2s(events), vec![BREVE_LOG2; 6]);
     assert!(
-        matches!(events[5], MeasureEvent::GroupMark(_)) && matches!(events[7], MeasureEvent::Chord(_)),
+        matches!(events[5], MeasureEvent::GroupMark(_))
+            && matches!(events[7], MeasureEvent::Chord(_)),
         "the chord member stays a chord inside the span: {events:?}"
     );
 }

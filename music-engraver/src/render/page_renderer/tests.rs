@@ -1474,7 +1474,9 @@ fn within_system_hairpin_emits_no_dasharray() {
 
 // --- cross-system dashed-text crescendo (cresc-text) tests ---
 
-use crate::layout::text_spanner::{TextSpanner, TEXT_SPANNER_DASH_GAP_SS, TEXT_SPANNER_DASH_LENGTH_SS};
+use crate::layout::text_spanner::{
+    TextSpanner, TEXT_SPANNER_DASH_GAP_SS, TEXT_SPANNER_DASH_LENGTH_SS,
+};
 
 fn text_spanner_start_note(pos: i8, kind: TextSpanner) -> MeasureEvent {
     MeasureEvent::Note(NoteEvent {

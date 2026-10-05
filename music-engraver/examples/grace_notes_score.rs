@@ -23,22 +23,40 @@ fn main() {
         .measures_per_system(2)
         // Measure 1: acciaccatura grace notes (slashed)
         .note(Pitch::new(Note::E, 4), Duration::QTR)
-        .grace_notes(single_grace(Pitch::new(Note::D, 4), GraceNoteKind::Acciaccatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::D, 4),
+            GraceNoteKind::Acciaccatura,
+        ))
         .note(Pitch::new(Note::G, 4), Duration::QTR)
-        .grace_notes(single_grace(Pitch::new(Note::Fis, 4), GraceNoteKind::Acciaccatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::Fis, 4),
+            GraceNoteKind::Acciaccatura,
+        ))
         .note(Pitch::new(Note::A, 4), Duration::HALF)
         .barline()
         // Measure 2: appoggiatura grace notes (no slash)
         .note(Pitch::new(Note::C, 5), Duration::HALF)
-        .grace_notes(single_grace(Pitch::new(Note::B, 4), GraceNoteKind::Appoggiatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::B, 4),
+            GraceNoteKind::Appoggiatura,
+        ))
         .note(Pitch::new(Note::D, 5), Duration::HALF)
-        .grace_notes(single_grace(Pitch::new(Note::Cis, 5), GraceNoteKind::Appoggiatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::Cis, 5),
+            GraceNoteKind::Appoggiatura,
+        ))
         .barline()
         // Measure 3: grace notes on low and high notes
         .note(Pitch::new(Note::C, 4), Duration::QTR)
-        .grace_notes(single_grace(Pitch::new(Note::B, 3), GraceNoteKind::Acciaccatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::B, 3),
+            GraceNoteKind::Acciaccatura,
+        ))
         .note(Pitch::new(Note::A, 5), Duration::QTR)
-        .grace_notes(single_grace(Pitch::new(Note::G, 5), GraceNoteKind::Acciaccatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::G, 5),
+            GraceNoteKind::Acciaccatura,
+        ))
         .note(Pitch::new(Note::F, 4), Duration::HALF)
         .barline()
         // Measure 4: grace note on a chord + rest (rest should be no-op)
@@ -50,10 +68,16 @@ fn main() {
             ],
             Duration::HALF,
         )
-        .grace_notes(single_grace(Pitch::new(Note::B, 3), GraceNoteKind::Acciaccatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::B, 3),
+            GraceNoteKind::Acciaccatura,
+        ))
         .rest(Duration::QTR)
         // Grace note on rest — should be no-op
-        .grace_notes(single_grace(Pitch::new(Note::A, 4), GraceNoteKind::Acciaccatura))
+        .grace_notes(single_grace(
+            Pitch::new(Note::A, 4),
+            GraceNoteKind::Acciaccatura,
+        ))
         .note(Pitch::new(Note::D, 4), Duration::QTR)
         .end_barline()
         .render_svg();
@@ -61,7 +85,6 @@ fn main() {
     std::fs::create_dir_all("music-engraver/examples/output").ok();
     std::fs::write("music-engraver/examples/output/grace_notes_score.svg", &svg)
         .expect("write SVG");
-
 
     let path_count = svg.matches("<path").count();
     let line_count = svg.matches("<line").count();
@@ -71,5 +94,4 @@ fn main() {
         path_count,
         line_count
     );
-
 }

@@ -89,7 +89,16 @@ pub fn draw_notehead(
     position: StaffPosition,
     kind: NoteheadKind,
 ) -> Result<f64, FontError> {
-    draw_styled_notehead(svg, staff, font, x, position, kind, NoteheadStyle::Normal, 1.0)
+    draw_styled_notehead(
+        svg,
+        staff,
+        font,
+        x,
+        position,
+        kind,
+        NoteheadStyle::Normal,
+        1.0,
+    )
 }
 
 /// Return the actual font advance for a duration-aware semantic notehead.
@@ -144,7 +153,11 @@ pub fn draw_notehead_parentheses(
     let y = staff.y_of(position);
     let left = font.glyph_outline(Glyph::NoteheadParenthesisLeft)?;
     let open_x = left_x - left.advance_width as f64 * scale;
-    svg.add_path(&left.path_data, "black", Some(&glyph_transform(open_x, y, scale)));
+    svg.add_path(
+        &left.path_data,
+        "black",
+        Some(&glyph_transform(open_x, y, scale)),
+    );
     let right = font.glyph_outline(Glyph::NoteheadParenthesisRight)?;
     let right_transform = glyph_transform(right_x, y, scale);
     svg.add_path(&right.path_data, "black", Some(&right_transform));
@@ -641,9 +654,7 @@ mod tests {
             .glyph_outline(Glyph::NoteheadParenthesisRight)
             .unwrap()
             .path_data;
-        let left_advance = font
-            .glyph_advance(Glyph::NoteheadParenthesisLeft)
-            .unwrap() as f64;
+        let left_advance = font.glyph_advance(Glyph::NoteheadParenthesisLeft).unwrap() as f64;
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
         let advance = draw_styled_notehead(
             &mut svg,
@@ -656,8 +667,7 @@ mod tests {
             1.0,
         )
         .unwrap();
-        draw_notehead_parentheses(&mut svg, &staff, &font, 500.0, 500.0 + advance, 4, 1.0)
-            .unwrap();
+        draw_notehead_parentheses(&mut svg, &staff, &font, 500.0, 500.0 + advance, 4, 1.0).unwrap();
         let output = svg.to_svg();
         assert!(output.contains(&selected));
         assert!(output.contains(&left));

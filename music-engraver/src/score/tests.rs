@@ -1,9 +1,9 @@
 use super::*;
 use crate::layout::dynamics::Dynamic;
-use crate::layout::tempo::MetronomeMark;
-use crate::layout::text_script::TextScript;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::stem::StemDirection;
+use crate::layout::tempo::MetronomeMark;
+use crate::layout::text_script::TextScript;
 use crate::layout::tremolo::TremoloCount;
 use music::note::note::Note;
 
@@ -1389,7 +1389,6 @@ fn multiple_dynamics_in_score() {
 
 // --- tuplet support in ScoreBuilder ---
 
-
 #[test]
 fn tuplet_differs_from_beam_group() {
     let notes = vec![
@@ -2238,10 +2237,7 @@ fn convert_event_preserves_cresc_text_fields() {
     let result = convert_event(&event, &clef, &builder.key_sig, None);
     match result {
         MeasureEvent::Note(n) => {
-            assert_eq!(
-                n.annotations.text_spanner_start,
-                Some(TextSpanner::dim())
-            );
+            assert_eq!(n.annotations.text_spanner_start, Some(TextSpanner::dim()));
             assert!(!n.annotations.text_spanner_end);
         }
         _ => panic!("expected Note"),
@@ -2287,10 +2283,7 @@ fn chord_cresc_text_preserved_in_convert() {
     let result = convert_event(&event, &clef, &builder.key_sig, None);
     match result {
         MeasureEvent::Chord(c) => {
-            assert_eq!(
-                c.annotations.text_spanner_start,
-                Some(TextSpanner::cresc())
-            );
+            assert_eq!(c.annotations.text_spanner_start, Some(TextSpanner::cresc()));
             assert!(!c.annotations.text_spanner_end);
         }
         _ => panic!("expected Chord"),
@@ -2499,7 +2492,10 @@ fn tempo_metronome_adds_bpm_to_svg() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .note(p("C", 4), Duration::QTR)
-        .tempo(TempoMark::metronome(MetronomeMark::bpm(crate::layout::tempo::MetronomeNoteKind::Quarter, 120)))
+        .tempo(TempoMark::metronome(MetronomeMark::bpm(
+            crate::layout::tempo::MetronomeNoteKind::Quarter,
+            120,
+        )))
         .rest(Duration::new(DurationKind::Half, 1))
         .end_barline()
         .render_svg();
@@ -2541,10 +2537,7 @@ fn convert_event_preserves_tempo_mark() {
     let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
     match result {
         MeasureEvent::Note(n) => {
-            assert_eq!(
-                n.annotations.tempo_mark,
-                Some(TempoMark::text("Largo"))
-            );
+            assert_eq!(n.annotations.tempo_mark, Some(TempoMark::text("Largo")));
         }
         _ => panic!("expected Note"),
     }
@@ -2558,7 +2551,10 @@ fn tracked_convert_preserves_tempo_mark() {
         pitch: p("D", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            tempo_mark: Some(TempoMark::metronome(MetronomeMark::bpm(crate::layout::tempo::MetronomeNoteKind::Quarter, 60))),
+            tempo_mark: Some(TempoMark::metronome(MetronomeMark::bpm(
+                crate::layout::tempo::MetronomeNoteKind::Quarter,
+                60,
+            ))),
             ..NoteAnnotations::default()
         },
     };
@@ -2585,10 +2581,7 @@ fn chord_convert_preserves_tempo_mark() {
     let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
     match result {
         MeasureEvent::Chord(c) => {
-            assert_eq!(
-                c.annotations.tempo_mark,
-                Some(TempoMark::text("Adagio"))
-            );
+            assert_eq!(c.annotations.tempo_mark, Some(TempoMark::text("Adagio")));
         }
         _ => panic!("expected Chord"),
     }
@@ -2973,7 +2966,6 @@ fn stack_long_fermata_with_staccato_adds_two_paths() {
         count_with,
     );
 }
-
 
 #[test]
 fn stacked_articulations_add_two_paths() {
@@ -5459,10 +5451,14 @@ fn multi_voice_beam_group_forces_stems() {
         .end_barline();
     let contents = builder.build_measure_contents().unwrap();
     // Every stemmed member of voice 0's beam points up in a multi-voice measure.
-    let members: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
-        MeasureEvent::Note(note) => Some(note.stem_direction),
-        _ => None,
-    }).collect();
+    let members: Vec<_> = contents[0]
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.stem_direction),
+            _ => None,
+        })
+        .collect();
     assert_eq!(members, vec![Some(StemDirection::Up); 2]);
 }
 
@@ -10245,7 +10241,10 @@ fn grace_accidentals_sound_before_the_principal_and_follow_measure_policy() {
     let MeasureEvent::Note(second) = &contents[0].events[1] else {
         panic!("expected second note");
     };
-    assert_eq!(second.accidental, None, "grace E-flat alters the later note");
+    assert_eq!(
+        second.accidental, None,
+        "grace E-flat alters the later note"
+    );
 }
 
 #[test]
@@ -10266,13 +10265,18 @@ fn stemless_score_omits_stems_and_flags_on_notes_chords_and_beams() {
     for event in &contents[0].events {
         match event {
             MeasureEvent::Note(note) => assert_eq!(note.annotations.stem, StemVisibility::Hidden),
-            MeasureEvent::Chord(chord) => assert_eq!(chord.annotations.stem, StemVisibility::Hidden),
+            MeasureEvent::Chord(chord) => {
+                assert_eq!(chord.annotations.stem, StemVisibility::Hidden)
+            }
             MeasureEvent::GroupMark(_) => {}
             _ => panic!("unexpected event"),
         }
     }
     let svg = score.render_svg();
-    assert!(!svg.contains("<polygon"), "stemless groups must not emit beams");
+    assert!(
+        !svg.contains("<polygon"),
+        "stemless groups must not emit beams"
+    );
 }
 
 #[test]
@@ -10296,24 +10300,52 @@ fn cue_note_shrinks_notehead_stem_and_incompressible_rod() {
     };
     let (normal, normal_rod) = build(NoteSize::Normal);
     let (cue, cue_rod) = build(NoteSize::Cue);
-    let head = bravura_font().glyph_outline(Glyph::NoteheadBlack).unwrap().path_data;
+    let head = bravura_font()
+        .glyph_outline(Glyph::NoteheadBlack)
+        .unwrap()
+        .path_data;
     assert!(normal.contains(&head) && cue.contains(&head));
     assert!(cue.contains(&format!("scale({})", NoteSize::Cue.scale())));
-    assert!(cue_rod < normal_rod, "cue accidental and notehead need smaller rods");
+    assert!(
+        cue_rod < normal_rod,
+        "cue accidental and notehead need smaller rods"
+    );
 
     // Two vertical line end coordinates from the eighth's stem; the same
     // pitch/staff are used, so only the stem's glyph-scale length changes.
     let stem_length = |svg: &str| {
         let segment = svg
             .split("<line ")
-            .find(|part| part.contains("stroke=\"black\"") && part.contains("x1=") && {
-                let x1 = part.split("x1=\"").nth(1).unwrap().split('"').next().unwrap();
-                let x2 = part.split("x2=\"").nth(1).unwrap().split('"').next().unwrap();
-                x1 == x2
+            .find(|part| {
+                part.contains("stroke=\"black\"") && part.contains("x1=") && {
+                    let x1 = part
+                        .split("x1=\"")
+                        .nth(1)
+                        .unwrap()
+                        .split('"')
+                        .next()
+                        .unwrap();
+                    let x2 = part
+                        .split("x2=\"")
+                        .nth(1)
+                        .unwrap()
+                        .split('"')
+                        .next()
+                        .unwrap();
+                    x1 == x2
+                }
             })
             .expect("a stem line");
         let y = |key: &str| -> f64 {
-            segment.split(key).nth(1).unwrap().split('"').next().unwrap().parse().unwrap()
+            segment
+                .split(key)
+                .nth(1)
+                .unwrap()
+                .split('"')
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap()
         };
         (y("y1=\"") - y("y2=\"")).abs()
     };
@@ -10347,8 +10379,14 @@ fn custom_mark_stacks_above_built_in_and_parentheses_enclose_pause_marks() {
             "missing glyph {glyph:?}"
         );
     }
-    let left = font.glyph_outline(Glyph::AccidentalParensLeft).unwrap().path_data;
-    let right = font.glyph_outline(Glyph::AccidentalParensRight).unwrap().path_data;
+    let left = font
+        .glyph_outline(Glyph::AccidentalParensLeft)
+        .unwrap()
+        .path_data;
+    let right = font
+        .glyph_outline(Glyph::AccidentalParensRight)
+        .unwrap()
+        .path_data;
     assert_eq!(svg.matches(&left).count(), 2);
     assert_eq!(svg.matches(&right).count(), 2);
 }
@@ -10358,10 +10396,7 @@ fn parenthesized_cue_note_and_dots_use_their_own_smufl_parentheses() {
     use smufl::Glyph;
     let font = bravura_font();
     let svg = ScoreBuilder::new()
-        .note(
-            Pitch::new(Note::E, 4),
-            Duration::new(DurationKind::Qtr, 1),
-        )
+        .note(Pitch::new(Note::E, 4), Duration::new(DurationKind::Qtr, 1))
         .parenthesize()
         .parenthesize_dots()
         .note_size(NoteSize::Cue)
@@ -10373,7 +10408,11 @@ fn parenthesized_cue_note_and_dots_use_their_own_smufl_parentheses() {
         Glyph::NoteheadParenthesisRight,
     ] {
         let path = font.glyph_outline(glyph).unwrap().path_data;
-        assert_eq!(svg.matches(&path).count(), 2, "notehead and dots need separate {glyph:?}");
+        assert_eq!(
+            svg.matches(&path).count(),
+            2,
+            "notehead and dots need separate {glyph:?}"
+        );
     }
 }
 
@@ -10393,9 +10432,15 @@ fn mixed_cue_beam_keeps_beam_and_omits_only_hidden_member_stem() {
     };
     let normal = make(false);
     let hidden = make(true);
-    assert!(hidden.contains("<polygon"), "the visible note still owns the beam");
+    assert!(
+        hidden.contains("<polygon"),
+        "the visible note still owns the beam"
+    );
     assert!(hidden.contains(&format!("scale({})", NoteSize::Cue.scale())));
-    assert_eq!(normal.matches("<line ").count(), hidden.matches("<line ").count() + 1);
+    assert_eq!(
+        normal.matches("<line ").count(),
+        hidden.matches("<line ").count() + 1
+    );
 }
 
 #[test]
@@ -10424,21 +10469,19 @@ fn grace_group_moves_principal_right_by_its_reserved_width() {
 fn forget_never_auto_cancels_an_in_measure_sharp() {
     let events: Vec<_> = [Note::Fis, Note::Fis, Note::F, Note::F]
         .into_iter()
-        .map(|note| (
-            0,
-            ScoreEvent::Note {
-                pitch: Pitch::new(note, 4),
-                duration: Duration::QTR,
-                annotations: NoteAnnotations::default(),
-            },
-        ))
+        .map(|note| {
+            (
+                0,
+                ScoreEvent::Note {
+                    pitch: Pitch::new(note, 4),
+                    duration: Duration::QTR,
+                    annotations: NoteAnnotations::default(),
+                },
+            )
+        })
         .collect();
-    let result = resolve_measure_accidentals(
-        &events,
-        &KeySignature::Open,
-        &[],
-        AccidentalPolicy::Forget,
-    );
+    let result =
+        resolve_measure_accidentals(&events, &KeySignature::Open, &[], AccidentalPolicy::Forget);
     assert_eq!(
         result,
         vec![
@@ -10489,6 +10532,9 @@ fn c12_r009_broad_mark_has_long_bar_and_hanging_block_above_note() {
         .end_barline()
         .render_svg();
     assert!(svg.contains(&bar), "the broad mark's bar uses a real glyph");
-    assert!(svg.contains("scale(2.5,1)"), "the bar spans several noteheads");
+    assert!(
+        svg.contains("scale(2.5,1)"),
+        "the bar spans several noteheads"
+    );
     assert!(svg.contains("<rect"), "a solid block hangs under the bar");
 }

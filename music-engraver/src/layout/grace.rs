@@ -321,8 +321,7 @@ pub fn layout_grace_group(
     let scale = GRACE_NOTE_SCALE;
     let unit = staff.staff_space * scale;
     let head = NOTEHEAD_WIDTH_SS * unit;
-    let left_x =
-        principal_left_x - grace_group_extent(group, stem_direction, staff.staff_space);
+    let left_x = principal_left_x - grace_group_extent(group, stem_direction, staff.staff_space);
     let (offsets, _) = horizontal_layout(group, stem_direction, unit);
     let stem_thickness = config.stem_thickness_fu() * scale;
     let stem_length = DEFAULT_STEM_LENGTH_SS * unit;
@@ -366,7 +365,9 @@ pub fn layout_grace_group(
         let beam_step = (config.beam_thickness_fu() + config.beam_spacing_fu()) * scale;
         let levels: Vec<u8> = notes.iter().map(|note| note.flags).collect();
         let first = notes[0].stem.expect("beamed graces are stemmed");
-        let last = notes[notes.len() - 1].stem.expect("beamed graces are stemmed");
+        let last = notes[notes.len() - 1]
+            .stem
+            .expect("beamed graces are stemmed");
         let max_rise = BEAM_MAX_RISE_SS * unit;
         let y_first = first.y_tip;
         let y_last = y_first + (last.y_tip - y_first).clamp(-max_rise, max_rise);
@@ -421,11 +422,7 @@ pub fn layout_grace_group(
                     index += 1;
                 }
                 if index > start {
-                    beams.push(segment(
-                        level,
-                        stem_xs[start] - half,
-                        stem_xs[index] + half,
-                    ));
+                    beams.push(segment(level, stem_xs[start] - half, stem_xs[index] + half));
                 } else if start + 1 < count {
                     beams.push(segment(level, stem_xs[start] - half, stem_xs[start] + stub));
                 } else {

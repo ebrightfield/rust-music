@@ -58,7 +58,11 @@ pub fn draw_dots(
     let mut end_x = first_x;
     for index in 0..dot_count {
         let x = first_x + f64::from(index) * inter_dot;
-        svg.add_path(&outline.path_data, "black", Some(&glyph_transform(x, y, scale)));
+        svg.add_path(
+            &outline.path_data,
+            "black",
+            Some(&glyph_transform(x, y, scale)),
+        );
         end_x = x + dot_advance;
     }
 
@@ -187,7 +191,18 @@ mod tests {
         let notehead_x = 500.0;
         let notehead_advance = 295.0;
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2000.0);
-        draw_dots(&mut svg, &staff, &font, notehead_x, notehead_advance, 5, 1, 1.0, false).unwrap();
+        draw_dots(
+            &mut svg,
+            &staff,
+            &font,
+            notehead_x,
+            notehead_advance,
+            5,
+            1,
+            1.0,
+            false,
+        )
+        .unwrap();
         let output = svg.to_svg();
 
         let ss = staff.staff_space;
@@ -202,7 +217,18 @@ mod tests {
     #[test]
     fn returns_x_past_last_dot() {
         let (font, _, staff) = setup();
-        let result = draw_dots(&mut svg_for_test(), &staff, &font, 500.0, 295.0, 5, 1, 1.0, false).unwrap();
+        let result = draw_dots(
+            &mut svg_for_test(),
+            &staff,
+            &font,
+            500.0,
+            295.0,
+            5,
+            1,
+            1.0,
+            false,
+        )
+        .unwrap();
         let end_x = result.unwrap();
         let ss = staff.staff_space;
         let first_x = 500.0 + 295.0 + DOT_NOTEHEAD_PADDING_SS * ss;

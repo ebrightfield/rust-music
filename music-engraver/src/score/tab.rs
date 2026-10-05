@@ -613,9 +613,9 @@ impl TabScoreBuilder {
             let numbers = layout_bar_numbers(
                 self.measure_numbering,
                 (*start..*end).map(|index| BarNumberSlot {
-                    number: self.first_measure_number.saturating_add(
-                        i32::try_from(index).unwrap_or(i32::MAX),
-                    ),
+                    number: self
+                        .first_measure_number
+                        .saturating_add(i32::try_from(index).unwrap_or(i32::MAX)),
                     x: clef_width + (index - start) as f64 * measure_width,
                     system_start: index == *start,
                     numbered: true,

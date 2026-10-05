@@ -92,7 +92,9 @@ pub enum GroupSpanError {
         duration_log2: i8,
     },
     /// A tuplet ratio with a zero term.
-    #[error("measure {measure}, voice {voice}: tuplet ratio {number}:{in_time_of} has a zero term")]
+    #[error(
+        "measure {measure}, voice {voice}: tuplet ratio {number}:{in_time_of} has a zero term"
+    )]
     InvalidTupletRatio {
         /// 1-based measure number.
         measure: usize,
@@ -104,7 +106,9 @@ pub enum GroupSpanError {
         in_time_of: u32,
     },
     /// A multi-measure rest inside an open beam or tuplet.
-    #[error("measure {measure}, voice {voice}: a multi-measure rest cannot be a beam or tuplet member")]
+    #[error(
+        "measure {measure}, voice {voice}: a multi-measure rest cannot be a beam or tuplet member"
+    )]
     MultiMeasureRestInSpan {
         /// 1-based measure number.
         measure: usize,
@@ -188,7 +192,9 @@ pub(crate) fn validate_group_spans(measures: &[CompletedMeasure]) -> Result<(), 
                         return Err(GroupSpanError::MultiMeasureRestInSpan { measure, voice });
                     }
                 }
-                ScoreEvent::Spacer { duration: Some(_), .. } => {
+                ScoreEvent::Spacer {
+                    duration: Some(_), ..
+                } => {
                     count_tuplet_member(state);
                 }
                 ScoreEvent::Spacer { duration: None, .. }
@@ -310,7 +316,11 @@ fn resolve_beam_directions(contents: &mut [MeasureContent], voice: usize) {
     }
 }
 
-fn member_event(contents: &[MeasureContent], voice: usize, (measure, index): (usize, usize)) -> &MeasureEvent {
+fn member_event(
+    contents: &[MeasureContent],
+    voice: usize,
+    (measure, index): (usize, usize),
+) -> &MeasureEvent {
     &voice_events(&contents[measure], voice).expect("member voice exists")[index]
 }
 
@@ -323,13 +333,14 @@ fn beam_direction(
     if let Some(direction) = spec.stem_direction {
         return direction;
     }
-    let requested = members
-        .iter()
-        .find_map(|&member| match member_event(contents, voice, member) {
-            MeasureEvent::Note(note) => note.stem_direction,
-            MeasureEvent::Chord(chord) => chord.stem_direction,
-            _ => None,
-        });
+    let requested =
+        members
+            .iter()
+            .find_map(|&member| match member_event(contents, voice, member) {
+                MeasureEvent::Note(note) => note.stem_direction,
+                MeasureEvent::Chord(chord) => chord.stem_direction,
+                _ => None,
+            });
     if let Some(direction) = requested {
         return direction;
     }
@@ -404,7 +415,9 @@ fn split_spans_at_barlines(contents: &mut [MeasureContent], voice: usize) {
         }
         events.splice(0..0, resumed);
         if open_beam.is_some() {
-            events.push(MeasureEvent::GroupMark(GroupMark::BeamEnd { continues: true }));
+            events.push(MeasureEvent::GroupMark(GroupMark::BeamEnd {
+                continues: true,
+            }));
         }
         events.extend(
             open_tuplets

@@ -626,5 +626,4 @@ mod tests {
         assert!((staff_position_to_y(4, HS) - 500.0).abs() < f64::EPSILON);
         assert!((staff_position_to_y(-2, HS) - 1250.0).abs() < f64::EPSILON);
     }
-
 }

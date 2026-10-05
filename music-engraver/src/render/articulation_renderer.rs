@@ -43,7 +43,13 @@ pub fn draw_articulation(
             ArticulationPlacement::Above => layout.y,
             ArticulationPlacement::Below => layout.y - block_height,
         };
-        writer.add_rect(layout.x - block_width / 2.0, block_y, block_width, block_height, "black");
+        writer.add_rect(
+            layout.x - block_width / 2.0,
+            block_y,
+            block_width,
+            block_height,
+            "black",
+        );
         if layout.parenthesized {
             draw_mark_parentheses_around(
                 writer,

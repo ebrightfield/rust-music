@@ -727,8 +727,17 @@ pub(crate) fn collect_text_spanner_note_info(
                         false,
                         &c.annotations,
                     ),
-                    MeasureElement::Rest(r) => (r.duration_log2, &[][..], 1, true, false, &r.annotations),
-                    MeasureElement::Spacer(s) => (s.duration_log2.unwrap_or(2), &[][..], 0, false, true, &s.annotations),
+                    MeasureElement::Rest(r) => {
+                        (r.duration_log2, &[][..], 1, true, false, &r.annotations)
+                    }
+                    MeasureElement::Spacer(s) => (
+                        s.duration_log2.unwrap_or(2),
+                        &[][..],
+                        0,
+                        false,
+                        true,
+                        &s.annotations,
+                    ),
                     _ => continue,
                 };
             notes.push(TextSpannerNoteInfo {

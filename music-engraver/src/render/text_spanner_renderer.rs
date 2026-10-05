@@ -86,7 +86,10 @@ mod tests {
         assert!(out.contains(r#"font-weight="normal""#));
         let y = -1.6 * SS;
         assert!(out.contains(&format!(r#"y="{y}""#)), "{out}");
-        assert!(out.contains(&format!(r#"y1="{y}" x2="2000" y2="{y}""#)), "{out}");
+        assert!(
+            out.contains(&format!(r#"y1="{y}" x2="2000" y2="{y}""#)),
+            "{out}"
+        );
         assert!(out.contains("stroke-dasharray=\"200,100\""), "{out}");
     }
 

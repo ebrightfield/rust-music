@@ -35,8 +35,8 @@ use crate::layout::trill_extension::{
     layout_trill_extension_multi_speed, layout_trill_extension_with_glyph,
     trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
 };
-use crate::render::bar_number_renderer::draw_bar_numbers;
 pub(crate) use crate::render::analysis_bracket_renderer::draw_cross_system_analysis_brackets;
+use crate::render::bar_number_renderer::draw_bar_numbers;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{
@@ -1444,7 +1444,8 @@ pub(crate) fn draw_cross_system_glissandos(
             ) {
                 if let Some(tgt) = targets.first() {
                     let delta = f64::from(gliss_src.staff_position - tgt.staff_position)
-                        * config.staff_space * 0.5;
+                        * config.staff_space
+                        * 0.5;
                     right_layout.y_end = right_layout.y_start + delta * 0.5;
                 }
                 draw_glissando(svg, &right_layout);
@@ -1467,7 +1468,8 @@ pub(crate) fn draw_cross_system_glissandos(
                     gliss_src.style,
                 ) {
                     let delta = f64::from(gliss_src.staff_position - tgt.staff_position)
-                        * config.staff_space * 0.5;
+                        * config.staff_space
+                        * 0.5;
                     left_layout.y_start = left_layout.y_end - delta * 0.5;
                     draw_glissando(svg, &left_layout);
                 }

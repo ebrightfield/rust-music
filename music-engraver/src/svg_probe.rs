@@ -87,7 +87,11 @@ pub(crate) fn text(svg: &str, content: &str) -> SvgText {
         .into_iter()
         .filter(|t| t.content == content)
         .collect();
-    assert_eq!(found.len(), 1, "expected one <text> {content:?}, found {found:?}");
+    assert_eq!(
+        found.len(),
+        1,
+        "expected one <text> {content:?}, found {found:?}"
+    );
     found.into_iter().next().unwrap()
 }
 
@@ -121,7 +125,9 @@ pub(crate) fn glyphs(svg: &str, font: &MusicFont, glyph: Glyph) -> Vec<GlyphPlac
                 Some((t, s)) => (t, s.trim_end_matches(')')),
                 None => (inner.trim_end_matches(')'), "1,1"),
             };
-            let mut xy = translate.split(',').map(|v| v.trim().parse::<f64>().unwrap());
+            let mut xy = translate
+                .split(',')
+                .map(|v| v.trim().parse::<f64>().unwrap());
             let scale = scale.split(',').next().unwrap().trim().parse().unwrap();
             GlyphPlacement {
                 x: xy.next().unwrap(),

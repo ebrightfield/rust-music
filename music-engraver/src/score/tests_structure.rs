@@ -224,7 +224,10 @@ fn rm_mn_004_svg_has_change_clef_glyph_and_both_meters() {
     assert_eq!(change.len(), 1, "one bass change clef");
     assert_eq!(change[0].1, staff.y_of(6), "F clef on the fourth line");
     assert_eq!(glyph_origins(&svg, Glyph::GClef).len(), 1);
-    assert!(glyph_origins(&svg, Glyph::FClef).is_empty(), "no full-size F clef");
+    assert!(
+        glyph_origins(&svg, Glyph::FClef).is_empty(),
+        "no full-size F clef"
+    );
 
     let threes = glyph_origins(&svg, Glyph::TimeSig3);
     let twos = glyph_origins(&svg, Glyph::TimeSig2);
@@ -342,7 +345,10 @@ fn clef_after_barline_placement_opens_the_measure() {
             .end_barline(),
     );
     let measures = &page.systems[0].system.measures;
-    assert_eq!(kinds(&measures[0].layout), ["clef:FClef", "note:3", "barline"]);
+    assert_eq!(
+        kinds(&measures[0].layout),
+        ["clef:FClef", "note:3", "barline"]
+    );
     assert_eq!(
         kinds(&measures[1].layout),
         ["clef:CClefChange", "note:4", "barline"]
@@ -662,7 +668,10 @@ fn spacer_bar_is_empty_and_at_least_the_minimum_width() {
         .note(c5(), Duration::new(DurationKind::Half, 1))
         .end_barline()
         .render_svg();
-    assert_eq!(svg.matches("<path ").count(), empty.matches("<path ").count());
+    assert_eq!(
+        svg.matches("<path ").count(),
+        empty.matches("<path ").count()
+    );
 }
 
 // --- Bar numbers (G22) --------------------------------------------------------
@@ -714,7 +723,10 @@ fn system_start_number_sits_after_the_prefix() {
     let numbers = texts(&builder.render_svg());
     assert_eq!(numbers.len(), 2);
     assert_eq!((numbers[0].2.as_str(), numbers[1].2.as_str()), ("1", "2"));
-    assert!((numbers[0].0 - first_note_x(0)).abs() < 1e-6, "not over the clef");
+    assert!(
+        (numbers[0].0 - first_note_x(0)).abs() < 1e-6,
+        "not over the clef"
+    );
     assert!((numbers[1].0 - first_note_x(1)).abs() < 1e-6);
 }
 
@@ -772,7 +784,10 @@ fn view_box_contains_every_clef_glyph() {
         let ink = layout.ink_box();
         let (vb_x, vb_y, vb_w, vb_h) = view_box(&svg);
         assert!(vb_y <= y + ink.y_top * SS, "{clef:?} top clipped");
-        assert!(vb_y + vb_h >= y + ink.y_bottom * SS, "{clef:?} bottom clipped");
+        assert!(
+            vb_y + vb_h >= y + ink.y_bottom * SS,
+            "{clef:?} bottom clipped"
+        );
         assert!(vb_x <= x + ink.x_left * SS && vb_x + vb_w >= x + ink.x_right * SS);
     }
 }

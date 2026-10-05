@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::layout::accidental::ResolvedAccidental;
-use crate::layout::key_signature::KeySignature;
 use crate::layout::group::{BeamSpec, GroupMark, TupletSpec};
+use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
 use crate::layout::measure_meta::MeasureMeta;
 use crate::layout::page::{break_into_systems, SystemBreaking};
@@ -82,12 +82,22 @@ fn event_length_and_voice_length_respect_independent_tuplets_and_beams() {
     assert_eq!(event_length(&MeasureEvent::Note(note(2, 1))), len(3, 8));
     assert_eq!(event_length(&MeasureEvent::Note(note(1, 2))), len(7, 8));
     let eighth = MeasureEvent::Note(note(3, 0));
-    let rest = MeasureEvent::Rest(RestEvent { duration_log2: 3, dots: 0, annotations: NoteAnnotations::default() });
+    let rest = MeasureEvent::Rest(RestEvent {
+        duration_log2: 3,
+        dots: 0,
+        annotations: NoteAnnotations::default(),
+    });
     assert_eq!(event_length(&rest), len(1, 8));
     let events = vec![
-        MeasureEvent::GroupMark(GroupMark::TupletStart { spec: TupletSpec::new(3, 2), continued: false }),
+        MeasureEvent::GroupMark(GroupMark::TupletStart {
+            spec: TupletSpec::new(3, 2),
+            continued: false,
+        }),
         eighth.clone(),
-        MeasureEvent::GroupMark(GroupMark::BeamStart { spec: BeamSpec::new(), continued: false }),
+        MeasureEvent::GroupMark(GroupMark::BeamStart {
+            spec: BeamSpec::new(),
+            continued: false,
+        }),
         rest,
         eighth,
         MeasureEvent::GroupMark(GroupMark::BeamEnd { continues: false }),
@@ -255,8 +265,14 @@ fn split_without_an_inline_barline_closes_the_first_piece_invisibly() {
 fn break_inside_a_tuplet_and_beam_keeps_both_spans_and_exact_onsets() {
     let spec = TupletSpec::new(3, 2);
     let events = vec![
-        MeasureEvent::GroupMark(GroupMark::TupletStart { spec, continued: false }),
-        MeasureEvent::GroupMark(GroupMark::BeamStart { spec: BeamSpec::new(), continued: false }),
+        MeasureEvent::GroupMark(GroupMark::TupletStart {
+            spec,
+            continued: false,
+        }),
+        MeasureEvent::GroupMark(GroupMark::BeamStart {
+            spec: BeamSpec::new(),
+            continued: false,
+        }),
         MeasureEvent::Note(note(3, 0)),
         MeasureEvent::Barline(BarlineStyle::Dashed),
         MeasureEvent::Note(note(3, 0)),
@@ -271,9 +287,26 @@ fn break_inside_a_tuplet_and_beam_keeps_both_spans_and_exact_onsets() {
     assert_eq!(pieces[0].barline, BarlineStyle::Dashed);
     assert_eq!(staff_positions(&pieces[0].events), vec![4]);
     assert_eq!(staff_positions(&pieces[1].events), vec![4, 4]);
-    assert!(matches!(pieces[0].events.last(), Some(MeasureEvent::GroupMark(GroupMark::TupletEnd { continues: true }))));
-    assert!(matches!(pieces[1].events[0], MeasureEvent::GroupMark(GroupMark::TupletStart { continued: true, .. })));
-    assert!(matches!(pieces[1].events[1], MeasureEvent::GroupMark(GroupMark::BeamStart { continued: true, .. })));
+    assert!(matches!(
+        pieces[0].events.last(),
+        Some(MeasureEvent::GroupMark(GroupMark::TupletEnd {
+            continues: true
+        }))
+    ));
+    assert!(matches!(
+        pieces[1].events[0],
+        MeasureEvent::GroupMark(GroupMark::TupletStart {
+            continued: true,
+            ..
+        })
+    ));
+    assert!(matches!(
+        pieces[1].events[1],
+        MeasureEvent::GroupMark(GroupMark::BeamStart {
+            continued: true,
+            ..
+        })
+    ));
     assert_eq!(voice_length(&pieces[0].events), len(1, 12));
     assert_eq!(voice_length(&pieces[1].events), len(1, 6));
 }

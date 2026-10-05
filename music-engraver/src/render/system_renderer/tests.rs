@@ -1319,10 +1319,7 @@ fn cresc_text_dashed_line_endpoints_lie_between_start_and_end_notes() {
         .iter()
         .find(|n| n.start.is_some())
         .expect("start note present");
-    let end = info
-        .iter()
-        .find(|n| n.end)
-        .expect("end note present");
+    let end = info.iter().find(|n| n.end).expect("end note present");
     assert!(
         end.x > start.x,
         "test setup precondition: end note must be after start note"

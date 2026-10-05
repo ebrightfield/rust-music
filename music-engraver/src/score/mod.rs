@@ -178,9 +178,7 @@ fn last_annotations_mut(events: &mut [(u8, ScoreEvent)]) -> Option<&mut NoteAnno
     }
 }
 
-fn last_spanner_annotations_mut(
-    events: &mut [(u8, ScoreEvent)],
-) -> Option<&mut NoteAnnotations> {
+fn last_spanner_annotations_mut(events: &mut [(u8, ScoreEvent)]) -> Option<&mut NoteAnnotations> {
     match last_rhythmic_event(events, None)? {
         ScoreEvent::Note { annotations, .. }
         | ScoreEvent::Chord { annotations, .. }
@@ -344,8 +342,12 @@ impl ScoreBuilder {
             ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. } => {
                 Some(annotations)
             }
-            ScoreEvent::Spacer { .. } => panic!("pitch-bound mark cannot attach to an invisible spacer"),
-            ScoreEvent::MultiMeasureRest { .. } => panic!("pitch-bound mark cannot attach to a multi-measure rest"),
+            ScoreEvent::Spacer { .. } => {
+                panic!("pitch-bound mark cannot attach to an invisible spacer")
+            }
+            ScoreEvent::MultiMeasureRest { .. } => {
+                panic!("pitch-bound mark cannot attach to a multi-measure rest")
+            }
             _ => None,
         }
     }
@@ -1098,7 +1100,9 @@ impl ScoreBuilder {
             Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) => {
                 set_verse(annotations, verse, syllable, style);
             }
-            Some(ScoreEvent::Spacer { .. }) => panic!("lyrics cannot attach to an invisible spacer"),
+            Some(ScoreEvent::Spacer { .. }) => {
+                panic!("lyrics cannot attach to an invisible spacer")
+            }
             _ => {}
         }
         self

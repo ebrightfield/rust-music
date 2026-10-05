@@ -359,7 +359,11 @@ pub struct ArticulationLayout {
 }
 
 /// Y of the first (innermost) mark on `placement`'s side of a note.
-fn side_base_y(placement: ArticulationPlacement, note_staff_position: i8, staff: &StaffLayout) -> f64 {
+fn side_base_y(
+    placement: ArticulationPlacement,
+    note_staff_position: i8,
+    staff: &StaffLayout,
+) -> f64 {
     let offset_fu = ARTICULATION_OFFSET_SS * staff.staff_space;
 
     // Position the articulation just outside the notehead.
@@ -814,7 +818,10 @@ mod tests {
         // other variants) as "always above," same as the plain Fermata.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato.into(), Articulation::FermataLong.into()],
+            &[
+                Articulation::Staccato.into(),
+                Articulation::FermataLong.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -836,7 +843,10 @@ mod tests {
         // separated vertically by the standard stack spacing.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::FermataShort.into(), Articulation::FermataLong.into()],
+            &[
+                Articulation::FermataShort.into(),
+                Articulation::FermataLong.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -1581,7 +1591,10 @@ mod tests {
         // Locks the bucket-partition rule for the combined variants.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::TenutoAccent.into(), Articulation::Fermata.into()],
+            &[
+                Articulation::TenutoAccent.into(),
+                Articulation::Fermata.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -1603,7 +1616,10 @@ mod tests {
         // `bow_strokes` bucket — otherwise both would land above and stack.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::AccentStaccato.into(), Articulation::DownBow.into()],
+            &[
+                Articulation::AccentStaccato.into(),
+                Articulation::DownBow.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -1622,7 +1638,10 @@ mod tests {
         // below, in input order, stacked outward by one stack-step.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato.into(), Articulation::AccentStaccato.into()],
+            &[
+                Articulation::Staccato.into(),
+                Articulation::AccentStaccato.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -1931,7 +1950,10 @@ mod tests {
         // Locks the bucket-partition rule for the new variants.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::SoftAccent.into(), Articulation::Fermata.into()],
+            &[
+                Articulation::SoftAccent.into(),
+                Articulation::Fermata.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -2215,7 +2237,10 @@ mod tests {
         // bucket — not the always-above bucket reserved for fermatas.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::LaissezVibrer.into(), Articulation::Fermata.into()],
+            &[
+                Articulation::LaissezVibrer.into(),
+                Articulation::Fermata.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -2236,7 +2261,10 @@ mod tests {
         // bow-stroke bucket.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::LaissezVibrer.into(), Articulation::UpBow.into()],
+            &[
+                Articulation::LaissezVibrer.into(),
+                Articulation::UpBow.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,
@@ -2256,7 +2284,10 @@ mod tests {
         // exactly one ARTICULATION_STACK_SPACING_SS × staff_space.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato.into(), Articulation::LaissezVibrer.into()],
+            &[
+                Articulation::Staccato.into(),
+                Articulation::LaissezVibrer.into(),
+            ],
             100.0,
             4,
             StemDirection::Up,

@@ -16,14 +16,14 @@ use music::note::pitch::Pitch;
 
 use music_engraver::font::bravura_font;
 use music_engraver::layout::clef::ClefLayout;
-use music_engraver::layout::text_spanner::{
-    layout_text_spanner, layout_text_spanner_continuation, TextSpanner,
-};
 use music_engraver::layout::note_placement::pitch_to_staff_position;
 use music_engraver::layout::staff::StaffLayout;
 use music_engraver::layout::stem::auto_stem_direction;
-use music_engraver::render::text_spanner_renderer::draw_text_spanner;
+use music_engraver::layout::text_spanner::{
+    layout_text_spanner, layout_text_spanner_continuation, TextSpanner,
+};
 use music_engraver::render::note_renderer::{draw_stemmed_note, NoteheadKind};
+use music_engraver::render::text_spanner_renderer::draw_text_spanner;
 use music_engraver::render::{draw_clef, draw_staff_lines, SvgWriter};
 
 /// Vertical spacing between successive staves in font design units.
