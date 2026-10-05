@@ -285,6 +285,13 @@ pub fn scan_groups<'a>(elements: impl IntoIterator<Item = &'a MeasureElement>) -
             MeasureElement::Barline(_) => {
                 onset = 0.0;
             }
+            MeasureElement::Spacer(spacer) => {
+                if let Some(log2) = spacer.duration_log2 {
+                    let scale =
+                        tuplet_time_scale(open_tuplets.iter().map(|&t| &scan.tuplets[t].spec));
+                    onset += written_whole_notes(log2, spacer.dots) * scale;
+                }
+            }
             _ => {
                 let Some((duration_log2, dots)) = member_duration(element) else {
                     continue;

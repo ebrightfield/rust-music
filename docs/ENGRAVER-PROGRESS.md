@@ -7943,3 +7943,22 @@
   a cue-size unison, same-kind opposing stems, second and third intervals,
   displaced flag/accidental/dot/ledger geometry, and lyric anchoring. A
   source-like PNG was compared with the LilyPond PDF around measure 7.
+
+## 2026-10-04 — G18: tick-addressed invisible spanner anchors
+- `ScoreBuilder::spacer(duration)` now carries pitch-independent annotations at
+  its exact onset; a later spacer still advances rational musical time without
+  engraving a rest. `spanner_anchor()` supplies a zero-duration `<>\!` stop
+  after the last sounding note. Both share the same typed `SpacerEvent` and
+  preserve common note/spacer columns across voices and staves.
+- Hairpin and text-spanner endpoints use the onset's numeric x (including on
+  incoming systems), with no phantom notehead, rest, or anchor spacing rod.
+  Dynamics, tempo/rehearsal marks, and text scripts on invisible onsets render
+  without creating a glyph. Unsupported pitch-bound marks on spacers and
+  spanner ends on multi-measure rests fail rather than silently vanishing.
+- Public builder/model/layout/SVG regressions use mn-c11-r015 `<>\!` and
+  mn-c11-r029 `<< e''4 { s8 s8\! } >>`, checking exact 3/4 and 7/8 onsets,
+  distinct intra-note versus next-note endpoint x, a 1/6 tuplet onset,
+  text stops, shared cross-staff columns, and cross-system continuations.
+  A source-shaped final c11-r029 bar was rasterized with loaded serif fonts
+  and compared visually with its LilyPond PDF; this is an endpoint excerpt,
+  not a full transcription.

@@ -1145,8 +1145,11 @@ fn mn_c11_r029_spacer_end_uses_exact_intra_note_onset() {
     assert!(!svg.contains(&rest), "invisible eighths must not render as eighth rests");
     #[cfg(feature = "png")]
     if let Ok(path) = std::env::var("SPANNER_ANCHOR_VISUAL_OUT") {
-        let png = crate::render::png::svg_to_png(&svg, 1.5).unwrap();
-        std::fs::write(path, png).unwrap();
+        let mut renderer = crate::render::png::PngRenderer::new(1.5);
+        renderer.load_system_fonts();
+        let png = renderer.render_png(&svg).unwrap();
+        std::fs::write(&path, png).unwrap();
+        std::fs::write(path.replace(".png", ".svg"), &svg).unwrap();
     }
 }
 
@@ -1260,6 +1263,20 @@ fn invisible_onset_endings_survive_system_break_with_visible_marks_only() {
     let svg = score.render_svg();
     assert!(svg.contains(">fine</text>") && svg.contains(">rit.</text>"));
     assert_eq!(svg.matches("stroke-dasharray").count(), 4, "text line on both systems and dashed incoming hairpin");
+    let dashed: Vec<_> = svg.lines()
+        .filter(|line| line.contains("<line ") && line.contains("stroke-dasharray"))
+        .collect();
+    let text_end = dashed.iter()
+        .filter(|line| line_attr(line, "y1") == line_attr(line, "y2"))
+        .map(|line| line_attr(line, "x2")).last().unwrap();
+    let hairpin_end = dashed.iter()
+        .filter(|line| line_attr(line, "y1") != line_attr(line, "y2"))
+        .map(|line| line_attr(line, "x2")).last().unwrap();
+    let expected_text = page.systems[1].x + x - 0.3 * 250.0;
+    let expected_hairpin = page.systems[1].x
+        + hp[0].hairpin_end_x(&crate::font::bravura_font(), 250.0, Placement::Below).unwrap();
+    assert!((text_end - expected_text).abs() < 0.02, "text continuation ends at spacer onset");
+    assert!((hairpin_end - expected_hairpin).abs() < 0.02, "wedge clears spacer dynamic at same onset");
     let rest = crate::font::bravura_font().glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data;
     assert!(!svg.contains(&rest));
 }
@@ -1274,4 +1291,48 @@ fn unsupported_spanner_end_cannot_silently_disappear() {
 #[should_panic(expected = "pitch-bound mark cannot attach to an invisible spacer")]
 fn spacer_rejects_pitch_bound_attachment_instead_of_dropping_it() {
     let _ = ScoreBuilder::new().spacer(Duration::EIGHTH).tie();
+}
+
+#[test]
+fn tupled_invisible_stop_preserves_performed_rational_onsets() {
+    use crate::layout::group::scan_groups;
+    use crate::layout::text_spanner::TextSpanner;
+    let score = ScoreBuilder::new()
+        .time_signature(2, 4)
+        .begin_tuplet(TupletSpec::new(3, 2))
+        .note(p(Note::B, 4), Duration::QTR)
+        .text_spanner_start(TextSpanner::dim())
+        .spacer(Duration::EIGHTH).text_spanner_end()
+        .spacer(Duration::EIGHTH)
+        .end_tuplet()
+        .note(p(Note::C, 5), Duration::QTR)
+        .end_barline();
+    assert_eq!(measures(&score)[0].meta.actual_length, length(7, 12));
+    let ticks = event::measure_timeline(&score.measures[0].events, &[], Some(length(7, 12)));
+    let actual = score.measures[0].events.iter().zip(ticks.onsets.iter())
+        .find_map(|((_, event), &tick)| matches!(event,
+            event::ScoreEvent::Spacer { annotations, .. } if annotations.text_spanner_end)
+            .then_some(ticks.to_length(tick))).unwrap();
+    assert_eq!(actual, length(1, 6));
+    let page = page(&score);
+    let layout = &page.systems[0].system.measures[0].layout;
+    let stop_x = layout.elements.iter().find_map(|e| match &e.element {
+        MeasureElement::Spacer(s) if s.annotations.text_spanner_end => Some(e.x),
+        _ => None,
+    }).unwrap();
+    let next_note_x = layout.elements.iter().filter_map(|e|
+        matches!(e.element, MeasureElement::Note(_)).then_some(e.x)).nth(1).unwrap();
+    assert!(stop_x < next_note_x);
+    let scan = scan_groups(layout.elements.iter().map(|e| &e.element));
+    let note_index = layout.elements.iter().enumerate()
+        .filter(|(_, e)| matches!(e.element, MeasureElement::Note(_)))
+        .map(|(i, _)| i).nth(1).unwrap();
+    assert!((scan.onsets[note_index] - 1.0 / 3.0).abs() < 1e-9,
+        "the following note starts at performed third despite invisible tuplet members");
+}
+
+#[test]
+#[should_panic(expected = "text_spanner_end requires a note")]
+fn text_span_end_without_any_attachment_is_rejected() {
+    let _ = ScoreBuilder::new().text_spanner_end();
 }

@@ -843,9 +843,9 @@ impl ScoreBuilder {
     /// after the last sounding event use `spanner_anchor().hairpin_end()`
     /// (LilyPond `<>\!`) without advancing the voice.
     pub fn hairpin_end(mut self) -> Self {
-        if let Some(annotations) = self.last_spanner_annotations_mut() {
-            annotations.hairpin_end = true;
-        }
+        self.last_spanner_annotations_mut()
+            .expect("hairpin_end requires a note, chord, rest, spacer or anchor")
+            .hairpin_end = true;
         self
     }
 
@@ -933,9 +933,9 @@ impl ScoreBuilder {
     /// or zero-duration [`spanner_anchor`](Self::spanner_anchor). The line
     /// stops just before that onset (LilyPond `\stopTextSpan`).
     pub fn text_spanner_end(mut self) -> Self {
-        if let Some(annotations) = self.last_spanner_annotations_mut() {
-            annotations.text_spanner_end = true;
-        }
+        self.last_spanner_annotations_mut()
+            .expect("text_spanner_end requires a note, chord, rest, spacer or anchor")
+            .text_spanner_end = true;
         self
     }
 
@@ -1024,7 +1024,8 @@ impl ScoreBuilder {
             .and_then(|event| match event {
                 ScoreEvent::Note { annotations, .. }
                 | ScoreEvent::Chord { annotations, .. }
-                | ScoreEvent::Rest { annotations, .. } => Some(annotations),
+                | ScoreEvent::Rest { annotations, .. }
+                | ScoreEvent::Spacer { annotations, .. } => Some(annotations),
                 _ => None,
             });
         match target {
@@ -1057,6 +1058,7 @@ impl ScoreBuilder {
                 ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. } => {
                     Some(annotations)
                 }
+                ScoreEvent::Spacer { .. } => panic!("lyrics cannot attach to an invisible spacer"),
                 _ => None,
             })
         } else {
@@ -1091,10 +1093,12 @@ impl ScoreBuilder {
         style: LyricStyle,
     ) -> Self {
         assert!(verse > 0, "lyric verse numbers start at 1");
-        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) =
-            last_rhythmic_event(&mut self.current_events, Some(voice))
-        {
-            set_verse(annotations, verse, syllable, style);
+        match last_rhythmic_event(&mut self.current_events, Some(voice)) {
+            Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) => {
+                set_verse(annotations, verse, syllable, style);
+            }
+            Some(ScoreEvent::Spacer { .. }) => panic!("lyrics cannot attach to an invisible spacer"),
+            _ => {}
         }
         self
     }

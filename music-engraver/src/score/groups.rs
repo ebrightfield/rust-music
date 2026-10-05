@@ -188,7 +188,10 @@ pub(crate) fn validate_group_spans(measures: &[CompletedMeasure]) -> Result<(), 
                         return Err(GroupSpanError::MultiMeasureRestInSpan { measure, voice });
                     }
                 }
-                ScoreEvent::Spacer { .. }
+                ScoreEvent::Spacer { duration: Some(_), .. } => {
+                    count_tuplet_member(state);
+                }
+                ScoreEvent::Spacer { duration: None, .. }
                 | ScoreEvent::Barline(_)
                 | ScoreEvent::ClefChange(_)
                 | ScoreEvent::TimeSignatureChange(_) => {}
