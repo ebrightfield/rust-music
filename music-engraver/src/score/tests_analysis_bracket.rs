@@ -193,7 +193,13 @@ fn mn_c12_i001_dashed_gliss_keeps_notehead_trim_across_system() {
         .collect();
     assert_eq!(dashed.len(), 3);
     assert!(dashed[0].contains("stroke-dasharray="));
-    assert!(attr(dashed[0], "x1") > xs[0][0]);
+    let head = crate::render::note_renderer::notehead_advance(
+        &bravura_font(),
+        0,
+        crate::layout::measure::NoteheadStyle::Normal,
+    )
+    .unwrap();
+    assert!(attr(dashed[0], "x1") >= xs[0][0] + head);
     assert!(attr(dashed[0], "x2") < xs[0][1]);
     assert!(attr(dashed[1], "x1") > xs[0][1]);
     assert!(attr(dashed[2], "x2") < xs[1][0]);

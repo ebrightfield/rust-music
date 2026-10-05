@@ -1378,7 +1378,7 @@ struct UnresolvedGlissando {
     x: f64,
     /// Staff position of the source note.
     staff_position: i8,
-    /// Glissando style (Line or LineWithText).
+    /// Glissando line style (solid, labeled, dashed, or zigzag).
     style: GlissandoStyle,
     /// Right edge of the system's staff lines (absolute x).
     staff_right: f64,
@@ -1394,7 +1394,11 @@ struct IncomingGlissandoTarget {
 
 /// Find the last note with `glissando_start` that has no subsequent note
 /// within the same system to resolve against.
-fn find_unresolved_glissandos(page_system: &PageSystem) -> Vec<UnresolvedGlissando> {
+fn find_unresolved_glissandos(
+    page_system: &PageSystem,
+    font: &MusicFont,
+    ss: f64,
+) -> Result<Vec<UnresolvedGlissando>, FontError> {
     let system = &page_system.system;
     let notes = collect_glissando_note_info(system);
 
@@ -1411,14 +1415,14 @@ fn find_unresolved_glissandos(page_system: &PageSystem) -> Vec<UnresolvedGlissan
         }
 
         unresolved.push(UnresolvedGlissando {
-            x: page_system.x + note.x,
+            x: page_system.x + note.x + note.source_width_correction(font, ss)?,
             staff_position: note.staff_position,
             style,
             staff_right: page_system.x + system.staff_width,
         });
     }
 
-    unresolved
+    Ok(unresolved)
 }
 
 /// Find the first note in a system (candidate target for incoming cross-system glissando).
@@ -1447,12 +1451,12 @@ fn find_incoming_glissando_targets(page_system: &PageSystem) -> Vec<IncomingGlis
 /// to that note.
 pub(crate) fn draw_cross_system_glissandos(
     svg: &mut SvgWriter,
-    _font: &MusicFont,
+    font: &MusicFont,
     config: &EngravingConfig,
     systems: &[PageSystem],
 ) -> Result<(), FontError> {
     for i in 0..systems.len().saturating_sub(1) {
-        let unresolved = find_unresolved_glissandos(&systems[i]);
+        let unresolved = find_unresolved_glissandos(&systems[i], font, config.staff_space)?;
         if unresolved.is_empty() {
             continue;
         }

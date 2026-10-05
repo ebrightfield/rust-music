@@ -6,6 +6,10 @@ use crate::layout::stem::StemDirection;
 /// notehead glyph.
 pub const GLISSANDO_H_PADDING_SS: f64 = 0.4;
 
+/// Default head-width estimate; actual wider glyphs are corrected with
+/// font advances in the system/page renderers.
+pub(crate) const GLISSANDO_NOTEHEAD_WIDTH_SS: f64 = 1.18;
+
 /// Vertical offset from the notehead center toward the direction of the
 /// glissando, in staff spaces. Moves the endpoint slightly away from center
 /// so the line visually connects to the edge of the notehead rather than
@@ -70,10 +74,9 @@ pub fn layout_glissando(
 ) -> Option<GlissandoLayout> {
     let ss = staff.staff_space;
     let h_pad = GLISSANDO_H_PADDING_SS * ss;
-    // Notehead advance width is approximately 1.18 staff spaces in Bravura.
-    // The x_source position is at the notehead's left edge, so we advance
-    // past the notehead plus a small padding.
-    let notehead_width = ss * 1.18;
+    // x_source is the notehead's left edge. The renderer adds any excess
+    // measured glyph width to this default before calling layout.
+    let notehead_width = ss * GLISSANDO_NOTEHEAD_WIDTH_SS;
 
     let x_start = x_source + notehead_width + h_pad;
     let x_end = x_target - h_pad;
@@ -132,7 +135,7 @@ pub fn layout_half_glissando_right(
     style: GlissandoStyle,
 ) -> Option<GlissandoLayout> {
     let ss = staff.staff_space;
-    let notehead_width = ss * 1.18;
+    let notehead_width = ss * GLISSANDO_NOTEHEAD_WIDTH_SS;
     let h_pad = GLISSANDO_H_PADDING_SS * ss;
 
     let x_start = x_source + notehead_width + h_pad;

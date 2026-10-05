@@ -7874,8 +7874,9 @@
   with continuation segments and overlap lanes; invisible barlines do not
   truncate them. Guitar TAB cell brackets retain their distinct TAB anchors.
 - `GlissandoStyle::{Dashed,Wavy}` draws dashed strokes and sloped zigzag paths
-  clipped between noteheads. Cross-system fragments retain their style and
-  approach a common pitch midpoint; cross-staff glissandi are separate work.
+  clipped between noteheads (font-measured advances correct wide whole heads).
+  Cross-system fragments retain their style and approach a common pitch
+  midpoint; cross-staff glissandi are separate work.
 - Focused public-builder score/layout/SVG tests cover source-derived
   mn-c06-m003, mn-c01-h007, mn-c04-r010, mn-c12-i001 and mn-c05-m006 shapes.
   A flattened PNG of the mn-c06-m003 barline-crossing bracket was inspected
