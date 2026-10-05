@@ -202,7 +202,7 @@ pub(crate) fn draw_measure_elements(
 }
 
 /// Horizontal engraving displacements indexed by additional voice element.
-/// These never change the measure layout's underlying rhythmic x positions.
+/// Empty when no notes collide. Rhythmic x positions remain unchanged.
 pub(crate) fn collision_shifts(
     font: &MusicFont,
     primary: &MeasureLayout,
@@ -210,15 +210,16 @@ pub(crate) fn collision_shifts(
 ) -> Vec<f64> {
     let offsets =
         crate::layout::voice_collision::compute_voice_collision_offsets(primary, additional);
+    if offsets.is_empty() {
+        return Vec::new();
+    }
+    let notehead_width = font
+        .glyph_outline(smufl::Glyph::NoteheadBlack)
+        .map(|outline| outline.advance_width as f64)
+        .unwrap_or(250.0);
     let mut shifts = vec![0.0; additional.elements.len()];
-    if !offsets.is_empty() {
-        let notehead_width = font
-            .glyph_outline(smufl::Glyph::NoteheadBlack)
-            .map(|outline| outline.advance_width as f64)
-            .unwrap_or(250.0);
-        for offset in offsets {
-            shifts[offset.element_index] = offset.x_offset_noteheads * notehead_width;
-        }
+    for offset in offsets {
+        shifts[offset.element_index] = offset.x_offset_noteheads * notehead_width;
     }
     shifts
 }
@@ -264,7 +265,7 @@ pub fn draw_additional_voices(
 
         for (elem_idx, positioned) in voice_layout.elements.iter().enumerate() {
             let rhythm_x = x_offset + positioned.x;
-            let elem_x = rhythm_x + collision_shifts[elem_idx];
+            let elem_x = rhythm_x + collision_shifts.get(elem_idx).copied().unwrap_or(0.0);
 
             match &positioned.element {
                 // Skip non-rhythmic elements — the primary voice already drew them.
