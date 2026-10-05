@@ -125,6 +125,23 @@ pub const LYRIC_BELOW_STAFF_SS: f64 = 5.5;
 /// `layout_lyric`.
 pub const LYRIC_FONT_SIZE_SS: f64 = 1.4;
 
+/// Minimum free space around a lyric hyphen, in staff spaces.
+pub(crate) const LYRIC_HYPHEN_MIN_GAP_SS: f64 = 0.6;
+/// Enough room for the visible hyphen glyph (about one third of the lyric
+/// font's em) and the renderer's clearance around it.
+pub(crate) const LYRIC_HYPHEN_GAP_SS: f64 =
+    LYRIC_FONT_SIZE_SS * 0.333 + LYRIC_HYPHEN_MIN_GAP_SS + 0.1;
+
+/// Conservative width of lyric text in font design units. The score uses
+/// generic SVG `serif`: the default DejaVu Serif raster face has glyph
+/// advances up to ~35% wider than the Times-like text-script estimator,
+/// especially in italic words with accented letters. Reserve that width
+/// before compressing note springs, and use the same edges for continuations.
+pub(crate) fn lyric_text_width(text: &str, style: LyricStyle, staff_space: f64) -> f64 {
+    crate::layout::text_script::estimate_text_width(text, LYRIC_FONT_SIZE_SS * staff_space, style)
+        * 1.4
+}
+
 /// Lay out a lyric syllable below the staff.
 ///
 /// `syllable` is the lyric content with continuation info.

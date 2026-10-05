@@ -27,12 +27,14 @@ use crate::layout::trill_extension::{
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::analysis_bracket_renderer::draw_system_analysis_brackets;
 use crate::render::glissando_renderer::draw_glissando;
-use crate::render::group_renderer::draw_groups;
+use crate::render::group_renderer::{draw_groups, GroupItem};
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{
     draw_lyric_extender, draw_lyric_hyphen_between, extender_source_x, extender_target_x,
 };
-use crate::render::measure_renderer::{draw_additional_voices, draw_measure_elements};
+use crate::render::measure_renderer::{
+    collision_shifts, draw_additional_voices, draw_measure_elements,
+};
 use crate::render::note_renderer::notehead_advance;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
@@ -283,10 +285,23 @@ fn draw_system_groups(
                 };
                 let measure_x = system_x + measure.x_offset;
                 layout.into_iter().flat_map(move |layout| {
+                    let shifts = if voice == 0 {
+                        Vec::new()
+                    } else {
+                        collision_shifts(font, &measure.layout, layout)
+                    };
                     layout
                         .elements
                         .iter()
-                        .map(move |positioned| (measure_x + positioned.x, &positioned.element))
+                        .enumerate()
+                        .map(move |(index, positioned)| {
+                            let x = measure_x + positioned.x;
+                            GroupItem {
+                                x,
+                                ink_x: x + shifts.get(index).copied().unwrap_or(0.0),
+                                element: &positioned.element,
+                            }
+                        })
                 })
             })
             .collect();

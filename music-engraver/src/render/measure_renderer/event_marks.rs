@@ -41,6 +41,8 @@ use crate::render::{SvgWriter, TextStyle};
 pub(super) struct EventAnchor {
     /// Left edge of the notehead column or rest glyph.
     pub(super) left_x: f64,
+    /// Original onset column: text and lyrics do not follow a displaced head.
+    pub(super) rhythm_x: f64,
     /// Width of the notehead column or rest glyph.
     pub(super) width: f64,
     /// Top of the event's noteheads or rest glyph (SVG y-down: the smallest
@@ -159,6 +161,8 @@ pub(super) fn draw_event_marks(
 ) -> Result<(), FontError> {
     let ss = config.staff_space;
     let center_x = anchor.center_x();
+    let text_left = anchor.rhythm_x;
+    let text_center = text_left + anchor.width / 2.0;
     let padding = TEXT_SCRIPT_PADDING_SS * ss;
     let mut stacks = Stacks {
         above: anchor.top_y.min(staff.y_of(8)) - padding,
@@ -237,10 +241,10 @@ pub(super) fn draw_event_marks(
 
     let tempo = match &annotations.tempo_mark {
         Some(mark) => {
-            let probe = layout_tempo_mark(mark, anchor.left_x, 0.0, font, ss)?;
+            let probe = layout_tempo_mark(mark, text_left, 0.0, font, ss)?;
             let descent = probe.lines.last().map_or(0.0, |line| line.line.descent);
             let baseline = tempo_baseline(staff, ss).min(stacks.above - descent);
-            Some(layout_tempo_mark(mark, anchor.left_x, baseline, font, ss)?)
+            Some(layout_tempo_mark(mark, text_left, baseline, font, ss)?)
         }
         None => None,
     };
@@ -250,13 +254,13 @@ pub(super) fn draw_event_marks(
             svg,
             font,
             &layout.line,
-            layout.left_for(center_x),
+            layout.left_for(text_center),
             *baseline,
         )?;
     }
 
     if let Some((text, style)) = &annotations.rehearsal_mark {
-        let layout = layout_rehearsal_mark(text, center_x, staff, ss, *style);
+        let layout = layout_rehearsal_mark(text, text_center, staff, ss, *style);
         draw_rehearsal_mark(svg, &layout);
     }
 
@@ -265,22 +269,14 @@ pub(super) fn draw_event_marks(
     }
 
     for (align, line, baseline) in &scripts {
-        draw_aligned_text_line(
-            svg,
-            font,
-            line,
-            *align,
-            anchor.left_x,
-            anchor.width,
-            *baseline,
-        )?;
+        draw_aligned_text_line(svg, font, line, *align, text_left, anchor.width, *baseline)?;
     }
 
     for lyric in &annotations.lyrics {
         if !lyric.syllable.skip {
             let layout = layout_lyric_verse(
                 &lyric.syllable,
-                center_x,
+                text_center,
                 staff,
                 ss,
                 lyric.verse,
@@ -293,7 +289,7 @@ pub(super) fn draw_event_marks(
     if let Some(symbol) = &annotations.chord_symbol {
         let layout = crate::layout::chord_symbol::layout_chord_symbol_composite(
             symbol,
-            center_x,
+            text_center,
             staff,
             ss,
             font.units_per_em(),
@@ -307,12 +303,12 @@ pub(super) fn draw_event_marks(
     }
 
     if let Some(sign) = annotations.navigation_sign {
-        let layout = crate::layout::navigation::layout_navigation_sign(sign, center_x, staff);
+        let layout = crate::layout::navigation::layout_navigation_sign(sign, text_center, staff);
         crate::render::navigation_renderer::draw_navigation_sign(svg, font, &layout)?;
     }
 
     if let Some(pedal_mark) = annotations.pedal {
-        crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, center_x)?;
+        crate::render::pedal_renderer::draw_pedal(svg, staff, font, pedal_mark, text_center)?;
     }
 
     if let Some(breath) = annotations.breath_mark {
@@ -359,6 +355,7 @@ pub(super) fn draw_rest_event(
         });
     let anchor = EventAnchor {
         left_x: x,
+        rhythm_x: x,
         width: advance,
         top_y,
         bottom_y,

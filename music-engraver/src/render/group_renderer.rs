@@ -11,7 +11,9 @@
 //! loses its hook on that side.
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::beam::{beam_level, layout_beam_group_scaled, subdivide_beam_counts, BeamedNote};
+use crate::layout::beam::{
+    beam_level, layout_beam_group_scaled, subdivide_beam_counts, BeamedNote,
+};
 use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::group::{
     scan_groups, BeamSpec, GroupScan, GroupSegment, TupletBracketVisibility, TupletNumberDisplay,
@@ -41,9 +43,14 @@ const TUPLET_CLEARANCE_SS: f64 = 1.0;
 /// Distance between nested tuplet brackets on the same side, in staff spaces.
 const NESTED_TUPLET_GAP_SS: f64 = 1.5;
 
-/// One positioned element of the sequence being drawn: absolute x and the
-/// element.
-pub type GroupItem<'a> = (f64, &'a MeasureElement);
+/// One positioned element: `x` is the rhythmic column and `ink_x` is where
+/// its noteheads and stems are engraved after cross-voice collision avoidance.
+/// Tuplets and rhythmic subdivisions must continue to use `x`.
+pub struct GroupItem<'a> {
+    pub x: f64,
+    pub ink_x: f64,
+    pub element: &'a MeasureElement,
+}
 
 /// Stem geometry of one beamed note or chord.
 struct MemberStem {
@@ -78,7 +85,7 @@ pub fn draw_groups(
     config: &EngravingConfig,
     items: &[GroupItem<'_>],
 ) -> Result<(), FontError> {
-    let scan = scan_groups(items.iter().map(|&(_, element)| element));
+    let scan = scan_groups(items.iter().map(|item| item.element));
     if scan.beams.is_empty() && scan.tuplets.is_empty() {
         return Ok(());
     }
@@ -189,7 +196,8 @@ fn member_stem(
             Ok(Some(MemberStem {
                 item,
                 attach_x: x + notehead_x_offset(attach.offset, direction) * widest,
-                attach_advance: notehead_advance(font, chord.duration_log2, attach.notehead_style)? * scale,
+                attach_advance: notehead_advance(font, chord.duration_log2, attach.notehead_style)?
+                    * scale,
                 attach_position,
                 beam_side_position,
                 duration_log2: chord.duration_log2,
@@ -212,16 +220,19 @@ fn draw_beam(
 ) -> Result<Option<RenderedBeam>, FontError> {
     // Members carry their beam's resolved direction (score conversion); the
     // farthest-from-the-middle rule covers hand-built layouts without one.
-    let explicit = segment.members.iter().find_map(|&item| match items[item].1 {
-        MeasureElement::Note(note) => note.stem_direction,
-        MeasureElement::Chord(chord) => chord.stem_direction,
-        _ => None,
-    });
+    let explicit = segment
+        .members
+        .iter()
+        .find_map(|&item| match items[item].element {
+            MeasureElement::Note(note) => note.stem_direction,
+            MeasureElement::Chord(chord) => chord.stem_direction,
+            _ => None,
+        });
     let direction = explicit.unwrap_or_else(|| {
         let positions: Vec<i8> = segment
             .members
             .iter()
-            .flat_map(|&item| match items[item].1 {
+            .flat_map(|&item| match items[item].element {
                 MeasureElement::Note(note) => vec![note.staff_position],
                 MeasureElement::Chord(chord) => chord.staff_positions.clone(),
                 _ => Vec::new(),
@@ -232,7 +243,9 @@ fn draw_beam(
 
     let mut stems = Vec::with_capacity(segment.members.len());
     for &item in &segment.members {
-        let (x, element) = items[item];
+        let GroupItem {
+            ink_x: x, element, ..
+        } = items[item];
         if let Some(stem) = member_stem(font, item, x, element, direction)? {
             stems.push(stem);
         }
@@ -269,7 +282,8 @@ fn draw_beam(
         })
         .collect();
     let advances: Vec<f64> = stems.iter().map(|stem| stem.attach_advance).collect();
-    let mut layout = layout_beam_group_scaled(&notes, direction, staff.staff_space, |i| stems[i].scale);
+    let mut layout =
+        layout_beam_group_scaled(&notes, direction, staff.staff_space, |i| stems[i].scale);
     if let Some(interval_log2) = segment.spec.subdivide_log2 {
         let onsets: Vec<f64> = stems.iter().map(|stem| scan.onsets[stem.item]).collect();
         subdivide_beam_counts(
@@ -292,11 +306,20 @@ fn draw_beam(
     if segment.open_end {
         layout.beams_right[last] = 0;
         if last > 0 {
-            layout.beams_left[last] = layout.beams_left[last].min(layout.beams_right[last - 1].max(1));
+            layout.beams_left[last] =
+                layout.beams_left[last].min(layout.beams_right[last - 1].max(1));
         }
     }
-    draw_beam_group_with_styles(svg, staff, config, &notes, &layout, &advances,
-        |i| stems[i].scale, |i| stems[i].visible);
+    draw_beam_group_with_styles(
+        svg,
+        staff,
+        config,
+        &notes,
+        &layout,
+        &advances,
+        |i| stems[i].scale,
+        |i| stems[i].visible,
+    );
 
     let tips: Vec<f64> = layout
         .stem_tip_ys
@@ -306,7 +329,8 @@ fn draw_beam(
     let stem_xs: Vec<f64> = notes
         .iter()
         .zip(&advances)
-        .map(|(note, &advance)| stem_x(note.x, advance, direction, thickness))
+        .zip(&stems)
+        .map(|((note, &advance), stem)| stem_x(note.x, advance, direction, thickness * stem.scale))
         .collect();
     let slope = if last > 0 && (stem_xs[last] - stem_xs[0]).abs() > f64::EPSILON {
         (tips[last] - tips[0]) / (stem_xs[last] - stem_xs[0])
@@ -374,22 +398,23 @@ fn draw_beam_extension(
 /// Right edge of an element's notehead (or rest) column, from its x.
 fn element_right_x(font: &MusicFont, x: f64, element: &MeasureElement) -> Result<f64, FontError> {
     let advance = match element {
-        MeasureElement::Note(note) => notehead_advance(
-            font,
-            note.duration_log2,
-            style_at(&note.annotations.notehead_styles, 0),
-        )? * note.annotations.size.scale(),
-        MeasureElement::Chord(chord) => (0..chord.staff_positions.len().max(1)).try_fold(
-            0.0_f64,
-            |widest, index| {
+        MeasureElement::Note(note) => {
+            notehead_advance(
+                font,
+                note.duration_log2,
+                style_at(&note.annotations.notehead_styles, 0),
+            )? * note.annotations.size.scale()
+        }
+        MeasureElement::Chord(chord) => {
+            (0..chord.staff_positions.len().max(1)).try_fold(0.0_f64, |widest, index| {
                 notehead_advance(
                     font,
                     chord.duration_log2,
                     style_at(&chord.annotations.notehead_styles, index),
                 )
                 .map(|advance| widest.max(advance * chord.annotations.size.scale()))
-            },
-        )?,
+            })?
+        }
         _ => notehead_advance(font, 2, NoteheadStyle::Normal)?,
     };
     Ok(x + advance)
@@ -405,16 +430,24 @@ fn member_extent(
     let half_space = staff.staff_space / 2.0;
     let (lowest, highest, duration_log2, visible): (i8, i8, i8, bool) = match element {
         MeasureElement::Note(note) => (
-            note.staff_position, note.staff_position, note.duration_log2,
+            note.staff_position,
+            note.staff_position,
+            note.duration_log2,
             note.annotations.stem == StemVisibility::Visible,
         ),
         MeasureElement::Chord(chord) => {
-            let (Some(&lowest), Some(&highest)) =
-                (chord.staff_positions.iter().min(), chord.staff_positions.iter().max())
-            else {
+            let (Some(&lowest), Some(&highest)) = (
+                chord.staff_positions.iter().min(),
+                chord.staff_positions.iter().max(),
+            ) else {
                 return staff.y_of(4);
             };
-            (lowest, highest, chord.duration_log2, chord.annotations.stem == StemVisibility::Visible)
+            (
+                lowest,
+                highest,
+                chord.duration_log2,
+                chord.annotations.stem == StemVisibility::Visible,
+            )
         }
         // A rest's glyph stays within the staff's middle; bound it there.
         _ => {
@@ -441,11 +474,16 @@ fn member_extent(
                 StemDirection::Up => highest,
                 StemDirection::Down => lowest,
             };
-            let (top, bottom) = stem_endpoints(staff, far, direction, match element {
-                MeasureElement::Note(note) => note.annotations.size.scale(),
-                MeasureElement::Chord(chord) => chord.annotations.size.scale(),
-                _ => 1.0,
-            });
+            let (top, bottom) = stem_endpoints(
+                staff,
+                far,
+                direction,
+                match element {
+                    MeasureElement::Note(note) => note.annotations.size.scale(),
+                    MeasureElement::Chord(chord) => chord.annotations.size.scale(),
+                    _ => 1.0,
+                },
+            );
             match direction {
                 StemDirection::Up => top,
                 StemDirection::Down => bottom,
@@ -482,7 +520,7 @@ fn draw_tuplet(
         .members
         .iter()
         .copied()
-        .filter(|&item| element_stem_direction(items[item].1).is_some())
+        .filter(|&item| element_stem_direction(items[item].element).is_some())
         .collect();
 
     // LilyPond's `if-no-beam`: one beam joining the first and last stemmed
@@ -513,7 +551,9 @@ fn draw_tuplet(
         None => {
             let up = stemmed
                 .iter()
-                .filter(|&&item| element_stem_direction(items[item].1) == Some(StemDirection::Up))
+                .filter(|&&item| {
+                    element_stem_direction(items[item].element) == Some(StemDirection::Up)
+                })
                 .count();
             if up * 2 >= stemmed.len() {
                 TupletPlacement::Above
@@ -524,8 +564,8 @@ fn draw_tuplet(
     });
 
     let extension = BROKEN_SPAN_EXTENSION_SS * staff.staff_space;
-    let mut x_left = items[first].0;
-    let mut x_right = element_right_x(font, items[last].0, items[last].1)?;
+    let mut x_left = items[first].x;
+    let mut x_right = element_right_x(font, items[last].x, items[last].element)?;
     if segment.open_start {
         x_left -= extension;
     }
@@ -546,7 +586,7 @@ fn draw_tuplet(
     let extents = segment
         .members
         .iter()
-        .map(|&item| member_extent(staff, items[item].1, beam_tip(item), placement));
+        .map(|&item| member_extent(staff, items[item].element, beam_tip(item), placement));
     let clearance = TUPLET_CLEARANCE_SS * staff.staff_space;
     let mut bracket_y = match placement {
         TupletPlacement::Above => extents.fold(f64::INFINITY, f64::min) - clearance,
