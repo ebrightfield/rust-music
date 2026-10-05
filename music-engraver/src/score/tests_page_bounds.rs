@@ -1,6 +1,7 @@
 use super::multi_staff::MultiStaffScore;
 use super::ScoreBuilder;
 use crate::font::bravura_font;
+use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
 use crate::layout::barline::BarlineStyle;
 use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
@@ -106,6 +107,7 @@ fn dense_score() -> ScoreBuilder {
     let mut score = ScoreBuilder::new()
         .clef(Clef::Alto)
         .time_signature(8, 8)
+        .accidental_policy(AccidentalPolicy::Forget)
         .system_width_fu(10_000.0)
         .measures_per_system(3)
         .note(Pitch::new(Note::A, 3), Duration::EIGHTH)
@@ -131,7 +133,12 @@ fn dense_score() -> ScoreBuilder {
         if index == 3 || index == 6 || index == 9 {
             score = score.inline_barline(BarlineStyle::Dashed);
         }
-        score = score.note(Pitch::new(note, 4), Duration::EIGHTH);
+        let pitch = Pitch::new(note, 4);
+        score = if matches!(index, 4 | 5 | 8 | 10 | 11) {
+            score.note_with_accidental(pitch, Duration::EIGHTH, AccidentalDisplay::Force)
+        } else {
+            score.note(pitch, Duration::EIGHTH)
+        };
     }
     score
         .barline()
