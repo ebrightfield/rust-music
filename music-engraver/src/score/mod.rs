@@ -45,10 +45,10 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
-use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
 use crate::layout::analysis_bracket::AnalysisBracketSpec;
 #[cfg(test)]
 use crate::layout::accidental::ResolvedAccidental;
+use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::{Articulation, ArticulationMark};
 use crate::layout::bar_number::MeasureNumbering;
@@ -57,11 +57,11 @@ use crate::layout::breath::BreathMark;
 use crate::layout::dynamics::DynamicMark;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::GraceNotes;
-use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::group::{BeamSpec, GroupMark, TupletSpec};
+use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::line_break::{LineBreakPlan, LineBreakRequest};
-use crate::layout::lyric::LyricSyllable;
+use crate::layout::lyric::{LyricStyle, LyricSyllable, VerseLyric};
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteSize, StemVisibility};
 use crate::layout::measure_meta::{LineBreak, MeasureLength, MeasureMeta};
 use crate::layout::navigation::NavigationSign;
@@ -71,6 +71,7 @@ use crate::layout::page::{layout_page, PageLayout, PageLayoutConfig, SystemBreak
 use crate::layout::pedal::PedalMark;
 use crate::layout::placement::Placement;
 use crate::layout::rehearsal::RehearsalStyle;
+use crate::layout::stem::StemDirection;
 use crate::layout::system::{
     ClefChange, ClefChangePlacement, ClefKind, MeasureContent, MeasureEvent, SystemPrefix,
 };
@@ -80,7 +81,6 @@ use crate::layout::text_spanner::TextSpanner;
 use crate::layout::time_signature::{TimeSignature, TimeSignatureKind};
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_extension::TrillWiggleSpeed;
-use crate::layout::stem::StemDirection;
 use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 use crate::render::page_renderer::draw_page;
 
@@ -160,7 +160,10 @@ fn last_rhythmic_event(
         .rev()
         .filter(|(v, _)| voice.is_none_or(|wanted| *v == wanted))
         .map(|(_, event)| event)
-        .find(|event| !event.is_structural() && !matches!(event, ScoreEvent::GroupMark(_) | ScoreEvent::Barline(_)))
+        .find(|event| {
+            !event.is_structural()
+                && !matches!(event, ScoreEvent::GroupMark(_) | ScoreEvent::Barline(_))
+        })
 }
 
 /// Annotations of the most recent rhythmic event when it is a note, chord or
@@ -171,6 +174,31 @@ fn last_annotations_mut(events: &mut [(u8, ScoreEvent)]) -> Option<&mut NoteAnno
         | ScoreEvent::Chord { annotations, .. }
         | ScoreEvent::Rest { annotations, .. } => Some(annotations),
         _ => None,
+    }
+}
+
+/// One verse occupies at most one slot on a note; entering it again replaces
+/// that verse without erasing the other verses.
+fn set_verse(
+    annotations: &mut NoteAnnotations,
+    verse: u16,
+    syllable: LyricSyllable,
+    style: LyricStyle,
+) {
+    let entry = VerseLyric {
+        verse,
+        syllable,
+        style,
+    };
+    if let Some(existing) = annotations
+        .lyrics
+        .iter_mut()
+        .find(|lyric| lyric.verse == verse)
+    {
+        *existing = entry;
+    } else {
+        annotations.lyrics.push(entry);
+        annotations.lyrics.sort_by_key(|lyric| lyric.verse);
     }
 }
 
@@ -217,6 +245,8 @@ pub struct ScoreBuilder {
     /// when multiple voices are present, voice 0 forces stems up, voice 1 forces
     /// stems down.
     current_voice: u8,
+    /// Per-verse associated voice, independent of the voice currently being entered.
+    lyric_voices: Vec<(u16, u8)>,
     /// Measures per system (for line breaking). 0 = auto (4 per system).
     pub(crate) measures_per_system: usize,
     /// System width in font design units. 0 = auto.
@@ -263,6 +293,7 @@ impl ScoreBuilder {
             current_events: Vec::new(),
             measures: Vec::new(),
             current_voice: 0,
+            lyric_voices: Vec::new(),
             measures_per_system: 4,
             system_width: 0.0,
             auto_breaks: false,
@@ -635,7 +666,6 @@ impl ScoreBuilder {
         self
     }
 
-
     /// Add a note to the current measure.
     pub fn note(mut self, pitch: Pitch, duration: Duration) -> Self {
         self.current_events.push((
@@ -981,19 +1011,67 @@ impl ScoreBuilder {
         self
     }
 
-    /// Attach a lyric syllable to the most recently added note or chord.
-    ///
-    /// Lyrics are rendered in roman (upright) text below the staff, below
-    /// dynamics and expression text. Use [`LyricSyllable::word`] for
-    /// end-of-word syllables, [`LyricSyllable::with_hyphen`] for mid-word
-    /// syllables (displays trailing hyphen), and [`LyricSyllable::with_extender`]
-    /// for melismatic syllables (sustained across multiple notes).
-    ///
-    /// Must be called immediately after `.note()` or `.chord()`. Has no effect
-    /// if the last event is not a note or chord.
-    pub fn lyric(mut self, syllable: LyricSyllable) -> Self {
-        if let Some(annotations) = self.last_pitched_annotations_mut() {
-            annotations.lyric = Some(syllable);
+    /// Attach a verse-1 upright syllable to the latest note or chord.
+    /// This uses the same numbered-verse model as [`Self::lyric_verse`].
+    pub fn lyric(self, syllable: LyricSyllable) -> Self {
+        self.lyric_verse(1, syllable, LyricStyle::Upright)
+    }
+
+    /// Attach a syllable to the given numbered verse (1-based). Different
+    /// verses on the same event coexist and have independent continuations.
+    /// By default the latest pitched event is used, regardless of voice entry
+    /// order. [`Self::lyric_associated_voice`] selects a voice for this verse.
+    pub fn lyric_verse(mut self, verse: u16, syllable: LyricSyllable, style: LyricStyle) -> Self {
+        assert!(verse > 0, "lyric verse numbers start at 1");
+        let voice = self
+            .lyric_voices
+            .iter()
+            .find(|(v, _)| *v == verse)
+            .map(|(_, voice)| *voice);
+        let target = if let Some(voice) = voice {
+            last_rhythmic_event(&mut self.current_events, Some(voice)).and_then(|event| match event
+            {
+                ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. } => {
+                    Some(annotations)
+                }
+                _ => None,
+            })
+        } else {
+            self.last_pitched_annotations_mut()
+        };
+        if let Some(annotations) = target {
+            set_verse(annotations, verse, syllable, style);
+        }
+        self
+    }
+
+    /// Associate this verse with a particular staff voice for future lyric
+    /// calls, including after barlines and system breaks. Switch it again when
+    /// the source underlay changes voice (`associatedVoice`).
+    pub fn lyric_associated_voice(mut self, verse: u16, voice: u8) -> Self {
+        assert!(verse > 0, "lyric verse numbers start at 1");
+        if let Some((_, associated)) = self.lyric_voices.iter_mut().find(|(v, _)| *v == verse) {
+            *associated = voice;
+        } else {
+            self.lyric_voices.push((verse, voice));
+        }
+        self
+    }
+
+    /// Attach a syllable explicitly to the most recent note/chord of `voice`,
+    /// without changing this verse's persistent voice association.
+    pub fn lyric_verse_on_voice(
+        mut self,
+        voice: u8,
+        verse: u16,
+        syllable: LyricSyllable,
+        style: LyricStyle,
+    ) -> Self {
+        assert!(verse > 0, "lyric verse numbers start at 1");
+        if let Some(ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. }) =
+            last_rhythmic_event(&mut self.current_events, Some(voice))
+        {
+            set_verse(annotations, verse, syllable, style);
         }
         self
     }
@@ -1651,7 +1729,6 @@ impl ScoreBuilder {
         self
     }
 
-
     /// Engrave grace notes before the most recently added note or chord.
     ///
     /// The group is drawn small ([`crate::layout::grace::GRACE_NOTE_SCALE`])
@@ -1695,8 +1772,12 @@ impl ScoreBuilder {
     /// its accidental, in parentheses (LilyPond `\parenthesize`). The
     /// parentheses' width is reserved. No-op if the last event was a rest.
     pub fn parenthesize(mut self) -> Self {
-        match self.current_events.iter_mut().rev()
-            .find(|(_, event)| !matches!(event, ScoreEvent::GroupMark(_))) {
+        match self
+            .current_events
+            .iter_mut()
+            .rev()
+            .find(|(_, event)| !matches!(event, ScoreEvent::GroupMark(_)))
+        {
             Some((_, ScoreEvent::Note { annotations, .. })) => {
                 annotations.parenthesized_noteheads = vec![true];
             }
@@ -2660,8 +2741,10 @@ mod tests_breve;
 #[cfg(test)]
 mod tests_c_clefs;
 #[cfg(test)]
-mod tests_written_octave;
+mod tests_lyrics_verses;
 #[cfg(test)]
 mod tests_rest_marks;
 #[cfg(test)]
 mod tests_structure;
+#[cfg(test)]
+mod tests_written_octave;

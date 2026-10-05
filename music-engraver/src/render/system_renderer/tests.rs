@@ -1416,7 +1416,11 @@ fn note_with_lyric(pos: i8, syl: LyricSyllable) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            lyric: Some(syl),
+            lyrics: vec![crate::layout::lyric::VerseLyric {
+                verse: 1,
+                syllable: syl,
+                style: Default::default(),
+            }],
             ..Default::default()
         },
     })

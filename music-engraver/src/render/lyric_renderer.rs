@@ -1,10 +1,10 @@
 /// SVG rendering for lyric text syllables.
 ///
-/// Renders roman (upright) text below the staff. Hyphens between adjacent
-/// syllables and melisma extender lines are drawn separately in a second
-/// pass, by [`draw_lyric_hyphen`] and [`draw_lyric_extender`] respectively,
-/// once positions of all consecutive notes are known.
-use crate::layout::lyric::LyricLayout;
+/// Renders serif text in each verse's font shape on its own baseline.
+/// Hyphens between adjacent syllables and melisma extender lines are drawn
+/// separately once the positions of consecutive notes are known.
+use crate::layout::lyric::{LyricLayout, LyricStyle};
+use crate::layout::text_script::estimate_text_width;
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
@@ -16,12 +16,72 @@ use crate::render::SvgWriter;
 /// centered between the syllable and the next one. Use [`draw_lyric_hyphen`]
 /// in a second pass when the next note's x-position is known.
 pub fn draw_lyric(svg: &mut SvgWriter, layout: &LyricLayout) {
+    let style = TextStyle {
+        font_weight: layout.style.svg_weight(),
+        font_style: layout.style.svg_style(),
+        ..TextStyle::normal(layout.font_size)
+    };
+    svg.add_text(layout.x_center, layout.y_baseline, &layout.text, &style);
+}
+
+/// Estimated half-width in the same serif metrics as score text scripts.
+pub(crate) fn lyric_text_half_width(text: &str, font: LyricStyle, staff_space: f64) -> f64 {
+    estimate_text_width(
+        text,
+        crate::layout::lyric::LYRIC_FONT_SIZE_SS * staff_space,
+        font,
+    ) * 0.5
+}
+
+/// Convert a note-center anchor to the center argument of
+/// [`draw_lyric_extender`], so the visible line clears the syllable's edge.
+pub(crate) fn extender_source_x(
+    center: f64,
+    lyric: &crate::layout::lyric::VerseLyric,
+    ss: f64,
+) -> f64 {
+    center + lyric_text_half_width(&lyric.syllable.text, lyric.style, ss) + 0.15 * ss
+        - EXTENDER_LEFT_PAD_SS * ss
+}
+
+/// Leave enough room for the next syllable at the end of a melisma.
+pub(crate) fn extender_target_x(
+    center: f64,
+    lyric: &crate::layout::lyric::VerseLyric,
+    ss: f64,
+) -> f64 {
+    center - lyric_text_half_width(&lyric.syllable.text, lyric.style, ss) - 0.15 * ss
+        + EXTENDER_RIGHT_PAD_SS * ss
+}
+
+/// Draw a hyphen only when there is room between the actual printed syllable
+/// edges, not just between their note centers.
+pub(crate) fn draw_lyric_hyphen_between(
+    svg: &mut SvgWriter,
+    from_x: f64,
+    from: &crate::layout::lyric::VerseLyric,
+    to_x: f64,
+    to: &crate::layout::lyric::VerseLyric,
+    y_baseline: f64,
+    staff_space: f64,
+) -> bool {
+    let left = from_x + lyric_text_half_width(&from.syllable.text, from.style, staff_space);
+    let right = to_x - lyric_text_half_width(&to.syllable.text, to.style, staff_space);
+    let font_size = crate::layout::lyric::LYRIC_FONT_SIZE_SS * staff_space;
+    if right - left < font_size * 0.333 + HYPHEN_MIN_GAP_SS * staff_space {
+        return false;
+    }
     svg.add_text(
-        layout.x_center,
-        layout.y_baseline,
-        &layout.text,
-        &TextStyle::normal(layout.font_size),
+        (left + right) * 0.5,
+        y_baseline,
+        "-",
+        &TextStyle {
+            font_weight: from.style.svg_weight(),
+            font_style: from.style.svg_style(),
+            ..TextStyle::normal(font_size)
+        },
     );
+    true
 }
 
 /// Estimated half-width of a lyric syllable, in ems, used to push the
@@ -61,14 +121,43 @@ pub fn draw_lyric_hyphen(
     font_size: f64,
     staff_space: f64,
 ) -> bool {
+    draw_lyric_hyphen_styled(
+        svg,
+        from_x,
+        to_x,
+        y_baseline,
+        font_size,
+        staff_space,
+        LyricStyle::Upright,
+    )
+}
+
+/// A system-boundary hyphen in the source verse's serif font shape.
+pub(crate) fn draw_lyric_hyphen_styled(
+    svg: &mut SvgWriter,
+    from_x: f64,
+    to_x: f64,
+    y_baseline: f64,
+    font_size: f64,
+    staff_space: f64,
+    style: LyricStyle,
+) -> bool {
     let half_width = HYPHEN_SYLLABLE_HALF_WIDTH_EM * font_size;
     let gap = to_x - from_x - 2.0 * half_width;
     if gap < HYPHEN_MIN_GAP_SS * staff_space {
         return false;
     }
-
     let midpoint = 0.5 * (from_x + to_x);
-    svg.add_text(midpoint, y_baseline, "-", &TextStyle::normal(font_size));
+    svg.add_text(
+        midpoint,
+        y_baseline,
+        "-",
+        &TextStyle {
+            font_weight: style.svg_weight(),
+            font_style: style.svg_style(),
+            ..TextStyle::normal(font_size)
+        },
+    );
     true
 }
 

@@ -13,12 +13,14 @@ use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::articulation::{
     layout_articulation_stack, layout_chord_articulation_stack, ArticulationPlacement,
 };
-use crate::layout::dynamics::{layout_dynamic_mark, DYNAMICS_ABOVE_STAFF_SS, DYNAMICS_BELOW_STAFF_SS};
-use crate::layout::lyric::layout_lyric;
+use crate::layout::dynamics::{
+    layout_dynamic_mark, DYNAMICS_ABOVE_STAFF_SS, DYNAMICS_BELOW_STAFF_SS,
+};
+use crate::layout::lyric::layout_lyric_verse;
 use crate::layout::measure::{NoteAnnotations, RestEvent};
-use crate::layout::rest::{rest_glyph, rest_staff_position, rest_y};
 use crate::layout::placement::Placement;
 use crate::layout::rehearsal::layout_rehearsal_mark;
+use crate::layout::rest::{rest_glyph, rest_staff_position, rest_y};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::StemDirection;
 use crate::layout::tempo::{layout_tempo_mark, tempo_baseline};
@@ -76,13 +78,7 @@ struct Stacks {
 impl Stacks {
     /// Baseline for a line of `ascent`/`descent` on `placement`'s side whose
     /// default baseline is `default`, advancing that side's cursor past it.
-    fn place(
-        &mut self,
-        placement: Placement,
-        default: f64,
-        ascent: f64,
-        descent: f64,
-    ) -> f64 {
+    fn place(&mut self, placement: Placement, default: f64, ascent: f64, descent: f64) -> f64 {
         match placement {
             Placement::Above => {
                 let baseline = default.min(self.above - descent);
@@ -147,9 +143,7 @@ fn text_script_default_baseline(
     staff_space: f64,
 ) -> f64 {
     match script.placement {
-        Placement::Above => {
-            staff.y_of(8) - TEXT_SCRIPT_PADDING_SS * staff_space - line.descent
-        }
+        Placement::Above => staff.y_of(8) - TEXT_SCRIPT_PADDING_SS * staff_space - line.descent,
         Placement::Below => staff.y_of(0) + TEXT_SCRIPT_BELOW_STAFF_SS * staff_space,
     }
 }
@@ -244,10 +238,7 @@ pub(super) fn draw_event_marks(
     let tempo = match &annotations.tempo_mark {
         Some(mark) => {
             let probe = layout_tempo_mark(mark, anchor.left_x, 0.0, font, ss)?;
-            let descent = probe
-                .lines
-                .last()
-                .map_or(0.0, |line| line.line.descent);
+            let descent = probe.lines.last().map_or(0.0, |line| line.line.descent);
             let baseline = tempo_baseline(staff, ss).min(stacks.above - descent);
             Some(layout_tempo_mark(mark, anchor.left_x, baseline, font, ss)?)
         }
@@ -255,7 +246,13 @@ pub(super) fn draw_event_marks(
     };
 
     if let Some((layout, baseline)) = &dynamic {
-        draw_text_line(svg, font, &layout.line, layout.left_for(center_x), *baseline)?;
+        draw_text_line(
+            svg,
+            font,
+            &layout.line,
+            layout.left_for(center_x),
+            *baseline,
+        )?;
     }
 
     if let Some((text, style)) = &annotations.rehearsal_mark {
@@ -279,9 +276,18 @@ pub(super) fn draw_event_marks(
         )?;
     }
 
-    if let Some(syllable) = &annotations.lyric {
-        let layout = layout_lyric(syllable, center_x, staff, ss);
-        draw_lyric(svg, &layout);
+    for lyric in &annotations.lyrics {
+        if !lyric.syllable.skip {
+            let layout = layout_lyric_verse(
+                &lyric.syllable,
+                center_x,
+                staff,
+                ss,
+                lyric.verse,
+                lyric.style,
+            );
+            draw_lyric(svg, &layout);
+        }
     }
 
     if let Some(symbol) = &annotations.chord_symbol {
@@ -338,10 +344,12 @@ pub(super) fn draw_rest_event(
         return Ok(());
     };
     let half_space = config.staff_space / 2.0;
-    let position = rest_staff_position(rest.duration_log2)
-        - (y_displacement / half_space).round() as i8;
+    let position =
+        rest_staff_position(rest.duration_log2) - (y_displacement / half_space).round() as i8;
     if rest.dots > 0 {
-        draw_dots(svg, staff, font, x, advance, position, rest.dots, 1.0, false)?;
+        draw_dots(
+            svg, staff, font, x, advance, position, rest.dots, 1.0, false,
+        )?;
     }
     let origin_y = rest_y(staff, rest.duration_log2) + y_displacement;
     let (top_y, bottom_y) = font

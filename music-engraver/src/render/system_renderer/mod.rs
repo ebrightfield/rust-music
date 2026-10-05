@@ -4,9 +4,7 @@ use crate::layout::glissando::{layout_glissando, GlissandoStyle, GLISSANDO_NOTEH
 use crate::layout::hairpin::{
     hairpin_reference_y, layout_hairpin_styled, HairpinType, NientePlacement,
 };
-use crate::layout::lyric::{
-    LyricContinuation, LyricSyllable, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS,
-};
+use crate::layout::lyric::{verse_baseline, LyricContinuation, LyricSyllable, VerseLyric};
 use crate::layout::measure::{MeasureElement, NoteAnnotations, NoteheadStyle, PositionedElement};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
@@ -29,15 +27,17 @@ use crate::layout::trill_extension::{
 use crate::layout::volta::layout_volta_bracket;
 use crate::render::analysis_bracket_renderer::draw_system_analysis_brackets;
 use crate::render::glissando_renderer::draw_glissando;
-use crate::render::hairpin_renderer::draw_hairpin;
-use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
 use crate::render::group_renderer::draw_groups;
+use crate::render::hairpin_renderer::draw_hairpin;
+use crate::render::lyric_renderer::{
+    draw_lyric_extender, draw_lyric_hyphen_between, extender_source_x, extender_target_x,
+};
 use crate::render::measure_renderer::{draw_additional_voices, draw_measure_elements};
 use crate::render::note_renderer::notehead_advance;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
-use crate::render::text_spanner_renderer::draw_text_spanner;
 use crate::render::staff_renderer::draw_staff_lines;
+use crate::render::text_spanner_renderer::draw_text_spanner;
 use crate::render::tie_renderer::draw_tie;
 use crate::render::trill_bracket_renderer::draw_trill_bracket_hooks;
 use crate::render::trill_extension_renderer::{
@@ -622,8 +622,7 @@ fn draw_system_hairpins(
         // The hairpin runs from right of the start event (and its dynamic)
         // to left of the target (and its dynamic).
         let hp_x_start = system_x + info.hairpin_start_x(font, config.staff_space)?;
-        let hp_x_end =
-            system_x + target.hairpin_end_x(font, config.staff_space, info.placement)?;
+        let hp_x_end = system_x + target.hairpin_end_x(font, config.staff_space, info.placement)?;
 
         // Use staff line thickness as hairpin stroke width
         let stroke_width = config.staff_line_thickness_fu();
@@ -735,46 +734,62 @@ fn draw_system_text_spanners(
     Ok(())
 }
 
-/// Positional info for a note/chord relevant to lyric extender drawing.
-pub(crate) struct LyricNoteInfo {
-    /// X-offset of the note within the system (before system_x is added).
+/// A pitched event and its lyrics, in system-local coordinates. Voice identity
+/// is retained: interleaved secondary notes never steal another voice's spans.
+pub(crate) struct LyricNoteInfo<'a> {
     pub(crate) x: f64,
-    /// The lyric syllable, if any.
-    pub(crate) lyric: Option<LyricSyllable>,
+    pub(crate) voice: u8,
+    pub(crate) lyrics: &'a [VerseLyric],
 }
 
-/// Collect lyric-relevant note info from the system in sequential order.
-pub(crate) fn collect_lyric_note_info(system: &SystemLayout) -> Vec<LyricNoteInfo> {
+impl LyricNoteInfo<'_> {
+    pub(crate) fn verse(&self, verse: u16) -> Option<&VerseLyric> {
+        self.lyrics
+            .iter()
+            .find(|lyric| lyric.verse == verse && !lyric.syllable.skip)
+    }
+
+    pub(crate) fn syllable(&self, verse: u16) -> Option<&LyricSyllable> {
+        self.verse(verse).map(|lyric| &lyric.syllable)
+    }
+}
+
+/// Collect notes/chords, including every beamed and tuplet member, from each
+/// voice in temporal order. Group marks and rests do not become lyric anchors.
+pub(crate) fn collect_lyric_note_info(
+    system: &SystemLayout,
+    staff_space: f64,
+) -> Vec<LyricNoteInfo<'_>> {
     let mut notes = Vec::new();
     for measure in &system.measures {
-        for (elem_x, elem) in all_measure_elements(measure) {
-            match &elem.element {
-                MeasureElement::Note(n) => {
-                    notes.push(LyricNoteInfo {
-                        x: elem_x,
-                        lyric: n.annotations.lyric.clone(),
-                    });
-                }
-                MeasureElement::Chord(c) => {
-                    notes.push(LyricNoteInfo {
-                        x: elem_x,
-                        lyric: c.annotations.lyric.clone(),
-                    });
-                }
-                _ => {}
+        for (voice, layout) in std::iter::once(&measure.layout)
+            .chain(measure.additional_voice_layouts.iter())
+            .enumerate()
+        {
+            for element in &layout.elements {
+                let (lyrics, scale) = match &element.element {
+                    MeasureElement::Note(n) => {
+                        (&n.annotations.lyrics[..], n.annotations.size.scale())
+                    }
+                    MeasureElement::Chord(c) => {
+                        (&c.annotations.lyrics[..], c.annotations.size.scale())
+                    }
+                    _ => continue,
+                };
+                notes.push(LyricNoteInfo {
+                    x: measure.x_offset + element.x + 0.59 * staff_space * scale,
+                    voice: voice as u8,
+                    lyrics,
+                });
             }
         }
     }
     notes
 }
 
-/// Draw lyric extender lines (melisma underscores) between syllables that
-/// have `Extender` continuation and the next note position.
-///
-/// The extender runs from just past the source syllable text to just before
-/// the target note's position. The target is the next note/chord in the
-/// system regardless of whether it has a lyric — the held syllable sustains
-/// until the next rhythmic event.
+/// Draw each verse's melisma to its next syllable, or to the final pitched
+/// member of its voice when it continues past this system. Explicit skips do
+/// not stop a melisma.
 fn draw_system_lyric_extenders(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
@@ -782,45 +797,37 @@ fn draw_system_lyric_extenders(
     staff: &StaffLayout,
     system_x: f64,
 ) {
-    let note_info = collect_lyric_note_info(system);
-
-    let y_baseline = staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
-    let stroke_width = config.staff_line_thickness_fu();
-
-    for (i, info) in note_info.iter().enumerate() {
-        let Some(ref lyric) = info.lyric else {
-            continue;
-        };
-        if lyric.continuation != LyricContinuation::Extender {
-            continue;
+    let notes = collect_lyric_note_info(system, config.staff_space);
+    for (i, info) in notes.iter().enumerate() {
+        for lyric in info.lyrics {
+            if lyric.syllable.skip || lyric.syllable.continuation != LyricContinuation::Extender {
+                continue;
+            }
+            let target = notes[i + 1..]
+                .iter()
+                .filter(|n| n.voice == info.voice)
+                .find(|n| n.syllable(lyric.verse).is_some())
+                .or_else(|| notes[i + 1..].iter().rev().find(|n| n.voice == info.voice));
+            if let Some(target) = target {
+                draw_lyric_extender(
+                    svg,
+                    system_x + extender_source_x(info.x, lyric, config.staff_space),
+                    system_x
+                        + target.verse(lyric.verse).map_or(target.x, |next| {
+                            extender_target_x(target.x, next, config.staff_space)
+                        }),
+                    verse_baseline(staff, config.staff_space, lyric.verse),
+                    config.staff_space,
+                    config.staff_line_thickness_fu(),
+                );
+            }
         }
-
-        // Find the next note/chord (any — the held syllable extends until
-        // the next rhythmic event regardless of whether it carries a lyric).
-        let Some(target) = note_info.get(i + 1) else {
-            continue;
-        };
-
-        draw_lyric_extender(
-            svg,
-            system_x + info.x,
-            system_x + target.x,
-            y_baseline,
-            config.staff_space,
-            stroke_width,
-        );
     }
 }
 
-/// Draw lyric hyphens between consecutive syllables where the source syllable
-/// has `Hyphen` continuation.
-///
-/// Engraving convention: the hyphen is a separate centered glyph between two
-/// syllables, sharing the same baseline and font size as the lyrics. The
-/// target is the next note/chord that carries a lyric — a syllable with
-/// hyphen continuation followed by a note WITHOUT a lyric is unusual and
-/// typically indicates a notation error; we render the hyphen anyway against
-/// the next rhythmic event, matching the extender convention.
+/// A visible hyphen is drawn only between real syllables of the same verse
+/// and associated voice. Hidden hyphens retain their continuation semantics
+/// without a visible glyph.
 fn draw_system_lyric_hyphens(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
@@ -828,34 +835,28 @@ fn draw_system_lyric_hyphens(
     staff: &StaffLayout,
     system_x: f64,
 ) {
-    let note_info = collect_lyric_note_info(system);
-
-    let y_baseline = staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
-    let font_size = LYRIC_FONT_SIZE_SS * config.staff_space;
-
-    for (i, info) in note_info.iter().enumerate() {
-        let Some(ref lyric) = info.lyric else {
-            continue;
-        };
-        if lyric.continuation != LyricContinuation::Hyphen {
-            continue;
+    let notes = collect_lyric_note_info(system, config.staff_space);
+    for (i, info) in notes.iter().enumerate() {
+        for lyric in info.lyrics {
+            if lyric.syllable.skip || lyric.syllable.continuation != LyricContinuation::Hyphen {
+                continue;
+            }
+            if let Some(target) = notes[i + 1..]
+                .iter()
+                .find(|n| n.voice == info.voice && n.syllable(lyric.verse).is_some())
+            {
+                let next = target.verse(lyric.verse).expect("target has a syllable");
+                draw_lyric_hyphen_between(
+                    svg,
+                    system_x + info.x,
+                    lyric,
+                    system_x + target.x,
+                    next,
+                    verse_baseline(staff, config.staff_space, lyric.verse),
+                    config.staff_space,
+                );
+            }
         }
-
-        // Find the next note/chord carrying a lyric — this is where the next
-        // syllable lives. If none exists in the same system, the hyphen will
-        // be picked up by the cross-system pass.
-        let Some(target) = note_info.iter().skip(i + 1).find(|n| n.lyric.is_some()) else {
-            continue;
-        };
-
-        draw_lyric_hyphen(
-            svg,
-            system_x + info.x,
-            system_x + target.x,
-            y_baseline,
-            font_size,
-            config.staff_space,
-        );
     }
 }
 

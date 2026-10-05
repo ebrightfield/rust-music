@@ -3232,7 +3232,11 @@ fn lyric_convert_event_preserves_field() {
         pitch: p("E", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            lyric: Some(LyricSyllable::with_hyphen("test")),
+            lyrics: vec![crate::layout::lyric::VerseLyric {
+                verse: 1,
+                syllable: LyricSyllable::with_hyphen("test"),
+                style: Default::default(),
+            }],
             ..NoteAnnotations::default()
         },
     };
@@ -3240,7 +3244,7 @@ fn lyric_convert_event_preserves_field() {
     let result = convert_event(&event, &clef, &key_sig, None);
     match result {
         MeasureEvent::Note(ne) => {
-            let lyric = ne.annotations.lyric.as_ref().expect("should have lyric");
+            let lyric = &ne.annotations.lyrics[0].syllable;
             assert_eq!(lyric.text, "test");
             assert_eq!(
                 lyric.continuation,

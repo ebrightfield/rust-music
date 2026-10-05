@@ -9,19 +9,22 @@ use crate::layout::glissando::{
 use crate::layout::hairpin::{
     hairpin_reference_y, layout_hairpin_styled, HairpinType, NientePlacement,
 };
-use crate::layout::placement::Placement;
-use crate::layout::text_spanner::{
-    layout_text_spanner, layout_text_spanner_continuation, TextSpanner,
-};
-use crate::layout::lyric::{LyricContinuation, LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
+#[cfg(test)]
+use crate::layout::lyric::LYRIC_BELOW_STAFF_SS;
+use crate::layout::lyric::{verse_baseline, LyricContinuation, LyricStyle, LYRIC_FONT_SIZE_SS};
+use crate::layout::mark_extent::{annotation_extent_ss, element_annotations};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::page::{PageLayout, PageSystem};
+use crate::layout::placement::Placement;
 use crate::layout::slur::{
     layout_half_slur_left, layout_half_slur_right, slur_direction_from_stem,
 };
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::auto_stem_direction;
+use crate::layout::text_spanner::{
+    layout_text_spanner, layout_text_spanner_continuation, TextSpanner,
+};
 use crate::layout::tie::{
     layout_half_tie_left, layout_half_tie_right, tie_direction_from_stem, TieDirection,
 };
@@ -34,21 +37,23 @@ use crate::layout::trill_extension::{
 };
 use crate::render::bar_number_renderer::draw_bar_numbers;
 pub(crate) use crate::render::analysis_bracket_renderer::draw_cross_system_analysis_brackets;
-use crate::render::text_spanner_renderer::draw_text_spanner;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
-use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
+use crate::render::lyric_renderer::{
+    draw_lyric_extender, draw_lyric_hyphen_styled, extender_source_x, extender_target_x,
+    lyric_text_half_width,
+};
 use crate::render::note_renderer::notehead_advance;
 use crate::render::ottava_renderer::draw_ottava_bracket;
 use crate::render::slur_renderer::draw_slur;
-use crate::layout::mark_extent::{annotation_extent_ss, element_annotations};
 use crate::render::system_renderer::{
-    collect_glissando_note_info, collect_hairpin_note_info, collect_text_spanner_note_info,
-    collect_lyric_note_info, collect_note_positions, collect_ottava_note_info,
-    collect_slur_note_info, collect_trill_extension_note_info, draw_system, layout_trill_end_hook,
-    span_event_advance, widest_notehead_advance, TRILL_BRACKET_HOOK_LENGTH_SS,
-    TRILL_EXTENSION_NOTE_GAP_SS,
+    collect_glissando_note_info, collect_hairpin_note_info, collect_lyric_note_info,
+    collect_note_positions, collect_ottava_note_info, collect_slur_note_info,
+    collect_text_spanner_note_info, collect_trill_extension_note_info, draw_system,
+    layout_trill_end_hook, span_event_advance, widest_notehead_advance,
+    TRILL_BRACKET_HOOK_LENGTH_SS, TRILL_EXTENSION_NOTE_GAP_SS,
 };
+use crate::render::text_spanner_renderer::draw_text_spanner;
 use crate::render::tie_renderer::draw_tie;
 use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_bracket_hooks};
 use crate::render::trill_extension_renderer::{
@@ -128,7 +133,10 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
                         }
                     }
                     // Tuplet brackets can extend past stems and note annotations.
-                    if matches!(positioned.element, MeasureElement::GroupMark(GroupMark::TupletStart { .. })) {
+                    if matches!(
+                        positioned.element,
+                        MeasureElement::GroupMark(GroupMark::TupletStart { .. })
+                    ) {
                         top = top.min(ps.y - 3.0 * config.staff_space);
                         bottom = bottom.max(ps.y + 7.0 * config.staff_space);
                     }
@@ -960,231 +968,181 @@ pub(crate) fn draw_cross_system_text_spanners(
     Ok(())
 }
 
-/// Draw cross-system lyric extender lines between adjacent systems on a page.
-///
-/// When a lyric syllable with `Extender` continuation appears on the last note
-/// of a system and the held syllable continues into the next system, two
-/// half-extender lines are drawn: one trailing from the source syllable to the
-/// right edge of the system, and one leading from the left of the next system
-/// to the first note's position (the rhythmic event where the sustained
-/// syllable ends).
+/// Draw an extender or hyphen across each system boundary, keeping an
+/// independent active syllable for every (voice, verse) pair. An empty verse
+/// on a note, or an explicit skip, never transfers a lyric to another voice.
+fn draw_cross_system_lyric_spans(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    systems: &[PageSystem],
+    continuation: LyricContinuation,
+) {
+    use std::collections::BTreeMap;
+    let mut active: BTreeMap<(u8, u16), (LyricContinuation, LyricStyle, Option<f64>)> =
+        BTreeMap::new();
+    for pair in systems.windows(2) {
+        let src = &pair[0];
+        let dst = &pair[1];
+        let source_notes = collect_lyric_note_info(&src.system, config.staff_space);
+        // The x is Some only if this system bears the active syllable.
+        for (_, _, x) in active.values_mut() {
+            *x = None;
+        }
+        for note in &source_notes {
+            for lyric in note.lyrics {
+                if !lyric.syllable.skip {
+                    active.insert(
+                        (note.voice, lyric.verse),
+                        (
+                            lyric.syllable.continuation.clone(),
+                            lyric.style,
+                            Some(note.x),
+                        ),
+                    );
+                }
+            }
+        }
+        let target_notes = collect_lyric_note_info(&dst.system, config.staff_space);
+        let src_staff = StaffLayout::new(src.x, src.y, src.system.staff_width, config.staff_space);
+        let dst_staff = StaffLayout::new(dst.x, dst.y, dst.system.staff_width, config.staff_space);
+        let dst_start = dst.x
+            + dst
+                .system
+                .measures
+                .first()
+                .map_or(0.0, |measure| measure.x_offset);
+        for (&(voice, verse), (kind, style, source_x)) in &active {
+            if *kind != continuation {
+                continue;
+            }
+            let mut voice_notes = target_notes.iter().filter(|note| note.voice == voice);
+            let next_syllable = voice_notes
+                .clone()
+                .find(|note| note.syllable(verse).is_some());
+            let end = if continuation == LyricContinuation::Extender {
+                next_syllable.or_else(|| voice_notes.next_back())
+            } else {
+                next_syllable
+            };
+            let Some(end) = end else {
+                continue;
+            };
+            // A previous system may hold the original syllable; its active
+            // melisma then begins at this system's first pitched member.
+            let from = source_x.or_else(|| {
+                source_notes
+                    .iter()
+                    .find(|note| note.voice == voice)
+                    .map(|note| note.x)
+            });
+            let Some(from) = from else {
+                continue;
+            };
+            let src_y = verse_baseline(&src_staff, config.staff_space, verse);
+            let dst_y = verse_baseline(&dst_staff, config.staff_space, verse);
+            if continuation == LyricContinuation::Extender {
+                let last_note_x = source_notes
+                    .iter()
+                    .rev()
+                    .find(|note| note.voice == voice)
+                    .map_or(from, |note| note.x);
+                let source_lyric = source_x.and_then(|_| {
+                    source_notes
+                        .iter()
+                        .rev()
+                        .find(|note| note.voice == voice && note.verse(verse).is_some())
+                        .and_then(|note| note.verse(verse))
+                });
+                let trailing_from = if *source_x == Some(last_note_x) {
+                    source_lyric.map_or(last_note_x, |lyric| {
+                        extender_source_x(last_note_x, lyric, config.staff_space)
+                    })
+                } else {
+                    last_note_x
+                };
+                draw_lyric_extender(
+                    svg,
+                    src.x + trailing_from,
+                    src.x + src.system.staff_width,
+                    src_y,
+                    config.staff_space,
+                    config.staff_line_thickness_fu(),
+                );
+                let incoming_end = end.verse(verse).map_or(end.x, |lyric| {
+                    extender_target_x(end.x, lyric, config.staff_space)
+                });
+                draw_lyric_extender(
+                    svg,
+                    dst_start,
+                    dst.x + incoming_end,
+                    dst_y,
+                    config.staff_space,
+                    config.staff_line_thickness_fu(),
+                );
+            } else {
+                let source_edge = source_x
+                    .and_then(|_| {
+                        source_notes
+                            .iter()
+                            .rev()
+                            .find(|note| note.voice == voice && note.verse(verse).is_some())
+                            .and_then(|note| note.verse(verse))
+                    })
+                    .map_or(from, |lyric| {
+                        from + lyric_text_half_width(
+                            &lyric.syllable.text,
+                            lyric.style,
+                            config.staff_space,
+                        )
+                    });
+                let target_edge = end.verse(verse).map_or(end.x, |lyric| {
+                    end.x
+                        - lyric_text_half_width(
+                            &lyric.syllable.text,
+                            lyric.style,
+                            config.staff_space,
+                        )
+                });
+                draw_lyric_hyphen_styled(
+                    svg,
+                    src.x + source_edge,
+                    src.x + src.system.staff_width,
+                    src_y,
+                    LYRIC_FONT_SIZE_SS * config.staff_space,
+                    config.staff_space,
+                    *style,
+                );
+                draw_lyric_hyphen_styled(
+                    svg,
+                    dst_start,
+                    dst.x + target_edge,
+                    dst_y,
+                    LYRIC_FONT_SIZE_SS * config.staff_space,
+                    config.staff_space,
+                    *style,
+                );
+            }
+        }
+    }
+}
+
+/// Continue per-voice, per-verse melismas through system breaks.
 pub(crate) fn draw_cross_system_lyric_extenders(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
     systems: &[PageSystem],
 ) {
-    let stroke_width = config.staff_line_thickness_fu();
-
-    for i in 0..systems.len().saturating_sub(1) {
-        let src_system = &systems[i];
-        let note_info = collect_lyric_note_info(&src_system.system);
-
-        // Find the last note with an extender that has no target within the
-        // same system (i.e., it's the last note or the remaining notes have
-        // no next target to resolve it).
-        let Some(last_extender) = find_last_unresolved_extender(&note_info) else {
-            continue;
-        };
-
-        let src_staff = StaffLayout::new(
-            src_system.x,
-            src_system.y,
-            src_system.system.staff_width,
-            config.staff_space,
-        );
-        let src_y_baseline = src_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
-
-        // Draw trailing half-extender from the source syllable to the right
-        // edge of the system.
-        let x_from = src_system.x + last_extender.x;
-        let x_to = src_system.x + src_system.system.staff_width;
-        draw_lyric_extender(
-            svg,
-            x_from,
-            x_to,
-            src_y_baseline,
-            config.staff_space,
-            stroke_width,
-        );
-
-        // Draw incoming half-extender at the start of the target system.
-        let tgt_system = &systems[i + 1];
-        let tgt_note_info = collect_lyric_note_info(&tgt_system.system);
-
-        if let Some(first_note) = tgt_note_info.first() {
-            let tgt_staff = StaffLayout::new(
-                tgt_system.x,
-                tgt_system.y,
-                tgt_system.system.staff_width,
-                config.staff_space,
-            );
-            let tgt_y_baseline = tgt_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
-
-            // Start from the left edge of the first measure's content area
-            let first_measure_x = tgt_system
-                .system
-                .measures
-                .first()
-                .map(|m| tgt_system.x + m.x_offset)
-                .unwrap_or(tgt_system.x);
-
-            let x_to_tgt = tgt_system.x + first_note.x;
-            draw_lyric_extender(
-                svg,
-                first_measure_x,
-                x_to_tgt,
-                tgt_y_baseline,
-                config.staff_space,
-                stroke_width,
-            );
-        }
-    }
+    draw_cross_system_lyric_spans(svg, config, systems, LyricContinuation::Extender);
 }
 
-/// Find the last note in a system that has an extender lyric with no target
-/// note following it within the same system.
-///
-/// An extender is "unresolved" if there is no subsequent note/chord in the
-/// note_info list to draw the extender line to — meaning the held syllable
-/// continues past the system boundary.
-fn find_last_unresolved_extender(
-    note_info: &[crate::render::system_renderer::LyricNoteInfo],
-) -> Option<&crate::render::system_renderer::LyricNoteInfo> {
-    // Walk backwards: the last note with an extender that has no next note
-    // to resolve it is the one whose index == note_info.len() - 1, since the
-    // within-system renderer would have drawn the line if a target existed.
-    // More generally, the last extender with no subsequent note is unresolved.
-    for (i, info) in note_info.iter().enumerate().rev() {
-        let Some(ref lyric) = info.lyric else {
-            continue;
-        };
-        if lyric.continuation == LyricContinuation::Extender {
-            // Check if there's a next note to resolve it within the system
-            if i + 1 < note_info.len() {
-                // Resolved within the system — skip
-                return None;
-            }
-            return Some(info);
-        }
-        // If we hit a note without an extender, no unresolved extender exists
-        // (any earlier extender would have had a target note after it).
-        return None;
-    }
-    None
-}
-
-/// Draw cross-system lyric hyphens between adjacent systems on a page.
-///
-/// When the last syllable on a system has `Hyphen` continuation, the hyphen
-/// is drawn between the source syllable (on the source system) and the first
-/// syllable-bearing note on the next system. The single hyphen is centered
-/// over the system break — the closer half of the gap on the source system,
-/// the closer half on the target system. We approximate this with one hyphen
-/// per side: a trailing hyphen near the right edge of the source system and
-/// a leading hyphen near the left edge of the target system. Some engraving
-/// conventions draw only one (closest to the syllable text); we draw both
-/// for visual symmetry, which Gould describes as acceptable.
+/// Continue visible word hyphens through system breaks. Hidden hyphens are
+/// attached to their verse but deliberately draw neither half-hyphen.
 pub(crate) fn draw_cross_system_lyric_hyphens(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
     systems: &[PageSystem],
 ) {
-    let font_size = LYRIC_FONT_SIZE_SS * config.staff_space;
-
-    for i in 0..systems.len().saturating_sub(1) {
-        let src_system = &systems[i];
-        let note_info = collect_lyric_note_info(&src_system.system);
-
-        // Find the last note with a Hyphen continuation that has no
-        // syllable-bearing target within the same system (otherwise the
-        // within-system pass already drew it).
-        let Some(last_hyphen) = find_last_unresolved_hyphen(&note_info) else {
-            continue;
-        };
-
-        let src_staff = StaffLayout::new(
-            src_system.x,
-            src_system.y,
-            src_system.system.staff_width,
-            config.staff_space,
-        );
-        let src_y_baseline = src_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
-
-        // Trailing hyphen on the source system, between the source syllable
-        // and the right edge of the system's staff.
-        let from_x_src = src_system.x + last_hyphen.x;
-        let to_x_src = src_system.x + src_system.system.staff_width;
-        draw_lyric_hyphen(
-            svg,
-            from_x_src,
-            to_x_src,
-            src_y_baseline,
-            font_size,
-            config.staff_space,
-        );
-
-        // Leading hyphen on the target system, between the left edge of the
-        // target system's content area and the first syllable-bearing note.
-        let tgt_system = &systems[i + 1];
-        let tgt_note_info = collect_lyric_note_info(&tgt_system.system);
-        let Some(first_lyric_note) = tgt_note_info.iter().find(|n| n.lyric.is_some()) else {
-            continue;
-        };
-
-        let tgt_staff = StaffLayout::new(
-            tgt_system.x,
-            tgt_system.y,
-            tgt_system.system.staff_width,
-            config.staff_space,
-        );
-        let tgt_y_baseline = tgt_staff.y_of(0) + LYRIC_BELOW_STAFF_SS * config.staff_space;
-
-        let first_measure_x = tgt_system
-            .system
-            .measures
-            .first()
-            .map(|m| tgt_system.x + m.x_offset)
-            .unwrap_or(tgt_system.x);
-        let to_x_tgt = tgt_system.x + first_lyric_note.x;
-        draw_lyric_hyphen(
-            svg,
-            first_measure_x,
-            to_x_tgt,
-            tgt_y_baseline,
-            font_size,
-            config.staff_space,
-        );
-    }
-}
-
-/// Find the last note in a system with `Hyphen` continuation that has no
-/// subsequent syllable-bearing note in the same system.
-///
-/// Walks backwards: the search ends at the first syllable-bearing note. If
-/// that syllable has hyphen continuation but no successor with a lyric, it is
-/// unresolved and the hyphen crosses the system boundary. If it has any other
-/// continuation (or its successor has a lyric within the system), no
-/// cross-system hyphen is needed.
-fn find_last_unresolved_hyphen(
-    note_info: &[crate::render::system_renderer::LyricNoteInfo],
-) -> Option<&crate::render::system_renderer::LyricNoteInfo> {
-    for (i, info) in note_info.iter().enumerate().rev() {
-        let Some(ref lyric) = info.lyric else {
-            continue;
-        };
-        if lyric.continuation != LyricContinuation::Hyphen {
-            // Last syllable carries no hyphen — nothing crosses the boundary.
-            return None;
-        }
-        // Does any subsequent note in the system carry a lyric?
-        let has_target = note_info.iter().skip(i + 1).any(|n| n.lyric.is_some());
-        if has_target {
-            // Within-system hyphen already drawn — not unresolved.
-            return None;
-        }
-        return Some(info);
-    }
-    None
+    draw_cross_system_lyric_spans(svg, config, systems, LyricContinuation::Hyphen);
 }
 
 /// An ottava bracket at the end of a system with no matching `ottava_end`.

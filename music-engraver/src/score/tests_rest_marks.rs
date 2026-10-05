@@ -384,6 +384,6 @@ fn pitch_bound_builders_after_a_rest_attach_nowhere() {
         };
         assert!(!annotations.tie_forward);
         assert!(!annotations.slur_start);
-        assert!(annotations.lyric.is_none());
+        assert!(annotations.lyrics.is_empty());
     }
 }

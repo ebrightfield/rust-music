@@ -1525,7 +1525,11 @@ fn note_with_lyric_adds_text_element() {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            lyric: Some(LyricSyllable::word("sun")),
+            lyrics: vec![crate::layout::lyric::VerseLyric {
+                verse: 1,
+                syllable: LyricSyllable::word("sun"),
+                style: Default::default(),
+            }],
             ..Default::default()
         },
     })];
@@ -1596,7 +1600,11 @@ fn chord_with_lyric_adds_text_element() {
         accidentals: vec![None, None, None],
         stem_direction: None,
         annotations: NoteAnnotations {
-            lyric: Some(LyricSyllable::with_hyphen("hap")),
+            lyrics: vec![crate::layout::lyric::VerseLyric {
+                verse: 1,
+                syllable: LyricSyllable::with_hyphen("hap"),
+                style: Default::default(),
+            }],
             ..Default::default()
         },
     })];
@@ -1639,7 +1647,14 @@ fn lyric_differs_from_no_lyric() {
             accidental: None,
             stem_direction: None,
             annotations: NoteAnnotations {
-                lyric,
+                lyrics: lyric
+                    .into_iter()
+                    .map(|syllable| crate::layout::lyric::VerseLyric {
+                        verse: 1,
+                        syllable,
+                        style: Default::default(),
+                    })
+                    .collect(),
                 ..Default::default()
             },
         })];

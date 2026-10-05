@@ -126,7 +126,8 @@ pub use hairpin::{
 };
 pub use key_signature::{KeySignature, KeySignatureLayout};
 pub use lyric::{
-    layout_lyric, LyricContinuation, LyricLayout, LyricSyllable, LYRIC_BELOW_STAFF_SS,
+    layout_lyric, layout_lyric_verse, verse_baseline, LyricContinuation, LyricLayout, LyricStyle,
+    LyricSyllable, VerseLyric, LYRIC_BELOW_STAFF_SS, LYRIC_VERSE_GAP_SS,
 };
 pub use measure::{
     layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent, NoteSize,
