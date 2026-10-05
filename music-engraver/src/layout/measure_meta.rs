@@ -170,6 +170,15 @@ pub struct MeasureMeta {
     /// A later visual piece of a logical measure that was split at an inline
     /// barline. It shares the logical measure's number and lengths.
     pub continuation: bool,
+    /// Exact onset of this visual piece in its logical measure. Non-split
+    /// measures begin at zero; pieces after a forced mid-measure break retain
+    /// the break's original performed onset on every stave.
+    pub visual_start: MeasureLength,
+    /// At a split, each voice's exact performed cursor at its first original
+    /// event in this piece (primary first). This preserves a note that spans
+    /// the break: its next event begins after `visual_start`, not at the break.
+    /// Unsplit measures leave this empty.
+    pub visual_voice_onsets: Vec<MeasureLength>,
     /// Line-break permission after this content.
     pub line_break: LineBreak,
 }

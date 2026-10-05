@@ -7864,3 +7864,17 @@
   8/8→12/8→8/8→7/8 excerpt shape against the LilyPond excerpt PDF,
   mid-measure/system-break changes, and grand staff; unrelated slurs/dashed
   barlines in the reference are outside this change.
+
+## 2026-10-04 — RM-MN-006: shared exact rhythmic columns
+- Laid out every voice and stave against one `MeasureLength` onset grid, with
+  tuplet-adjusted performed durations, split-measure carry-in, and a common
+  barline column. Structural glyphs, accidentals, dots, and simultaneous voices
+  reserve the maximum collision-free rod; overlapping rhythmic spans take the
+  maximum spring per interval before one system-wide justification.
+- Multi-staff and single-staff rendering now share grid positions; automatic
+  breaks measure the widest stave/voice, including otherwise empty staves.
+  Removed byte-pinned SVG snapshots while retaining behavioral rendering
+  assertions and adding onset/geometry regressions from Modus Novus excerpts.
+- Verified 12 focused grid tests and 53 surviving SVG behavioral tests;
+  visually compared flattened PNGs of a two-staff mixed-density score and
+  mn-c12-i001's opening against the corresponding LilyPond renderings.

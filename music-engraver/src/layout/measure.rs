@@ -6,8 +6,8 @@ use crate::layout::breath::BreathMark;
 use crate::layout::clef::{ClefLayout, ClefSize};
 use crate::layout::dynamics::DynamicMark;
 use crate::layout::glissando::GlissandoStyle;
-use crate::layout::group::{GroupMark, TupletSpec};
 use crate::layout::grace::{grace_group_extent, grace_stem_direction, GraceGroup, GraceNotes};
+use crate::layout::group::{GroupMark, TupletSpec};
 use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
@@ -770,8 +770,11 @@ fn element_left_extent(element: &MeasureElement, config: &MeasureLayoutConfig) -
     match element {
         MeasureElement::Note(note) => note_left_extent(note, config),
         MeasureElement::Chord(chord) => annotated_left_extent(
-            &chord.staff_positions, &chord.accidentals, &chord.annotations,
-            chord.stem_direction, config,
+            &chord.staff_positions,
+            &chord.accidentals,
+            &chord.annotations,
+            chord.stem_direction,
+            config,
         ),
         MeasureElement::Clef(clef) => match clef.size {
             ClefSize::Full => config.clef_left_margin,
@@ -828,82 +831,81 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
         // trailing padding (e.g. clef_padding) that sits outside the element's
         // own width; rhythmic elements fold all spacing into rod + spring
         // except their leading accidental extent, reserved before them below.
-        let (rod, spr, trailing) =
-            match elem {
-                // The clef's origin sits at the element x (after its leading
-                // margin); its rod is the inked width right of the origin.
-                MeasureElement::Clef(clef) => (
-                    clef.ink_box().x_right * config.staff_space,
+        let (rod, spr, trailing) = match elem {
+            // The clef's origin sits at the element x (after its leading
+            // margin); its rod is the inked width right of the origin.
+            MeasureElement::Clef(clef) => (
+                clef.ink_box().x_right * config.staff_space,
+                0.0,
+                config.clef_padding,
+            ),
+            MeasureElement::KeySignature(key) => {
+                let count = match key {
+                    KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
+                    KeySignature::Open => 0.0,
+                };
+                let w = count * config.key_sig_accidental_width;
+                let trailing = if w > 0.0 { config.key_sig_padding } else { 0.0 };
+                (w, 0.0, trailing)
+            }
+            MeasureElement::TimeSignature(kind) => (
+                kind.width_ss() * config.staff_space,
+                0.0,
+                config.time_sig_padding,
+            ),
+            MeasureElement::Note(n) => (
+                note_rod(0.0, n.dots, &n.annotations, config),
+                spring(n.duration_log2, time_scale),
+                0.0,
+            ),
+            MeasureElement::Rest(r) => {
+                // A rest has no notehead/accidental, but reuse the notehead rod
+                // as the glyph-extent estimate; dots still apply.
+                (
+                    event_rod(0.0, r.dots, config),
+                    spring(r.duration_log2, time_scale),
                     0.0,
-                    config.clef_padding,
-                ),
-                MeasureElement::KeySignature(key) => {
-                    let count = match key {
-                        KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
-                        KeySignature::Open => 0.0,
-                    };
-                    let w = count * config.key_sig_accidental_width;
-                    let trailing = if w > 0.0 { config.key_sig_padding } else { 0.0 };
-                    (w, 0.0, trailing)
-                }
-                MeasureElement::TimeSignature(kind) => (
-                    kind.width_ss() * config.staff_space,
+                )
+            }
+            // A spacer occupies exactly the room of a rest of its duration,
+            // so an empty bar is as wide as the same bar holding a rest.
+            MeasureElement::Spacer(spacer) => (
+                event_rod(0.0, spacer.dots, config),
+                spring(spacer.duration_log2, 1.0),
+                0.0,
+            ),
+            MeasureElement::Chord(c) => {
+                // A chord shares one stem column (one notehead rod); its stacked
+                // accidental columns are its leading accidental extent.
+                (
+                    note_rod(0.0, c.dots, &c.annotations, config),
+                    spring(c.duration_log2, time_scale),
                     0.0,
-                    config.time_sig_padding,
-                ),
-                MeasureElement::Note(n) => (
-                    note_rod(0.0, n.dots, &n.annotations, config),
-                    spring(n.duration_log2, time_scale),
-                    0.0,
-                ),
-                MeasureElement::Rest(r) => {
-                    // A rest has no notehead/accidental, but reuse the notehead rod
-                    // as the glyph-extent estimate; dots still apply.
-                    (
-                        event_rod(0.0, r.dots, config),
-                        spring(r.duration_log2, time_scale),
-                        0.0,
-                    )
-                }
-                // A spacer occupies exactly the room of a rest of its duration,
-                // so an empty bar is as wide as the same bar holding a rest.
-                MeasureElement::Spacer(spacer) => (
-                    event_rod(0.0, spacer.dots, config),
-                    spring(spacer.duration_log2, 1.0),
-                    0.0,
-                ),
-                MeasureElement::Chord(c) => {
-                    // A chord shares one stem column (one notehead rod); its stacked
-                    // accidental columns are its leading accidental extent.
-                    (
-                        note_rod(0.0, c.dots, &c.annotations, config),
-                        spring(c.duration_log2, time_scale),
-                        0.0,
-                    )
-                }
-                MeasureElement::GroupMark(mark) => {
-                    match mark {
-                        GroupMark::TupletStart { spec, .. } => open_tuplets.push(*spec),
-                        GroupMark::TupletEnd { .. } => {
-                            open_tuplets.pop();
-                        }
-                        GroupMark::BeamStart { .. } | GroupMark::BeamEnd { .. } => {}
+                )
+            }
+            MeasureElement::GroupMark(mark) => {
+                match mark {
+                    GroupMark::TupletStart { spec, .. } => open_tuplets.push(*spec),
+                    GroupMark::TupletEnd { .. } => {
+                        open_tuplets.pop();
                     }
-                    (0.0, 0.0, 0.0)
+                    GroupMark::BeamStart { .. } | GroupMark::BeamEnd { .. } => {}
                 }
-                MeasureElement::MultiMeasureRest { .. } => {
-                    // Occupies the full rhythmic width of the measure as an
-                    // incompressible block; the renderer draws the H-bar (or
-                    // church-rest cluster) spanning to the barline. Use whole-note
-                    // (longest) spring length as the block allocation, but treat it
-                    // as rod so it neither compresses nor stretches.
-                    (event_rod(0.0, 0, config) + spring(0, 1.0), 0.0, 0.0)
-                }
-                // An invisible barline marks a position (a break point or an
-                // unmarked end) without taking any space.
-                MeasureElement::Barline(style) if !style.is_visible() => (0.0, 0.0, 0.0),
-                MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
-            };
+                (0.0, 0.0, 0.0)
+            }
+            MeasureElement::MultiMeasureRest { .. } => {
+                // Occupies the full rhythmic width of the measure as an
+                // incompressible block; the renderer draws the H-bar (or
+                // church-rest cluster) spanning to the barline. Use whole-note
+                // (longest) spring length as the block allocation, but treat it
+                // as rod so it neither compresses nor stretches.
+                (event_rod(0.0, 0, config) + spring(0, 1.0), 0.0, 0.0)
+            }
+            // An invisible barline marks a position (a break point or an
+            // unmarked end) without taking any space.
+            MeasureElement::Barline(style) if !style.is_visible() => (0.0, 0.0, 0.0),
+            MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
+        };
 
         let leading = element_left_extent(elem, config)
             + match (elem, previous) {
@@ -984,7 +986,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
 
 /// Trailing padding that sits after a prefix element but outside its `width`
 /// (clef/key-sig/time-sig). Counted as incompressible rod at the measure level.
-fn trailing_padding(elem: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
+pub(crate) fn trailing_padding(elem: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
     match elem {
         MeasureElement::Clef(_) => config.clef_padding,
         MeasureElement::KeySignature(key) => {

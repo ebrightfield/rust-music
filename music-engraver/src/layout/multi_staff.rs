@@ -234,6 +234,26 @@ impl MultiStaffLayout {
         let staff_height = self.staff_space * 4.0; // 5 lines = 4 spaces
         last_top - first_top + staff_height
     }
+    /// Move a planned system vertically without recalculating connector
+    /// geometry; the stave origins, brace and both bracket levels travel
+    /// together.
+    pub fn translate_y(&mut self, offset: f64) {
+        for y in &mut self.staff_y_origins {
+            *y += offset;
+        }
+        if let Some(brace) = &mut self.brace {
+            brace.y_top += offset;
+            brace.y_bottom += offset;
+        }
+        if let Some(bracket) = &mut self.bracket {
+            bracket.y_top += offset;
+            bracket.y_bottom += offset;
+        }
+        for bracket in &mut self.sub_brackets {
+            bracket.y_top += offset;
+            bracket.y_bottom += offset;
+        }
+    }
 }
 
 /// Compute vertical positions for staves in a group.
@@ -248,14 +268,37 @@ pub fn layout_multi_staff(
     group: &StaffGroup,
     y_start: f64,
     staff_space: f64,
+    staff_width: f64,
+) -> MultiStaffLayout {
+    layout_multi_staff_with_gaps(group, y_start, staff_space, staff_width, &[])
+}
+
+/// Compute connector and stave geometry with per-boundary minimum gaps in
+/// staff spaces. Omitted entries retain the ordinary inter-staff gap. The
+/// caller can reserve extra room for lyric verses and annotations without
+/// changing horizontal onset columns or detaching the brace/bracket.
+pub fn layout_multi_staff_with_gaps(
+    group: &StaffGroup,
+    y_start: f64,
+    staff_space: f64,
     _staff_width: f64,
+    gaps_ss: &[f64],
 ) -> MultiStaffLayout {
     let staff_height = staff_space * 4.0; // 5 lines → 4 inter-line gaps
     let gap = INTER_STAFF_GAP_SS * staff_space;
 
     let mut staff_y_origins = Vec::with_capacity(group.staff_count);
+    let mut y = y_start;
     for i in 0..group.staff_count {
-        let y = y_start + (i as f64) * (staff_height + gap);
+        if i > 0 {
+            y += staff_height
+                + gaps_ss
+                    .get(i - 1)
+                    .copied()
+                    .unwrap_or(INTER_STAFF_GAP_SS)
+                    .max(INTER_STAFF_GAP_SS)
+                    * staff_space;
+        }
         staff_y_origins.push(y);
     }
 

@@ -42,6 +42,7 @@ pub mod pedal;
 pub mod placement;
 pub mod rehearsal;
 pub mod rest;
+pub(crate) mod rhythm_grid;
 pub mod slur;
 pub mod staff;
 pub mod stem;
@@ -78,10 +79,6 @@ pub use barline::{BarlineLayout, BarlineStyle};
 pub use beam::{
     beam_group_stem_direction, compute_beam_counts, layout_beam_group, BeamGroupLayout, BeamedNote,
 };
-pub use group::{
-    scan_groups, BeamSpec, GroupMark, GroupScan, GroupSegment, TupletBracketVisibility,
-    TupletNumberDisplay, TupletSpec,
-};
 pub use breath::{
     layout_breath_mark, BreathMark, BreathMarkLayout, BREATH_MARK_ABOVE_STAFF_SS,
     BREATH_MARK_RIGHT_PADDING_SS,
@@ -109,9 +106,13 @@ pub use glissando::{
 };
 pub use grace::{
     grace_group_extent, grace_stem_direction, layout_grace_group, layout_grace_slur,
-    GraceBeamSegment, GraceGroup, GraceGroupLayout, GraceNoteEvent, GraceNoteKind,
-    GraceNoteLayout, GraceNotes, GraceStemLayout, WrittenGraceNote, GRACE_NOTE_GAP_SS,
-    GRACE_NOTE_SCALE, GRACE_PRINCIPAL_GAP_SS,
+    GraceBeamSegment, GraceGroup, GraceGroupLayout, GraceNoteEvent, GraceNoteKind, GraceNoteLayout,
+    GraceNotes, GraceStemLayout, WrittenGraceNote, GRACE_NOTE_GAP_SS, GRACE_NOTE_SCALE,
+    GRACE_PRINCIPAL_GAP_SS,
+};
+pub use group::{
+    scan_groups, BeamSpec, GroupMark, GroupScan, GroupSegment, TupletBracketVisibility,
+    TupletNumberDisplay, TupletSpec,
 };
 pub use hairpin::{
     layout_hairpin, layout_hairpin_dashed, layout_hairpin_styled, layout_hairpin_with_niente,
@@ -144,6 +145,7 @@ pub use ornament::{layout_ornament, Ornament, OrnamentLayout};
 pub use ottava::{layout_ottava_bracket, OttavaBracketLayout, OttavaKind, OTTAVA_ABOVE_STAFF_SS};
 pub use page::{layout_page, PageLayout, PageLayoutConfig, PageSystem, SystemBreaking};
 pub use pedal::{layout_pedal, PedalLayout, PedalMark, PEDAL_BELOW_STAFF_SS};
+pub use placement::Placement;
 pub use rehearsal::{layout_rehearsal_mark, RehearsalMarkLayout, RehearsalStyle};
 pub use slur::{layout_slur, slur_direction_from_stem, SlurDirection, SlurLayout};
 pub use staff::{StaffLayout, StaffPosition, BOTTOM_LINE, STANDARD_LINE_COUNT, TOP_LINE};
@@ -174,7 +176,6 @@ pub use tab_palm_mute::{
 pub use tab_rhythm::{layout_tab_rhythm, needs_stem, tab_flag_count, TabRhythmLayout};
 pub use tab_slide::{layout_tab_slide, TabSlideLayout};
 pub use tab_vibrato::{layout_tab_vibrato, TabVibratoLayout, VibratoKind};
-pub use placement::Placement;
 pub use tempo::{
     layout_tempo_mark, MetronomeMark, MetronomeNoteKind, MetronomeUnit, MetronomeValue, TempoMark,
     TempoMarkLayout, TempoText,
