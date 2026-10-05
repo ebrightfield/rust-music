@@ -568,6 +568,7 @@ fn mn_c04_r010_pickup_and_member_gliss() {
             Placement::Above,
         ))
         .glissando(crate::layout::glissando::GlissandoStyle::Line)
+        .text_script(crate::layout::text_script::TextScript::below("gliss.").italic())
         .note(p(Note::Gis, 4), dotted(DurationKind::Eighth))
         .end_beam()
         .barline()
@@ -609,6 +610,9 @@ fn mn_c04_r010_pickup_and_member_gliss() {
     );
     let above = page(&score);
     let staff_y = above.systems.last().unwrap().y;
+    let gliss_text = text_line(&svg, "gliss.");
+    assert!(gliss_text.contains("font-style=\"italic\""));
+    assert!(line_attr(gliss_text, "y") > staff_y + 4.0 * 250.0);
     assert!(svg.lines().any(|l| l.contains("stroke-dasharray=")
         && l.contains("<line ")
         && line_attr(l, "y1") < staff_y));
@@ -1026,6 +1030,8 @@ fn mn_c11_r029_interior_voice_grid_cue_lyrics_and_hidden_bar() {
         .rest(Duration::EIGHTH)
         .begin_beam()
         .note(p(Note::Des, 5), Duration::SIXTEENTH)
+        .dynamic(crate::layout::dynamics::Dynamic::Forte)
+        .text_script(crate::layout::text_script::TextScript::above("secco ma con forza").italic())
         .note(p(Note::Des, 5), Duration::SIXTEENTH)
         .end_beam()
         .begin_beam()
@@ -1048,5 +1054,15 @@ fn mn_c11_r029_interior_voice_grid_cue_lyrics_and_hidden_bar() {
             .value,
         MetronomeValue::Bpm(112)
     );
-    assert!(score.render_svg().contains("112"));
+    let svg = score.render_svg();
+    assert!(svg.contains("112"));
+    assert!(text_line(&svg, "secco ma con forza").contains("font-style=\"italic\""));
+    let forte = crate::font::bravura_font()
+        .glyph_outline(smufl::Glyph::DynamicForte)
+        .unwrap()
+        .path_data;
+    assert!(
+        svg.contains(&forte),
+        "source attack is forte on the first sixteenth"
+    );
 }
