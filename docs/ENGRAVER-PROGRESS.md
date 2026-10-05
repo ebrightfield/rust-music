@@ -1,5 +1,69 @@
 # Music Engraver Progress Log
 
+## Current engraving checklist (code-checked 2026-10-04)
+
+This section is the current status; dated **Next** and **Open issues** entries
+below record what was true *then*. Older June QA snapshots and pre-merge
+checklists are historical, not current work queues. A checked item is
+implemented or confirmed not to be a gap; tests are named where available.
+
+### Completed or removed from the backlog
+
+- [x] **Spring/rod spacing and shared voice grid.** `layout/measure.rs` splits
+  each event into rod and spring; `layout/rhythm_grid.rs::align_shared_grid`
+  merges all staves and additional voices at exact onsets, takes the largest
+  active spring per interval, and justifies springs without scaling the
+  clef/key/time prefix. See `layout/rhythm_grid_tests.rs`. This supersedes
+  the "multi-voice max-spring-per-tick" follow-up in the 2026-08-06 entry.
+- [x] **Grand staff, section brackets, nested sub-brackets, and cross-staff
+  voices.** `score/multi_staff.rs`, `layout/multi_staff.rs`, and
+  `score/tests_cross_staff.rs` cover shared columns and routed notation. The
+  June "largest structural chunk" is no longer open.
+- [x] **Chord accidental columns and shared-onset beam collisions.**
+  `layout/accidental.rs::layout_accidental_columns` and
+  `render/accidental_renderer.rs::chord_accidental_column_offsets` stagger
+  close accidentals. The system-wide beam pass uses the same per-note ink
+  displacement as collision-shifted heads (`2026-10-04` entry below).
+- [x] **Lyric extenders, multi-voice rest offsets, and chord-symbol accidental
+  glyphs.** Within/across-system extender tests live under
+  `render/{system_renderer,page_renderer}/tests.rs`; additional-voice rests
+  move off the middle line in `render/measure_renderer/mod.rs`; chord symbols
+  compose SMuFL accidental glyphs. These were open in the June QA snapshot.
+- [x] **Cross-system church rests are not a separate missing feature.**
+  Church rests occupy single measures and already survive system breaks;
+  the 2026-06-19 Gourlay spacing entry closed this older suggestion.
+
+### Still actionable
+
+- [ ] **Local vertical collision avoidance (correctness).** Dynamics,
+  hairpins, and lyrics still use fixed staff-relative baselines in
+  `layout/{dynamics,hairpin,lyric}.rs`. `layout/mark_extent.rs` sizes pages and
+  separates *systems*, but does not route marks around low noteheads or ledger
+  lines in the same system. Reproduce on a low-register score before changing
+  placement; then check the actual SVG/PNG geometry.
+- [ ] **Font-measured spacing rods.** `layout/measure.rs::MeasureLayoutConfig`
+  still estimates notehead/accidental/dot rods in staff spaces. Replace the
+  estimates with active-font metrics without losing the minimum ink clearance;
+  the shared rhythmic grid itself is already implemented.
+- [ ] **Line-breaking quality, not line breaking itself.** `layout/page.rs`
+  already offers greedy and optimal breaks, explicit directives, and bounds
+  wide enough for incompressible systems. Its optimal cost is based on squared
+  fill deviation, without engraving penalties for awkward breaks; tune with
+  a representative multi-system corpus rather than adding another break API.
+- [ ] **Beam-rule polish.** `layout/beam.rs` derives slope from the first and
+  last notes (interior notes can only shift the whole beam) and defaults
+  isolated secondary-beam stubs leftward rather than consulting metric
+  position. These are quality candidates, not confirmed current collisions;
+  capture a visually failing mixed-duration passage before altering them.
+- [ ] **Perceptual PNG regression baselines.** The `png` feature renders and
+  pixel-content tests already inspect actual staff/TAB ink in
+  `render/png.rs` and the score tests. There is no PHASH/tolerance-backed
+  visual baseline corpus yet; do not confuse this with missing PNG export.
+- [ ] **Configurable TAB rhythm-stem styling.**
+  `layout/tab_rhythm.rs` still hardcodes the stem base/length above the TAB
+  staff, with no public style option in `score/tab.rs`. This is optional
+  tablature polish, not a blocker for standard-notation practice material.
+
 ## 2026-04-18 — Phase 0, crate scaffold
 - Did: Created `music-engraver/` as workspace member. Set up `Cargo.toml` with dependencies (music, ttf-parser, smufl 0.2, serde, serde_json, thiserror; optional png feature with resvg/tiny-skia/fontdb). Created `src/lib.rs` with `font` module. Bundled Bravura.otf (v1.380, 508KB), OFL.txt license, and bravura_metadata.json under `fonts/`. Font module exposes `BRAVURA_OTF` and `BRAVURA_METADATA` via `include_bytes!`.
 - Verified: `cargo check -p music-engraver` passes. `cargo check --workspace` passes. `cargo test -p music-engraver` passes (3 tests: OTF magic bytes, ttf-parser parse, metadata JSON validity).
