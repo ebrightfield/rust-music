@@ -129,6 +129,37 @@ fn six_source_timelines_keep_pitch_staff_and_onset_identity() {
 }
 
 #[test]
+fn i001_has_twelve_shared_columns_and_one_head_per_tick() {
+    let mut score = grand(voice(I001));
+    let source = score.cross_staff_voice.take().unwrap();
+    cross_staff::distribute_voice(source, &mut score.staves).unwrap();
+    let config = MeasureLayoutConfig::from_staff_space(bravura_font().engraving_config().staff_space);
+    let (contents, chunks) = score.staves_into_systems(&config, 25_000.0, 4).unwrap();
+    assert_eq!(chunks, vec![(0, 1)]);
+    let prefixes: Vec<_> = contents.iter()
+        .map(|(measures, prefix)| system_start_prefix(prefix, measures, 0))
+        .collect();
+    let slices: Vec<_> = contents.iter().zip(&prefixes)
+        .map(|((measures, _), prefix)| (prefix, &measures[..], None))
+        .collect();
+    let systems = layout_staves_followed_by(&slices, &config, Some(25_000.0));
+    let rhythms: Vec<Vec<_>> = systems.iter().map(|system| {
+        system.measures[0].layout.elements.iter()
+            .filter(|e| matches!(e.element, MeasureElement::Note(_) | MeasureElement::Spacer(_)))
+            .collect()
+    }).collect();
+    assert_eq!(rhythms[0].len(), 12);
+    assert_eq!(rhythms[1].len(), 12);
+    for (i, (upper, lower)) in rhythms[0].iter().zip(&rhythms[1]).enumerate() {
+        assert_eq!(upper.x, lower.x, "onset {i} is not an exact shared column");
+        assert_eq!(matches!(upper.element, MeasureElement::Note(_)), I001[i].2 == 0);
+        assert_eq!(matches!(lower.element, MeasureElement::Note(_)), I001[i].2 == 1);
+    }
+    assert_eq!(systems[0].measures[0].shared_closing_barline_x,
+        systems[1].measures[0].shared_closing_barline_x);
+}
+
+#[test]
 fn assigned_staff_accidentals_and_errors() {
     let voice=ScoreBuilder::new().cadenza_on().accidental_policy(AccidentalPolicy::Forget)
         .note_with_accidental(Pitch::new(Note::F,4),Duration::WHOLE,AccidentalDisplay::Force).on_staff(0)
