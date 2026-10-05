@@ -27,6 +27,7 @@ use crate::layout::trill_extension::{
     TrillWiggleSpeed,
 };
 use crate::layout::volta::layout_volta_bracket;
+use crate::render::analysis_bracket_renderer::draw_system_analysis_brackets;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
@@ -239,6 +240,8 @@ pub fn draw_system(
 
     // Draw ottava brackets (8va/8vb dashed lines) between marked notes
     draw_system_ottava_brackets(svg, font, config, system, &staff, x)?;
+    // Resolve standard-notation analysis brackets from laid-out event anchors.
+    draw_system_analysis_brackets(svg, font, config, system, x, y)?;
 
     // Draw glissando lines between notes marked with glissando_start
     draw_system_glissandos(svg, config, system, &staff, x);

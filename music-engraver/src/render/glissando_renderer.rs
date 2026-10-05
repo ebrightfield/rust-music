@@ -1,20 +1,56 @@
-use crate::layout::glissando::GlissandoLayout;
+use std::fmt::Write;
+
+use crate::layout::glissando::{GlissandoLayout, GlissandoStyle};
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
-/// Draw a glissando line (and optional "gliss." text label) onto an SVG writer.
-///
-/// Renders a straight diagonal line from the source note to the target note.
-/// When `show_text` is true, adds italic "gliss." text centered along the line.
+/// Draw a glissando between clipped notehead edges (including system fragments).
 pub fn draw_glissando(svg: &mut SvgWriter, layout: &GlissandoLayout) {
-    svg.add_line(
-        layout.x_start,
-        layout.y_start,
-        layout.x_end,
-        layout.y_end,
-        "black",
-        layout.stroke_width,
-    );
+    match layout.style {
+        GlissandoStyle::Line | GlissandoStyle::LineWithText => svg.add_line(
+            layout.x_start,
+            layout.y_start,
+            layout.x_end,
+            layout.y_end,
+            "black",
+            layout.stroke_width,
+        ),
+        GlissandoStyle::Dashed => {
+            let ss = layout.stroke_width / 0.08;
+            let dash = format!("{},{}", ss * 0.36, ss * 0.23);
+            svg.add_dashed_line(
+                layout.x_start,
+                layout.y_start,
+                layout.x_end,
+                layout.y_end,
+                "black",
+                layout.stroke_width,
+                &dash,
+            );
+        }
+        GlissandoStyle::Wavy => {
+            let dx = layout.x_end - layout.x_start;
+            let dy = layout.y_end - layout.y_start;
+            let length = dx.hypot(dy);
+            let ss = layout.stroke_width / 0.08;
+            let count = ((length / (ss * 0.36)).ceil() as usize).max(2);
+            let amplitude = ss * 0.16;
+            let mut path = format!("<path d=\"M {} {}", layout.x_start, layout.y_start);
+            for i in 1..count {
+                let t = i as f64 / count as f64;
+                let side = if i % 2 == 0 { -amplitude } else { amplitude };
+                let x = layout.x_start + t * dx - side * dy / length;
+                let y = layout.y_start + t * dy + side * dx / length;
+                let _ = write!(path, " L {x} {y}");
+            }
+            let _ = write!(
+                path,
+                " L {} {}\" fill=\"none\" stroke=\"black\" stroke-width=\"{}\"/>",
+                layout.x_end, layout.y_end, layout.stroke_width
+            );
+            svg.add_raw(&path);
+        }
+    }
 
     if layout.show_text {
         let style = TextStyle {

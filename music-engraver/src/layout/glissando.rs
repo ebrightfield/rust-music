@@ -19,6 +19,10 @@ pub enum GlissandoStyle {
     Line,
     /// Diagonal line with "gliss." text label.
     LineWithText,
+    /// Broken diagonal line (LilyPond `dashed-line`).
+    Dashed,
+    /// Repeated zigzag segments along the diagonal (LilyPond `zigzag`).
+    Wavy,
 }
 
 /// Computed geometry for a glissando line between two notes.
@@ -34,6 +38,8 @@ pub struct GlissandoLayout {
     pub y_end: f64,
     /// Stroke width in font design units.
     pub stroke_width: f64,
+    /// Rendering style of the line; retained across system-break fragments.
+    pub style: GlissandoStyle,
     /// Whether to show "gliss." text label.
     pub show_text: bool,
     /// Midpoint x for text label placement.
@@ -100,6 +106,7 @@ pub fn layout_glissando(
     let text_font_size = ss * 0.9;
 
     Some(GlissandoLayout {
+        style,
         x_start,
         y_start,
         x_end,
@@ -153,6 +160,7 @@ pub fn layout_half_glissando_right(
         x_end,
         y_end,
         stroke_width,
+        style,
         show_text,
         text_x,
         text_y,
@@ -170,6 +178,7 @@ pub fn layout_half_glissando_left(
     x_target: f64,
     staff_pos_target: i8,
     staff: &StaffLayout,
+    style: GlissandoStyle,
 ) -> Option<GlissandoLayout> {
     let ss = staff.staff_space;
     let h_pad = GLISSANDO_H_PADDING_SS * ss;
@@ -194,6 +203,7 @@ pub fn layout_half_glissando_left(
         y_start,
         x_end,
         y_end: y_target,
+        style,
         stroke_width,
         show_text: false, // no text label on incoming half
         text_x: 0.0,
@@ -386,14 +396,15 @@ mod tests {
     #[test]
     fn half_left_produces_layout_for_valid_span() {
         let staff = test_staff();
-        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff);
+        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff, GlissandoStyle::Line);
         assert!(layout.is_some(), "valid span should produce layout");
     }
 
     #[test]
     fn half_left_x_end_left_of_target() {
         let staff = test_staff();
-        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff).unwrap();
+        let layout =
+            layout_half_glissando_left(0.0, 1200.0, 4, &staff, GlissandoStyle::Line).unwrap();
         assert!(layout.x_end < 1200.0, "x_end should be left of target x");
     }
 
@@ -402,7 +413,8 @@ mod tests {
         let staff = test_staff();
         let target_y = staff.y_of(8);
         let mid_y = staff.y_of(4);
-        let layout = layout_half_glissando_left(0.0, 1200.0, 8, &staff).unwrap();
+        let layout =
+            layout_half_glissando_left(0.0, 1200.0, 8, &staff, GlissandoStyle::Line).unwrap();
         // y_start should be between target and mid_y
         assert!(
             (layout.y_start - target_y).abs() < (target_y - mid_y).abs(),
@@ -417,14 +429,15 @@ mod tests {
     #[test]
     fn half_left_no_text() {
         let staff = test_staff();
-        let layout = layout_half_glissando_left(0.0, 1200.0, 4, &staff).unwrap();
+        let layout =
+            layout_half_glissando_left(0.0, 1200.0, 4, &staff, GlissandoStyle::Line).unwrap();
         assert!(!layout.show_text, "incoming half should never show text");
     }
 
     #[test]
     fn half_left_too_close_returns_none() {
         let staff = test_staff();
-        let layout = layout_half_glissando_left(1100.0, 1200.0, 4, &staff);
+        let layout = layout_half_glissando_left(1100.0, 1200.0, 4, &staff, GlissandoStyle::Line);
         assert!(layout.is_none(), "too-close span should return None");
     }
 }
