@@ -67,7 +67,6 @@ pub enum CrossStaffError {
     UnsupportedEvent { event: usize, kind: &'static str },
 }
 
-
 /// One stave's measure contents (explicit line breaks applied) and prefix.
 pub(crate) type StaveData = (Vec<MeasureContent>, SystemPrefix);
 
@@ -607,8 +606,11 @@ impl MultiStaffScore {
             .collect();
         let mut planned_staff_layouts: Vec<_> = gaps
             .iter()
-            .map(|system_gaps| {
-                layout_multi_staff_with_gaps(&group, 0.0, staff_space, sys_width, system_gaps)
+            .zip(&laid_out_systems)
+            .map(|(system_gaps, systems)| {
+                // The shared grid assigns the same staff width to every stave.
+                let width = systems.first().map_or(sys_width, |system| system.staff_width);
+                layout_multi_staff_with_gaps(&group, 0.0, staff_space, width, system_gaps)
             })
             .collect();
 
@@ -661,7 +663,11 @@ impl MultiStaffScore {
         };
 
         let total_systems = chunks.len();
-        let page_width = sys_width + left_margin;
+        let page_width = left_margin
+            + laid_out_systems
+                .iter()
+                .flat_map(|systems| systems.iter().map(|system| system.staff_width))
+                .fold(sys_width, f64::max);
         let page_height = system_heights.iter().sum::<f64>()
             + total_systems.saturating_sub(1) as f64 * inter_system_gap;
         let mut system_y_origins = Vec::with_capacity(total_systems);
@@ -740,7 +746,8 @@ impl MultiStaffScore {
         };
         let vb_x = -side_margin - left_margin;
         let vb_y = -top_margin;
-        // The staves end at `left_margin + sys_width` (= `page_width`).
+        // Staff and TAB lines use each laid-out system's width, which may
+        // exceed the requested width when its shared rods are incompressible.
         let vb_w = page_width + side_margin - vb_x;
         let vb_h = page_height + top_margin + bottom_margin;
         let px_per_unit = 7.0 / staff_space;
@@ -773,6 +780,9 @@ impl MultiStaffScore {
 
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
             let group_y = system_y_origins[sys_idx];
+            let system_width = laid_out_systems[sys_idx]
+                .first()
+                .map_or(sys_width, |system| system.staff_width);
 
             // Move the pre-planned staff and connector geometry to this
             // system's page origin, without laying its columns out again.
@@ -786,7 +796,7 @@ impl MultiStaffScore {
             for (stave_idx, system) in stave_systems.iter().enumerate() {
                 let stave_y = ms_layout.staff_y_origins[stave_idx];
                 if system.measures.is_empty() {
-                    let staff = StaffLayout::new(left_margin, stave_y, sys_width, staff_space);
+                    let staff = StaffLayout::new(left_margin, stave_y, system_width, staff_space);
                     draw_staff_lines(&mut svg, &staff, &config);
                     continue;
                 }
@@ -823,7 +833,7 @@ impl MultiStaffScore {
                 let tab_staff = TabStaffLayout::new(
                     left_margin,
                     tab_y,
-                    sys_width,
+                    system_width,
                     staff_space,
                     tab.line_count(),
                 );
@@ -837,7 +847,7 @@ impl MultiStaffScore {
                 guitar_standard_staves.push(StaffLayout::new(
                     left_margin,
                     ms_layout.staff_y_origins[0],
-                    sys_width,
+                    system_width,
                     staff_space,
                 ));
                 draw_guitar_tab_system(
@@ -1016,7 +1026,10 @@ impl MultiStaffScore {
         }
 
         draw_cross_staff_glissandos(
-            &mut svg, staff_space, &self.cross_staff_glissandos, &cross_staff_anchors,
+            &mut svg,
+            staff_space,
+            &self.cross_staff_glissandos,
+            &cross_staff_anchors,
             &stave_page_systems,
         );
 

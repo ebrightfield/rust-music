@@ -444,8 +444,9 @@ fn system_measure_elements(
 /// Subsequent measures get their rhythmic content, structural changes, and
 /// barlines. Measures are arranged left-to-right with no gap between them.
 ///
-/// If `target_width` is `Some(w)`, the layout will scale note spacing so the
-/// system fills exactly that width. If `None`, measures use natural widths.
+/// If `target_width` is `Some(w)`, the layout adjusts compressible springs
+/// toward that width; incompressible rods can make the actual system wider.
+/// If `None`, measures use natural widths.
 pub fn layout_system(
     prefix: &SystemPrefix,
     measures: &[MeasureContent],

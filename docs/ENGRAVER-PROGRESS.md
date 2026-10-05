@@ -7921,6 +7921,18 @@
   c12-i001 PNG was compared to its LilyPond PDF (staff positions, trimmed
   diagonal strokes, brace and final barline).
 
+## 2026-10-04 — Expand page geometry for incompressible notation systems
+- A requested system width controls spring justification, not a hard clipping
+  edge: forced/fixed dense systems can have rods wider than that width.
+  Single-staff pages now derive their horizontal SVG bounds from the maximum
+  laid-out staff width; multi-staff and guitar/TAB pages use the shared-grid
+  system widths for their page bounds and staff/TAB lines.
+- Public-builder regressions use c04-r038-style dashed divisions and accidentals
+  to compare numeric SVG viewBox limits against staff lines, barline strokes,
+  and font-metric notehead/accidental ink. A fitting-width control preserves
+  the requested staff width. The corrected first excerpt was rendered through
+  Typst and visually compared with the source PDF.
+
 ## 2026-10-04 — RM-MN-006: cross-voice ink at shared onsets
 - The mn-c11-r029 G4 unison exposed a detached secondary beamed stem: noteheads
   moved for a voice collision, but the system-wide beam pass still drew stems

@@ -2798,6 +2798,8 @@ mod tests_modus_novus_rhythm;
 #[cfg(test)]
 mod tests_modus_novus_struct;
 #[cfg(test)]
+mod tests_page_bounds;
+#[cfg(test)]
 mod tests_rest_marks;
 #[cfg(test)]
 mod tests_structure;
