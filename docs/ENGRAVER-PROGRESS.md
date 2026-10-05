@@ -7962,3 +7962,26 @@
   A source-shaped final c11-r029 bar was rasterized with loaded serif fonts
   and compared visually with its LilyPond PDF; this is an endpoint excerpt,
   not a full transcription.
+
+## 2026-10-04 — Modus Novus fidelity exit gate
+- Source-derived score regressions cover c04-r035/r038, c08-r009/r011,
+  c11-r017/r018, c12-r002/r003, c06-m004, c11-r015/r027/r029,
+  c04-r007/r010, c08-r002, c11-r028, c03-m008, c05-m001, c06-m003,
+  c01-h007/h001/m006, c12-r009, c04-r005/r006, c09-p001, c10-p001,
+  and c05-h001; c12-i001 through i006 have cross-staff source timelines.
+  Tests assert written MIDI/staff positions, accidental glyphs and resets,
+  performed lengths, structural glyphs, shared onset coordinates, grouping,
+  lyric lanes and spanner endpoints rather than SVG byte snapshots.
+- Fixed-page visual review: representative c04-r038, c12-r002, c12-r009,
+  c01-h007, c12-i001 and c11-r029 engraver SVGs were assembled by Typst
+  into a two-page US-letter PDF and inspected against LilyPond source PDFs.
+  The dense c04-r038 staff ends at x=13828.5 inside viewBox right=14078.5;
+  c12-r002 staff lines end one staff space inside its corrected viewBox.
+  Typst owns title, attribution, pagination, paper and PDF; this crate
+  remains notation SVG/optional PNG only.
+- `cargo test --workspace --no-fail-fast`: passed. All-features workspace
+  tests pass with `c_triad_half_second_wav_has_audible_frames` skipped; the
+  unskipped run fails only because `music-midi`'s optional
+  `sf2-cache-available` test requires GeneralUser GS v2.0.3 in the offline
+  SoundFont cache. `cargo clippy --workspace --all-targets --all-features`
+  and `cargo fmt --all --check` pass.
