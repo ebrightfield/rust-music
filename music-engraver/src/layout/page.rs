@@ -2,6 +2,7 @@ use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{layout_measure, MeasureElement, MeasureLayoutConfig};
 use crate::layout::mark_extent::system_mark_extent_ss;
+use crate::layout::measure_meta::LineBreak;
 use crate::layout::system::{
     layout_system_followed_by, measure_event_to_element, system_start_prefix, MeasureContent,
     SystemLayout, SystemPrefix,
@@ -76,14 +77,16 @@ pub struct PageLayout {
     pub measure_numbering: MeasureNumbering,
 }
 
-/// Specification for how to break measures into systems.
+/// Policy for breaking measures into systems.
+///
+/// Every policy honors the measures' explicit directives
+/// (`MeasureContent::meta.line_break`): a forced break always ends a system
+/// and a forbidden break never does. See [`LineBreak`].
 #[derive(Clone, Debug)]
 pub enum SystemBreaking {
-    /// Fixed number of measures per system.
+    /// Fixed number of measures per system, counted afresh after each forced
+    /// break.
     Fixed(usize),
-    /// Break at these measure indices (0-based, exclusive upper bound of each system).
-    /// e.g. `[4, 8, 12]` means measures 0–3, 4–7, 8–11.
-    Manual(Vec<usize>),
     /// Automatic line breaking: greedily pack measures until their natural
     /// widths exceed the target system width, then start a new system.
     /// The first system accounts for the prefix (clef + key sig + time sig).
@@ -92,6 +95,10 @@ pub enum SystemBreaking {
     /// Minimizes total badness (squared whitespace deviation) across all
     /// systems, producing more evenly filled lines than the greedy `Auto`.
     Optimal,
+    /// Break only at forced breaks (LilyPond's `line-break-permission ##f`
+    /// with explicit `\break`s). A system holds everything between two forced
+    /// breaks, compressed to the system width even when it overflows.
+    Explicit,
 }
 
 /// Lay out a full page of music.
@@ -115,15 +122,13 @@ pub fn layout_page(
         };
     }
 
-    let chunks = match breaking {
-        SystemBreaking::Auto => {
-            break_measures_auto(prefix, measures, measure_config, page_config.system_width)
-        }
-        SystemBreaking::Optimal => {
-            break_measures_optimal(prefix, measures, measure_config, page_config.system_width)
-        }
-        other => break_measures(measures.len(), other),
-    };
+    let chunks = break_into_systems(
+        prefix,
+        measures,
+        measure_config,
+        page_config.system_width,
+        breaking,
+    );
 
     let mut systems = Vec::with_capacity(chunks.len());
     let mut y = page_config.top_margin;
@@ -203,76 +208,150 @@ pub(crate) fn prefix_natural_width(prefix: &SystemPrefix, config: &MeasureLayout
     layout_measure(&elems, config).total_width
 }
 
-/// Greedily pack measures into systems so that each system's natural width
-/// does not exceed `target_width`. The first system reserves space for the
-/// full prefix (clef + key sig + time sig); subsequent systems reserve
-/// space for the continuation prefix (clef + key sig, no time sig).
+/// Split measures into `(start, end)` system ranges per the `breaking`
+/// policy and each measure's explicit [`LineBreak`] directive
+/// (`meta.line_break`, permission to break *after* that measure).
 ///
-/// Guarantees at least one measure per system (even if a single measure
-/// exceeds the target width — it will be scaled down by `layout_system`).
-pub(crate) fn break_measures_auto(
+/// - [`LineBreak::Force`] always ends a system; the policy then restarts from
+///   the next measure (a fresh `Fixed` count, a fresh greedy or optimal run).
+/// - [`LineBreak::Forbid`] keeps a measure on the same system as the next
+///   one: the policy sees the run of measures glued together this way as one
+///   unbreakable unit (its width is the run's total; `Fixed` counts it once).
+/// - [`SystemBreaking::Explicit`] breaks only at `Force`.
+///
+/// Every range is non-empty and the ranges tile `0..measures.len()`.
+pub(crate) fn break_into_systems(
     prefix: &SystemPrefix,
     measures: &[MeasureContent],
     config: &MeasureLayoutConfig,
     target_width: f64,
+    breaking: &SystemBreaking,
 ) -> Vec<(usize, usize)> {
-    if measures.is_empty() {
-        return vec![];
-    }
-
-    // Pre-compute natural widths of each measure's content (without prefix)
-    let widths: Vec<f64> = measures
-        .iter()
-        .map(|m| content_natural_width(m, config))
-        .collect();
-
-    // First-system prefix includes time sig
+    let widths: Vec<f64> = match breaking {
+        SystemBreaking::Auto | SystemBreaking::Optimal => measures
+            .iter()
+            .map(|m| content_natural_width(m, config))
+            .collect(),
+        SystemBreaking::Fixed(_) | SystemBreaking::Explicit => Vec::new(),
+    };
+    // First-system prefix includes the time signature; continuation
+    // systems show only clef and key signature.
     let first_prefix_w = prefix_natural_width(prefix, config);
-
-    // Continuation prefix: clef + key sig, no time sig
     let continuation_prefix = SystemPrefix {
         clef_layout: prefix.clef_layout.clone(),
         clef_kind: prefix.clef_kind,
         key_signature: prefix.key_signature.clone(),
         time_signature: None,
     };
-    let cont_prefix_w = prefix_natural_width(&continuation_prefix, config);
+    let cont_budget = target_width - prefix_natural_width(&continuation_prefix, config);
+    let first_budget = target_width - first_prefix_w;
+    let directives: Vec<LineBreak> = measures
+        .iter()
+        .map(|measure| measure.meta.line_break)
+        .collect();
+    break_by_directives(&directives, breaking, &widths, (first_budget, cont_budget))
+}
 
+/// [`break_into_systems`] over bare directives: `directives[i]` is the
+/// line-break permission after measure `i`. Only the width-based policies
+/// consult `widths` (each measure's natural width) and `budgets` (the
+/// content width available on the first system and on later ones).
+pub(crate) fn break_by_directives(
+    directives: &[LineBreak],
+    breaking: &SystemBreaking,
+    widths: &[f64],
+    budgets: (f64, f64),
+) -> Vec<(usize, usize)> {
+    let count = directives.len();
+    let mut chunks = Vec::new();
+    let mut section_start = 0;
+    while section_start < count {
+        // A section runs to the next forced break (or the end).
+        let section_end = (section_start..count)
+            .find(|&i| directives[i] == LineBreak::Force)
+            .map_or(count, |i| i + 1);
+        // Units: maximal runs of measures whose internal boundaries forbid
+        // a break, as `(start, end)` measure ranges.
+        let mut units = Vec::new();
+        let mut unit_start = section_start;
+        for (i, directive) in directives
+            .iter()
+            .enumerate()
+            .take(section_end)
+            .skip(section_start)
+        {
+            if i + 1 == section_end || *directive != LineBreak::Forbid {
+                units.push((unit_start, i + 1));
+                unit_start = i + 1;
+            }
+        }
+        let unit_widths: Vec<f64> = if widths.is_empty() {
+            Vec::new()
+        } else {
+            units
+                .iter()
+                .map(|&(start, end)| widths[start..end].iter().sum())
+                .collect()
+        };
+        let section_budgets = if section_start == 0 {
+            budgets
+        } else {
+            (budgets.1, budgets.1)
+        };
+        let unit_chunks = match breaking {
+            SystemBreaking::Fixed(per_system) => fixed_breaks(units.len(), *per_system),
+            SystemBreaking::Explicit => vec![(0, units.len())],
+            SystemBreaking::Auto => greedy_breaks(&unit_widths, section_budgets),
+            SystemBreaking::Optimal => optimal_breaks(&unit_widths, section_budgets),
+        };
+        chunks.extend(
+            unit_chunks
+                .into_iter()
+                .map(|(first, last)| (units[first].0, units[last - 1].1)),
+        );
+        section_start = section_end;
+    }
+    chunks
+}
+
+/// Group `n` units into systems of `per_system` (at least one) units each.
+fn fixed_breaks(n: usize, per_system: usize) -> Vec<(usize, usize)> {
+    let per = per_system.max(1);
+    (0..n)
+        .step_by(per)
+        .map(|start| (start, (start + per).min(n)))
+        .collect()
+}
+
+/// Greedily pack units into systems so that each system's natural width
+/// does not exceed its budget (`budgets.0` for the first system, `budgets.1`
+/// for the rest: the target width minus the prefix width).
+///
+/// Guarantees at least one unit per system (even if a single unit exceeds
+/// the budget — `layout_system` compresses it).
+fn greedy_breaks(widths: &[f64], budgets: (f64, f64)) -> Vec<(usize, usize)> {
     let mut chunks = Vec::new();
     let mut start = 0;
-    let mut is_first = true;
-
-    while start < measures.len() {
-        let prefix_w = if is_first {
-            first_prefix_w
+    while start < widths.len() {
+        let budget = if chunks.is_empty() {
+            budgets.0
         } else {
-            cont_prefix_w
+            budgets.1
         };
-        let budget = target_width - prefix_w;
-
         let mut running = 0.0;
         let mut end = start;
-
-        while end < measures.len() {
+        while end < widths.len() {
             let next = running + widths[end];
             if end > start && next > budget {
-                // Adding this measure would exceed the budget; stop before it.
+                // Adding this unit would exceed the budget; stop before it.
                 break;
             }
             running = next;
             end += 1;
         }
-
-        // Guarantee at least one measure per system
-        if end == start {
-            end = start + 1;
-        }
-
         chunks.push((start, end));
         start = end;
-        is_first = false;
     }
-
     chunks
 }
 
@@ -280,45 +359,19 @@ pub(crate) fn break_measures_auto(
 ///
 /// Minimizes total badness across all systems, where badness for a system is
 /// the squared deviation of its fill ratio from 1.0. This distributes
-/// whitespace more evenly than the greedy `break_measures_auto`.
+/// whitespace more evenly than the greedy [`greedy_breaks`]. Budgets are as
+/// for [`greedy_breaks`].
 ///
 /// The algorithm considers every possible break point and uses DP to find
 /// the globally optimal sequence. Complexity is O(n²) where n is the number
-/// of measures — acceptable since scores rarely exceed a few hundred measures.
-pub(crate) fn break_measures_optimal(
-    prefix: &SystemPrefix,
-    measures: &[MeasureContent],
-    config: &MeasureLayoutConfig,
-    target_width: f64,
-) -> Vec<(usize, usize)> {
-    if measures.is_empty() {
-        return vec![];
-    }
+/// of units — acceptable since scores rarely exceed a few hundred measures.
+fn optimal_breaks(widths: &[f64], budgets: (f64, f64)) -> Vec<(usize, usize)> {
+    let n = widths.len();
 
-    let n = measures.len();
-    let widths: Vec<f64> = measures
-        .iter()
-        .map(|m| content_natural_width(m, config))
-        .collect();
-
-    let first_prefix_w = prefix_natural_width(prefix, config);
-    let continuation_prefix = SystemPrefix {
-        clef_layout: prefix.clef_layout.clone(),
-        clef_kind: prefix.clef_kind,
-        key_signature: prefix.key_signature.clone(),
-        time_signature: None,
-    };
-    let cont_prefix_w = prefix_natural_width(&continuation_prefix, config);
-
-    // Badness for a system spanning measures[start..end] on system number `sys_idx` (0-based).
-    // Returns f64::INFINITY if the line is overfull beyond tolerance.
+    // Badness for a system spanning units[start..end] on system number
+    // `sys_idx` (0-based).
     let line_badness = |start: usize, end: usize, sys_idx: usize| -> f64 {
-        let prefix_w = if sys_idx == 0 {
-            first_prefix_w
-        } else {
-            cont_prefix_w
-        };
-        let budget = target_width - prefix_w;
+        let budget = if sys_idx == 0 { budgets.0 } else { budgets.1 };
         if budget <= 0.0 {
             return 0.0;
         }
@@ -345,13 +398,13 @@ pub(crate) fn break_measures_optimal(
         }
     };
 
-    // DP: cost[j] = minimum total badness for measures[0..j].
+    // DP: cost[j] = minimum total badness for units[0..j].
     // prev[j] = the start index of the last system that ends at j.
     let mut cost = vec![f64::INFINITY; n + 1];
     let mut prev = vec![0usize; n + 1];
     cost[0] = 0.0;
 
-    // sys_count[j] = number of systems used to reach measure j.
+    // sys_count[j] = number of systems used to reach unit j.
     let mut sys_count = vec![0usize; n + 1];
 
     for j in 1..=n {
@@ -382,46 +435,6 @@ pub(crate) fn break_measures_optimal(
     }
     breaks.reverse();
     breaks
-}
-
-/// Split N measures into (start, end) ranges per the breaking strategy.
-fn break_measures(n: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
-    match breaking {
-        SystemBreaking::Fixed(per_system) => {
-            let per = (*per_system).max(1);
-            let mut chunks = Vec::new();
-            let mut start = 0;
-            while start < n {
-                let end = (start + per).min(n);
-                chunks.push((start, end));
-                start = end;
-            }
-            chunks
-        }
-        SystemBreaking::Manual(breaks) => {
-            let mut chunks = Vec::new();
-            let mut start = 0;
-            for &end in breaks {
-                let end = end.min(n);
-                if end > start {
-                    chunks.push((start, end));
-                }
-                start = end;
-                if start >= n {
-                    break;
-                }
-            }
-            // Any remaining measures go in a final system
-            if start < n {
-                chunks.push((start, n));
-            }
-            chunks
-        }
-        // Auto and Optimal are handled before this function is called; see layout_page.
-        SystemBreaking::Auto | SystemBreaking::Optimal => {
-            unreachable!("Auto/Optimal handled before break_measures")
-        }
-    }
 }
 
 #[cfg(test)]
@@ -475,48 +488,80 @@ mod tests {
         MeasureLayoutConfig::from_staff_space(ss)
     }
 
-    // --- break_measures tests ---
+    /// `n` one-note measures, with a forced break after each index in
+    /// `forced_after`.
+    fn measures_forced_after(n: usize, forced_after: &[usize]) -> Vec<MeasureContent> {
+        (0..n)
+            .map(|i| {
+                let mut measure = make_measure((i % 8) as i8);
+                if forced_after.contains(&i) {
+                    measure.meta.line_break = LineBreak::Force;
+                }
+                measure
+            })
+            .collect()
+    }
+
+    fn break_plain(n: usize, breaking: &SystemBreaking) -> Vec<(usize, usize)> {
+        break_into_systems(
+            &test_prefix(),
+            &measures_forced_after(n, &[]),
+            &test_measure_config(250.0),
+            10000.0,
+            breaking,
+        )
+    }
+
+    // --- break_into_systems tests ---
 
     #[test]
     fn break_fixed_evenly_divisible() {
-        let chunks = break_measures(8, &SystemBreaking::Fixed(4));
+        let chunks = break_plain(8, &SystemBreaking::Fixed(4));
         assert_eq!(chunks, vec![(0, 4), (4, 8)]);
     }
 
     #[test]
     fn break_fixed_remainder() {
-        let chunks = break_measures(7, &SystemBreaking::Fixed(3));
+        let chunks = break_plain(7, &SystemBreaking::Fixed(3));
         assert_eq!(chunks, vec![(0, 3), (3, 6), (6, 7)]);
     }
 
     #[test]
     fn break_fixed_more_per_system_than_measures() {
-        let chunks = break_measures(2, &SystemBreaking::Fixed(5));
+        let chunks = break_plain(2, &SystemBreaking::Fixed(5));
         assert_eq!(chunks, vec![(0, 2)]);
     }
 
     #[test]
     fn break_fixed_zero_clamps_to_one() {
-        let chunks = break_measures(3, &SystemBreaking::Fixed(0));
+        let chunks = break_plain(3, &SystemBreaking::Fixed(0));
         assert_eq!(chunks.len(), 3);
     }
 
     #[test]
-    fn break_manual_basic() {
-        let chunks = break_measures(10, &SystemBreaking::Manual(vec![3, 6, 10]));
+    fn break_explicit_basic() {
+        let measures = measures_forced_after(10, &[2, 5, 9]);
+        let chunks = break_into_systems(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(250.0),
+            10000.0,
+            &SystemBreaking::Explicit,
+        );
         assert_eq!(chunks, vec![(0, 3), (3, 6), (6, 10)]);
     }
 
     #[test]
-    fn break_manual_with_remainder() {
-        let chunks = break_measures(10, &SystemBreaking::Manual(vec![4, 7]));
+    fn break_explicit_with_remainder() {
+        let measures = measures_forced_after(10, &[3, 6]);
+        let chunks = break_into_systems(
+            &test_prefix(),
+            &measures,
+            &test_measure_config(250.0),
+            10000.0,
+            &SystemBreaking::Explicit,
+        );
         assert_eq!(chunks, vec![(0, 4), (4, 7), (7, 10)]);
-    }
-
-    #[test]
-    fn break_manual_exceeds_count() {
-        let chunks = break_measures(5, &SystemBreaking::Manual(vec![3, 20]));
-        assert_eq!(chunks, vec![(0, 3), (3, 5)]);
     }
 
     // --- layout_page tests ---
@@ -716,15 +761,15 @@ mod tests {
     }
 
     #[test]
-    fn manual_breaking_respects_boundaries() {
+    fn explicit_breaking_respects_boundaries() {
         let ss = 250.0;
-        let measures: Vec<_> = (0..10).map(|i| make_measure((i % 8) as i8)).collect();
+        let measures = measures_forced_after(10, &[1, 5]);
         let page = layout_page(
             &test_prefix(),
             &measures,
             &test_measure_config(ss),
             &test_page_config(ss),
-            &SystemBreaking::Manual(vec![2, 6, 10]),
+            &SystemBreaking::Explicit,
         );
         assert_eq!(page.systems.len(), 3);
         assert_eq!(page.systems[0].system.measures.len(), 2);
@@ -968,7 +1013,13 @@ mod tests {
         let config = test_measure_config(ss);
         let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
 
-        let chunks = break_measures_auto(&prefix, &measures, &config, 100_000.0);
+        let chunks = break_into_systems(
+            &prefix,
+            &measures,
+            &config,
+            100_000.0,
+            &SystemBreaking::Auto,
+        );
         // Very wide target: all measures on one system
         assert_eq!(chunks, vec![(0, 4)]);
     }
@@ -978,7 +1029,7 @@ mod tests {
         let ss = 250.0;
         let prefix = test_prefix();
         let config = test_measure_config(ss);
-        let chunks = break_measures_auto(&prefix, &[], &config, 10_000.0);
+        let chunks = break_into_systems(&prefix, &[], &config, 10_000.0, &SystemBreaking::Auto);
         assert!(chunks.is_empty());
     }
 
@@ -988,7 +1039,7 @@ mod tests {
     fn optimal_breaking_empty() {
         let prefix = test_prefix();
         let config = test_measure_config(250.0);
-        let chunks = break_measures_optimal(&prefix, &[], &config, 10_000.0);
+        let chunks = break_into_systems(&prefix, &[], &config, 10_000.0, &SystemBreaking::Optimal);
         assert!(chunks.is_empty());
     }
 
@@ -997,7 +1048,13 @@ mod tests {
         let prefix = test_prefix();
         let config = test_measure_config(250.0);
         let measures = vec![make_measure(4)];
-        let chunks = break_measures_optimal(&prefix, &measures, &config, 100_000.0);
+        let chunks = break_into_systems(
+            &prefix,
+            &measures,
+            &config,
+            100_000.0,
+            &SystemBreaking::Optimal,
+        );
         assert_eq!(chunks, vec![(0, 1)]);
     }
 
@@ -1006,7 +1063,13 @@ mod tests {
         let prefix = test_prefix();
         let config = test_measure_config(250.0);
         let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
-        let chunks = break_measures_optimal(&prefix, &measures, &config, 100_000.0);
+        let chunks = break_into_systems(
+            &prefix,
+            &measures,
+            &config,
+            100_000.0,
+            &SystemBreaking::Optimal,
+        );
         // Very wide target: all measures on one system
         assert_eq!(chunks, vec![(0, 4)]);
     }
@@ -1016,7 +1079,13 @@ mod tests {
         let prefix = test_prefix();
         let config = test_measure_config(250.0);
         let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
-        let chunks = break_measures_optimal(&prefix, &measures, &config, 5_000.0);
+        let chunks = break_into_systems(
+            &prefix,
+            &measures,
+            &config,
+            5_000.0,
+            &SystemBreaking::Optimal,
+        );
         let total: usize = chunks.iter().map(|(s, e)| e - s).sum();
         assert_eq!(total, 8, "optimal breaking must cover all measures");
         // Chunks must be contiguous and non-overlapping
@@ -1040,7 +1109,13 @@ mod tests {
         let prefix = test_prefix();
         let config = test_measure_config(250.0);
         let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
-        let chunks = break_measures_optimal(&prefix, &measures, &config, 3_000.0);
+        let chunks = break_into_systems(
+            &prefix,
+            &measures,
+            &config,
+            3_000.0,
+            &SystemBreaking::Optimal,
+        );
         for (s, e) in &chunks {
             assert!(e > s, "each system must contain at least one measure");
         }
@@ -1054,8 +1129,14 @@ mod tests {
         let config = test_measure_config(250.0);
         let measures: Vec<_> = (0..8).map(|_| make_measure(4)).collect();
         let target = 5_000.0;
-        let greedy = break_measures_auto(&prefix, &measures, &config, target);
-        let optimal = break_measures_optimal(&prefix, &measures, &config, target);
+        let greedy = break_into_systems(&prefix, &measures, &config, target, &SystemBreaking::Auto);
+        let optimal = break_into_systems(
+            &prefix,
+            &measures,
+            &config,
+            target,
+            &SystemBreaking::Optimal,
+        );
         // Same number of measures covered
         let g_total: usize = greedy.iter().map(|(s, e)| e - s).sum();
         let o_total: usize = optimal.iter().map(|(s, e)| e - s).sum();
@@ -1097,7 +1178,7 @@ mod tests {
         let prefix = test_prefix();
         let config = test_measure_config(250.0);
         let measures: Vec<_> = (0..3).map(|i| make_measure(i as i8)).collect();
-        let chunks = break_measures_optimal(&prefix, &measures, &config, 1.0);
+        let chunks = break_into_systems(&prefix, &measures, &config, 1.0, &SystemBreaking::Optimal);
         // Should still cover all measures, one per system
         assert_eq!(
             chunks.len(),

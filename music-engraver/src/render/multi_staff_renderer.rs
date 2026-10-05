@@ -2,7 +2,7 @@
 //!
 //! Draws the visual connectors that group staves at the left edge of a system.
 
-use crate::font::{FontError, MusicFont};
+use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::multi_staff::{BraceLayout, BracketLayout, MultiStaffLayout, SubBracketLayout};
 use crate::render::SvgWriter;
 
@@ -230,6 +230,26 @@ pub fn draw_multi_staff_connectors(
 /// of the last staff, connecting them visually.
 pub fn draw_joined_barline(svg: &mut SvgWriter, x: f64, y_top: f64, y_bottom: f64, thickness: f64) {
     svg.add_line(x, y_top, x, y_bottom, "black", thickness);
+}
+
+/// Draw the joined part of a dashed barline: a dashed line across each gap
+/// between staves, `gaps` as `(y_top, y_bottom)` pairs. Each staff draws its
+/// own dashed barline glyph, so the gaps are all that joins them (LilyPond's
+/// dashed span bar). Dash, gap, and thickness follow the font's
+/// `dashedBarline*` engraving defaults.
+pub fn draw_joined_dashed_barline(
+    svg: &mut SvgWriter,
+    config: &EngravingConfig,
+    x: f64,
+    gaps: &[(f64, f64)],
+) {
+    let dash = config.to_font_units(config.dashed_barline_dash_length);
+    let gap = config.to_font_units(config.dashed_barline_gap_length);
+    let dash_array = format!("{dash},{gap}");
+    let thickness = config.to_font_units(config.dashed_barline_thickness);
+    for &(y_top, y_bottom) in gaps {
+        svg.add_dashed_line(x, y_top, x, y_bottom, "black", thickness, &dash_array);
+    }
 }
 
 #[cfg(test)]

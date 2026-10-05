@@ -7803,8 +7803,23 @@
 - `TextScript` renders stacked above/below styled text and inline SMuFL glyphs on events and barlines; the old expression channel is replaced by italic scripts. General `TextSpanner` replaces `CrescText`, preserving cresc./decresc. and adding configurable rit./dim. with dashed, solid or no continuation line across systems.
 - Custom dynamics mix italic words and SMuFL dynamic glyphs; dynamics and hairpins support above/below placement via `ScoreBuilder::dynamics_placement` and per-mark `dynamic_placed`.
 - Composable tempo marks support dotted values, 32nd notes, c. prefixes, BPM ranges, parenthesized marks, text before/after/below, and note = note equations.
-- Focused score/renderer position tests and SVG golden tests cover these marks. Visual PNG smokes were compared against the mn-c11-r015 and mn-c03-m008 LilyPond reference PDFs; the demo smokes select representative bars, not a complete transcription of either piece. `golden_advanced_guitar_vocabulary` remains the known baseline mismatch.
+- Focused score/renderer position tests and SVG golden tests cover these marks. Visual PNG smokes were compared against the mn-c11-r015 and mn-c03-m008 LilyPond reference PDFs; the demos select representative bars, not complete transcriptions. The previously drifting `golden_advanced_guitar_vocabulary` fixture passes after the structure integration.
 - Native PNG font loading now maps generic serif to an installed text-serif family; one Linux fontconfig alias selected Standard Symbols PS and silently mangled "c.", "rit." and "più" into symbol-font characters. A rest/tempo/rit./custom-dynamic two-system PNG smoke now shows the intended Latin text as well as the expected Bravura glyphs.
+
+## 2026-10-04 — G1/G2/G3/G15: inline barlines and explicit system breaks
+- Added `BarlineStyle::{Dashed,Invisible,Tick}`: dashed/tick use Bravura
+  SMuFL barline glyphs; invisible draws nothing and reserves no barline rod.
+  `ScoreBuilder::inline_barline(style)` inserts a zero-duration barline without
+  ending the logical measure or resetting its accidental state. Explicitly
+  close an incomplete final measure with `barline_style(Invisible)` to suppress
+  the final barline.
+- `system_break()` and `no_break()` control line breaks in fixed, greedy,
+  optimal, and explicit-only modes. A forced mid-measure break splits the
+  *visual* measure at its musical onset; continuation pieces keep the logical
+  bar number and already-resolved accidentals. Multi-staff scores share break
+  points across staves; guitar notation and TAB share measure-boundary breaks.
+- Verified with focused layout, score, TAB, and glyph regressions plus a PNG
+  smoke of mn-c04-r038's eight dashed inline barlines against its LilyPond PDF.
 
 ## 2026-10-04 — RM-MN-004/010: score structure and meter
 - Added onset-aware clef changes (including after-barline placement), printed and

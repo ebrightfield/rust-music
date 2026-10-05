@@ -25,6 +25,7 @@ pub mod glyph_metrics;
 pub mod grace;
 pub mod hairpin;
 pub mod key_signature;
+pub(crate) mod line_break;
 pub mod lyric;
 pub mod mark_extent;
 pub mod measure;

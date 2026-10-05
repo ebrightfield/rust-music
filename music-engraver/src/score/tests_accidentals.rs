@@ -54,6 +54,7 @@ fn voice_accidentals(events: &[MeasureEvent]) -> Vec<Option<ResolvedAccidental>>
                 .collect(),
             MeasureEvent::Rest(_)
             | MeasureEvent::MultiMeasureRest { .. }
+            | MeasureEvent::Barline(_) => Vec::new(),
             | MeasureEvent::Spacer(_)
             | MeasureEvent::ClefChange(_)
             | MeasureEvent::TimeSignature(_) => Vec::new(),

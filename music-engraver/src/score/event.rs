@@ -15,6 +15,7 @@ use music::note::spelling::{Accidental, Spelling};
 use crate::layout::accidental::{
     accidental_glyph, AccidentalDisplay, AccidentalPolicy, ResolvedAccidental,
 };
+use crate::layout::barline::BarlineStyle;
 use crate::layout::grace::{GraceGroup, GraceNoteEvent};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
@@ -67,6 +68,9 @@ pub(crate) enum ScoreEvent {
         count: u32,
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// Zero-duration inline barline inside the measure. It does not end the
+    /// measure, advance the measure number, or reset accidental state.
+    Barline(BarlineStyle),
     /// Invisible rhythmic placeholder: takes `duration` but draws nothing.
     Spacer {
         duration: Duration,
@@ -497,6 +501,7 @@ pub(crate) fn convert_resolved_event(
             count: *count,
             style: *style,
         },
+        ScoreEvent::Barline(style) => MeasureEvent::Barline(*style),
         ScoreEvent::Spacer { duration } => MeasureEvent::Spacer(SpacerEvent {
             duration_log2: duration_kind_to_log2(duration.kind()),
             dots: duration.num_dots(),
@@ -688,6 +693,7 @@ fn visit_pitches(event: &ScoreEvent, scale: u64, mut visit: impl FnMut(VisitedPi
         ),
         ScoreEvent::Spacer { duration } => scaled_ticks(duration, scale, 1, 1),
         ScoreEvent::MultiMeasureRest { .. }
+        | ScoreEvent::Barline(_)
         | ScoreEvent::ClefChange(_)
         | ScoreEvent::TimeSignatureChange(_) => 0,
     }
