@@ -174,7 +174,7 @@ fn last_annotations_mut(events: &mut [(u8, ScoreEvent)]) -> Option<&mut NoteAnno
         | ScoreEvent::Chord { annotations, .. }
         | ScoreEvent::Rest { annotations, .. } => Some(annotations),
         ScoreEvent::Spacer { .. } => panic!("this mark cannot attach to an invisible spacer"),
-        _ => None,
+        _ => panic!("this mark cannot attach to a multi-measure rest"),
     }
 }
 
@@ -345,6 +345,7 @@ impl ScoreBuilder {
                 Some(annotations)
             }
             ScoreEvent::Spacer { .. } => panic!("pitch-bound mark cannot attach to an invisible spacer"),
+            ScoreEvent::MultiMeasureRest { .. } => panic!("pitch-bound mark cannot attach to a multi-measure rest"),
             _ => None,
         }
     }
