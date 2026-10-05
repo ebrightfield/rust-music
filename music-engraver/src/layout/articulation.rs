@@ -101,10 +101,129 @@ pub enum Articulation {
 }
 
 /// Whether an articulation appears above or below the notehead.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ArticulationPlacement {
     Above,
     Below,
+}
+
+/// What an articulation-like mark draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ArticulationKind {
+    /// A built-in articulation: its SMuFL above/below glyph pair and
+    /// conventional placement.
+    Standard(Articulation),
+    /// A caller-chosen SMuFL glyph for a mark the built-ins do not cover (an
+    /// unidentified printed sign, a house style). The same glyph is drawn on
+    /// either side; without an explicit placement it goes opposite the stem
+    /// and stacks like an ordinary articulation.
+    Custom(Glyph),
+    /// Source-derived broad mark: a long horizontal bar with a short thick
+    /// block under its centre (`mn-c12-r009`'s `\broadMark` markup).
+    BroadMark,
+}
+
+/// One articulation-like mark on a note or chord: what it draws, on which
+/// side, and whether it is parenthesized.
+///
+/// Marks on one side of the note stack outward in this order: ordinary
+/// articulations and custom marks (in the order given), then bow strokes, then
+/// fermatas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ArticulationMark {
+    /// The glyph source.
+    pub kind: ArticulationKind,
+    /// Forced side (LilyPond `^` / `_`); `None` keeps the conventional side.
+    pub placement: Option<ArticulationPlacement>,
+    /// Whether the mark is enclosed in parentheses (e.g. a parenthesized
+    /// fermata).
+    pub parenthesized: bool,
+}
+
+impl From<Articulation> for ArticulationMark {
+    fn from(articulation: Articulation) -> Self {
+        Self {
+            kind: ArticulationKind::Standard(articulation),
+            placement: None,
+            parenthesized: false,
+        }
+    }
+}
+
+impl ArticulationMark {
+    /// A custom mark drawing `glyph`, placed opposite the stem.
+    pub fn custom(glyph: Glyph) -> Self {
+        Self {
+            kind: ArticulationKind::Custom(glyph),
+            placement: None,
+            parenthesized: false,
+        }
+    }
+
+    /// The broad mark printed in mn-c12-r009: a thin horizontal line with
+    /// a thick, centred block hanging below it, placed opposite the stem
+    /// unless `.above()` / `.below()` is requested.
+    pub fn broad_mark() -> Self {
+        Self {
+            kind: ArticulationKind::BroadMark,
+            placement: None,
+            parenthesized: false,
+        }
+    }
+
+    /// Force the mark above the note.
+    pub fn above(self) -> Self {
+        Self {
+            placement: Some(ArticulationPlacement::Above),
+            ..self
+        }
+    }
+
+    /// Force the mark below the note.
+    pub fn below(self) -> Self {
+        Self {
+            placement: Some(ArticulationPlacement::Below),
+            ..self
+        }
+    }
+
+    /// Enclose the mark in parentheses.
+    pub fn parenthesized(self) -> Self {
+        Self {
+            parenthesized: true,
+            ..self
+        }
+    }
+
+    /// The side the mark is engraved on for a note with stem `stem_dir`.
+    pub fn resolved_placement(self, stem_dir: StemDirection) -> ArticulationPlacement {
+        self.placement.unwrap_or(match self.kind {
+            ArticulationKind::Standard(articulation) => articulation.default_placement(stem_dir),
+            ArticulationKind::Custom(_) | ArticulationKind::BroadMark => match stem_dir {
+                StemDirection::Up => ArticulationPlacement::Below,
+                StemDirection::Down => ArticulationPlacement::Above,
+            },
+        })
+    }
+
+    /// The glyph drawn on `placement`'s side.
+    pub fn glyph(self, placement: ArticulationPlacement) -> Glyph {
+        match self.kind {
+            ArticulationKind::Standard(articulation) => articulation.glyph(placement),
+            ArticulationKind::Custom(glyph) => glyph,
+            ArticulationKind::BroadMark => Glyph::ArticTenutoAbove,
+        }
+    }
+
+    /// Stacking tier on its side: ordinary and custom marks (0) sit nearest
+    /// the note, then bow strokes (1), then fermatas (2).
+    fn stack_tier(self) -> u8 {
+        match self.kind {
+            ArticulationKind::Standard(articulation) if articulation.is_fermata() => 2,
+            ArticulationKind::Standard(articulation) if articulation.is_bow_stroke() => 1,
+            _ => 0,
+        }
+    }
 }
 
 impl Articulation {
@@ -228,28 +347,19 @@ pub struct ArticulationLayout {
     pub x: f64,
     /// Y-coordinate of the articulation glyph anchor.
     pub y: f64,
-    /// The SMuFL glyph to render.
+    /// The source kind; [`ArticulationKind::BroadMark`] adds a centred
+    /// block to the stretched tenuto glyph.
+    pub kind: ArticulationKind,
+    /// The SMuFL glyph that supplies the mark's outline.
     pub glyph: Glyph,
     /// Whether the articulation is placed above or below.
     pub placement: ArticulationPlacement,
+    /// Whether the glyph is enclosed in parentheses.
+    pub parenthesized: bool,
 }
 
-/// Compute the position for an articulation relative to a note.
-///
-/// `notehead_x` is the x-center of the notehead. `note_staff_position` is the
-/// staff position of the note (0 = bottom line). `stem_dir` determines default
-/// placement (articulation goes opposite the stem; fermata always above).
-/// `staff` provides the coordinate mapping.
-pub fn layout_articulation(
-    articulation: Articulation,
-    notehead_x: f64,
-    note_staff_position: i8,
-    stem_dir: StemDirection,
-    staff: &StaffLayout,
-) -> ArticulationLayout {
-    let placement = articulation.default_placement(stem_dir);
-    let glyph = articulation.glyph(placement);
-
+/// Y of the first (innermost) mark on `placement`'s side of a note.
+fn side_base_y(placement: ArticulationPlacement, note_staff_position: i8, staff: &StaffLayout) -> f64 {
     let offset_fu = ARTICULATION_OFFSET_SS * staff.staff_space;
 
     // Position the articulation just outside the notehead.
@@ -262,7 +372,7 @@ pub fn layout_articulation(
     let on_line = StaffLayout::is_on_line(note_staff_position);
     let extra_clearance = if on_line { offset_fu * 0.5 } else { 0.0 };
 
-    let y = match placement {
+    match placement {
         ArticulationPlacement::Above => {
             // Ensure we don't place inside the staff for notes below the top line.
             let min_y = staff.y_of(8) - offset_fu;
@@ -275,135 +385,94 @@ pub fn layout_articulation(
             let natural_y = note_y + offset_fu + extra_clearance;
             natural_y.max(max_y)
         }
-    };
-
-    ArticulationLayout {
-        x: notehead_x,
-        y,
-        glyph,
-        placement,
     }
 }
 
-/// Compute positions for multiple stacked articulations on a single note.
+/// Compute the position for an articulation-like mark relative to a note.
 ///
-/// Articulations are stacked outward from the notehead: the first in the list
-/// is closest to the note, each subsequent one is placed further away.
-/// Fermata is always placed above, even when other articulations are below.
-/// If the list contains a fermata mixed with non-fermata articulations,
-/// the fermata is separated and placed above, while the rest follow the
-/// normal stem-direction rule.
+/// `notehead_x` is the x-center of the notehead. `note_staff_position` is the
+/// staff position of the note (0 = bottom line). `stem_dir` determines default
+/// placement (articulation goes opposite the stem; fermata always above)
+/// unless the mark forces a side. `staff` provides the coordinate mapping.
+pub fn layout_articulation(
+    mark: impl Into<ArticulationMark>,
+    notehead_x: f64,
+    note_staff_position: i8,
+    stem_dir: StemDirection,
+    staff: &StaffLayout,
+) -> ArticulationLayout {
+    let mark = mark.into();
+    let placement = mark.resolved_placement(stem_dir);
+    ArticulationLayout {
+        x: notehead_x,
+        y: side_base_y(placement, note_staff_position, staff),
+        glyph: mark.glyph(placement),
+        kind: mark.kind,
+        placement,
+        parenthesized: mark.parenthesized,
+    }
+}
+
+/// Compute positions for multiple stacked marks on a single note.
+///
+/// Each mark takes its own side (forced, or conventional: opposite the stem;
+/// fermatas and bow strokes above). On each side marks stack outward from
+/// the notehead by tier — ordinary articulations and custom marks first (in
+/// the order given), then bow strokes (Gould: closer to the note than the
+/// fermata), then fermatas. The result lists marks in that tier order.
 pub fn layout_articulation_stack(
-    articulations: &[Articulation],
+    marks: &[ArticulationMark],
     notehead_x: f64,
     note_staff_position: i8,
     stem_dir: StemDirection,
     staff: &StaffLayout,
 ) -> Vec<ArticulationLayout> {
-    if articulations.is_empty() {
-        return Vec::new();
-    }
+    layout_chord_articulation_stack(
+        marks,
+        notehead_x,
+        (note_staff_position, note_staff_position),
+        stem_dir,
+        staff,
+    )
+}
 
-    // Partition into three buckets by stacking convention:
-    //   1. normal     — stem-opposite (below for stem-up, above for stem-down)
-    //   2. bow strokes — always above, slotted between normal-above and fermata
-    //   3. fermatas   — always above, outermost
-    // Bow strokes sit closer to the note than fermata (Gould convention).
-    let mut normal: Vec<Articulation> = Vec::new();
-    let mut bow_strokes: Vec<Articulation> = Vec::new();
-    let mut fermatas: Vec<Articulation> = Vec::new();
-    for &a in articulations {
-        if a.is_fermata() {
-            fermatas.push(a);
-        } else if a.is_bow_stroke() {
-            bow_strokes.push(a);
-        } else {
-            normal.push(a);
-        }
-    }
+/// [`layout_articulation_stack`] for a chord spanning `(lowest, highest)`
+/// staff positions: marks above stack from the highest notehead, marks below
+/// from the lowest.
+pub fn layout_chord_articulation_stack(
+    marks: &[ArticulationMark],
+    notehead_x: f64,
+    (lowest, highest): (i8, i8),
+    stem_dir: StemDirection,
+    staff: &StaffLayout,
+) -> Vec<ArticulationLayout> {
+    let mut ordered: Vec<ArticulationMark> = marks.to_vec();
+    ordered.sort_by_key(|mark| mark.stack_tier());
 
-    let mut result = Vec::with_capacity(articulations.len());
     let stack_spacing = ARTICULATION_STACK_SPACING_SS * staff.staff_space;
-
-    // Place normal articulations on the stem-opposite side, stacking outward
-    if !normal.is_empty() {
-        let first_layout =
-            layout_articulation(normal[0], notehead_x, note_staff_position, stem_dir, staff);
-        let base_y = first_layout.y;
-        let placement = first_layout.placement;
-        result.push(first_layout);
-
-        for (i, &artic) in normal.iter().enumerate().skip(1) {
-            let glyph = artic.glyph(placement);
-            let y = match placement {
-                ArticulationPlacement::Above => base_y - (i as f64) * stack_spacing,
-                ArticulationPlacement::Below => base_y + (i as f64) * stack_spacing,
+    let mut above = 0_u32;
+    let mut below = 0_u32;
+    ordered
+        .into_iter()
+        .map(|mark| {
+            let attach = match mark.resolved_placement(stem_dir) {
+                ArticulationPlacement::Above => highest,
+                ArticulationPlacement::Below => lowest,
             };
-            result.push(ArticulationLayout {
-                x: notehead_x,
-                y,
-                glyph,
-                placement,
-            });
-        }
-    }
-
-    // Helper: y for the next "always-above" element. If any above-placement
-    // layouts already exist, stack one spacing further above the topmost; if
-    // none exist, fall back to the conventional above-side position.
-    let next_above_base_y = |layouts: &[ArticulationLayout]| -> f64 {
-        let topmost_above = layouts
-            .iter()
-            .filter(|l| l.placement == ArticulationPlacement::Above)
-            .map(|l| l.y)
-            .fold(f64::INFINITY, f64::min);
-        if topmost_above.is_finite() {
-            topmost_above - stack_spacing
-        } else {
-            // No above articulations yet — use the conventional above-side
-            // position. Choose any "always above" articulation as the probe
-            // since they share placement rules.
-            let probe = layout_articulation(
-                Articulation::Fermata,
-                notehead_x,
-                note_staff_position,
-                stem_dir,
-                staff,
-            );
-            probe.y
-        }
-    };
-
-    // Place bow strokes above any normal-above articulations, before fermata.
-    if !bow_strokes.is_empty() {
-        let base_y = next_above_base_y(&result);
-        for (i, &b) in bow_strokes.iter().enumerate() {
-            let glyph = b.glyph(ArticulationPlacement::Above);
-            result.push(ArticulationLayout {
-                x: notehead_x,
-                y: base_y - (i as f64) * stack_spacing,
-                glyph,
-                placement: ArticulationPlacement::Above,
-            });
-        }
-    }
-
-    // Place fermata(s) above bow strokes and any other above-placement
-    // articulations.
-    if !fermatas.is_empty() {
-        let fermata_base_y = next_above_base_y(&result);
-        for (i, &f) in fermatas.iter().enumerate() {
-            let glyph = f.glyph(ArticulationPlacement::Above);
-            result.push(ArticulationLayout {
-                x: notehead_x,
-                y: fermata_base_y - (i as f64) * stack_spacing,
-                glyph,
-                placement: ArticulationPlacement::Above,
-            });
-        }
-    }
-
-    result
+            let mut layout = layout_articulation(mark, notehead_x, attach, stem_dir, staff);
+            let depth = match layout.placement {
+                ArticulationPlacement::Above => &mut above,
+                ArticulationPlacement::Below => &mut below,
+            };
+            let offset = f64::from(*depth) * stack_spacing;
+            layout.y = match layout.placement {
+                ArticulationPlacement::Above => layout.y - offset,
+                ArticulationPlacement::Below => layout.y + offset,
+            };
+            *depth += 1;
+            layout
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -745,7 +814,7 @@ mod tests {
         // other variants) as "always above," same as the plain Fermata.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::FermataLong],
+            &[Articulation::Staccato.into(), Articulation::FermataLong.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -767,7 +836,7 @@ mod tests {
         // separated vertically by the standard stack spacing.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::FermataShort, Articulation::FermataLong],
+            &[Articulation::FermataShort.into(), Articulation::FermataLong.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -882,7 +951,7 @@ mod tests {
     fn stack_single_matches_layout_articulation() {
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato],
+            &[Articulation::Staccato.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -902,7 +971,7 @@ mod tests {
         let staff = test_staff();
         // Stem up → articulations below → higher y = further from note
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::Accent],
+            &[Articulation::Staccato.into(), Articulation::Accent.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -924,7 +993,7 @@ mod tests {
         let staff = test_staff();
         // Stem down → articulations above → lower y = further from note
         let stack = layout_articulation_stack(
-            &[Articulation::Tenuto, Articulation::Marcato],
+            &[Articulation::Tenuto.into(), Articulation::Marcato.into()],
             100.0,
             4,
             StemDirection::Down,
@@ -946,7 +1015,7 @@ mod tests {
         let staff = test_staff();
         // Stem up: staccato goes below, fermata goes above
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::Fermata],
+            &[Articulation::Staccato.into(), Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -963,7 +1032,7 @@ mod tests {
     fn stack_fermata_above_staccato_below_non_overlapping() {
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::Fermata],
+            &[Articulation::Staccato.into(), Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -983,9 +1052,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::Staccato,
-                Articulation::Accent,
-                Articulation::Tenuto,
+                Articulation::Staccato.into(),
+                Articulation::Accent.into(),
+                Articulation::Tenuto.into(),
             ],
             100.0,
             4,
@@ -1012,9 +1081,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::Staccato,
-                Articulation::Accent,
-                Articulation::Fermata,
+                Articulation::Staccato.into(),
+                Articulation::Accent.into(),
+                Articulation::Fermata.into(),
             ],
             250.0,
             4,
@@ -1030,7 +1099,7 @@ mod tests {
     fn stack_fermata_only_behaves_like_single() {
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Fermata],
+            &[Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1150,7 +1219,7 @@ mod tests {
         // Stem-up: staccato goes below, bow stroke goes above.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::DownBow],
+            &[Articulation::Staccato.into(), Articulation::DownBow.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1171,7 +1240,7 @@ mod tests {
         // staccato (further from note).
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::UpBow],
+            &[Articulation::Staccato.into(), Articulation::UpBow.into()],
             100.0,
             4,
             StemDirection::Down,
@@ -1199,7 +1268,7 @@ mod tests {
         // bow strokes → fermata. Locks that ordering.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::UpBow, Articulation::Fermata],
+            &[Articulation::UpBow.into(), Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1229,9 +1298,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::Staccato,
-                Articulation::DownBow,
-                Articulation::Fermata,
+                Articulation::Staccato.into(),
+                Articulation::DownBow.into(),
+                Articulation::Fermata.into(),
             ],
             100.0,
             4,
@@ -1262,9 +1331,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::Staccato,
-                Articulation::UpBow,
-                Articulation::FermataLong,
+                Articulation::Staccato.into(),
+                Articulation::UpBow.into(),
+                Articulation::FermataLong.into(),
             ],
             100.0,
             4,
@@ -1295,7 +1364,7 @@ mod tests {
         // multi-edition reconciliations). Both above, second further out.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::DownBow, Articulation::UpBow],
+            &[Articulation::DownBow.into(), Articulation::UpBow.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1512,7 +1581,7 @@ mod tests {
         // Locks the bucket-partition rule for the combined variants.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::TenutoAccent, Articulation::Fermata],
+            &[Articulation::TenutoAccent.into(), Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1534,7 +1603,7 @@ mod tests {
         // `bow_strokes` bucket — otherwise both would land above and stack.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::AccentStaccato, Articulation::DownBow],
+            &[Articulation::AccentStaccato.into(), Articulation::DownBow.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1553,7 +1622,7 @@ mod tests {
         // below, in input order, stacked outward by one stack-step.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::AccentStaccato],
+            &[Articulation::Staccato.into(), Articulation::AccentStaccato.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1584,9 +1653,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::MarcatoStaccato,
-                Articulation::UpBow,
-                Articulation::Fermata,
+                Articulation::MarcatoStaccato.into(),
+                Articulation::UpBow.into(),
+                Articulation::Fermata.into(),
             ],
             100.0,
             4,
@@ -1612,7 +1681,7 @@ mod tests {
         // calling layout_articulation directly — no spurious offset.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::TenutoStaccato],
+            &[Articulation::TenutoStaccato.into()],
             175.0,
             3,
             StemDirection::Down,
@@ -1639,7 +1708,7 @@ mod tests {
         // unintended offset just because the stacker is involved.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::UpBow],
+            &[Articulation::UpBow.into()],
             150.0,
             4,
             StemDirection::Down,
@@ -1862,7 +1931,7 @@ mod tests {
         // Locks the bucket-partition rule for the new variants.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::SoftAccent, Articulation::Fermata],
+            &[Articulation::SoftAccent.into(), Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1883,7 +1952,7 @@ mod tests {
         // incorrectly classified as bow-stroke-equivalent.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Stress, Articulation::DownBow],
+            &[Articulation::Stress.into(), Articulation::DownBow.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1902,7 +1971,7 @@ mod tests {
         // preserved, stacked outward by one stack-step.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::Unstress],
+            &[Articulation::Staccato.into(), Articulation::Unstress.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -1932,9 +2001,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::SoftAccent,
-                Articulation::UpBow,
-                Articulation::Fermata,
+                Articulation::SoftAccent.into(),
+                Articulation::UpBow.into(),
+                Articulation::Fermata.into(),
             ],
             100.0,
             4,
@@ -1961,7 +2030,7 @@ mod tests {
         // spurious offset.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Unstress],
+            &[Articulation::Unstress.into()],
             175.0,
             3,
             StemDirection::Down,
@@ -2146,7 +2215,7 @@ mod tests {
         // bucket — not the always-above bucket reserved for fermatas.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::LaissezVibrer, Articulation::Fermata],
+            &[Articulation::LaissezVibrer.into(), Articulation::Fermata.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -2167,7 +2236,7 @@ mod tests {
         // bow-stroke bucket.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::LaissezVibrer, Articulation::UpBow],
+            &[Articulation::LaissezVibrer.into(), Articulation::UpBow.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -2187,7 +2256,7 @@ mod tests {
         // exactly one ARTICULATION_STACK_SPACING_SS × staff_space.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::Staccato, Articulation::LaissezVibrer],
+            &[Articulation::Staccato.into(), Articulation::LaissezVibrer.into()],
             100.0,
             4,
             StemDirection::Up,
@@ -2216,9 +2285,9 @@ mod tests {
         let staff = test_staff();
         let stack = layout_articulation_stack(
             &[
-                Articulation::LaissezVibrer,
-                Articulation::DownBow,
-                Articulation::FermataLong,
+                Articulation::LaissezVibrer.into(),
+                Articulation::DownBow.into(),
+                Articulation::FermataLong.into(),
             ],
             100.0,
             4,
@@ -2254,7 +2323,7 @@ mod tests {
         // extensions and bow strokes.
         let staff = test_staff();
         let stack = layout_articulation_stack(
-            &[Articulation::LaissezVibrer],
+            &[Articulation::LaissezVibrer.into()],
             220.5,
             5,
             StemDirection::Down,
@@ -2272,5 +2341,29 @@ mod tests {
         assert!((stack[0].y - direct.y).abs() < 1e-9);
         assert_eq!(stack[0].glyph, direct.glyph);
         assert_eq!(stack[0].placement, direct.placement);
+    }
+
+    #[test]
+    fn custom_glyph_supports_auto_and_forced_side_and_stacks_with_staccato() {
+        let staff = test_staff();
+        let mark = ArticulationMark::custom(Glyph::ArticMarcatoAbove);
+        let auto = layout_articulation(mark, 100.0, 4, StemDirection::Up, &staff);
+        let above = layout_articulation(mark.above(), 100.0, 4, StemDirection::Up, &staff);
+        assert_eq!(auto.glyph, Glyph::ArticMarcatoAbove);
+        assert_eq!(auto.placement, ArticulationPlacement::Below);
+        assert_eq!(above.placement, ArticulationPlacement::Above);
+        let below = layout_articulation(mark.below(), 100.0, 4, StemDirection::Down, &staff);
+        assert_eq!(below.placement, ArticulationPlacement::Below);
+
+        let stack = layout_articulation_stack(
+            &[Articulation::Staccato.into(), mark],
+            100.0,
+            4,
+            StemDirection::Up,
+            &staff,
+        );
+        assert_eq!(stack[0].placement, ArticulationPlacement::Below);
+        assert_eq!(stack[1].placement, ArticulationPlacement::Below);
+        assert!(stack[1].y > stack[0].y, "the second mark clears the first");
     }
 }

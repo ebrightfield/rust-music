@@ -58,17 +58,17 @@ fn main() {
         .unwrap();
 
         let thickness = config.stem_thickness_fu();
-        draw_stem(&mut svg, &staff, &config, x, advance, pos, direction);
+        draw_stem(&mut svg, &staff, &config, x, advance, pos, direction, 1.0);
 
         // Compute stem tip for flag placement
         let sx = stem_x(x, advance, direction, thickness);
-        let (y_top, y_bottom) = stem_endpoints(&staff, pos, direction);
+        let (y_top, y_bottom) = stem_endpoints(&staff, pos, direction, 1.0);
         let tip_y = match direction {
             music_engraver::layout::stem::StemDirection::Up => y_top,
             music_engraver::layout::stem::StemDirection::Down => y_bottom,
         };
 
-        draw_flag(&mut svg, &font, sx, tip_y, *flag_count, direction).unwrap();
+        draw_flag(&mut svg, &font, sx, tip_y, *flag_count, direction, 1.0).unwrap();
     }
 
     let output = svg.to_svg();

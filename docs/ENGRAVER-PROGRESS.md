@@ -7810,9 +7810,11 @@
   `first_measure_number` also sets a standalone TAB score's start value.
 - Clef advance/bbox controls key-signature spacing and page bounds so alto,
   tenor, and high accidentals remain inside the SVG viewBox.
-- Verified: 22 structure regressions and 2,942 engraver library tests passed;
-  the 80 SVG golden tests had 79 passes and the previously failing
-  `golden_advanced_guitar_vocabulary`. Rendered and visually inspected PNGs
-  for an alto pickup 8/8→12/8→8/8→7/8 excerpt shape against the LilyPond
-  excerpt PDF, mid-measure/system-break changes, and grand staff; the
-  unrelated slurs/dashed barlines in the reference are outside this change.
+- Verified after merging notation marks: 2,960 engraver library tests and
+  78 SVG golden/behavior tests passed; all-features workspace tests failed only
+  the known offline GeneralUser GS SoundFont test. Workspace all-targets clippy
+  completed with warnings (including the pre-existing guitar 8-argument
+  renderer helper). Rendered and visually inspected PNGs for an alto pickup
+  8/8→12/8→8/8→7/8 excerpt shape against the LilyPond excerpt PDF,
+  mid-measure/system-break changes, and grand staff; unrelated slurs/dashed
+  barlines in the reference are outside this change.

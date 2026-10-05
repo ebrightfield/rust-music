@@ -46,11 +46,18 @@ pub struct BreathMarkLayout {
     pub y: f64,
     /// The SMuFL glyph to render.
     pub glyph: Glyph,
+    /// Whether the mark is enclosed in parentheses.
+    pub parenthesized: bool,
 }
 
 /// Horizontal padding (in staff spaces) between the note's right edge and
 /// the breath mark glyph. Positions the mark clearly after the note.
 pub const BREATH_MARK_RIGHT_PADDING_SS: f64 = 0.5;
+
+/// Extra room (in staff spaces) a parenthesized breath mark leaves after the
+/// note for its opening parenthesis: Bravura's `accidentalParensLeft`
+/// advance (0.564) plus the gap to the mark.
+pub const BREATH_MARK_PARENTHESIS_ROOM_SS: f64 = 0.7;
 
 /// Distance (in staff spaces) above the top staff line for the breath mark.
 /// Breath marks sit just above the staff — lower than rehearsal marks or
@@ -61,18 +68,28 @@ pub const BREATH_MARK_ABOVE_STAFF_SS: f64 = 1.5;
 ///
 /// `note_right_x` is the x-coordinate of the right edge of the notehead
 /// (i.e., `note_x + advance_width`). The breath mark is placed to the right
-/// of this position, above the top staff line.
+/// of this position, above the top staff line; a `parenthesized` mark moves
+/// right to make room for its opening parenthesis.
 pub fn layout_breath_mark(
     mark: BreathMark,
     note_right_x: f64,
     staff: &StaffLayout,
+    parenthesized: bool,
 ) -> BreathMarkLayout {
     let glyph = mark.glyph();
-    let x = note_right_x + BREATH_MARK_RIGHT_PADDING_SS * staff.staff_space;
+    let mut x = note_right_x + BREATH_MARK_RIGHT_PADDING_SS * staff.staff_space;
+    if parenthesized {
+        x += BREATH_MARK_PARENTHESIS_ROOM_SS * staff.staff_space;
+    }
     let offset_fu = BREATH_MARK_ABOVE_STAFF_SS * staff.staff_space;
     let y = staff.y_of(8) - offset_fu;
 
-    BreathMarkLayout { x, y, glyph }
+    BreathMarkLayout {
+        x,
+        y,
+        glyph,
+        parenthesized,
+    }
 }
 
 #[cfg(test)]
@@ -125,7 +142,7 @@ mod tests {
     #[test]
     fn layout_above_top_staff_line() {
         let staff = test_staff();
-        let layout = layout_breath_mark(BreathMark::Comma, 500.0, &staff);
+        let layout = layout_breath_mark(BreathMark::Comma, 500.0, &staff, false);
         let top_line_y = staff.y_of(8);
         assert!(
             layout.y < top_line_y,
@@ -139,7 +156,7 @@ mod tests {
     fn x_is_right_of_note() {
         let staff = test_staff();
         let note_right_x = 500.0;
-        let layout = layout_breath_mark(BreathMark::Comma, note_right_x, &staff);
+        let layout = layout_breath_mark(BreathMark::Comma, note_right_x, &staff, false);
         assert!(
             layout.x > note_right_x,
             "breath mark x ({}) should be to the right of note_right_x ({})",
@@ -152,7 +169,7 @@ mod tests {
     fn x_offset_is_0_5_staff_spaces() {
         let staff = test_staff();
         let note_right_x = 500.0;
-        let layout = layout_breath_mark(BreathMark::Tick, note_right_x, &staff);
+        let layout = layout_breath_mark(BreathMark::Tick, note_right_x, &staff, false);
         let expected_x = note_right_x + 0.5 * staff.staff_space;
         assert!(
             (layout.x - expected_x).abs() < 0.01,
@@ -165,7 +182,7 @@ mod tests {
     #[test]
     fn y_offset_is_1_5_staff_spaces() {
         let staff = test_staff();
-        let layout = layout_breath_mark(BreathMark::Caesura, 100.0, &staff);
+        let layout = layout_breath_mark(BreathMark::Caesura, 100.0, &staff, false);
         let expected_y = staff.y_of(8) - 1.5 * staff.staff_space;
         assert!(
             (layout.y - expected_y).abs() < 0.01,
@@ -178,24 +195,24 @@ mod tests {
     #[test]
     fn glyph_matches_mark() {
         let staff = test_staff();
-        let layout = layout_breath_mark(BreathMark::Caesura, 100.0, &staff);
+        let layout = layout_breath_mark(BreathMark::Caesura, 100.0, &staff, false);
         assert_eq!(layout.glyph, Glyph::Caesura);
     }
 
     #[test]
     fn different_note_x_produces_different_layout() {
         let staff = test_staff();
-        let a = layout_breath_mark(BreathMark::Comma, 100.0, &staff);
-        let b = layout_breath_mark(BreathMark::Comma, 900.0, &staff);
+        let a = layout_breath_mark(BreathMark::Comma, 100.0, &staff, false);
+        let b = layout_breath_mark(BreathMark::Comma, 900.0, &staff, false);
         assert!((a.x - b.x).abs() > 700.0);
     }
 
     #[test]
     fn y_is_fixed_regardless_of_mark_type() {
         let staff = test_staff();
-        let comma = layout_breath_mark(BreathMark::Comma, 100.0, &staff);
-        let tick = layout_breath_mark(BreathMark::Tick, 100.0, &staff);
-        let caesura = layout_breath_mark(BreathMark::Caesura, 100.0, &staff);
+        let comma = layout_breath_mark(BreathMark::Comma, 100.0, &staff, false);
+        let tick = layout_breath_mark(BreathMark::Tick, 100.0, &staff, false);
+        let caesura = layout_breath_mark(BreathMark::Caesura, 100.0, &staff, false);
         assert!(
             (comma.y - tick.y).abs() < f64::EPSILON,
             "comma ({}) and tick ({}) should have same y",

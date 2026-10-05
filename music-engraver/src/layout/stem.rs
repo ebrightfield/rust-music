@@ -51,15 +51,22 @@ pub fn auto_stem_direction_chord(positions: &[StaffPosition]) -> StemDirection {
     }
 }
 
-/// Compute stem length in staff spaces, extending beyond the default 3.5
-/// when notes are far above or below the staff so the stem tip reaches
+/// Compute stem length in staff spaces for a note drawn at `scale` (1.0 for
+/// normal size; smaller for cue notes), extending beyond the scaled default
+/// 3.5 when notes are far above or below the staff so the stem tip reaches
 /// at least the middle line.
 ///
 /// For stem-up notes at very low positions, the stem must extend up to
 /// at least the middle line (position 4). For stem-down notes at very
 /// high positions, the stem must reach down to at least the middle line.
-pub fn stem_length_staff_spaces(position: StaffPosition, direction: StemDirection) -> f64 {
-    let default_half_spaces = (DEFAULT_STEM_LENGTH_SS * 2.0) as i8; // 7 half-spaces
+pub fn stem_length_staff_spaces(
+    position: StaffPosition,
+    direction: StemDirection,
+    scale: f64,
+) -> f64 {
+    let default_length = DEFAULT_STEM_LENGTH_SS * scale;
+    let position = f64::from(position);
+    let default_half_spaces = default_length * 2.0;
 
     let tip_position = match direction {
         StemDirection::Up => position + default_half_spaces,
@@ -68,20 +75,20 @@ pub fn stem_length_staff_spaces(position: StaffPosition, direction: StemDirectio
 
     // If the stem tip already reaches past the middle line, use default length
     let needs_extension = match direction {
-        StemDirection::Up => tip_position < 4, // tip should reach at least middle line
-        StemDirection::Down => tip_position > 4, // tip should reach at least middle line
+        StemDirection::Up => tip_position < 4.0, // tip should reach at least middle line
+        StemDirection::Down => tip_position > 4.0, // tip should reach at least middle line
     };
 
     if needs_extension {
         // Extend so tip lands on the middle line (position 4)
         let half_spaces_needed = match direction {
-            StemDirection::Up => 4 - position, // distance from note to middle line
-            StemDirection::Down => position - 4,
+            StemDirection::Up => 4.0 - position, // distance from note to middle line
+            StemDirection::Down => position - 4.0,
         };
-        let length = half_spaces_needed as f64 / 2.0;
-        length.max(MIN_STEM_LENGTH_SS)
+        let length = half_spaces_needed / 2.0;
+        length.max(MIN_STEM_LENGTH_SS * scale)
     } else {
-        DEFAULT_STEM_LENGTH_SS
+        default_length
     }
 }
 
@@ -168,16 +175,16 @@ mod tests {
     fn default_length_for_middle_notes() {
         // Note on middle line, stem down: tip at 4 - 7 = -3, which is past middle
         // Actually for stem down from pos 4, tip = 4-7 = -3, that's below middle, OK
-        assert!((stem_length_staff_spaces(4, StemDirection::Down) - 3.5).abs() < f64::EPSILON);
-        assert!((stem_length_staff_spaces(3, StemDirection::Up) - 3.5).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(4, StemDirection::Down, 1.0) - 3.5).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(3, StemDirection::Up, 1.0) - 3.5).abs() < f64::EPSILON);
     }
 
     #[test]
     fn default_length_for_staff_notes() {
         // E4 on treble = position 0, stem up: tip = 0+7 = 7, which is > 4, fine
-        assert!((stem_length_staff_spaces(0, StemDirection::Up) - 3.5).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(0, StemDirection::Up, 1.0) - 3.5).abs() < f64::EPSILON);
         // F5 on treble = position 8, stem down: tip = 8-7 = 1, which is < 4, fine
-        assert!((stem_length_staff_spaces(8, StemDirection::Down) - 3.5).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(8, StemDirection::Down, 1.0) - 3.5).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -185,7 +192,7 @@ mod tests {
         // Position 12 (two ledger lines above), stem down:
         // default tip = 12-7=5, which is > 4, so needs extension
         // need tip at 4: length = (12-4)/2 = 4.0 staff spaces
-        assert!((stem_length_staff_spaces(12, StemDirection::Down) - 4.0).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(12, StemDirection::Down, 1.0) - 4.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -193,7 +200,7 @@ mod tests {
         // Position -4, stem up:
         // default tip = -4+7=3, which is < 4, needs extension
         // need tip at 4: length = (4-(-4))/2 = 4.0
-        assert!((stem_length_staff_spaces(-4, StemDirection::Up) - 4.0).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(-4, StemDirection::Up, 1.0) - 4.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -202,14 +209,14 @@ mod tests {
         // But position 5, stem down: tip = 5-7=-2, past middle → default 3.5
         // For minimum to kick in, we'd need a note very close to middle going wrong way
         // Position 5, stem up — 3.5 is already > min
-        assert!(stem_length_staff_spaces(5, StemDirection::Up) >= MIN_STEM_LENGTH_SS);
-        assert!(stem_length_staff_spaces(-10, StemDirection::Up) >= MIN_STEM_LENGTH_SS);
+        assert!(stem_length_staff_spaces(5, StemDirection::Up, 1.0) >= MIN_STEM_LENGTH_SS);
+        assert!(stem_length_staff_spaces(-10, StemDirection::Up, 1.0) >= MIN_STEM_LENGTH_SS);
     }
 
     #[test]
     fn very_far_below_note_extends_stem() {
         // Position -10, stem up: tip = -10+7=-3, needs extension
         // length = (4-(-10))/2 = 7.0 staff spaces
-        assert!((stem_length_staff_spaces(-10, StemDirection::Up) - 7.0).abs() < f64::EPSILON);
+        assert!((stem_length_staff_spaces(-10, StemDirection::Up, 1.0) - 7.0).abs() < f64::EPSILON);
     }
 }

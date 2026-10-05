@@ -1,17 +1,26 @@
+use smufl::Glyph;
+
 use crate::font::{FontError, MusicFont};
-use crate::layout::dot::{dot_staff_position, dot_xs, DOT_GLYPH};
+use crate::layout::dot::{
+    dot_staff_position, first_dot_x, DOT_GLYPH, DOT_INTER_DOT_SPACING_SS, DOT_PARENTHESES_GAP_SS,
+};
 use crate::layout::staff::StaffLayout;
 use crate::layout::StaffPosition;
+use crate::render::note_renderer::glyph_transform;
 use crate::render::SvgWriter;
 
-/// Draw augmentation dots for a note.
+/// Draw augmentation dots for a note drawn at `scale` (1.0 for normal size).
 ///
 /// Renders `dot_count` augmentation dots to the right of a notehead at
 /// the given staff position. Dots on staff lines are shifted up to the
-/// space above per standard engraving convention.
+/// space above per standard engraving convention. With `parenthesized`
+/// (LilyPond `Dots.parenthesized`) the dots are enclosed in notehead
+/// parentheses, the opening one taking the dots' usual gap after the
+/// notehead.
 ///
-/// Returns the x-position just past the last dot (useful for layout), or
-/// `None` if `dot_count` is 0.
+/// Returns the x-position just past the last dot (or closing parenthesis),
+/// or `None` if `dot_count` is 0.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_dots(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -20,27 +29,50 @@ pub fn draw_dots(
     notehead_advance: f64,
     position: StaffPosition,
     dot_count: u8,
+    scale: f64,
+    parenthesized: bool,
 ) -> Result<Option<f64>, FontError> {
     if dot_count == 0 {
         return Ok(None);
     }
 
+    let unit = staff.staff_space * scale;
     let outline = font.glyph_outline(DOT_GLYPH)?;
-    let dot_advance = outline.advance_width as f64;
+    let dot_advance = outline.advance_width as f64 * scale;
+    let y = staff.y_of(dot_staff_position(position));
 
-    let xs = dot_xs(notehead_x, notehead_advance, staff.staff_space, dot_count);
+    let first_x = if parenthesized {
+        let open = font.glyph_outline(Glyph::NoteheadParenthesisLeft)?;
+        let open_x = notehead_x + notehead_advance + DOT_PARENTHESES_GAP_SS * unit;
+        svg.add_path(
+            &open.path_data,
+            "black",
+            Some(&glyph_transform(open_x, y, scale)),
+        );
+        open_x + open.advance_width as f64 * scale + DOT_PARENTHESES_GAP_SS * unit
+    } else {
+        first_dot_x(notehead_x, notehead_advance, unit)
+    };
 
-    let dot_y_pos = dot_staff_position(position);
-    let y = staff.y_of(dot_y_pos);
-
-    for &x in &xs {
-        let transform = format!("translate({x}, {y})");
-        svg.add_path(&outline.path_data, "black", Some(&transform));
+    let inter_dot = DOT_INTER_DOT_SPACING_SS * unit;
+    let mut end_x = first_x;
+    for index in 0..dot_count {
+        let x = first_x + f64::from(index) * inter_dot;
+        svg.add_path(&outline.path_data, "black", Some(&glyph_transform(x, y, scale)));
+        end_x = x + dot_advance;
     }
 
-    // Return x just past the last dot
-    let last_x = xs.last().unwrap();
-    Ok(Some(last_x + dot_advance))
+    if parenthesized {
+        let close = font.glyph_outline(Glyph::NoteheadParenthesisRight)?;
+        let close_x = end_x + DOT_PARENTHESES_GAP_SS * unit;
+        svg.add_path(
+            &close.path_data,
+            "black",
+            Some(&glyph_transform(close_x, y, scale)),
+        );
+        end_x = close_x + close.advance_width as f64 * scale;
+    }
+    Ok(Some(end_x))
 }
 
 #[cfg(test)]
@@ -60,7 +92,7 @@ mod tests {
     fn zero_dots_returns_none_and_no_elements() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, 0.0, 0.0, 6000.0, 1500.0);
-        let result = draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 4, 0).unwrap();
+        let result = draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 4, 0, 1.0, false).unwrap();
         assert!(result.is_none());
         let output = svg.to_svg();
         assert_eq!(
@@ -74,7 +106,7 @@ mod tests {
     fn single_dot_produces_one_path() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        let result = draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 1).unwrap();
+        let result = draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 1, 1.0, false).unwrap();
         assert!(result.is_some());
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 1, "exactly one dot path");
@@ -84,7 +116,7 @@ mod tests {
     fn double_dot_produces_two_paths() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 2).unwrap();
+        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 2, 1.0, false).unwrap();
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 2, "two dot paths");
     }
@@ -93,7 +125,7 @@ mod tests {
     fn triple_dot_produces_three_paths() {
         let (font, _, staff) = setup();
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -200.0, 6000.0, 1500.0);
-        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 3).unwrap();
+        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 3, 1.0, false).unwrap();
         let output = svg.to_svg();
         assert_eq!(output.matches("<path ").count(), 3, "three dot paths");
     }
@@ -103,7 +135,7 @@ mod tests {
         let (font, _, staff) = setup();
         // Position 5 is a space — dot should stay at position 5
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2000.0);
-        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 1).unwrap();
+        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 5, 1, 1.0, false).unwrap();
         let output = svg.to_svg();
 
         let expected_y = staff.y_of(5);
@@ -122,7 +154,7 @@ mod tests {
         let (font, _, staff) = setup();
         // Position 4 is middle line — dot should be at position 5 (space above)
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2000.0);
-        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 4, 1).unwrap();
+        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 4, 1, 1.0, false).unwrap();
         let output = svg.to_svg();
 
         let shifted_y = staff.y_of(5); // space above middle line
@@ -138,7 +170,7 @@ mod tests {
         let (font, _, staff) = setup();
         // Position 0 → dot at position 1
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2000.0);
-        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 0, 1).unwrap();
+        draw_dots(&mut svg, &staff, &font, 500.0, 295.0, 0, 1, 1.0, false).unwrap();
         let output = svg.to_svg();
 
         let shifted_y = staff.y_of(1);
@@ -155,7 +187,7 @@ mod tests {
         let notehead_x = 500.0;
         let notehead_advance = 295.0;
         let mut svg = SvgWriter::new(800.0, 200.0, -100.0, -500.0, 6000.0, 2000.0);
-        draw_dots(&mut svg, &staff, &font, notehead_x, notehead_advance, 5, 1).unwrap();
+        draw_dots(&mut svg, &staff, &font, notehead_x, notehead_advance, 5, 1, 1.0, false).unwrap();
         let output = svg.to_svg();
 
         let ss = staff.staff_space;
@@ -170,7 +202,7 @@ mod tests {
     #[test]
     fn returns_x_past_last_dot() {
         let (font, _, staff) = setup();
-        let result = draw_dots(&mut svg_for_test(), &staff, &font, 500.0, 295.0, 5, 1).unwrap();
+        let result = draw_dots(&mut svg_for_test(), &staff, &font, 500.0, 295.0, 5, 1, 1.0, false).unwrap();
         let end_x = result.unwrap();
         let ss = staff.staff_space;
         let first_x = 500.0 + 295.0 + DOT_NOTEHEAD_PADDING_SS * ss;

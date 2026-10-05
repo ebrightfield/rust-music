@@ -64,11 +64,11 @@ pub mod tuplet;
 pub mod voice_collision;
 pub mod volta;
 
-pub use accidental::{AccidentalDisplay, ResolvedAccidental};
+pub use accidental::{AccidentalDisplay, AccidentalPolicy, ResolvedAccidental};
 pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
 pub use articulation::{
-    layout_articulation, layout_articulation_stack, Articulation, ArticulationLayout,
-    ArticulationPlacement,
+    layout_articulation, layout_articulation_stack, Articulation, ArticulationKind,
+    ArticulationLayout, ArticulationMark, ArticulationPlacement,
 };
 pub use barline::{BarlineLayout, BarlineStyle};
 pub use beam::{
@@ -98,8 +98,10 @@ pub use glissando::{
     GlissandoStyle, GLISSANDO_H_PADDING_SS,
 };
 pub use grace::{
-    grace_note_glyph, grace_note_x_reservation, layout_grace_note, GraceNoteKind, GraceNoteLayout,
-    GRACE_NOTE_SCALE, GRACE_NOTE_SPACING_SS,
+    grace_group_extent, grace_stem_direction, layout_grace_group, layout_grace_slur,
+    GraceBeamSegment, GraceGroup, GraceGroupLayout, GraceNoteEvent, GraceNoteKind,
+    GraceNoteLayout, GraceNotes, GraceStemLayout, WrittenGraceNote, GRACE_NOTE_GAP_SS,
+    GRACE_NOTE_SCALE, GRACE_PRINCIPAL_GAP_SS,
 };
 pub use hairpin::{
     layout_hairpin, layout_hairpin_dashed, layout_hairpin_styled, layout_hairpin_with_niente,
@@ -112,8 +114,8 @@ pub use lyric::{
     layout_lyric, LyricContinuation, LyricLayout, LyricSyllable, LYRIC_BELOW_STAFF_SS,
 };
 pub use measure::{
-    layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent,
-    PositionedElement, RestEvent,
+    layout_measure, MeasureElement, MeasureLayout, MeasureLayoutConfig, NoteEvent, NoteSize,
+    PositionedElement, RestEvent, StemVisibility, CUE_NOTE_SCALE,
 };
 pub use multi_measure_rest::{
     church_rest_supported, layout_church_rest, layout_multi_measure_rest, ChurchRestGlyph,
