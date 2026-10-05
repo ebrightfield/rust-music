@@ -90,6 +90,13 @@ fn beamed_elements(elements: &[PositionedElement]) -> Vec<bool> {
         .collect()
 }
 
+/// An event's rhythmic column and its displaced ink position.
+/// Only the latter moves for a voice collision.
+struct EventX {
+    ink: f64,
+    rhythm: f64,
+}
+
 /// Draw a laid-out measure's elements without its beam and tuplet spans,
 /// which the system renderer draws per voice across the whole system.
 pub(crate) fn draw_measure_elements(
@@ -125,8 +132,10 @@ pub(crate) fn draw_measure_elements(
                     staff,
                     font,
                     config,
-                    elem_x,
-                    elem_x,
+                    EventX {
+                        ink: elem_x,
+                        rhythm: elem_x,
+                    },
                     note,
                     beamed[index],
                 )?;
@@ -137,8 +146,10 @@ pub(crate) fn draw_measure_elements(
                     staff,
                     font,
                     config,
-                    elem_x,
-                    elem_x,
+                    EventX {
+                        ink: elem_x,
+                        rhythm: elem_x,
+                    },
                     chord,
                     beamed[index],
                 )?;
@@ -225,7 +236,6 @@ pub(crate) fn collision_shifts(
 /// along with their ink (stem, flag, accidentals, dots, and ledger lines).
 /// The rhythmic columns and text anchors do not move. Beamed stems and beams
 /// are drawn later by the system renderer using those same ink positions.
-
 pub fn draw_additional_voices(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -275,8 +285,10 @@ pub fn draw_additional_voices(
                         staff,
                         font,
                         config,
-                        elem_x,
-                        rhythm_x,
+                        EventX {
+                            ink: elem_x,
+                            rhythm: rhythm_x,
+                        },
                         note,
                         beamed[elem_idx],
                     )?;
@@ -287,8 +299,10 @@ pub fn draw_additional_voices(
                         staff,
                         font,
                         config,
-                        elem_x,
-                        rhythm_x,
+                        EventX {
+                            ink: elem_x,
+                            rhythm: rhythm_x,
+                        },
                         chord,
                         beamed[elem_idx],
                     )?;
@@ -389,11 +403,14 @@ fn draw_note_event(
     staff: &StaffLayout,
     font: &MusicFont,
     config: &EngravingConfig,
-    x: f64,
-    rhythm_x: f64,
+    event_x: EventX,
     note: &NoteEvent,
     beamed: bool,
 ) -> Result<(), FontError> {
+    let EventX {
+        ink: x,
+        rhythm: rhythm_x,
+    } = event_x;
     let kind = notehead_kind_from_log2(note.duration_log2);
     let style = notehead_style(&note.annotations, 0);
     let parenthesized = parenthesized_notehead(&note.annotations, 0);
@@ -523,11 +540,14 @@ fn draw_chord_event(
     staff: &StaffLayout,
     font: &MusicFont,
     config: &EngravingConfig,
-    x: f64,
-    rhythm_x: f64,
+    event_x: EventX,
     chord: &ChordEvent,
     beamed: bool,
 ) -> Result<(), FontError> {
+    let EventX {
+        ink: x,
+        rhythm: rhythm_x,
+    } = event_x;
     if chord.staff_positions.is_empty() {
         return Ok(());
     }
