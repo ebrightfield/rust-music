@@ -2735,6 +2735,8 @@ mod tests_lyrics_verses;
 #[cfg(test)]
 mod tests_rest_marks;
 #[cfg(test)]
+mod tests_modus_novus_rhythm;
+#[cfg(test)]
 mod tests_structure;
 #[cfg(test)]
 mod tests_written_octave;
