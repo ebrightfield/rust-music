@@ -2733,6 +2733,8 @@ mod tests_c_clefs;
 #[cfg(test)]
 mod tests_lyrics_verses;
 #[cfg(test)]
+mod tests_modus_novus_marks;
+#[cfg(test)]
 mod tests_rest_marks;
 #[cfg(test)]
 mod tests_structure;
