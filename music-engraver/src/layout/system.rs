@@ -285,6 +285,9 @@ pub struct SystemMeasure {
     pub x_offset: f64,
     /// The laid-out measure (voice 0 / primary voice).
     pub layout: MeasureLayout,
+    /// Closing barline's measure-relative position from the shared grid,
+    /// independent of which stave supplies the visible barline style.
+    pub shared_closing_barline_x: f64,
     /// Optional volta bracket annotation for this measure.
     pub volta: Option<VoltaAnnotation>,
     /// Laid-out additional voices (voice 1, voice 2, …).
@@ -462,263 +465,58 @@ pub fn layout_system_followed_by(
     config: &MeasureLayoutConfig,
     target_width: Option<f64>,
 ) -> SystemLayout {
-    if measures.is_empty() {
-        return SystemLayout {
-            clef_kind: prefix.clef_kind,
-            measures: vec![],
-            total_width: 0.0,
-            staff_width: 0.0,
-        };
-    }
+    layout_staves_followed_by(&[(prefix, measures, next)], config, target_width)
+        .pop()
+        .expect("one stave was supplied")
+}
 
-    // First pass: lay out primary voice for each measure at natural width
-    let measure_elements = system_measure_elements(prefix, measures, next);
-
-    // Lay out primary voice for each measure
-    let mut layouts: Vec<MeasureLayout> = measure_elements
+/// Layout all staves on the same exact onset grid, including their additional
+/// voices. Measure rods and springs are merged before any horizontal x is
+/// assigned; system justification scales the merged springs just once.
+pub fn layout_staves_followed_by(
+    staves: &[(&SystemPrefix, &[MeasureContent], Option<&MeasureContent>)],
+    config: &MeasureLayoutConfig,
+    target_width: Option<f64>,
+) -> Vec<SystemLayout> {
+    let mut systems: Vec<SystemLayout> = staves
         .iter()
-        .map(|elems| layout_measure(elems, config))
-        .collect();
-
-    // Lay out additional voices for each measure. Each additional voice is
-    // laid out independently, then scaled to match the primary voice's width
-    // so that temporal positions align visually.
-    let mut additional_voice_layouts: Vec<Vec<MeasureLayout>> = Vec::with_capacity(measures.len());
-    for (i, measure) in measures.iter().enumerate() {
-        let mut voice_layouts = Vec::new();
-        for voice_events in &measure.additional_voices {
-            let mut elems: Vec<MeasureElement> =
-                voice_events.iter().map(measure_event_to_element).collect();
-            // Additional voices share the barline with the primary voice
-            elems.push(MeasureElement::Barline(measure.barline));
-            let mut voice_layout = layout_measure(&elems, config);
-            // Start each additional voice at the primary voice's first
-            // rhythmic event: past the system prefix in the first measure,
-            // and past the primary's leading accidental reservation anywhere.
-            let first_rhythmic_x = |layout: &MeasureLayout| {
-                layout
-                    .elements
-                    .iter()
-                    .find(|element| {
-                        matches!(
-                            element.element,
-                            MeasureElement::Note(_)
-                                | MeasureElement::Rest(_)
-                                | MeasureElement::Spacer(_)
-                                | MeasureElement::Chord(_)
-                                | MeasureElement::MultiMeasureRest { .. }
-                        )
-                    })
-                    .map(|element| element.x)
-            };
-            let primary_first = first_rhythmic_x(&layouts[i]);
-            if let (Some(primary_first), Some(voice_first)) =
-                (primary_first, first_rhythmic_x(&voice_layout))
-            {
-                let leading = primary_first - voice_first;
-                for element in &mut voice_layout.elements {
-                    element.x += leading;
-                }
-                voice_layout.total_rod += leading;
-                voice_layout.total_width += leading;
-            }
-            // Spring-only scale to match the primary voice's width, so temporal
-            // positions align at measure ends without compressing this voice's
-            // rods (Gourlay). (True max-spring-per-tick cross-voice merging is
-            // deferred — see docs/implementation-plan-gourlay-spacing.md §4.)
-            let primary_width = layouts[i].total_width;
-            if voice_layout.total_width > 0.0 && primary_width > 0.0 {
-                let s = spring_scale(
-                    voice_layout.total_rod,
-                    voice_layout.total_spring,
-                    primary_width,
-                );
-                scale_measure_springs(&mut voice_layout, s);
-            }
-            voice_layouts.push(voice_layout);
-        }
-        additional_voice_layouts.push(voice_layouts);
-    }
-
-    let natural_width: f64 = layouts.iter().map(|l| l.total_width).sum();
-
-    // If a target width is specified, fit the system with Gourlay's one-line
-    // analytic solve: find the single spring scale `s` such that
-    // `Σ(rod_i + s·spring_i) == target` across all measures, then apply it.
-    // Rods (noteheads, accidentals, clef/key/time prefix, barlines) stay
-    // fixed; only springs compress or extend. This replaces the previous
-    // uniform scale, which wrongly compressed the incompressible prefix and
-    // noteheads along with the springs.
-    if let Some(target) = target_width {
-        if natural_width > 0.0 {
-            let total_rod: f64 = layouts.iter().map(|l| l.total_rod).sum();
-            let total_spring: f64 = layouts.iter().map(|l| l.total_spring).sum();
-            let s = spring_scale(total_rod, total_spring, target);
-            for layout in &mut layouts {
-                scale_measure_springs(layout, s);
-            }
-            // Re-fit each additional voice to its (now scaled) primary measure
-            // width using the same spring-only rule, preserving alignment.
-            for (i, voice_layouts) in additional_voice_layouts.iter_mut().enumerate() {
-                let primary_width = layouts[i].total_width;
-                for vl in voice_layouts.iter_mut() {
-                    if vl.total_width > 0.0 && primary_width > 0.0 {
-                        let vs = spring_scale(vl.total_rod, vl.total_spring, primary_width);
-                        scale_measure_springs(vl, vs);
+        .map(|&(prefix, measures, next)| {
+            let elements = system_measure_elements(prefix, measures, next);
+            let system_measures = elements
+                .into_iter()
+                .zip(measures)
+                .map(|(elements, content)| {
+                    let layout = layout_measure(&elements, config);
+                    let additional_voice_layouts = content
+                        .additional_voices
+                        .iter()
+                        .map(|events| {
+                            let mut elements: Vec<_> =
+                                events.iter().map(measure_event_to_element).collect();
+                            elements.push(MeasureElement::Barline(content.barline));
+                            layout_measure(&elements, config)
+                        })
+                        .collect();
+                    SystemMeasure {
+                        x_offset: 0.0,
+                        shared_closing_barline_x: 0.0,
+                        layout,
+                        volta: content.volta.clone(),
+                        additional_voice_layouts,
+                        meta: content.meta.clone(),
                     }
-                }
-            }
-        }
-    }
-
-    // Assign x-offsets
-    let mut system_measures = Vec::with_capacity(layouts.len());
-    let mut x = 0.0;
-    for (i, layout) in layouts.iter().enumerate() {
-        system_measures.push(SystemMeasure {
-            x_offset: x,
-            layout: layout.clone(),
-            volta: measures[i].volta.clone(),
-            additional_voice_layouts: additional_voice_layouts[i].clone(),
-            meta: measures[i].meta.clone(),
-        });
-        x += layout.total_width;
-    }
-
-    let total = x;
-    let staff_w = target_width.unwrap_or(total);
-
-    SystemLayout {
-        clef_kind: prefix.clef_kind,
-        measures: system_measures,
-        total_width: total,
-        staff_width: staff_w,
-    }
-}
-
-/// Spring scale floor. When a system's incompressible rod total already meets
-/// or exceeds the target width, springs cannot shrink further without
-/// producing negative or zero element widths; we clamp the scale here and let
-/// the system overflow the target. (A line-breaker — out of scope — is the
-/// real fix for content that genuinely does not fit; this clamp just keeps
-/// geometry well-formed.)
-const MIN_SPRING_SCALE: f64 = 0.0;
-
-/// Solve the Gourlay one-line compression/extension scale for a system.
-///
-/// Returns the spring scale `s` such that `Σ(rod_i + s·spring_i) == target`.
-/// Rods are incompressible; only springs scale. When there is no spring to
-/// scale (all rod), or the solve would drive springs below the floor, the
-/// result is clamped — the system then keeps its natural rod-bound width and
-/// may overflow `target`.
-fn spring_scale(total_rod: f64, total_spring: f64, target: f64) -> f64 {
-    if total_spring <= 0.0 {
-        return 1.0;
-    }
-    ((target - total_rod) / total_spring).max(MIN_SPRING_SCALE)
-}
-
-/// Apply a spring scale to one measure layout in place: each element's spring
-/// scales by `s`, its rod stays fixed, `width = rod + s·spring`, and x-offsets
-/// are re-flowed by accumulation while preserving the original inter-element
-/// gaps (trailing prefix padding, which is incompressible rod).
-fn scale_measure_springs(layout: &mut MeasureLayout, s: f64) {
-    // Capture the original gaps before mutating any widths/positions. The gap
-    // after element i is everything between its right edge and the next
-    // element's left edge — i.e. trailing padding emitted by `layout_measure`.
-    let gaps: Vec<f64> = layout
-        .elements
-        .windows(2)
-        .map(|w| w[1].x - (w[0].x + w[0].width))
-        .collect();
-
-    let mut x = layout.elements.first().map(|e| e.x).unwrap_or(0.0);
-    for (i, el) in layout.elements.iter_mut().enumerate() {
-        el.spring *= s;
-        el.width = el.rod + el.spring;
-        el.x = x;
-        x += el.width;
-        if let Some(gap) = gaps.get(i) {
-            x += gap;
-        }
-    }
-    layout.total_spring *= s;
-    layout.total_width = layout.total_rod + layout.total_spring;
-}
-
-/// A zero-spring measure cannot be stretched by `scale_measure_springs`
-/// (typically it contains only a barline). Put the missing whitespace before
-/// its closing barline instead, so that an empty stave shares the same boundary
-/// as a sounding stave without changing any glyph's advance.
-fn fit_measure_column(layout: &mut MeasureLayout, width: f64) {
-    if layout.total_spring > 0.0 {
-        let scale = spring_scale(layout.total_rod, layout.total_spring, width);
-        scale_measure_springs(layout, scale);
-    } else if width > layout.total_width {
-        let gap = width - layout.total_width;
-        if let Some(last_barline) = layout
-            .elements
-            .iter()
-            .rposition(|element| matches!(element.element, MeasureElement::Barline(_)))
-        {
-            for element in &mut layout.elements[last_barline..] {
-                element.x += gap;
-            }
-        }
-        layout.total_spring += gap;
-        layout.total_width = width;
-    }
-}
-
-/// Give staves sharing a system the same measure boundaries.
-///
-/// Each stave is first laid out at natural width. The widest rod and spring
-/// of each measure column define a shared system, whose springs are fitted
-/// once to `target_width`. Then each stave's own springs fit that column,
-/// preserving incompressible glyph widths and aligning closing barlines.
-pub(crate) fn align_system_measure_boundaries(systems: &mut [SystemLayout], target_width: f64) {
-    if systems.len() < 2 {
-        return;
-    }
-    let count = systems
-        .iter()
-        .map(|system| system.measures.len())
-        .max()
-        .unwrap_or(0);
-    let columns: Vec<(f64, f64)> = (0..count)
-        .map(|index| {
-            systems
-                .iter()
-                .filter_map(|system| system.measures.get(index))
-                .fold((0.0_f64, 0.0_f64), |(rod, spring), measure| {
-                    (
-                        rod.max(measure.layout.total_rod),
-                        spring.max(measure.layout.total_spring),
-                    )
                 })
+                .collect();
+            SystemLayout {
+                clef_kind: prefix.clef_kind,
+                measures: system_measures,
+                total_width: 0.0,
+                staff_width: 0.0,
+            }
         })
         .collect();
-    let rods: f64 = columns.iter().map(|(rod, _)| rod).sum();
-    let springs: f64 = columns.iter().map(|(_, spring)| spring).sum();
-    let shared_scale = spring_scale(rods, springs, target_width);
-    let widths: Vec<f64> = columns
-        .iter()
-        .map(|(rod, spring)| rod + spring * shared_scale)
-        .collect();
-
-    for system in systems {
-        let mut x = 0.0;
-        for (measure, &width) in system.measures.iter_mut().zip(&widths) {
-            fit_measure_column(&mut measure.layout, width);
-            for voice in &mut measure.additional_voice_layouts {
-                fit_measure_column(voice, width);
-            }
-            measure.x_offset = x;
-            x += measure.layout.total_width;
-        }
-        system.total_width = x;
-        system.staff_width = target_width.max(x);
-    }
+    crate::layout::rhythm_grid::align_shared_grid(staves, &mut systems, config, target_width);
+    systems
 }
 
 pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {

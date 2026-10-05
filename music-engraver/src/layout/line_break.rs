@@ -28,7 +28,7 @@ use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
 
 /// Written length of a note value: `duration_log2` (-1 breve, 0 whole,
 /// 1 half, …) extended by `dots` augmentation dots.
-fn written_length(duration_log2: i8, dots: u8) -> MeasureLength {
+pub(crate) fn written_length(duration_log2: i8, dots: u8) -> MeasureLength {
     let (numerator, denominator) = if duration_log2 >= 0 {
         (1u64, 1u64 << duration_log2)
     } else {
@@ -216,8 +216,12 @@ impl LineBreakPlan {
 }
 
 /// Distribute one voice's events over `points.len() + 1` pieces by onset.
-fn split_voice(events: Vec<MeasureEvent>, points: &[MeasureLength]) -> Vec<Vec<MeasureEvent>> {
+fn split_voice(
+    events: Vec<MeasureEvent>,
+    points: &[MeasureLength],
+) -> (Vec<Vec<MeasureEvent>>, Vec<MeasureLength>) {
     let mut pieces: Vec<Vec<MeasureEvent>> = vec![Vec::new(); points.len() + 1];
+    let mut first_onsets: Vec<Option<MeasureLength>> = vec![None; pieces.len()];
     let mut onset = MeasureLength::ZERO;
     let mut tuplets = Vec::new();
     for event in events {
@@ -230,6 +234,7 @@ fn split_voice(events: Vec<MeasureEvent>, points: &[MeasureLength]) -> Vec<Vec<M
             .iter()
             .filter(|&&at| at < onset || (at == onset && !closes_piece))
             .count();
+        first_onsets[piece].get_or_insert(onset);
         onset = onset + performed_length(&event, &mut tuplets);
         pieces[piece].push(event);
     }
@@ -240,31 +245,63 @@ fn split_voice(events: Vec<MeasureEvent>, points: &[MeasureLength]) -> Vec<Vec<M
     for index in 0..points.len() {
         for event in &pieces[index] {
             match event {
-                MeasureEvent::GroupMark(GroupMark::TupletStart { spec, .. }) => open_tuplets.push(*spec),
-                MeasureEvent::GroupMark(GroupMark::TupletEnd { .. }) => { open_tuplets.pop(); }
-                MeasureEvent::GroupMark(GroupMark::BeamStart { spec, .. }) => open_beam = Some(*spec),
+                MeasureEvent::GroupMark(GroupMark::TupletStart { spec, .. }) => {
+                    open_tuplets.push(*spec)
+                }
+                MeasureEvent::GroupMark(GroupMark::TupletEnd { .. }) => {
+                    open_tuplets.pop();
+                }
+                MeasureEvent::GroupMark(GroupMark::BeamStart { spec, .. }) => {
+                    open_beam = Some(*spec)
+                }
                 MeasureEvent::GroupMark(GroupMark::BeamEnd { .. }) => open_beam = None,
                 _ => {}
             }
         }
         let closing_barline = matches!(pieces[index].last(), Some(MeasureEvent::Barline(_)))
-            .then(|| pieces[index].pop()).flatten();
+            .then(|| pieces[index].pop())
+            .flatten();
         if open_beam.is_some() {
-            pieces[index].push(MeasureEvent::GroupMark(GroupMark::BeamEnd { continues: true }));
+            pieces[index].push(MeasureEvent::GroupMark(GroupMark::BeamEnd {
+                continues: true,
+            }));
         }
         for _ in &open_tuplets {
-            pieces[index].push(MeasureEvent::GroupMark(GroupMark::TupletEnd { continues: true }));
+            pieces[index].push(MeasureEvent::GroupMark(GroupMark::TupletEnd {
+                continues: true,
+            }));
         }
         pieces[index].extend(closing_barline);
-        let mut resume: Vec<MeasureEvent> = open_tuplets.iter().map(|&spec| {
-            MeasureEvent::GroupMark(GroupMark::TupletStart { spec, continued: true })
-        }).collect();
+        let mut resume: Vec<MeasureEvent> = open_tuplets
+            .iter()
+            .map(|&spec| {
+                MeasureEvent::GroupMark(GroupMark::TupletStart {
+                    spec,
+                    continued: true,
+                })
+            })
+            .collect();
         if let Some(spec) = open_beam {
-            resume.push(MeasureEvent::GroupMark(GroupMark::BeamStart { spec, continued: true }));
+            resume.push(MeasureEvent::GroupMark(GroupMark::BeamStart {
+                spec,
+                continued: true,
+            }));
         }
         pieces[index + 1].splice(0..0, resume);
     }
-    pieces
+    let starts = first_onsets
+        .into_iter()
+        .enumerate()
+        .map(|(piece, first)| {
+            let boundary = if piece == 0 {
+                MeasureLength::ZERO
+            } else {
+                points[piece - 1]
+            };
+            first.unwrap_or(boundary).max(boundary)
+        })
+        .collect();
+    (pieces, starts)
 }
 
 /// The volta annotation of each of `count` pieces of one measure: the text
@@ -305,8 +342,8 @@ fn split_content(content: MeasureContent, points: &[MeasureLength]) -> Vec<Measu
         meta,
     } = content;
     let count = points.len() + 1;
-    let primary = split_voice(events, points);
-    let mut voices: Vec<Vec<Vec<MeasureEvent>>> = additional_voices
+    let (primary, primary_onsets) = split_voice(events, points);
+    let mut voices: Vec<_> = additional_voices
         .into_iter()
         .map(|voice| split_voice(voice, points))
         .collect();
@@ -329,6 +366,14 @@ fn split_content(content: MeasureContent, points: &[MeasureLength]) -> Vec<Measu
             };
             let mut piece_meta = meta.clone();
             piece_meta.continuation = meta.continuation || piece > 0;
+            piece_meta.visual_start = if piece == 0 {
+                meta.visual_start
+            } else {
+                points[piece - 1]
+            };
+            piece_meta.visual_voice_onsets = std::iter::once(primary_onsets[piece])
+                .chain(voices.iter().map(|(_, onsets)| onsets[piece]))
+                .collect();
             if !last {
                 piece_meta.line_break = LineBreak::Force;
             }
@@ -338,7 +383,7 @@ fn split_content(content: MeasureContent, points: &[MeasureLength]) -> Vec<Measu
                 volta,
                 additional_voices: voices
                     .iter_mut()
-                    .map(|voice| std::mem::take(&mut voice[piece]))
+                    .map(|(events, _)| std::mem::take(&mut events[piece]))
                     .collect(),
                 meta: piece_meta,
             }

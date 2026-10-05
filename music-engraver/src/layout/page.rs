@@ -1,7 +1,7 @@
 use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::key_signature::KeySignature;
-use crate::layout::measure::{layout_measure, MeasureElement, MeasureLayoutConfig};
 use crate::layout::mark_extent::system_mark_extent_ss;
+use crate::layout::measure::{layout_measure, MeasureElement, MeasureLayoutConfig};
 use crate::layout::measure_meta::LineBreak;
 use crate::layout::system::{
     layout_system_followed_by, measure_event_to_element, system_start_prefix, MeasureContent,
@@ -191,7 +191,14 @@ pub(crate) fn content_natural_width(content: &MeasureContent, config: &MeasureLa
         .map(measure_event_to_element)
         .collect();
     elems.push(MeasureElement::Barline(content.barline));
-    layout_measure(&elems, config).total_width
+    let mut width = layout_measure(&elems, config).total_width;
+    for voice in &content.additional_voices {
+        elems.clear();
+        elems.extend(voice.iter().map(measure_event_to_element));
+        elems.push(MeasureElement::Barline(content.barline));
+        width = width.max(layout_measure(&elems, config).total_width);
+    }
+    width
 }
 
 /// Compute the natural width of the system prefix (clef + key sig + time sig)

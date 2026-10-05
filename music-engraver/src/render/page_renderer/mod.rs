@@ -36,6 +36,7 @@ use crate::layout::trill_extension::{
     trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
 };
 use crate::render::bar_number_renderer::draw_bar_numbers;
+pub(crate) use crate::render::analysis_bracket_renderer::draw_cross_system_analysis_brackets;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{
@@ -266,6 +267,7 @@ pub fn draw_page(
 
     // Draw cross-system ottava brackets between adjacent systems
     draw_cross_system_ottava_brackets(&mut svg, font, config, &page.systems)?;
+    draw_cross_system_analysis_brackets(&mut svg, font, config, &page.systems)?;
 
     // Draw cross-system glissando lines between adjacent systems
     draw_cross_system_glissandos(&mut svg, font, config, &page.systems)?;
@@ -1334,7 +1336,7 @@ struct UnresolvedGlissando {
     x: f64,
     /// Staff position of the source note.
     staff_position: i8,
-    /// Glissando style (Line or LineWithText).
+    /// Glissando line style (solid, labeled, dashed, or zigzag).
     style: GlissandoStyle,
     /// Right edge of the system's staff lines (absolute x).
     staff_right: f64,
@@ -1346,13 +1348,15 @@ struct IncomingGlissandoTarget {
     x: f64,
     /// Staff position of the target note.
     staff_position: i8,
-    /// Left edge of the system's note area (after prefix).
-    staff_left: f64,
 }
 
 /// Find the last note with `glissando_start` that has no subsequent note
 /// within the same system to resolve against.
-fn find_unresolved_glissandos(page_system: &PageSystem) -> Vec<UnresolvedGlissando> {
+fn find_unresolved_glissandos(
+    page_system: &PageSystem,
+    font: &MusicFont,
+    ss: f64,
+) -> Result<Vec<UnresolvedGlissando>, FontError> {
     let system = &page_system.system;
     let notes = collect_glissando_note_info(system);
 
@@ -1369,14 +1373,14 @@ fn find_unresolved_glissandos(page_system: &PageSystem) -> Vec<UnresolvedGlissan
         }
 
         unresolved.push(UnresolvedGlissando {
-            x: page_system.x + note.x,
+            x: page_system.x + note.x + note.source_width_correction(font, ss)?,
             staff_position: note.staff_position,
             style,
             staff_right: page_system.x + system.staff_width,
         });
     }
 
-    unresolved
+    Ok(unresolved)
 }
 
 /// Find the first note in a system (candidate target for incoming cross-system glissando).
@@ -1384,19 +1388,12 @@ fn find_incoming_glissando_targets(page_system: &PageSystem) -> Vec<IncomingGlis
     let system = &page_system.system;
     let notes = collect_glissando_note_info(system);
 
-    let first_measure_x = system
-        .measures
-        .first()
-        .map(|m| page_system.x + m.x_offset)
-        .unwrap_or(page_system.x);
-
     let mut targets = Vec::new();
 
     if let Some(first_note) = notes.first() {
         targets.push(IncomingGlissandoTarget {
             x: page_system.x + first_note.x,
             staff_position: first_note.staff_position,
-            staff_left: first_measure_x,
         });
     }
 
@@ -1412,12 +1409,12 @@ fn find_incoming_glissando_targets(page_system: &PageSystem) -> Vec<IncomingGlis
 /// to that note.
 pub(crate) fn draw_cross_system_glissandos(
     svg: &mut SvgWriter,
-    _font: &MusicFont,
+    font: &MusicFont,
     config: &EngravingConfig,
     systems: &[PageSystem],
 ) -> Result<(), FontError> {
     for i in 0..systems.len().saturating_sub(1) {
-        let unresolved = find_unresolved_glissandos(&systems[i]);
+        let unresolved = find_unresolved_glissandos(&systems[i], font, config.staff_space)?;
         if unresolved.is_empty() {
             continue;
         }
@@ -1432,14 +1429,20 @@ pub(crate) fn draw_cross_system_glissandos(
                 config.staff_space,
             );
 
-            // Trailing half-glissando from source note to right edge
-            if let Some(right_layout) = layout_half_glissando_right(
+            // The outgoing and incoming fragments approach the same pitch
+            // midpoint in their own staff coordinates.
+            if let Some(mut right_layout) = layout_half_glissando_right(
                 gliss_src.x,
                 gliss_src.staff_position,
                 gliss_src.staff_right,
                 &src_staff,
                 gliss_src.style,
             ) {
+                if let Some(tgt) = targets.first() {
+                    let delta = f64::from(gliss_src.staff_position - tgt.staff_position)
+                        * config.staff_space * 0.5;
+                    right_layout.y_end = right_layout.y_start + delta * 0.5;
+                }
                 draw_glissando(svg, &right_layout);
             }
 
@@ -1452,12 +1455,16 @@ pub(crate) fn draw_cross_system_glissandos(
                     config.staff_space,
                 );
 
-                if let Some(left_layout) = layout_half_glissando_left(
-                    tgt.staff_left,
+                if let Some(mut left_layout) = layout_half_glissando_left(
+                    tgt.x - config.staff_space * 1.6,
                     tgt.x,
                     tgt.staff_position,
                     &tgt_staff,
+                    gliss_src.style,
                 ) {
+                    let delta = f64::from(gliss_src.staff_position - tgt.staff_position)
+                        * config.staff_space * 0.5;
+                    left_layout.y_start = left_layout.y_end - delta * 0.5;
                     draw_glissando(svg, &left_layout);
                 }
             }

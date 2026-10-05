@@ -7,6 +7,7 @@
 //! into complete scored layouts.
 
 pub mod accidental;
+pub mod analysis_bracket;
 pub mod arpeggio;
 pub mod articulation;
 pub mod bar_number;
@@ -42,6 +43,7 @@ pub mod pedal;
 pub mod placement;
 pub mod rehearsal;
 pub mod rest;
+pub(crate) mod rhythm_grid;
 pub mod slur;
 pub mod staff;
 pub mod stem;
@@ -69,6 +71,9 @@ pub mod voice_collision;
 pub mod volta;
 
 pub use accidental::{AccidentalDisplay, AccidentalPolicy, ResolvedAccidental};
+pub use analysis_bracket::{
+    layout_analysis_bracket, AnalysisBracketLayout, AnalysisBracketSpec, AnalysisBracketStyle,
+};
 pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
 pub use articulation::{
     layout_articulation, layout_articulation_stack, Articulation, ArticulationKind,

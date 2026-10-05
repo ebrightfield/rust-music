@@ -7864,3 +7864,42 @@
   8/8→12/8→8/8→7/8 excerpt shape against the LilyPond excerpt PDF,
   mid-measure/system-break changes, and grand staff; unrelated slurs/dashed
   barlines in the reference are outside this change.
+
+## 2026-10-04 — RM-MN-006: shared exact rhythmic columns
+- Laid out every voice and stave against one `MeasureLength` onset grid, with
+  tuplet-adjusted performed durations, split-measure carry-in, and a common
+  barline column. Structural glyphs, accidentals, dots, and simultaneous voices
+  reserve the maximum collision-free rod; overlapping rhythmic spans take the
+  maximum spring per interval before one system-wide justification.
+- Multi-staff and single-staff rendering now share grid positions; automatic
+  breaks measure the widest stave/voice, including otherwise empty staves.
+  Removed byte-pinned SVG snapshots while retaining behavioral rendering
+  assertions and adding onset/geometry regressions from Modus Novus excerpts.
+- Verified 12 focused grid tests and 52 surviving SVG behavioral tests;
+  visually compared flattened PNGs of a two-staff mixed-density score and
+  mn-c12-i001's opening against the corresponding LilyPond renderings.
+
+- After the analysis-bracket merge, multi-staff page rendering now runs its
+  cross-system bracket and lyric-hyphen passes for each notation stave; an
+  upper-stave continuation regression checks both segments stay above the
+  corresponding stave. All engraver regressions passed in the full all-features
+  workspace run; the only workspace failure was the known offline SoundFont
+  audio fixture.
+
+## 2026-10-04 — RM-MN-010 analysis brackets and G10 glissando styles
+- `ScoreBuilder::analysis_bracket_start(AnalysisBracketSpec)` and
+  `analysis_bracket_end()` attach standard-notation brackets to actual
+  note/chord/rest events, including beam and tuplet members. Solid/dashed
+  strokes, above/below placement, start/end hooks and optional labels are
+  typed options. Cross-barline and cross-system spans keep their event anchors,
+  with continuation segments and overlap lanes; invisible barlines do not
+  truncate them. Guitar TAB cell brackets retain their distinct TAB anchors.
+- `GlissandoStyle::{Dashed,Wavy}` draws dashed strokes and sloped zigzag paths
+  clipped between noteheads (font-measured advances correct wide whole heads).
+  Cross-system fragments retain their style and approach a common pitch
+  midpoint; cross-staff glissandi are separate work.
+- Focused public-builder score/layout/SVG tests cover source-derived
+  mn-c06-m003, mn-c01-h007, mn-c04-r010, mn-c12-i001 and mn-c05-m006 shapes.
+  Flattened PNGs of the mn-c06-m003 dashed barline-crossing bracket and
+  mn-c01-h007 solid chord-pair brackets were inspected alongside LilyPond
+  PDFs (representative bars, not complete transcriptions).

@@ -12,13 +12,18 @@ use crate::layout::bar_number::{
 };
 use crate::layout::barline::BarlineStyle;
 use crate::layout::line_break::LineBreakPlan;
+use crate::layout::mark_extent::system_mark_extent_ss;
 use crate::layout::measure::{MeasureElement, MeasureLayoutConfig};
-use crate::layout::multi_staff::{layout_multi_staff, ConnectorKind, StaffGroup, SubBracket};
-use crate::layout::page::{break_into_systems, PageSystem, SystemBreaking};
+use crate::layout::multi_staff::{
+    layout_multi_staff_with_gaps, ConnectorKind, StaffGroup, SubBracket, INTER_STAFF_GAP_SS,
+};
+use crate::layout::page::{
+    break_by_directives, content_natural_width, prefix_natural_width, PageSystem, SystemBreaking,
+};
 use crate::layout::staff::StaffLayout;
 use crate::layout::system::{
-    align_system_measure_boundaries, layout_system_followed_by, staff_prefix_glyph_extent_ss,
-    system_start_prefix, MeasureContent, SystemLayout, SystemPrefix,
+    layout_staves_followed_by, staff_prefix_glyph_extent_ss, system_start_prefix, MeasureContent,
+    SystemLayout, SystemPrefix,
 };
 use crate::layout::tab::TabStaffLayout;
 use crate::render::bar_number_renderer::draw_bar_numbers;
@@ -26,9 +31,10 @@ use crate::render::multi_staff_renderer::{
     draw_joined_barline, draw_joined_dashed_barline, draw_multi_staff_connectors,
 };
 use crate::render::page_renderer::{
-    draw_cross_system_glissandos, draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
-    draw_cross_system_ottava_brackets, draw_cross_system_slurs, draw_cross_system_ties,
-    draw_cross_system_text_spanners, draw_cross_system_trill_extensions,
+    draw_cross_system_analysis_brackets, draw_cross_system_glissandos, draw_cross_system_hairpins,
+    draw_cross_system_lyric_extenders, draw_cross_system_lyric_hyphens,
+    draw_cross_system_ottava_brackets, draw_cross_system_slurs, draw_cross_system_text_spanners,
+    draw_cross_system_ties, draw_cross_system_trill_extensions,
 };
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::system_renderer::draw_system;
@@ -295,10 +301,8 @@ impl MultiStaffScore {
     /// content ranges of the systems they break into.
     ///
     /// Every stave's explicit line breaks apply to all staves, so the staves
-    /// break — and split measures at mid-measure breaks — together. Widths
-    /// for width-based policies come from the stave with the most contents
-    /// (the first such stave on a tie), so no stave's measures fall outside
-    /// the ranges.
+    /// break — and split measures at mid-measure breaks — together. Width
+    /// policies consult the widest measure over every stave, never stave zero.
     pub(crate) fn staves_into_systems(
         &self,
         measure_config: &MeasureLayoutConfig,
@@ -314,12 +318,26 @@ impl MultiStaffScore {
         for (stave, contents) in self.staves.iter().zip(&logical) {
             line_breaks.merge(&stave.line_break_plan(contents));
         }
-        let stave_data: Vec<StaveData> = self
+        let mut stave_data: Vec<StaveData> = self
             .staves
             .iter()
             .zip(logical)
             .map(|(stave, contents)| (line_breaks.apply(contents), stave.build_prefix()))
             .collect();
+        if let Some(reference) = stave_data.iter().max_by_key(|(contents, _)| contents.len()) {
+            let reference = reference.0.clone();
+            for (contents, _) in &mut stave_data {
+                for missing in &reference[contents.len()..] {
+                    contents.push(MeasureContent {
+                        events: Vec::new(),
+                        barline: missing.barline,
+                        volta: None,
+                        additional_voices: Vec::new(),
+                        meta: missing.meta.clone(),
+                    });
+                }
+            }
+        }
 
         let breaking = if self.explicit_breaks || self.staves.iter().any(|s| s.explicit_breaks) {
             SystemBreaking::Explicit
@@ -330,13 +348,47 @@ impl MultiStaffScore {
         } else {
             SystemBreaking::Fixed(measures_per_system)
         };
-        let chunks = stave_data
+        let count = stave_data.first().map_or(0, |(contents, _)| contents.len());
+        let directives = stave_data.first().map_or_else(Vec::new, |(contents, _)| {
+            contents
+                .iter()
+                .map(|content| content.meta.line_break)
+                .collect()
+        });
+        let widths: Vec<f64> = match breaking {
+            SystemBreaking::Auto | SystemBreaking::Optimal => (0..count)
+                .map(|index| {
+                    stave_data
+                        .iter()
+                        .map(|(contents, _)| {
+                            content_natural_width(&contents[index], measure_config)
+                        })
+                        .fold(0.0_f64, f64::max)
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let first_prefix_width = stave_data
             .iter()
-            .rev()
-            .max_by_key(|(contents, _)| contents.len())
-            .map_or_else(Vec::new, |(contents, prefix)| {
-                break_into_systems(prefix, contents, measure_config, sys_width, &breaking)
-            });
+            .map(|(_, prefix)| prefix_natural_width(prefix, measure_config))
+            .fold(0.0_f64, f64::max);
+        let continuation_prefix_width = stave_data
+            .iter()
+            .map(|(_, prefix)| {
+                let mut continuation = prefix.clone();
+                continuation.time_signature = None;
+                prefix_natural_width(&continuation, measure_config)
+            })
+            .fold(0.0_f64, f64::max);
+        let chunks = break_by_directives(
+            &directives,
+            &breaking,
+            &widths,
+            (
+                sys_width - first_prefix_width,
+                sys_width - continuation_prefix_width,
+            ),
+        );
         Ok((stave_data, chunks))
     }
 
@@ -439,8 +491,44 @@ impl MultiStaffScore {
             sub_brackets: self.sub_brackets.clone(),
         };
 
-        let multi_layout = layout_multi_staff(&group, 0.0, staff_space, sys_width);
-        let notation_height = multi_layout.total_height();
+        // Plan every horizontal grid before assigning page/stave y positions.
+        // The resulting verse/annotation extents determine each stave gap.
+        let laid_out_systems: Vec<Vec<SystemLayout>> = chunks
+            .iter()
+            .map(|&(start, end)| {
+                let prefixes: Vec<_> = stave_data
+                    .iter()
+                    .map(|(contents, prefix)| system_start_prefix(prefix, contents, start))
+                    .collect();
+                let slices: Vec<_> = stave_data
+                    .iter()
+                    .zip(&prefixes)
+                    .map(|((contents, _), prefix)| {
+                        (prefix, &contents[start..end], contents.get(end))
+                    })
+                    .collect();
+                layout_staves_followed_by(&slices, &measure_config, Some(sys_width))
+            })
+            .collect();
+        let mark_extents: Vec<Vec<_>> = laid_out_systems
+            .iter()
+            .map(|systems| systems.iter().map(system_mark_extent_ss).collect())
+            .collect();
+        let gaps: Vec<Vec<f64>> = mark_extents
+            .iter()
+            .map(|system| {
+                system
+                    .windows(2)
+                    .map(|staves| INTER_STAFF_GAP_SS.max(staves[0].1 + staves[1].0 + 1.0))
+                    .collect()
+            })
+            .collect();
+        let mut planned_staff_layouts: Vec<_> = gaps
+            .iter()
+            .map(|system_gaps| {
+                layout_multi_staff_with_gaps(&group, 0.0, staff_space, sys_width, system_gaps)
+            })
+            .collect();
 
         // Tab stave geometry (height varies by line count)
         let tab_line_count = self
@@ -457,22 +545,32 @@ impl MultiStaffScore {
             .tab_stave
             .as_ref()
             .map(|score| score.annotation_layout(&chunks));
-        let base_system_height = if self.tab_stave.is_some() {
-            notation_height + tab_gap + tab_staff_height
-        } else {
-            notation_height
-        };
-        let system_heights = (0..chunks.len())
-            .map(|system_index| {
-                base_system_height
+        let system_heights: Vec<f64> = planned_staff_layouts
+            .iter()
+            .enumerate()
+            .map(|(index, layout)| {
+                layout.total_height()
+                    + if self.tab_stave.is_some() {
+                        tab_gap + tab_staff_height
+                    } else {
+                        0.0
+                    }
                     + guitar_annotation_layout
                         .as_ref()
-                        .map(|layout| layout.system_height_ss(system_index) * staff_space)
+                        .map(|annotations| annotations.system_height_ss(index) * staff_space)
                         .unwrap_or(0.0)
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        let inter_system_gap = 10.0 * staff_space;
+        let inter_system_gap = (0..mark_extents.len().saturating_sub(1))
+            .filter_map(|index| {
+                Some((
+                    mark_extents[index].last()?.1,
+                    mark_extents[index + 1].first()?.0,
+                ))
+            })
+            .fold(10.0_f64, |gap, (below, above)| gap.max(below + above + 2.0))
+            * staff_space;
 
         let left_margin = match self.connector {
             ConnectorKind::Brace => 2.0 * staff_space,
@@ -523,6 +621,14 @@ impl MultiStaffScore {
             let last = stave_data
                 .last()
                 .and_then(|(contents, prefix)| staff_prefix_glyph_extent_ss(prefix, contents));
+            let first_marks = mark_extents
+                .iter()
+                .filter_map(|staves| staves.first().map(|&(above, _)| above))
+                .fold(0.0_f64, f64::max);
+            let last_marks = mark_extents
+                .iter()
+                .filter_map(|staves| staves.last().map(|&(_, below)| below))
+                .fold(0.0_f64, f64::max);
             let numbers = if self.measure_numbering == MeasureNumbering::Hidden {
                 0.0
             } else {
@@ -531,10 +637,11 @@ impl MultiStaffScore {
             (
                 top_margin
                     .max(first.map_or(0.0, |(top, _)| (-top) * staff_space) + side_margin)
+                    .max(first_marks * staff_space + side_margin)
                     .max(numbers),
-                side_margin.max(
-                    last.map_or(0.0, |(_, bottom)| (bottom - 4.0) * staff_space) + side_margin,
-                ),
+                side_margin
+                    .max(last.map_or(0.0, |(_, bottom)| (bottom - 4.0) * staff_space) + side_margin)
+                    .max(last_marks * staff_space + side_margin),
             )
         };
         let vb_x = -side_margin - left_margin;
@@ -572,33 +679,14 @@ impl MultiStaffScore {
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
             let group_y = system_y_origins[sys_idx];
 
-            // --- Standard notation staves ---
-            let ms_layout = layout_multi_staff(&group, group_y, staff_space, sys_width);
-
+            // Move the pre-planned staff and connector geometry to this
+            // system's page origin, without laying its columns out again.
+            let ms_layout = &mut planned_staff_layouts[sys_idx];
+            ms_layout.translate_y(group_y);
             if !self.staves.is_empty() {
-                draw_multi_staff_connectors(&mut svg, &font, &ms_layout)?;
+                draw_multi_staff_connectors(&mut svg, &font, ms_layout)?;
             }
-
-            // Lay out each stave first, then share the widest measure-column
-            // boundaries. Different clefs or accidentals reserve different
-            // rods; independent spring fits would otherwise stagger joined
-            // barlines and notes on the following measures.
-            let mut stave_systems: Vec<SystemLayout> = stave_data
-                .iter()
-                .map(|(contents, prefix)| {
-                    let stave_start = (*start).min(contents.len());
-                    let stave_end = (*end).min(contents.len());
-                    let sys_prefix = system_start_prefix(prefix, contents, stave_start);
-                    layout_system_followed_by(
-                        &sys_prefix,
-                        &contents[stave_start..stave_end],
-                        contents.get(stave_end),
-                        &measure_config,
-                        (stave_data.len() == 1).then_some(sys_width),
-                    )
-                })
-                .collect();
-            align_system_measure_boundaries(&mut stave_systems, sys_width);
+            let stave_systems = &laid_out_systems[sys_idx];
 
             for (stave_idx, system) in stave_systems.iter().enumerate() {
                 let stave_y = ms_layout.staff_y_origins[stave_idx];
@@ -710,34 +798,35 @@ impl MultiStaffScore {
                     config.thin_barline_thickness_fu(),
                 );
 
-                if let Some(first_system) = stave_systems.first() {
-                    for measure in &first_system.measures {
-                        // Join at the first stave's closing barline (the
-                        // measure's last `Barline` element), in its style.
-                        let Some((barline_x, style)) = measure
-                            .layout
-                            .elements
-                            .iter()
-                            .rev()
-                            .find_map(|element| match element.element {
-                                MeasureElement::Barline(style) => Some((element.x, style)),
-                                _ => None,
+                for (measure_index, measure) in stave_systems[0].measures.iter().enumerate() {
+                    let style = stave_systems
+                        .iter()
+                        .filter_map(|system| system.measures.get(measure_index))
+                        .find_map(|measure| {
+                            measure.layout.elements.iter().rev().find_map(|element| {
+                                match element.element {
+                                    MeasureElement::Barline(style) if style.is_visible() => {
+                                        Some(style)
+                                    }
+                                    _ => None,
+                                }
                             })
-                        else {
-                            continue;
-                        };
-                        let barline_x = left_margin + measure.x_offset + barline_x;
-                        if style == BarlineStyle::Dashed {
-                            draw_joined_dashed_barline(&mut svg, &config, barline_x, &gaps);
-                        } else if style.spans_staff_gaps() {
-                            draw_joined_barline(
-                                &mut svg,
-                                barline_x,
-                                y_top,
-                                y_bottom,
-                                config.thin_barline_thickness_fu(),
-                            );
-                        }
+                        });
+                    let Some(style) = style else { continue };
+                    // The barline is a shared grid column, not a coordinate
+                    // borrowed from any individual stave's layout.
+                    let barline_x =
+                        left_margin + measure.x_offset + measure.shared_closing_barline_x;
+                    if style == BarlineStyle::Dashed {
+                        draw_joined_dashed_barline(&mut svg, &config, barline_x, &gaps);
+                    } else if style.spans_staff_gaps() {
+                        draw_joined_barline(
+                            &mut svg,
+                            barline_x,
+                            y_top,
+                            y_bottom,
+                            config.thin_barline_thickness_fu(),
+                        );
                     }
                 }
             }
@@ -813,7 +902,9 @@ impl MultiStaffScore {
             draw_cross_system_hairpins(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_text_spanners(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_lyric_extenders(&mut svg, &config, stave_systems);
+            draw_cross_system_lyric_hyphens(&mut svg, &config, stave_systems);
             draw_cross_system_ottava_brackets(&mut svg, &font, &config, stave_systems)?;
+            draw_cross_system_analysis_brackets(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_glissandos(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_trill_extensions(&mut svg, &font, &config, stave_systems)?;
         }
@@ -858,6 +949,10 @@ impl MultiStaffScore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "tests_multi_staff_brackets.rs"]
+mod bracket_tests;
 
 #[cfg(test)]
 mod tests {

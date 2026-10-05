@@ -1,4 +1,5 @@
 use crate::layout::accidental::{layout_accidental_columns, AccidentalDisplay, ResolvedAccidental};
+use crate::layout::analysis_bracket::AnalysisBracketSpec;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::ArticulationMark;
 use crate::layout::barline::BarlineStyle;
@@ -376,6 +377,10 @@ pub struct NoteAnnotations {
     /// Whether this event ends the text spanner opened by a preceding
     /// `text_spanner_start`.
     pub text_spanner_end: bool,
+    /// Start a horizontal analysis bracket on this exact event, even inside a beam/tuplet.
+    pub analysis_bracket_start: Option<AnalysisBracketSpec>,
+    /// End the most recently opened horizontal analysis bracket on this event.
+    pub analysis_bracket_end: bool,
 }
 
 /// A chord (multiple simultaneous notes) to be laid out within a measure.
@@ -1047,7 +1052,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
 
 /// Trailing padding that sits after a prefix element but outside its `width`
 /// (clef/key-sig/time-sig). Counted as incompressible rod at the measure level.
-fn trailing_padding(elem: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
+pub(crate) fn trailing_padding(elem: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
     match elem {
         MeasureElement::Clef(_) => config.clef_padding,
         MeasureElement::KeySignature(key) => {

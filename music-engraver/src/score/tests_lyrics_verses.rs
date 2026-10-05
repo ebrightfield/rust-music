@@ -403,6 +403,18 @@ fn multistaff_cross_system_hyphen_remains_on_its_verse_and_stave() {
     );
     let german = text_element(&svg, "Dorf");
     assert!(german.contains("font-style=\"italic\""));
+    let hyphens: Vec<_> = svg
+        .lines()
+        .filter(|line| line.contains(">-</text>"))
+        .collect();
+    assert_eq!(hyphens.len(), 2);
+    for (hyphen, word) in hyphens.iter().zip(["Dorf", "neben"]) {
+        assert!(hyphen.contains("font-style=\"italic\""));
+        assert!(
+            (attribute(hyphen, "y") - attribute(text_element(&svg, word), "y")).abs() < 0.01,
+            "each half-hyphen must follow verse 2 of its own system's upper stave"
+        );
+    }
 }
 
 #[test]
@@ -416,18 +428,35 @@ fn multistaff_reserves_third_verse_clearance_before_lower_stave() {
         .note(Pitch::new(Note::G, 2), Duration::QTR)
         .end_barline();
     let svg = crate::score::multi_staff::MultiStaffScore::grand_staff(upper, lower).render_svg();
+    let without_lyrics = crate::score::multi_staff::MultiStaffScore::grand_staff(
+        ScoreBuilder::new()
+            .note(p(Note::C), Duration::QTR)
+            .end_barline(),
+        ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .note(Pitch::new(Note::G, 2), Duration::QTR)
+            .end_barline(),
+    )
+    .render_svg();
+    let lower_staff_top = |svg: &str| {
+        let mut staff_lines: Vec<f64> = svg
+            .lines()
+            .filter(|line| {
+                line.contains("<line ")
+                    && (attribute(line, "x2") - attribute(line, "x1") - 40.0 * 250.0).abs() < 0.001
+            })
+            .map(|line| attribute(line, "y1"))
+            .collect();
+        staff_lines.sort_by(f64::total_cmp);
+        assert!(staff_lines.len() >= 10, "expected two five-line staves");
+        staff_lines[5]
+    };
     let lyric_y = attribute(text_element(&svg, "langen"), "y");
-    let mut staff_lines: Vec<f64> = svg
-        .lines()
-        .filter(|line| {
-            line.contains("<line ")
-                && (attribute(line, "x2") - attribute(line, "x1") - 40.0 * 250.0).abs() < 0.001
-        })
-        .map(|line| attribute(line, "y1"))
-        .collect();
-    staff_lines.sort_by(f64::total_cmp);
-    assert!(staff_lines.len() >= 10, "expected two five-line staves");
-    let lower_top = staff_lines[5];
+    let lower_top = lower_staff_top(&svg);
+    assert!(
+        lower_top > lower_staff_top(&without_lyrics),
+        "verse 3 must dynamically expand the upper-to-lower stave gap"
+    );
     assert!(
         lower_top > lyric_y + 0.22 * 1.4 * 250.0 + 0.5 * 250.0,
         "third-verse descent and half-space clearance must fit above the lower staff"

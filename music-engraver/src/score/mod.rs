@@ -45,6 +45,7 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
+use crate::layout::analysis_bracket::AnalysisBracketSpec;
 #[cfg(test)]
 use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
@@ -1591,6 +1592,25 @@ impl ScoreBuilder {
         self
     }
 
+    /// Open an analysis bracket at the most recently added note, chord or
+    /// rest. Beamed and tuplet members are ordinary events and can anchor it.
+    /// A barline does not clear an open bracket; close it on a later event.
+    pub fn analysis_bracket_start(mut self, spec: AnalysisBracketSpec) -> Self {
+        if let Some(annotations) = self.last_annotations_mut() {
+            annotations.analysis_bracket_start = Some(spec);
+        }
+        self
+    }
+
+    /// Close the latest open analysis bracket on this voice at the most
+    /// recently added note, chord or rest.
+    pub fn analysis_bracket_end(mut self) -> Self {
+        if let Some(annotations) = self.last_annotations_mut() {
+            annotations.analysis_bracket_end = true;
+        }
+        self
+    }
+
     /// Attach a pedal-down ("Ped.") marking to the most recently added note,
     /// chord or rest. The SMuFL "keyboardPedalPed" glyph is placed below the
     /// staff, well below dynamics, text scripts and lyrics.
@@ -2702,6 +2722,8 @@ impl Default for ScoreBuilder {
 mod tests;
 #[cfg(test)]
 mod tests_accidentals;
+#[cfg(test)]
+mod tests_analysis_bracket;
 #[cfg(test)]
 mod tests_barlines;
 #[cfg(test)]
