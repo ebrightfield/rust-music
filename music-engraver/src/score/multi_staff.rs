@@ -604,19 +604,12 @@ impl MultiStaffScore {
                     .collect()
             })
             .collect();
-        let system_widths: Vec<f64> = laid_out_systems
-            .iter()
-            .map(|systems| {
-                systems
-                    .iter()
-                    .map(|system| system.staff_width)
-                    .fold(sys_width, f64::max)
-            })
-            .collect();
         let mut planned_staff_layouts: Vec<_> = gaps
             .iter()
-            .zip(&system_widths)
-            .map(|(system_gaps, &width)| {
+            .zip(&laid_out_systems)
+            .map(|(system_gaps, systems)| {
+                // The shared grid assigns the same staff width to every stave.
+                let width = systems.first().map_or(sys_width, |system| system.staff_width);
                 layout_multi_staff_with_gaps(&group, 0.0, staff_space, width, system_gaps)
             })
             .collect();
@@ -670,7 +663,11 @@ impl MultiStaffScore {
         };
 
         let total_systems = chunks.len();
-        let page_width = left_margin + system_widths.iter().copied().fold(sys_width, f64::max);
+        let page_width = left_margin
+            + laid_out_systems
+                .iter()
+                .flat_map(|systems| systems.iter().map(|system| system.staff_width))
+                .fold(sys_width, f64::max);
         let page_height = system_heights.iter().sum::<f64>()
             + total_systems.saturating_sub(1) as f64 * inter_system_gap;
         let mut system_y_origins = Vec::with_capacity(total_systems);
@@ -783,7 +780,9 @@ impl MultiStaffScore {
 
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
             let group_y = system_y_origins[sys_idx];
-            let system_width = system_widths[sys_idx];
+            let system_width = laid_out_systems[sys_idx]
+                .first()
+                .map_or(sys_width, |system| system.staff_width);
 
             // Move the pre-planned staff and connector geometry to this
             // system's page origin, without laying its columns out again.
