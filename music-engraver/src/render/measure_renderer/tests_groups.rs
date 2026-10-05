@@ -33,7 +33,38 @@ fn beamed_rest_and_chord_keep_kinds_and_stems() {
     }
     let svg = builder.render_svg();
     assert!(beams(&svg) > 0, "a rest must not interrupt its enclosing beam");
-    assert!(svg.contains(&bravura_font().glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data));
+    let rest_glyph = &bravura_font().glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data;
+    let rest = svg.lines().find(|line| line.contains(rest_glyph))
+        .expect("the beamed rest retains its own eighth-rest glyph");
+    let rest_x: f64 = rest.split("translate(").nth(1).unwrap()
+        .split(',').next().unwrap().parse().unwrap();
+    let attr = |line: &str, name: &str| -> Option<f64> {
+        line.split(&format!("{name}=\"")).nth(1)?.split('"').next()?.parse().ok()
+    };
+    assert!(!svg.lines().any(|line| line.starts_with("  <line ")
+        && attr(line, "x1").is_some_and(|x| (x - rest_x).abs() < 1e-6)
+        && attr(line, "x1") == attr(line, "x2")),
+        "a rest cannot acquire the stem of its enclosing beam");
+}
+
+#[test]
+fn consecutive_beamed_chords_keep_both_tones_and_their_accidentals() {
+    let score = ScoreBuilder::new().begin_beam()
+        .chord(vec![p(Note::C), p(Note::E)], Duration::EIGHTH)
+        .chord(vec![p(Note::D), p(Note::Fis)], Duration::EIGHTH)
+        .end_beam().end_barline();
+    let contents = score.build_measure_contents().unwrap();
+    let chords: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
+        MeasureEvent::Chord(chord) => Some(chord),
+        _ => None,
+    }).collect();
+    assert_eq!(chords.len(), 2);
+    assert!(chords.iter().all(|chord| chord.staff_positions.len() == 2));
+    assert!(chords[1].accidentals[1].is_some(), "second chord retains its F-sharp");
+    let svg = score.render_svg();
+    let head = bravura_font().glyph_outline(smufl::Glyph::NoteheadBlack).unwrap().path_data;
+    assert_eq!(svg.matches(&head).count(), 4);
+    assert!(beams(&svg) > 0);
 }
 
 #[test]
@@ -76,6 +107,41 @@ fn chord_triplet_number_ratio_placement_and_visibility() {
         .note(p(Note::C), Duration::QTR).note(p(Note::D), Duration::QTR)
         .note(p(Note::E), Duration::QTR).end_tuplet().end_barline().render_svg();
     assert!(!hidden.contains(&bravura_font().glyph_outline(smufl::Glyph::TupletColon).unwrap().path_data));
+}
+
+#[test]
+fn quarter_triplet_remains_unbeamed_and_forced_tuplet_side_moves_number() {
+    let draw = |placement| ScoreBuilder::new()
+        .begin_tuplet(TupletSpec::new(3, 2)
+            .bracket(TupletBracketVisibility::Always)
+            .placement(placement))
+        .note(p(Note::C), Duration::QTR)
+        .note(p(Note::D), Duration::QTR)
+        .note(p(Note::E), Duration::QTR)
+        .end_tuplet().end_barline().render_svg();
+    let above = draw(TupletPlacement::Above);
+    let below = draw(TupletPlacement::Below);
+    let numeral = bravura_font().glyph_outline(smufl::Glyph::Tuplet3).unwrap().path_data;
+    let number_y = |svg: &str| -> f64 {
+        let glyph = svg.lines().find(|line| line.contains(&numeral))
+            .expect("quarter triplet prints a tuplet numeral");
+        glyph.split("translate(").nth(1).unwrap().split(',').nth(1).unwrap()
+            .split(')').next().unwrap().trim().parse().unwrap()
+    };
+    assert_eq!(beams(&above), 0, "quarter triplets may have brackets but not beams");
+    assert_eq!(beams(&below), 0);
+    assert!(number_y(&above) < number_y(&below),
+        "forced tuplet side must move the entire numbered bracket");
+}
+
+#[test]
+fn beam_continuing_across_a_system_break_draws_both_open_ends() {
+    let svg = ScoreBuilder::new().measures_per_system(1)
+        .begin_beam().note(p(Note::F), Duration::EIGHTH)
+        .barline().note(p(Note::G), Duration::EIGHTH)
+        .end_beam().end_barline().render_svg();
+    assert!(beams(&svg) >= 2,
+        "the first and next system both need visible broken-beam ends");
 }
 
 #[test]
@@ -152,6 +218,8 @@ fn nested_tuplet_onsets_apply_both_ratios_to_mixed_members() {
         .chord(vec![p(Note::D), p(Note::Fis)], Duration::EIGHTH)
         .end_tuplet().end_tuplet().end_barline();
     let contents = builder.build_measure_contents().unwrap();
+    use crate::layout::measure_meta::MeasureLength;
+    assert_eq!(contents[0].meta.actual_length, MeasureLength::new(3, 10));
     let cfg = MeasureLayoutConfig::from_staff_space(bravura_font().engraving_config().staff_space);
     let system = layout_system(&builder.build_prefix(), &contents, &cfg, None);
     let elements = &system.measures[0].layout.elements;
@@ -204,4 +272,31 @@ fn glissando_and_dynamic_attach_to_group_member_noteheads() {
                 && (attr("x2")? - (heads[2] - 0.3 * ss)).abs() < 1.0).then(|| attr("x2").unwrap())
         }).collect();
     assert_eq!(ends.len(), 2, "both hairpin edges end beside the final beamed note");
+}
+
+#[test]
+fn post_span_notehead_marks_still_target_the_last_rhythmic_member() {
+    use crate::layout::articulation::{Articulation, ArticulationMark};
+    use crate::layout::breath::BreathMark;
+    use crate::layout::measure::NoteSize;
+    let score = ScoreBuilder::new()
+        .begin_beam()
+        .note(p(Note::C), Duration::EIGHTH)
+        .note(p(Note::D), Duration::EIGHTH)
+        .end_beam()
+        .articulation_mark(ArticulationMark::from(Articulation::Staccato))
+        .parenthesized_breath_mark(BreathMark::Comma)
+        .parenthesize()
+        .note_size(NoteSize::Cue)
+        .end_barline();
+    let contents = score.build_measure_contents().unwrap();
+    let MeasureEvent::Note(note) = &contents[0].events[2] else {
+        panic!("the last beam member is an ordinary note");
+    };
+    assert_eq!(note.annotations.articulations.len(), 1);
+    assert!(note.annotations.breath_mark_parenthesized);
+    assert_eq!(note.annotations.parenthesized_noteheads, vec![true]);
+    assert_eq!(note.annotations.size, NoteSize::Cue);
+    let svg = score.render_svg();
+    assert!(svg.contains(&bravura_font().glyph_outline(smufl::Glyph::NoteheadParenthesisLeft).unwrap().path_data));
 }

@@ -2172,7 +2172,7 @@ impl GuitarScore {
                             add_event_to_score(score, event, clef, &self.bends)
                         }
                         GuitarGroup::Beam(events) => {
-                            add_events_to_score(score.begin_beam(), events, self.clef, &self.bends)
+                            add_events_to_score(score.begin_beam(), events, clef, &self.bends)
                                 .end_beam()
                         }
                         GuitarGroup::Tuplet {
@@ -2191,7 +2191,7 @@ impl GuitarScore {
                             if beamed {
                                 score = score.begin_beam();
                             }
-                            score = add_events_to_score(score, events, self.clef, &self.bends);
+                            score = add_events_to_score(score, events, clef, &self.bends);
                             if beamed {
                                 score = score.end_beam();
                             }

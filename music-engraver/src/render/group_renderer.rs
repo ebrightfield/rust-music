@@ -378,7 +378,7 @@ fn element_right_x(font: &MusicFont, x: f64, element: &MeasureElement) -> Result
             font,
             note.duration_log2,
             style_at(&note.annotations.notehead_styles, 0),
-        )?,
+        )? * note.annotations.size.scale(),
         MeasureElement::Chord(chord) => (0..chord.staff_positions.len().max(1)).try_fold(
             0.0_f64,
             |widest, index| {
@@ -387,7 +387,7 @@ fn element_right_x(font: &MusicFont, x: f64, element: &MeasureElement) -> Result
                     chord.duration_log2,
                     style_at(&chord.annotations.notehead_styles, index),
                 )
-                .map(|advance| widest.max(advance))
+                .map(|advance| widest.max(advance * chord.annotations.size.scale()))
             },
         )?,
         _ => notehead_advance(font, 2, NoteheadStyle::Normal)?,
@@ -403,9 +403,19 @@ fn member_extent(
     placement: TupletPlacement,
 ) -> f64 {
     let half_space = staff.staff_space / 2.0;
-    let (positions, duration_log2): (Vec<i8>, i8) = match element {
-        MeasureElement::Note(note) => (vec![note.staff_position], note.duration_log2),
-        MeasureElement::Chord(chord) => (chord.staff_positions.clone(), chord.duration_log2),
+    let (lowest, highest, duration_log2, visible): (i8, i8, i8, bool) = match element {
+        MeasureElement::Note(note) => (
+            note.staff_position, note.staff_position, note.duration_log2,
+            note.annotations.stem == StemVisibility::Visible,
+        ),
+        MeasureElement::Chord(chord) => {
+            let (Some(&lowest), Some(&highest)) =
+                (chord.staff_positions.iter().min(), chord.staff_positions.iter().max())
+            else {
+                return staff.y_of(4);
+            };
+            (lowest, highest, chord.duration_log2, chord.annotations.stem == StemVisibility::Visible)
+        }
         // A rest's glyph stays within the staff's middle; bound it there.
         _ => {
             return match placement {
@@ -413,9 +423,6 @@ fn member_extent(
                 TupletPlacement::Below => staff.y_of(1),
             };
         }
-    };
-    let (Some(&lowest), Some(&highest)) = (positions.iter().min(), positions.iter().max()) else {
-        return staff.y_of(4);
     };
     let direction = element_stem_direction(element);
     let mut extent = match placement {
@@ -427,7 +434,7 @@ fn member_extent(
         (Some(StemDirection::Up), TupletPlacement::Above)
             | (Some(StemDirection::Down), TupletPlacement::Below)
     );
-    if stem_on_bracket_side && duration_log2 >= 1 {
+    if visible && stem_on_bracket_side && duration_log2 >= 1 {
         let tip = beam_tip.unwrap_or_else(|| {
             let direction = direction.expect("stem side implies a direction");
             let far = match direction {

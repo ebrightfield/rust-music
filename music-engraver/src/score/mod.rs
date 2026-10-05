@@ -854,11 +854,7 @@ impl ScoreBuilder {
     ///     .render_svg();
     /// ```
     pub fn articulation_mark(mut self, mark: ArticulationMark) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.articulations.push(mark);
         }
         self
@@ -1461,11 +1457,7 @@ impl ScoreBuilder {
     ///
     /// No-op if the last event was a rest.
     pub fn parenthesized_breath_mark(mut self, mark: BreathMark) -> Self {
-        if let Some((
-            _,
-            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-        )) = self.current_events.last_mut()
-        {
+        if let Some(annotations) = self.last_annotations_mut() {
             annotations.breath_mark = Some(mark);
             annotations.breath_mark_parenthesized = true;
         }
@@ -1486,13 +1478,12 @@ impl ScoreBuilder {
     /// target of builders that act on noteheads, stems, dots, or grace notes,
     /// none of which a rest has.
     fn last_pitched_annotations_mut(&mut self) -> Option<&mut NoteAnnotations> {
-        match self.current_events.last_mut() {
-            Some((
-                _,
-                ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
-            )) => Some(annotations),
-            _ => None,
-        }
+        self.current_events.iter_mut().rev()
+            .find(|(_, event)| !matches!(event, ScoreEvent::GroupMark(_)))
+            .and_then(|(_, event)| match event {
+                ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. } => Some(annotations),
+                _ => None,
+            })
     }
 
     /// Engrave grace notes before the most recently added note or chord.
@@ -1538,7 +1529,8 @@ impl ScoreBuilder {
     /// its accidental, in parentheses (LilyPond `\parenthesize`). The
     /// parentheses' width is reserved. No-op if the last event was a rest.
     pub fn parenthesize(mut self) -> Self {
-        match self.current_events.last_mut() {
+        match self.current_events.iter_mut().rev()
+            .find(|(_, event)| !matches!(event, ScoreEvent::GroupMark(_))) {
             Some((_, ScoreEvent::Note { annotations, .. })) => {
                 annotations.parenthesized_noteheads = vec![true];
             }
