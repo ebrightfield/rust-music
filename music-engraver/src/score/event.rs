@@ -12,7 +12,10 @@ use music::notation::rhythm::duration::{Duration, DurationKind};
 use music::note::pitch::Pitch;
 use music::note::spelling::{Accidental, Spelling};
 
-use crate::layout::accidental::{accidental_glyph, AccidentalDisplay, ResolvedAccidental};
+use crate::layout::accidental::{
+    accidental_glyph, AccidentalDisplay, AccidentalPolicy, ResolvedAccidental,
+};
+use crate::layout::grace::{GraceGroup, GraceNoteEvent};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{
     BeamGroupEvent, ChordEvent, GroupedChordMember, NoteAnnotations, NoteEvent, RestEvent,
@@ -158,6 +161,7 @@ pub(crate) fn should_show_accidental(
 ///   key signature after an in-measure alteration, and suppresses repeats.
 /// - [`AccidentalDisplay::Force`]: always engrave the plain requested accidental.
 /// - [`AccidentalDisplay::Cautionary`]: always engrave it in parentheses.
+/// - [`AccidentalDisplay::Hide`]: never engrave it.
 pub(crate) fn resolve_accidental(
     pitch: &Pitch,
     key_sig: &KeySignature,
@@ -176,6 +180,7 @@ pub(crate) fn resolve_accidental(
         }
         AccidentalDisplay::Force => Some(ResolvedAccidental::plain(glyph)),
         AccidentalDisplay::Cautionary => Some(ResolvedAccidental::cautionary(glyph)),
+        AccidentalDisplay::Hide => None,
     }
 }
 
@@ -218,18 +223,26 @@ pub(crate) fn note_altered_in_key(
     }
 }
 
-/// Resolve an accidental and, with a tracker, record the pitch's own
-/// alteration as the in-measure state for its letter and octave.
+/// Resolve an accidental under the staff's [`AccidentalPolicy`] and, with a
+/// tracker, record the pitch's own alteration as the in-measure state for its
+/// letter and octave.
 ///
-/// Every display policy records state: a forced or cautionary sign tells the
-/// reader the alteration just as an automatic one does.
+/// Every display policy records state: a forced, cautionary, or hidden sign
+/// tells the reader the alteration just as an automatic one does. Under
+/// [`AccidentalPolicy::Forget`] the recorded state is never consulted, so
+/// every note is compared against the key signature alone.
 fn resolve_and_track(
     pitch: &Pitch,
     key_sig: &KeySignature,
     display: AccidentalDisplay,
+    policy: AccidentalPolicy,
     seen: Option<&mut AccidentalTracker>,
 ) -> Option<ResolvedAccidental> {
-    let resolved = resolve_accidental(pitch, key_sig, display, seen.as_deref());
+    let in_force = match policy {
+        AccidentalPolicy::Default => seen.as_deref(),
+        AccidentalPolicy::Forget => None,
+    };
+    let resolved = resolve_accidental(pitch, key_sig, display, in_force);
     if let Some(seen) = seen {
         seen.insert(note_key(pitch), Spelling::from(&pitch.note).acc);
     }
@@ -267,6 +280,45 @@ fn pitch_to_note_event(
     }
 }
 
+/// Resolve the written grace notes of `annotations` into the layout's
+/// [`GraceGroup`], taking one pre-resolved accidental per grace note.
+fn resolve_grace_group(
+    annotations: &NoteAnnotations,
+    clef: &Clef,
+    accidentals: &mut ResolvedAccidentals<'_>,
+) -> Option<GraceGroup> {
+    annotations.grace_notes.as_ref().map(|graces| GraceGroup {
+        kind: graces.kind,
+        slur: graces.slur,
+        notes: graces
+            .notes
+            .iter()
+            .map(|grace| GraceNoteEvent {
+                staff_position: pitch_to_staff_position(&grace.pitch, clef),
+                duration_log2: duration_kind_to_log2(grace.duration.kind()),
+                dots: grace.duration.num_dots(),
+                accidental: next_accidental(accidentals),
+            })
+            .collect(),
+    })
+}
+
+/// The layout's copy of a note/chord's annotations: written grace notes are
+/// resolved into [`NoteAnnotations::grace_group`] (consuming their
+/// accidentals, which precede the principal's own).
+fn convert_annotations(
+    annotations: &NoteAnnotations,
+    clef: &Clef,
+    accidentals: &mut ResolvedAccidentals<'_>,
+) -> NoteAnnotations {
+    let mut converted = annotations.clone();
+    if let Some(group) = resolve_grace_group(annotations, clef, accidentals) {
+        converted.grace_group = Some(group);
+        converted.grace_notes = None;
+    }
+    converted
+}
+
 fn pitches_to_styled_group_member(
     pitches: &[Pitch],
     duration: &Duration,
@@ -274,6 +326,7 @@ fn pitches_to_styled_group_member(
     clef: &Clef,
     accidentals: &mut ResolvedAccidentals<'_>,
 ) -> NoteEvent {
+    let mut annotations = convert_annotations(annotations, clef, accidentals);
     let mut staff_positions = Vec::with_capacity(pitches.len());
     let mut member_accidentals = Vec::with_capacity(pitches.len());
     for pitch in pitches {
@@ -282,7 +335,6 @@ fn pitches_to_styled_group_member(
     }
     let staff_position = staff_positions[0];
     let accidental = member_accidentals[0];
-    let mut annotations = annotations.clone();
     if pitches.len() > 1 {
         annotations.grouped_chord = Some(GroupedChordMember {
             staff_positions,
@@ -315,6 +367,7 @@ pub(crate) fn convert_resolved_event(
             duration,
             annotations,
         } => {
+            let annotations = convert_annotations(annotations, clef, accidentals);
             let staff_pos = pitch_to_staff_position(pitch, clef);
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
@@ -326,7 +379,7 @@ pub(crate) fn convert_resolved_event(
                 dots,
                 accidental: acc,
                 stem_direction: None,
-                annotations: annotations.clone(),
+                annotations,
             })
         }
         ScoreEvent::Rest {
@@ -347,6 +400,7 @@ pub(crate) fn convert_resolved_event(
             duration,
             annotations,
         } => {
+            let annotations = convert_annotations(annotations, clef, accidentals);
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
             let staff_positions: Vec<i8> = pitches
@@ -364,7 +418,7 @@ pub(crate) fn convert_resolved_event(
                 dots,
                 accidentals: chord_accidentals,
                 stem_direction: None,
-                annotations: annotations.clone(),
+                annotations,
             })
         }
         ScoreEvent::BeamGroup { notes } => {
@@ -497,26 +551,56 @@ fn pitch_display(annotations: &NoteAnnotations, index: usize) -> Option<Accident
     })
 }
 
+/// One notated pitch as [`visit_pitches`] reports it.
+#[derive(Clone, Copy, Debug)]
+struct VisitedPitch {
+    /// Onset offset from the start of the event, in scaled ticks.
+    offset: Onset,
+    /// Whether this is a grace note, sounding just before `offset`.
+    grace: bool,
+    pitch: Pitch,
+    /// Display policy; `None` for unpitched heads, which neither display nor
+    /// track accidentals.
+    display: Option<AccidentalDisplay>,
+}
+
 /// One rhythmic member of an event: its pitches, written duration, and
 /// annotations (`None` for plain group members, which display `Auto`).
 type Member<'a> = (&'a [Pitch], &'a Duration, Option<&'a NoteAnnotations>);
 
 /// Visit the pitches of consecutive `members` performed at
-/// `tuplet_number : in_time_of`; returns their total scaled duration.
+/// `tuplet_number : in_time_of`, each member's written grace notes first;
+/// returns their total scaled duration.
 fn visit_members<'a>(
     members: impl Iterator<Item = Member<'a>>,
     scale: u64,
     tuplet_number: u32,
     in_time_of: u32,
-    visit: &mut impl FnMut(Onset, Pitch, Option<AccidentalDisplay>),
+    visit: &mut impl FnMut(VisitedPitch),
 ) -> Onset {
     let mut offset = 0;
     for (pitches, duration, annotations) in members {
+        let graces = annotations
+            .and_then(|annotations| annotations.grace_notes.as_ref())
+            .map_or(&[][..], |graces| graces.notes.as_slice());
+        for grace in graces {
+            visit(VisitedPitch {
+                offset,
+                grace: true,
+                pitch: grace.pitch,
+                display: Some(grace.accidental),
+            });
+        }
         for (index, pitch) in pitches.iter().enumerate() {
             let display = annotations.map_or(Some(AccidentalDisplay::Auto), |annotations| {
                 pitch_display(annotations, index)
             });
-            visit(offset, *pitch, display);
+            visit(VisitedPitch {
+                offset,
+                grace: false,
+                pitch: *pitch,
+                display,
+            });
         }
         offset += scaled_ticks(duration, scale, tuplet_number, in_time_of);
     }
@@ -534,18 +618,14 @@ fn styled_member(
 }
 
 /// Visit every notated pitch of `event` in the order [`convert_resolved_event`]
-/// consumes accidentals: chord members in input order, group members in
-/// sequence. Each visit receives the pitch's onset offset from the start of the
-/// event (in ticks scaled by `scale`, which must be a multiple of the event's
-/// tuplet number) and its display policy. Grace notes are annotations that
-/// carry only a staff position, so they neither display nor track accidentals.
+/// consumes accidentals: a member's written grace notes, then its pitches
+/// (chord members in input order), group members in sequence. Each visit
+/// carries the pitch's onset offset from the start of the event (in ticks
+/// scaled by `scale`, which must be a multiple of the event's tuplet number)
+/// and its display policy.
 ///
 /// Returns the event's duration in scaled ticks.
-fn visit_pitches(
-    event: &ScoreEvent,
-    scale: u64,
-    mut visit: impl FnMut(Onset, Pitch, Option<AccidentalDisplay>),
-) -> Onset {
+fn visit_pitches(event: &ScoreEvent, scale: u64, mut visit: impl FnMut(VisitedPitch)) -> Onset {
     match event {
         ScoreEvent::Note {
             pitch,
@@ -603,50 +683,58 @@ fn visit_pitches(
 }
 
 /// Resolve every notated pitch's accidental in one measure of one staff, in
-/// musical rather than builder order.
+/// musical rather than builder order, under the staff's [`AccidentalPolicy`].
 ///
 /// Accidental state is staff-wide: every voice reads and writes one tracker,
 /// which starts empty (key signature only) at each barline. Each voice keeps
 /// its own clock from the measure start, advancing by written durations
 /// (dots included, tuplet members scaled by their ratio). Pitches are then
-/// resolved in order of onset, ties broken by voice index ascending and then
-/// by builder order within the voice (chord members in input order). Entering
-/// voices in a different builder order therefore cannot change the result.
+/// resolved in order of onset; at one onset grace notes (which sound just
+/// before it) come first, then ties are broken by voice index ascending and
+/// then by builder order within the voice (grace notes in written order,
+/// chord members in input order). Entering voices in a different builder
+/// order therefore cannot change the result.
 ///
 /// Returns one entry per notated pitch in builder order, ready for
 /// [`convert_resolved_event`].
 pub(crate) fn resolve_measure_accidentals(
     voiced_events: &[(u8, ScoreEvent)],
     key_sig: &KeySignature,
+    policy: AccidentalPolicy,
 ) -> Vec<Option<ResolvedAccidental>> {
     let scale = tuplet_tick_scale(voiced_events.iter().map(|(_, event)| event));
     let mut voice_clocks: Vec<Onset> = Vec::new();
-    let mut pitches: Vec<(Onset, u8, Pitch, Option<AccidentalDisplay>)> = Vec::new();
+    let mut pitches: Vec<(Onset, u8, VisitedPitch)> = Vec::new();
     for (voice, event) in voiced_events {
         let voice_index = usize::from(*voice);
         if voice_clocks.len() <= voice_index {
             voice_clocks.resize(voice_index + 1, 0);
         }
         let start = voice_clocks[voice_index];
-        voice_clocks[voice_index] += visit_pitches(event, scale, |offset, pitch, display| {
-            pitches.push((start + offset, *voice, pitch, display));
+        voice_clocks[voice_index] += visit_pitches(event, scale, |visited| {
+            pitches.push((start + visited.offset, *voice, visited));
         });
     }
 
     let mut order: Vec<usize> = (0..pitches.len()).collect();
-    order.sort_unstable_by_key(|&index| (pitches[index].0, pitches[index].1, index));
+    order.sort_unstable_by_key(|&index| {
+        let (onset, voice, visited) = pitches[index];
+        (onset, !visited.grace, voice, index)
+    });
     let mut seen = AccidentalTracker::new();
     let mut resolved = vec![None; pitches.len()];
     for index in order {
-        let (_, _, pitch, display) = &pitches[index];
-        resolved[index] =
-            display.and_then(|display| resolve_and_track(pitch, key_sig, display, Some(&mut seen)));
+        let (_, _, visited) = &pitches[index];
+        resolved[index] = visited.display.and_then(|display| {
+            resolve_and_track(&visited.pitch, key_sig, display, policy, Some(&mut seen))
+        });
     }
     resolved
 }
 
 /// Resolve one event's accidentals in its own member order against `seen`
-/// (or the key signature alone when `None`), then convert it.
+/// (or the key signature alone when `None`) under the default policy, then
+/// convert it.
 #[cfg(test)]
 pub(crate) fn convert_event(
     event: &ScoreEvent,
@@ -655,14 +743,16 @@ pub(crate) fn convert_event(
     mut seen: Option<&mut AccidentalTracker>,
 ) -> MeasureEvent {
     let mut resolved = Vec::new();
-    visit_pitches(
-        event,
-        tuplet_tick_scale(std::iter::once(event)),
-        |_, pitch, display| {
-            resolved.push(display.and_then(|display| {
-                resolve_and_track(&pitch, key_sig, display, seen.as_deref_mut())
-            }));
-        },
-    );
+    visit_pitches(event, tuplet_tick_scale(std::iter::once(event)), |visited| {
+        resolved.push(visited.display.and_then(|display| {
+            resolve_and_track(
+                &visited.pitch,
+                key_sig,
+                display,
+                AccidentalPolicy::Default,
+                seen.as_deref_mut(),
+            )
+        }));
+    });
     convert_resolved_event(event, clef, &mut resolved.iter())
 }

@@ -70,7 +70,7 @@ pub use dot_renderer::draw_dots;
 pub use dynamics_renderer::draw_dynamic;
 pub use flag_renderer::draw_flag;
 pub use glissando_renderer::draw_glissando;
-pub use grace_renderer::draw_grace_note;
+pub use grace_renderer::draw_grace_group;
 pub use hairpin_renderer::draw_hairpin;
 pub use key_sig_renderer::draw_key_signature;
 pub use lyric_renderer::draw_lyric;

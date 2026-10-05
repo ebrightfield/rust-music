@@ -7,21 +7,24 @@ use crate::layout::accidental::{
 use crate::layout::chord::ChordNoteLayout;
 use crate::layout::staff::StaffLayout;
 use crate::layout::StaffPosition;
+use crate::render::note_renderer::glyph_transform;
 use crate::render::SvgWriter;
 
-/// Draw a resolved accidental to the left of a notehead column.
+/// Draw a resolved accidental to the left of a notehead column, at `scale`
+/// (1.0 for normal size).
 ///
 /// `notehead_x` is the left edge of the notehead column the accidental belongs
 /// to and `column_offset` how much further left its stacked accidental column
 /// sits (`0.0` for the column nearest the noteheads). The accidental ends
-/// [`crate::layout::accidental::ACCIDENTAL_NOTEHEAD_PADDING_SS`] left of
-/// `notehead_x - column_offset`. A parenthesized (cautionary) accidental is
+/// [`crate::layout::accidental::ACCIDENTAL_NOTEHEAD_PADDING_SS`] (scaled) left
+/// of `notehead_x - column_offset`. A parenthesized (cautionary) accidental is
 /// drawn as `AccidentalParensLeft`, the accidental glyph, then
 /// `AccidentalParensRight`, with the closing parenthesis ending where a plain
 /// accidental would.
 ///
 /// Returns the x-position of the leftmost drawn glyph, i.e. the accidental's
 /// full left extent.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_accidental(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -30,30 +33,32 @@ pub fn draw_accidental(
     column_offset: f64,
     position: StaffPosition,
     accidental: ResolvedAccidental,
+    scale: f64,
 ) -> Result<f64, FontError> {
     let column_x = notehead_x - column_offset;
     let y = staff.y_of(position);
+    let unit = staff.staff_space * scale;
     let outline = font.glyph_outline(accidental.glyph)?;
+    let glyph_advance = outline.advance_width as f64 * scale;
     if !accidental.parenthesized {
-        let x = accidental_x(column_x, outline.advance_width as f64, staff.staff_space);
-        draw_glyph(svg, &outline.path_data, x, y);
+        let x = accidental_x(column_x, glyph_advance, unit);
+        draw_glyph(svg, &outline.path_data, x, y, scale);
         return Ok(x);
     }
 
     let close = font.glyph_outline(Glyph::AccidentalParensRight)?;
     let open = font.glyph_outline(Glyph::AccidentalParensLeft)?;
-    let close_x = accidental_x(column_x, close.advance_width as f64, staff.staff_space);
-    let glyph_x = close_x - outline.advance_width as f64;
-    let open_x = glyph_x - open.advance_width as f64;
-    draw_glyph(svg, &open.path_data, open_x, y);
-    draw_glyph(svg, &outline.path_data, glyph_x, y);
-    draw_glyph(svg, &close.path_data, close_x, y);
+    let close_x = accidental_x(column_x, close.advance_width as f64 * scale, unit);
+    let glyph_x = close_x - glyph_advance;
+    let open_x = glyph_x - open.advance_width as f64 * scale;
+    draw_glyph(svg, &open.path_data, open_x, y, scale);
+    draw_glyph(svg, &outline.path_data, glyph_x, y, scale);
+    draw_glyph(svg, &close.path_data, close_x, y, scale);
     Ok(open_x)
 }
 
-fn draw_glyph(svg: &mut SvgWriter, path_data: &str, x: f64, y: f64) {
-    let transform = format!("translate({x}, {y})");
-    svg.add_path(path_data, "black", Some(&transform));
+fn draw_glyph(svg: &mut SvgWriter, path_data: &str, x: f64, y: f64, scale: f64) {
+    svg.add_path(path_data, "black", Some(&glyph_transform(x, y, scale)));
 }
 
 /// Horizontal advance of a resolved accidental, including its parentheses.
@@ -70,8 +75,8 @@ pub fn resolved_accidental_advance(
         + font.glyph_advance(Glyph::AccidentalParensRight)? as f64)
 }
 
-/// Stacked-column offsets for the accidentals of one chord, parallel to
-/// `notes` (`0.0` for notes without an accidental).
+/// Stacked-column offsets for the accidentals of one chord drawn at `scale`,
+/// parallel to `notes` (`0.0` for notes without an accidental).
 ///
 /// Accidentals within a sixth of each other take separate columns (see
 /// [`layout_accidental_columns`]); a column is as wide as its widest member,
@@ -81,6 +86,7 @@ pub(crate) fn chord_accidental_column_offsets(
     font: &MusicFont,
     staff: &StaffLayout,
     notes: &[ChordNoteLayout],
+    scale: f64,
 ) -> Result<Vec<f64>, FontError> {
     let mut offsets = vec![0.0; notes.len()];
     if notes
@@ -97,12 +103,15 @@ pub(crate) fn chord_accidental_column_offsets(
         if let Some(accidental) = note.accidental {
             stacked.push((
                 note.staff_position,
-                resolved_accidental_advance(font, accidental)?,
+                resolved_accidental_advance(font, accidental)? * scale,
             ));
             owners.push(index);
         }
     }
-    let columns = layout_accidental_columns(&stacked, ACCIDENTAL_COLUMN_GAP_SS * staff.staff_space);
+    let columns = layout_accidental_columns(
+        &stacked,
+        ACCIDENTAL_COLUMN_GAP_SS * staff.staff_space * scale,
+    );
     for (owner, offset) in owners.into_iter().zip(columns.column_offsets) {
         offsets[owner] = offset;
     }
@@ -172,6 +181,7 @@ mod tests {
             0.0,
             0,
             ResolvedAccidental::plain(Glyph::AccidentalFlat),
+            1.0,
         )
         .unwrap();
 
@@ -196,6 +206,7 @@ mod tests {
             0.0,
             4,
             ResolvedAccidental::cautionary(Glyph::AccidentalNatural),
+            1.0,
         )
         .unwrap();
 
@@ -229,8 +240,8 @@ mod tests {
     fn column_offset_moves_the_accidental_left_by_exactly_the_offset() {
         let (font, _, staff) = setup();
         let sharp = ResolvedAccidental::plain(Glyph::AccidentalSharp);
-        let near = draw_accidental(&mut writer(), &staff, &font, 500.0, 0.0, 4, sharp).unwrap();
-        let far = draw_accidental(&mut writer(), &staff, &font, 500.0, 274.0, 4, sharp).unwrap();
+        let near = draw_accidental(&mut writer(), &staff, &font, 500.0, 0.0, 4, sharp, 1.0).unwrap();
+        let far = draw_accidental(&mut writer(), &staff, &font, 500.0, 274.0, 4, sharp, 1.0).unwrap();
         assert_eq!(near - far, 274.0);
     }
 
@@ -258,6 +269,7 @@ mod tests {
             &font,
             &staff,
             &[chord_note(2, Some(sharp)), chord_note(4, Some(sharp))],
+            1.0,
         )
         .unwrap();
         let sharp_advance = font.glyph_advance(Glyph::AccidentalSharp).unwrap() as f64;
@@ -268,6 +280,7 @@ mod tests {
             &font,
             &staff,
             &[chord_note(2, Some(sharp)), chord_note(4, Some(cautionary))],
+            1.0,
         )
         .unwrap();
         let cautionary_advance = resolved_accidental_advance(&font, cautionary).unwrap();
@@ -277,7 +290,7 @@ mod tests {
         // left parenthesis by exactly the column gap: no horizontal overlap.
         let mut svg = writer();
         let cautionary_left =
-            draw_accidental(&mut svg, &staff, &font, 500.0, 0.0, 4, cautionary).unwrap();
+            draw_accidental(&mut svg, &staff, &font, 500.0, 0.0, 4, cautionary, 1.0).unwrap();
         let sharp_left = draw_accidental(
             &mut svg,
             &staff,
@@ -286,6 +299,7 @@ mod tests {
             cautionary_offsets[0],
             2,
             sharp,
+            1.0,
         )
         .unwrap();
         assert!((cautionary_left - (sharp_left + sharp_advance) - gap).abs() < 1e-9);
@@ -304,6 +318,7 @@ mod tests {
                 ),
                 chord_note(4, None),
             ],
+            1.0,
         )
         .unwrap();
         assert_eq!(offsets, vec![0.0, 0.0]);

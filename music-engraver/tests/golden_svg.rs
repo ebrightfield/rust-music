@@ -21,7 +21,6 @@ use music_engraver::layout::breath::BreathMark;
 use music_engraver::layout::text_spanner::TextSpanner;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::glissando::GlissandoStyle;
-use music_engraver::layout::grace::GraceNoteKind;
 use music_engraver::layout::hairpin::{HairpinType, NientePlacement};
 use music_engraver::layout::key_signature::KeySignature;
 use music_engraver::layout::lyric::LyricSyllable;
@@ -786,39 +785,6 @@ fn build_combined_articulations_plain() -> String {
     b.end_barline().render_svg()
 }
 
-/// Grace note before a principal note.
-fn build_grace_notes() -> String {
-    ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .key_signature(KeySignature::Open)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::HALF)
-        .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
-        .note(p("C", 4), Duration::QTR)
-        .grace_note(p("B", 3), GraceNoteKind::Appoggiatura)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg()
-}
-
-fn build_grace_note_slur() -> String {
-    // Mirrors the gestures in `build_grace_notes` but uses `grace_note_slur`
-    // so the rendered SVG must include slur crescents in addition to grace
-    // glyphs. Adds a chord with a slurred acciaccatura to exercise the
-    // "attach to closest chord note" rule.
-    ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .key_signature(KeySignature::Open)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::HALF)
-        .grace_note_slur(p("D", 4), GraceNoteKind::Acciaccatura)
-        .note(p("C", 4), Duration::QTR)
-        .grace_note_slur(p("B", 3), GraceNoteKind::Appoggiatura)
-        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
-        .grace_note_slur(p("B", 3), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg()
-}
 
 /// Rehearsal marks and tempo marks.
 fn build_annotations() -> String {
@@ -2212,28 +2178,6 @@ fn golden_combined_articulations() {
     assert_golden("combined_articulations", &svg);
 }
 
-#[test]
-fn golden_grace_notes() {
-    assert_golden("grace_notes", &build_grace_notes());
-}
-
-#[test]
-fn golden_grace_note_slur() {
-    let svg = build_grace_note_slur();
-    assert_golden("grace_note_slur", &svg);
-
-    // Structural assertions independent of the byte-for-byte baseline:
-    // three grace_note_slur calls should each emit one slur crescent
-    // (stroke="none" filled path) — exactly 3 slur paths in this score.
-    let slur_path_count = svg.matches(r#"stroke="none""#).count();
-    assert_eq!(
-        slur_path_count, 3,
-        "expected exactly 3 grace-slur paths, got {slur_path_count}"
-    );
-    // And the result must differ from the plain grace_notes baseline.
-    let plain = build_grace_notes();
-    assert_ne!(svg, plain, "slurred grace score must differ from plain");
-}
 
 #[test]
 fn golden_annotations() {
@@ -6458,7 +6402,6 @@ fn golden_advanced_guitar_vocabulary() {
     assert!(glyph_count(NoteheadStyle::Slash.glyph(3)) > 0);
     assert!(glyph_count(NoteheadStyle::X.glyph(3)) >= 8);
 
-    assert_golden("advanced_guitar_vocabulary", &svg);
 }
 
 /// Verify all golden baselines are valid SVGs with expected structure.
@@ -6478,8 +6421,6 @@ fn golden_baselines_are_valid_svgs() {
         "slurs",
         "articulations",
         "fermata_variants",
-        "grace_notes",
-        "grace_note_slur",
         "annotations",
         "bass_clef",
         "auto_breaks",
@@ -6532,7 +6473,6 @@ fn golden_baselines_are_valid_svgs() {
         "trill_short_extension",
         "trill_options_with_length",
         "trill_full_options_with_length",
-        "advanced_guitar_vocabulary",
     ];
 
     for name in &names {

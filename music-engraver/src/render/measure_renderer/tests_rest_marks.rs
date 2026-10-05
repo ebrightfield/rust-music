@@ -104,7 +104,7 @@ fn dynamic_on_rest_is_centered_on_the_rest_below_or_above() {
 #[test]
 fn fermata_on_rest_sits_above_the_staff_over_the_rest() {
     let r = render(vec![quarter_rest(NoteAnnotations {
-        articulations: vec![Articulation::Fermata],
+        articulations: vec![Articulation::Fermata.into()],
         ..NoteAnnotations::default()
     })]);
     let rest_x = r.layout.elements[0].x;

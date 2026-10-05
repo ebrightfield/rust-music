@@ -25,6 +25,27 @@ pub enum AccidentalDisplay {
     /// (a cautionary or courtesy sign). It normally restates the state already
     /// in force; like every policy, it records the pitch's alteration as state.
     Cautionary,
+    /// Never engrave the accidental (LilyPond `\once \omit Accidental`). The
+    /// pitch still records its alteration as state, so later notes behave
+    /// exactly as if the sign had been printed.
+    Hide,
+}
+
+/// Staff-wide rule deciding which alteration a note's accidental is compared
+/// against.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum AccidentalPolicy {
+    /// Common-practice rule: an alteration stays in force for its letter and
+    /// octave until the barline, so repeats are suppressed and changes within
+    /// the measure are cancelled or reinstated (LilyPond's `default` style).
+    #[default]
+    Default,
+    /// Nothing carries within the measure (LilyPond `\accidentalStyle
+    /// forget`): every note is judged against the key signature alone, so an
+    /// alteration outside the key prints on every note, no automatic
+    /// cancellation natural is printed, and a natural on a letter the key
+    /// leaves unaltered prints only when forced or cautionary.
+    Forget,
 }
 
 /// An accidental the resolver decided to engrave: its SMuFL glyph and whether

@@ -43,20 +43,20 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
-use crate::layout::accidental::AccidentalDisplay;
+use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
 #[cfg(test)]
 use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::arpeggio::ArpeggioDirection;
-use crate::layout::articulation::Articulation;
+use crate::layout::articulation::{Articulation, ArticulationMark};
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::dynamics::DynamicMark;
 use crate::layout::glissando::GlissandoStyle;
-use crate::layout::grace::GraceNoteKind;
+use crate::layout::grace::GraceNotes;
 use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
-use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
+use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteSize, StemVisibility};
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
@@ -130,6 +130,26 @@ fn last_annotations_mut(events: &mut [(u8, ScoreEvent)]) -> Option<&mut NoteAnno
     }
 }
 
+/// Hide the stems (and with them the flags) of every note and chord in a
+/// `MeasureEvent`, for a stemless score.
+fn hide_stems(event: &mut MeasureEvent) {
+    match event {
+        MeasureEvent::Note(n) => n.annotations.stem = StemVisibility::Hidden,
+        MeasureEvent::Chord(c) => c.annotations.stem = StemVisibility::Hidden,
+        MeasureEvent::BeamGroup(bg) => {
+            for note in &mut bg.notes {
+                note.annotations.stem = StemVisibility::Hidden;
+            }
+        }
+        MeasureEvent::TupletGroup(tg) => {
+            for note in &mut tg.beam_group.notes {
+                note.annotations.stem = StemVisibility::Hidden;
+            }
+        }
+        MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => {}
+    }
+}
+
 /// Builder for constructing a score from `music` crate types and rendering to SVG.
 ///
 /// Events are grouped into measures delimited by `barline()` / `end_barline()` calls.
@@ -174,6 +194,10 @@ pub struct ScoreBuilder {
     dynamics_placement: Placement,
     /// Text marks entered before the first event; drawn above that event.
     leading_text_marks: Vec<TextScript>,
+    /// How accidentals carry within a measure on this staff.
+    accidental_policy: AccidentalPolicy,
+    /// Whether every note and chord is engraved without stem and flags.
+    stemless: bool,
 }
 
 impl ScoreBuilder {
@@ -197,6 +221,8 @@ impl ScoreBuilder {
             volta_ending: false,
             dynamics_placement: Placement::Below,
             leading_text_marks: Vec::new(),
+            accidental_policy: AccidentalPolicy::Default,
+            stemless: false,
         }
     }
 
@@ -661,15 +687,23 @@ impl ScoreBuilder {
     /// very-short, Henze long/short — a bow stroke (up-bow / down-bow), or a
     /// combined-articulation glyph: accent-staccato, marcato-staccato,
     /// tenuto-staccato (portato), or tenuto-accent) to the most recently
-    /// added note or chord.
+    /// added note, chord or rest.
     ///
     /// Placement (above/below) is determined automatically from stem direction.
-    /// All fermata variants and bow strokes are always placed above. Combined
-    /// articulations follow the standard stem-opposite rule. No-op if the
-    /// last event was a rest.
-    pub fn articulation(mut self, artic: Articulation) -> Self {
+    /// Fermatas and bow strokes are placed above rests and most noteheads.
+    /// Combined articulations follow the standard stem-opposite rule.
+    pub fn articulation(self, artic: Articulation) -> Self {
+        self.articulation_mark(artic.into())
+    }
+
+    /// Attach a built-in or custom articulation mark to the most recently
+    /// added note, chord or rest. [`ArticulationMark::custom`] accepts a SMuFL
+    /// glyph; [`ArticulationMark::broad_mark`] draws a line-and-block mark.
+    /// Marks can be parenthesized or forced above/below. On each side they
+    /// stack outward alongside other marks on the same event.
+    pub fn articulation_mark(mut self, mark: ArticulationMark) -> Self {
         if let Some(annotations) = self.last_annotations_mut() {
-            annotations.articulations.push(artic);
+            annotations.articulations.push(mark);
         }
         self
     }
@@ -1254,6 +1288,24 @@ impl ScoreBuilder {
     pub fn breath_mark(mut self, mark: BreathMark) -> Self {
         if let Some(annotations) = self.last_annotations_mut() {
             annotations.breath_mark = Some(mark);
+            annotations.breath_mark_parenthesized = false;
+        }
+        self
+    }
+
+    /// Attach a breath mark enclosed in parentheses to the most recently
+    /// added note or chord (e.g. an editorial "(,)"), placed like
+    /// [`Self::breath_mark`].
+    ///
+    /// No-op if the last event was a rest.
+    pub fn parenthesized_breath_mark(mut self, mark: BreathMark) -> Self {
+        if let Some((
+            _,
+            ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. },
+        )) = self.current_events.last_mut()
+        {
+            annotations.breath_mark = Some(mark);
+            annotations.breath_mark_parenthesized = true;
         }
         self
     }
@@ -1268,39 +1320,114 @@ impl ScoreBuilder {
         self
     }
 
-    /// Attach a grace note to the most recently added note or chord.
+
+    /// Engrave grace notes before the most recently added note or chord.
     ///
-    /// The grace note is rendered as a small composite glyph (notehead + stem +
-    /// optional slash) to the left of the principal note. `pitch` is the grace
-    /// note's pitch; `kind` selects acciaccatura (slashed) or appoggiatura.
+    /// The group is drawn small ([`crate::layout::grace::GRACE_NOTE_SCALE`])
+    /// from real noteheads, stems, flags, and accidentals: two or more
+    /// eighths (or shorter) are beamed, an acciaccatura slashes its first
+    /// stem, and [`GraceNotes::slur`] adds a slur from the first grace note
+    /// to the principal. Grace accidentals are resolved through the measure's
+    /// accidental state just before the principal's onset, and the group's
+    /// width is reserved before the principal. Replaces any grace notes
+    /// already attached. No-op if the last event was a rest.
     ///
-    /// No-op if the last event is a rest (grace notes attach to pitched events).
-    pub fn grace_note(mut self, pitch: Pitch, kind: GraceNoteKind) -> Self {
-        use crate::layout::note_placement::pitch_to_staff_position;
-        let clef = self.clef.to_clef();
-        let staff_pos = pitch_to_staff_position(&pitch, &clef);
+    /// # Example
+    /// ```no_run
+    /// use music::notation::clef::Clef;
+    /// use music::notation::rhythm::duration::Duration;
+    /// use music::note::note::Note;
+    /// use music::note::pitch::Pitch;
+    /// use music_engraver::layout::grace::{GraceNoteKind, GraceNotes};
+    /// use music_engraver::score::ScoreBuilder;
+    ///
+    /// // LilyPond: \grace { aes,8[ ees,8] } c8.
+    /// let svg = ScoreBuilder::new()
+    ///     .clef(Clef::Bass)
+    ///     .note(Pitch::new(Note::C, 3), Duration::new(music::notation::rhythm::duration::DurationKind::Eighth, 1))
+    ///     .grace_notes(
+    ///         GraceNotes::new(GraceNoteKind::Appoggiatura)
+    ///             .note(Pitch::new(Note::Aes, 2), Duration::EIGHTH)
+    ///             .note(Pitch::new(Note::Ees, 2), Duration::EIGHTH),
+    ///     )
+    ///     .end_barline()
+    ///     .render_svg();
+    /// ```
+    pub fn grace_notes(mut self, graces: GraceNotes) -> Self {
         if let Some(annotations) = self.last_pitched_annotations_mut() {
-            annotations.grace_note = Some((staff_pos, kind));
+            annotations.grace_notes = Some(graces);
         }
         self
     }
 
-    /// Attach a grace note to the most recently added note or chord, drawing a
-    /// connecting slur from the grace to the principal note.
-    ///
-    /// This is the canonical engraving for acciaccatura and is also common
-    /// for appoggiatura. The slur arcs away from the principal note's stem
-    /// (stem-up → slur under, stem-down → slur over).
-    ///
-    /// No-op if the last event is a rest (grace notes attach to pitched events).
-    pub fn grace_note_slur(mut self, pitch: Pitch, kind: GraceNoteKind) -> Self {
-        use crate::layout::note_placement::pitch_to_staff_position;
-        let clef = self.clef.to_clef();
-        let staff_pos = pitch_to_staff_position(&pitch, &clef);
-        if let Some(annotations) = self.last_pitched_annotations_mut() {
-            annotations.grace_note = Some((staff_pos, kind));
-            annotations.grace_note_slur = true;
+    /// Enclose every notehead of the most recently added note or chord, with
+    /// its accidental, in parentheses (LilyPond `\parenthesize`). The
+    /// parentheses' width is reserved. No-op if the last event was a rest.
+    pub fn parenthesize(mut self) -> Self {
+        match self.current_events.last_mut() {
+            Some((_, ScoreEvent::Note { annotations, .. })) => {
+                annotations.parenthesized_noteheads = vec![true];
+            }
+            Some((
+                _,
+                ScoreEvent::Chord {
+                    pitches,
+                    annotations,
+                    ..
+                },
+            )) => {
+                annotations.parenthesized_noteheads = vec![true; pitches.len()];
+            }
+            _ => {}
         }
+        self
+    }
+
+    /// Enclose the augmentation dots of the most recently added note or chord
+    /// in parentheses (LilyPond `Dots.parenthesized`). No-op if the last
+    /// event was a rest.
+    pub fn parenthesize_dots(mut self) -> Self {
+        if let Some(annotations) = self.last_pitched_annotations_mut() {
+            annotations.parenthesized_dots = true;
+        }
+        self
+    }
+
+    /// Engrave the most recently added note or chord at `size` (e.g.
+    /// [`NoteSize::Cue`] for a small-note layer, LilyPond `\tiny`): its
+    /// noteheads, accidentals, dots, stem, flags, and their spacing rods all
+    /// scale. No-op if the last event was a rest.
+    pub fn note_size(mut self, size: NoteSize) -> Self {
+        if let Some(annotations) = self.last_pitched_annotations_mut() {
+            annotations.size = size;
+        }
+        self
+    }
+
+    /// Omit the stem and flags of the most recently added note or chord
+    /// (LilyPond `\once \omit Stem`). No-op if the last event was a rest.
+    pub fn hide_stem(mut self) -> Self {
+        if let Some(annotations) = self.last_pitched_annotations_mut() {
+            annotations.stem = StemVisibility::Hidden;
+        }
+        self
+    }
+
+    /// Engrave every note and chord of the score without stems or flags
+    /// (LilyPond `\omit Stem` + `\omit Flag` for the whole staff): stemless
+    /// formulas and chord series. Durations still drive notehead shapes and
+    /// spacing.
+    pub fn stemless(mut self) -> Self {
+        self.stemless = true;
+        self
+    }
+
+    /// Choose how accidentals carry within a measure for this staff (see
+    /// [`AccidentalPolicy`]); the default keeps an alteration in force until
+    /// the barline, [`AccidentalPolicy::Forget`] judges every note against
+    /// the key signature alone (LilyPond `\accidentalStyle forget`).
+    pub fn accidental_policy(mut self, policy: AccidentalPolicy) -> Self {
+        self.accidental_policy = policy;
         self
     }
 
@@ -1720,7 +1847,11 @@ impl ScoreBuilder {
                 let max_voice = voiced_events.iter().map(|(v, _)| *v).max().unwrap_or(0);
                 let is_multi_voice = max_voice > 0;
 
-                let resolved = resolve_measure_accidentals(voiced_events, &self.key_sig);
+                let resolved = resolve_measure_accidentals(
+                    voiced_events,
+                    &self.key_sig,
+                    self.accidental_policy,
+                );
                 let mut accidentals = resolved.iter();
 
                 // Separate events by voice.
@@ -1731,6 +1862,9 @@ impl ScoreBuilder {
                     let mut me = convert_resolved_event(event, &clef, &mut accidentals);
                     if is_multi_voice {
                         force_stem_direction(&mut me, *voice);
+                    }
+                    if self.stemless {
+                        hide_stems(&mut me);
                     }
                     voice_buckets[*voice as usize].push(me);
                 }

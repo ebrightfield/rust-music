@@ -53,17 +53,24 @@ pub fn draw_beam_group(
         notes,
         layout,
         NoteheadAdvances::Uniform(notehead_advance),
+        |_| 1.0,
+        |_| true,
     );
 }
 
-/// Draw a beam group whose semantic noteheads have distinct font advances.
-pub(crate) fn draw_beam_group_with_advances(
+/// Draw a beam group with member-specific notehead advances, glyph scales,
+/// and stem visibility. Beam thickness follows the largest participating
+/// glyph; a cue-only beam is consequently thinner than a normal one.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_beam_group_with_styles(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
     config: &EngravingConfig,
     notes: &[BeamedNote],
     layout: &BeamGroupLayout,
     notehead_advances: &[f64],
+    scale: impl Fn(usize) -> f64,
+    stem_visible: impl Fn(usize) -> bool,
 ) {
     assert_eq!(notes.len(), notehead_advances.len());
     draw_beam_group_with_widths(
@@ -73,9 +80,12 @@ pub(crate) fn draw_beam_group_with_advances(
         notes,
         layout,
         NoteheadAdvances::PerNote(notehead_advances),
+        scale,
+        stem_visible,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_beam_group_with_widths(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -83,6 +93,8 @@ fn draw_beam_group_with_widths(
     notes: &[BeamedNote],
     layout: &BeamGroupLayout,
     notehead_advances: NoteheadAdvances<'_>,
+    scale: impl Fn(usize) -> f64,
+    stem_visible: impl Fn(usize) -> bool,
 ) {
     assert_eq!(notes.len(), layout.stem_tip_ys.len());
     if notes.is_empty() {
@@ -90,9 +102,9 @@ fn draw_beam_group_with_widths(
     }
 
     let stem_thick = config.stem_thickness_fu();
-    let beam_thick = config.beam_thickness_fu();
-    let beam_gap = config.beam_spacing_fu();
-
+    let beam_scale = (0..notes.len()).map(&scale).fold(0.0_f64, f64::max);
+    let beam_thick = config.beam_thickness_fu() * beam_scale;
+    let beam_gap = config.beam_spacing_fu() * beam_scale;
     // Translate staff-relative stem tips into canvas coordinates.
     let layout = &BeamGroupLayout {
         stem_tip_ys: layout
@@ -103,15 +115,18 @@ fn draw_beam_group_with_widths(
         ..layout.clone()
     };
 
-    // Draw stems: vertical line from notehead to beam attachment point.
+    // Draw stems: vertical line from notehead to the shared beam line.
     for (i, note) in notes.iter().enumerate() {
+        if !stem_visible(i) {
+            continue;
+        }
         let notehead_y = staff.y_of(note.staff_position);
         let tip_y = layout.stem_tip_ys[i];
         let sx = stem_x(
             note.x,
             notehead_advances.at(i),
             layout.direction,
-            stem_thick,
+            stem_thick * scale(i),
         );
 
         let (y1, y2) = if tip_y < notehead_y {
@@ -119,7 +134,7 @@ fn draw_beam_group_with_widths(
         } else {
             (notehead_y, tip_y)
         };
-        svg.add_line(sx, y1, sx, y2, "black", stem_thick);
+        svg.add_line(sx, y1, sx, y2, "black", stem_thick * scale(i));
     }
 
     // Draw beam lines at each level.

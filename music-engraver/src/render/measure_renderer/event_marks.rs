@@ -10,7 +10,9 @@
 //! it push it further out.
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::articulation::{layout_articulation_stack, ArticulationPlacement};
+use crate::layout::articulation::{
+    layout_articulation_stack, layout_chord_articulation_stack, ArticulationPlacement,
+};
 use crate::layout::dynamics::{layout_dynamic_mark, DYNAMICS_ABOVE_STAFF_SS, DYNAMICS_BELOW_STAFF_SS};
 use crate::layout::lyric::layout_lyric;
 use crate::layout::measure::{NoteAnnotations, RestEvent};
@@ -48,6 +50,9 @@ pub(super) struct EventAnchor {
     pub(super) bottom_y: f64,
     /// Staff position articulations attach to.
     pub(super) articulation_position: i8,
+    /// Lowest and highest staff positions for a chord; other events use one
+    /// articulation anchor on either side.
+    pub(super) chord_positions: Option<(i8, i8)>,
     /// Stem direction steering articulation placement (stem-opposite side).
     pub(super) stem: StemDirection,
     /// Staff position ornaments are placed above.
@@ -168,13 +173,23 @@ pub(super) fn draw_event_marks(
     };
 
     // Articulations sit closest to the event.
-    let articulations = layout_articulation_stack(
-        &annotations.articulations,
-        center_x,
-        anchor.articulation_position,
-        anchor.stem,
-        staff,
-    );
+    let articulations = if let Some(positions) = anchor.chord_positions {
+        layout_chord_articulation_stack(
+            &annotations.articulations,
+            center_x,
+            positions,
+            anchor.stem,
+            staff,
+        )
+    } else {
+        layout_articulation_stack(
+            &annotations.articulations,
+            center_x,
+            anchor.articulation_position,
+            anchor.stem,
+            staff,
+        )
+    };
     for layout in &articulations {
         if let Some(bbox) = font.glyph_bbox_design_units(layout.glyph) {
             match layout.placement {
@@ -295,8 +310,12 @@ pub(super) fn draw_event_marks(
     }
 
     if let Some(breath) = annotations.breath_mark {
-        let layout =
-            crate::layout::breath::layout_breath_mark(breath, anchor.left_x + anchor.width, staff);
+        let layout = crate::layout::breath::layout_breath_mark(
+            breath,
+            anchor.left_x + anchor.width,
+            staff,
+            annotations.breath_mark_parenthesized,
+        );
         crate::render::breath_renderer::draw_breath_mark(svg, font, &layout)?;
     }
 
@@ -322,7 +341,7 @@ pub(super) fn draw_rest_event(
     let position = rest_staff_position(rest.duration_log2)
         - (y_displacement / half_space).round() as i8;
     if rest.dots > 0 {
-        draw_dots(svg, staff, font, x, advance, position, rest.dots)?;
+        draw_dots(svg, staff, font, x, advance, position, rest.dots, 1.0, false)?;
     }
     let origin_y = rest_y(staff, rest.duration_log2) + y_displacement;
     let (top_y, bottom_y) = font
@@ -336,6 +355,7 @@ pub(super) fn draw_rest_event(
         top_y,
         bottom_y,
         articulation_position: position,
+        chord_positions: None,
         // Rest marks go above, as with a stem-down note.
         stem: StemDirection::Down,
         ornament_position: position,
