@@ -46,6 +46,27 @@ use super::guitar::{
     GUITAR_BARLINE_WIDTH_SS, GUITAR_TAB_GAP_SS,
 };
 use super::ScoreBuilder;
+#[path = "cross_staff.rs"]
+mod cross_staff;
+use cross_staff::{draw_cross_staff_glissandos, distribute_voice, CrossStaffGlissando};
+
+/// Invalid placement of a continuous voice among the score's staves.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum CrossStaffError {
+    /// An event targets a stave that does not exist.
+    #[error("cross-staff event {event} targets stave {staff}, but this score has {staff_count} staves")]
+    InvalidStaff { event: usize, staff: usize, staff_count: usize },
+    /// Only one continuous (primary) voice may be routed across staves.
+    #[error("cross-staff event {event} uses voice {voice}; expected voice 0")]
+    InvalidVoice { event: usize, voice: u8 },
+    /// Two separately authored voices were assigned to the single-voice lane.
+    #[error("a multi-staff score accepts only one continuous cross-staff voice")]
+    DuplicateVoice,
+    /// Structural/group events that cannot be distributed between staves.
+    #[error("cross-staff event {event} cannot be routed: {kind}")]
+    UnsupportedEvent { event: usize, kind: &'static str },
+}
+
 
 /// One stave's measure contents (explicit line breaks applied) and prefix.
 pub(crate) type StaveData = (Vec<MeasureContent>, SystemPrefix);
@@ -91,6 +112,11 @@ pub struct MultiStaffScore {
     staves: Vec<ScoreBuilder>,
     connector: ConnectorKind,
     joined_barlines: bool,
+    /// A single musical voice whose events choose their notation stave.
+    cross_staff_voice: Option<ScoreBuilder>,
+    duplicate_cross_staff_voice: bool,
+    cross_staff_breaks: Option<LineBreakPlan>,
+    cross_staff_glissandos: Vec<CrossStaffGlissando>,
     /// Override system width (font design units). 0 = auto.
     system_width: f64,
     /// Override measures per system. 0 = auto.
@@ -131,6 +157,10 @@ impl MultiStaffScore {
             measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
             sub_brackets: Vec::new(),
+            cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
+            cross_staff_breaks: None,
+            cross_staff_glissandos: Vec::new(),
         }
     }
 
@@ -147,6 +177,10 @@ impl MultiStaffScore {
             explicit_breaks: false,
             measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
+            cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
+            cross_staff_breaks: None,
+            cross_staff_glissandos: Vec::new(),
             sub_brackets: Vec::new(),
         }
     }
@@ -165,6 +199,10 @@ impl MultiStaffScore {
             measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
             sub_brackets: Vec::new(),
+            cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
+            cross_staff_breaks: None,
+            cross_staff_glissandos: Vec::new(),
         }
     }
 
@@ -190,7 +228,26 @@ impl MultiStaffScore {
             measure_numbering: numbering,
             tab_stave: Some(guitar),
             sub_brackets: Vec::new(),
+            cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
+            cross_staff_breaks: None,
+            cross_staff_glissandos: Vec::new(),
         }
+    }
+
+    /// Add a single continuous voice routed among this score's staves.
+    /// Assign notes, chords and rests with [`ScoreBuilder::on_staff`]; events
+    /// without an assignment use stave zero. Non-active staves have invisible
+    /// spacers at each onset, not duplicated notes or phantom rests.
+    /// Assigning a second continuous voice returns
+    /// [`CrossStaffError::DuplicateVoice`] from [`Self::try_render_svg`].
+    pub fn cross_staff_voice(mut self, voice: ScoreBuilder) -> Self {
+        if self.cross_staff_voice.is_some() {
+            self.duplicate_cross_staff_voice = true;
+        } else {
+            self.cross_staff_voice = Some(voice);
+        }
+        self
     }
 
     /// Set the system width in font design units.
@@ -318,6 +375,9 @@ impl MultiStaffScore {
         for (stave, contents) in self.staves.iter().zip(&logical) {
             line_breaks.merge(&stave.line_break_plan(contents));
         }
+        if let Some(cross_breaks) = &self.cross_staff_breaks {
+            line_breaks.merge(cross_breaks);
+        }
         let mut stave_data: Vec<StaveData> = self
             .staves
             .iter()
@@ -407,7 +467,7 @@ impl MultiStaffScore {
     /// Render the multi-staff score to an SVG string, returning an error on failure.
     #[must_use = "the SVG string is returned but not used"]
     pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
-        if self.staves.is_empty() && self.tab_stave.is_none() {
+        if self.staves.is_empty() && self.tab_stave.is_none() && self.cross_staff_voice.is_none() {
             return Ok(String::from(
                 "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
             ));
@@ -421,6 +481,16 @@ impl MultiStaffScore {
             for stave in &mut self.staves {
                 stave.flush_pending();
             }
+        }
+        if self.duplicate_cross_staff_voice {
+            return Err(CrossStaffError::DuplicateVoice.into());
+        }
+        if let Some(mut voice) = self.cross_staff_voice.take() {
+            voice.flush_pending();
+            voice.validate_group_spans()?;
+            self.cross_staff_breaks = Some(voice.line_break_plan(&voice.build_measure_contents()?));
+            self.explicit_breaks |= voice.explicit_breaks;
+            self.cross_staff_glissandos = distribute_voice(voice, &mut self.staves)?;
         }
         for stave in &self.staves {
             stave.validate_group_spans()?;
@@ -495,7 +565,8 @@ impl MultiStaffScore {
         // The resulting verse/annotation extents determine each stave gap.
         let laid_out_systems: Vec<Vec<SystemLayout>> = chunks
             .iter()
-            .map(|&(start, end)| {
+            .enumerate()
+            .map(|(system_index, &(start, end))| {
                 let prefixes: Vec<_> = stave_data
                     .iter()
                     .map(|(contents, prefix)| system_start_prefix(prefix, contents, start))
@@ -507,7 +578,18 @@ impl MultiStaffScore {
                         (prefix, &contents[start..end], contents.get(end))
                     })
                     .collect();
-                layout_staves_followed_by(&slices, &measure_config, Some(sys_width))
+                let mut system_config = measure_config.clone();
+                if system_index > 0 && !self.cross_staff_glissandos.is_empty() {
+                    // Reserve a short entry lane after the last prefix glyph
+                    // for a glissando coming from the preceding system. This
+                    // is applied to the shared grid, so both staves and every
+                    // independent voice retain the same onset columns.
+                    let lane = 1.6 * staff_space;
+                    system_config.clef_padding += lane;
+                    system_config.key_sig_padding += lane;
+                    system_config.time_sig_padding += lane;
+                }
+                layout_staves_followed_by(&slices, &system_config, Some(sys_width))
             })
             .collect();
         let mark_extents: Vec<Vec<_>> = laid_out_systems
@@ -629,6 +711,16 @@ impl MultiStaffScore {
                 .iter()
                 .filter_map(|staves| staves.last().map(|&(_, below)| below))
                 .fold(0.0_f64, f64::max);
+            let first_notes = if self.cross_staff_breaks.is_some() {
+                laid_out_systems.iter().filter_map(|s| s.first())
+                    .map(|s| cross_staff::outer_note_extent_ss(s).0)
+                    .fold(0.0_f64, f64::max)
+            } else { 0.0 };
+            let last_notes = if self.cross_staff_breaks.is_some() {
+                laid_out_systems.iter().filter_map(|s| s.last())
+                    .map(|s| cross_staff::outer_note_extent_ss(s).1)
+                    .fold(0.0_f64, f64::max)
+            } else { 0.0 };
             let numbers = if self.measure_numbering == MeasureNumbering::Hidden {
                 0.0
             } else {
@@ -638,10 +730,12 @@ impl MultiStaffScore {
                 top_margin
                     .max(first.map_or(0.0, |(top, _)| (-top) * staff_space) + side_margin)
                     .max(first_marks * staff_space + side_margin)
+                    .max(first_notes * staff_space + side_margin)
                     .max(numbers),
                 side_margin
                     .max(last.map_or(0.0, |(_, bottom)| (bottom - 4.0) * staff_space) + side_margin)
-                    .max(last_marks * staff_space + side_margin),
+                    .max(last_marks * staff_space + side_margin)
+                    .max(last_notes * staff_space + side_margin),
             )
         };
         let vb_x = -side_margin - left_margin;
@@ -671,6 +765,7 @@ impl MultiStaffScore {
 
         let num_staves = self.staves.len();
         let mut stave_page_systems: Vec<Vec<PageSystem>> = vec![Vec::new(); num_staves];
+        let mut cross_staff_anchors = HashMap::new();
 
         let mut guitar_anchors: HashMap<_, GuitarRenderAnchor> = HashMap::new();
         let mut guitar_standard_staves = Vec::new();
@@ -701,6 +796,17 @@ impl MultiStaffScore {
                     y: stave_y,
                     system: system.clone(),
                 });
+            }
+            if !self.cross_staff_glissandos.is_empty() {
+                cross_staff::collect_anchors(
+                    &font,
+                    staff_space,
+                    sys_idx,
+                    stave_systems,
+                    &ms_layout.staff_y_origins,
+                    left_margin,
+                    &mut cross_staff_anchors,
+                )?;
             }
 
             // --- Tab stave (below standard notation staves) ---
@@ -909,6 +1015,11 @@ impl MultiStaffScore {
             draw_cross_system_trill_extensions(&mut svg, &font, &config, stave_systems)?;
         }
 
+        draw_cross_staff_glissandos(
+            &mut svg, staff_space, &self.cross_staff_glissandos, &cross_staff_anchors,
+            &stave_page_systems,
+        );
+
         Ok(svg.to_svg())
     }
 
@@ -949,6 +1060,10 @@ impl MultiStaffScore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "tests_cross_staff.rs"]
+mod cross_staff_tests;
 
 #[cfg(test)]
 #[path = "tests_multi_staff_brackets.rs"]

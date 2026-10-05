@@ -134,6 +134,11 @@ pub enum StemVisibility {
 /// All fields default to "no annotation" (`false` / `None`).
 #[derive(Clone, Debug, Default)]
 pub struct NoteAnnotations {
+    /// Destination stave for an event of a continuous cross-staff voice.
+    /// Ignored by ordinary single-staff scores.
+    pub on_staff: Option<usize>,
+    /// Identity within the cross-staff voice, used to join laid-out anchors.
+    pub(crate) cross_staff_id: Option<usize>,
     /// Notehead styles parallel to the note/chord's pitches. An empty vector
     /// means [`NoteheadStyle::Normal`] for every pitch.
     pub notehead_styles: Vec<NoteheadStyle>,

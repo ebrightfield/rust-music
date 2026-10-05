@@ -7903,3 +7903,20 @@
   Flattened PNGs of the mn-c06-m003 dashed barline-crossing bracket and
   mn-c01-h007 solid chord-pair brackets were inspected alongside LilyPond
   PDFs (representative bars, not complete transcriptions).
+
+## 2026-10-04 — RM-MN-006/G11: continuous cross-staff notation
+- `MultiStaffScore::cross_staff_voice(ScoreBuilder)` accepts one musical voice
+  annotated by `.on_staff(index)` on notes, chords and rests. It moves each
+  event to exactly one notation stave, placing invisible duration-matched
+  spacers on the others; independent stave voices keep their own timeline.
+  Destination stave clefs, keys and accidental policy resolve written pitches.
+  Invalid stave indices or source voice assignments return `EngraverError`.
+- Dashed glissandi between successive events use measured notehead edges and
+  each stave's actual page-space origin; system breaks use styled continuation
+  fragments placed after the receiving system's clef. No duplicate sounding
+  events or visible rests are introduced on the otherwise empty stave.
+- Source-transcribed c12-i001…i006 fixtures cover six alternating timelines,
+  forced/hidden accidentals, exact shared columns, independently sounding
+  voices, manual breaks, and cross-system fragments. A full 12-note/11-gliss
+  c12-i001 PNG was compared to its LilyPond PDF (staff positions, trimmed
+  diagonal strokes, brace and final barline).
