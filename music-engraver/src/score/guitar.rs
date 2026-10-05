@@ -3171,17 +3171,21 @@ pub(crate) fn draw_guitar_tab_system(
 
                 match group {
                     GuitarGroup::Event(event) => {
-                        let duration = super::event::duration_kind_to_log2(event.duration.kind());
-                        if let Some(layout) =
-                            layout_tab_rhythm(tab_staff, xs[0], duration, stem_width)
-                        {
-                            draw_tab_rhythm(svg, &layout, font)?;
+                        if !matches!(event.kind, GuitarEventKind::Rest) {
+                            let duration = super::event::duration_kind_to_log2(event.duration.kind());
+                            if let Some(layout) =
+                                layout_tab_rhythm(tab_staff, xs[0], duration, stem_width)
+                            {
+                                draw_tab_rhythm(svg, &layout, font)?;
+                            }
                         }
                     }
                     GuitarGroup::Beam(events) | GuitarGroup::Tuplet { events, .. } => {
-                        let beam_notes: Vec<_> = events
-                            .iter()
-                            .zip(&xs)
+                        // Rests have no TAB rhythm stem. An unbeamed tuplet
+                        // still has individual rhythm stems and flags, just
+                        // like its ordinary standard-staff members.
+                        let beam_notes: Vec<_> = events.iter().zip(&xs)
+                            .filter(|(event, _)| !matches!(event.kind, GuitarEventKind::Rest))
                             .map(|(event, &x)| TabBeamedNote {
                                 x,
                                 duration_log2: super::event::duration_kind_to_log2(
@@ -3197,6 +3201,14 @@ pub(crate) fn draw_guitar_tab_system(
                             config.beam_spacing_fu(),
                         ) {
                             draw_tab_beam_group(svg, &layout);
+                        } else {
+                            for note in &beam_notes {
+                                if let Some(layout) = layout_tab_rhythm(
+                                    tab_staff, note.x, note.duration_log2, stem_width,
+                                ) {
+                                    draw_tab_rhythm(svg, &layout, font)?;
+                                }
+                            }
                         }
                         if let GuitarGroup::Tuplet { number, .. } = group {
                             draw_tab_tuplet(svg, tab_staff, &xs, *number, stem_width);
@@ -4631,6 +4643,47 @@ mod tests {
             let absolute_expected =
                 tab_staff.x + layout.measures[0].x_offset + expected_x + center_offset;
             assert!((actual - absolute_expected).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn unbeamed_guitar_quarter_triplet_keeps_tab_stems_and_member_anchors() {
+        let mut score = GuitarScore::standard();
+        score.set_time_signature(2, 4);
+        let ids = score.tuplet(3, 2, vec![
+            GuitarEventSpec::Slash { duration: Duration::QTR };
+            3
+        ]).unwrap();
+        score.end_barline().unwrap();
+        let notation = score.notation_builder();
+        let font = crate::font::bravura_font();
+        let config = font.engraving_config();
+        let layout = crate::layout::system::layout_system(
+            &notation.build_prefix(), &notation.build_measure_contents(),
+            &crate::layout::measure::MeasureLayoutConfig::from_staff_space(config.staff_space),
+            Some(10_000.0),
+        );
+        let tab = TabStaffLayout::new(500.0, 3000.0, 10_000.0, config.staff_space, 6);
+        let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 12_000.0, 6000.0);
+        let mut anchors = HashMap::new();
+        draw_guitar_tab_system(
+            &mut svg, &font, &config, &score, &score.annotation_layout(&[(0, 1)]),
+            0, 0, 1, &layout,
+            &StaffLayout::new(500.0, 1000.0, 10_000.0, config.staff_space),
+            &tab, &mut anchors,
+        ).unwrap();
+        let visual = svg.to_svg();
+        let stem = layout_tab_rhythm(&tab, 0.0, 2, config.stem_thickness_fu()).unwrap();
+        let stems = visual.lines().filter(|line| line.starts_with("  <line ")
+            && line.contains(&format!("y1=\"{}\"", stem.y_base))
+            && line.contains(&format!("y2=\"{}\"", stem.y_tip))).count();
+        assert_eq!(stems, 3, "quarter triplet needs three individual TAB stems");
+        assert_eq!(visual.matches("<polygon ").count(), 0, "quarter triplet must not beam TAB");
+        let members = rhythmic_anchor_xs(&layout.measures[0].layout);
+        for (id, &x) in ids.iter().zip(&members) {
+            let expected = tab.x + layout.measures[0].x_offset + x
+                + notation_center_offset(&font, score.event(*id).unwrap()).unwrap();
+            assert!((anchors[id].x - expected).abs() < 1e-9);
         }
     }
 
