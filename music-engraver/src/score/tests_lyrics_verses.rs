@@ -182,12 +182,53 @@ fn c12_r002_unbeamed_rest_triplet_keeps_german_skip_on_its_own_verse() {
         .note(Pitch::new(Note::Cis, 3), Duration::EIGHTH)
         .lyric_verse(1, LyricSyllable::word("do,"), LyricStyle::Upright)
         .lyric_verse(2, LyricSyllable::skip(), LyricStyle::Italic)
-        .end_barline();
+        .barline()
+        // The source's six-beat second measure shares this 40ss system:
+        // first-measure syllables must remain clear when springs compress.
+        .measure_length(3, 2)
+        .rest(Duration::new(DurationKind::Eighth, 1))
+        .note(Pitch::new(Note::Cis, 3), Duration::SIXTEENTH)
+        .begin_tuplet(TupletSpec::new(3, 2))
+        .note(Pitch::new(Note::E, 3), Duration::EIGHTH)
+        .note(Pitch::new(Note::E, 3), Duration::EIGHTH)
+        .note(Pitch::new(Note::E, 3), Duration::EIGHTH)
+        .end_tuplet()
+        .begin_tuplet(TupletSpec::new(3, 2))
+        .note(Pitch::new(Note::Fis, 3), Duration::EIGHTH)
+        .note(Pitch::new(Note::Fis, 3), Duration::EIGHTH)
+        .note(Pitch::new(Note::Fis, 3), Duration::EIGHTH)
+        .end_tuplet()
+        .note(Pitch::new(Note::Ees, 4), Duration::SIXTEENTH)
+        .note(Pitch::new(Note::Ees, 4), Duration::SIXTEENTH)
+        .note(Pitch::new(Note::Ees, 4), Duration::SIXTEENTH)
+        .note(Pitch::new(Note::Ees, 4), Duration::SIXTEENTH)
+        .note(p(Note::C), Duration::EIGHTH)
+        .note(Pitch::new(Note::A, 2), Duration::EIGHTH)
+        .note(Pitch::new(Note::Gis, 2), Duration::EIGHTH)
+        .note(Pitch::new(Note::Gis, 2), Duration::EIGHTH)
+        .barline_style(BarlineStyle::Invisible);
     let svg = score.clone().render_svg();
     let sodo = text_element(&svg, "Sodo.");
     let do_swedish = text_element(&svg, "do,");
     assert!(sodo.contains("font-style=\"italic\""));
     assert!(attribute(do_swedish, "x") > attribute(sodo, "x"));
+    // The PNG renderer resolves generic serif to DejaVu Serif on Linux.
+    // Its italic advances, measured in ems, are wider than the Times-like
+    // estimate used by generic text scripts. The source's German line must
+    // retain a visible gap between adjacent syllables, not "IchhabAngst,".
+    for (first, first_em, second, second_em) in [
+        ("Ich", 1.599, "hab", 1.880),
+        ("hab", 1.880, "Angst,", 3.239),
+        ("Angst,", 3.239, "Sodo.", 2.847),
+    ] {
+        let centers = attribute(text_element(&svg, second), "x")
+            - attribute(text_element(&svg, first), "x");
+        let required = (first_em + second_em) * 0.5 * 1.4 * 250.0 + 0.2 * 250.0;
+        assert!(
+            centers >= required,
+            "{first}/{second} lyric glyphs overlap: {centers} < {required}"
+        );
+    }
     assert_eq!(svg.matches(">-</text>").count(), 1);
     let contents = score.build_measure_contents().unwrap();
     let events: Vec<_> = contents[0]

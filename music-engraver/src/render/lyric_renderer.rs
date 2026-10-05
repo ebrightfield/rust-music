@@ -3,8 +3,7 @@
 /// Renders serif text in each verse's font shape on its own baseline.
 /// Hyphens between adjacent syllables and melisma extender lines are drawn
 /// separately once the positions of consecutive notes are known.
-use crate::layout::lyric::{LyricLayout, LyricStyle};
-use crate::layout::text_script::estimate_text_width;
+use crate::layout::lyric::{lyric_text_width, LyricLayout, LyricStyle};
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
@@ -26,11 +25,7 @@ pub fn draw_lyric(svg: &mut SvgWriter, layout: &LyricLayout) {
 
 /// Estimated half-width in the same serif metrics as score text scripts.
 pub(crate) fn lyric_text_half_width(text: &str, font: LyricStyle, staff_space: f64) -> f64 {
-    estimate_text_width(
-        text,
-        crate::layout::lyric::LYRIC_FONT_SIZE_SS * staff_space,
-        font,
-    ) * 0.5
+    lyric_text_width(text, font, staff_space) * 0.5
 }
 
 /// Convert a note-center anchor to the center argument of

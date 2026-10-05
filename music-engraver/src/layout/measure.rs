@@ -11,7 +11,9 @@ use crate::layout::grace::{grace_group_extent, grace_stem_direction, GraceGroup,
 use crate::layout::group::{GroupMark, TupletSpec};
 use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
-use crate::layout::lyric::{VerseLyric, LYRIC_FONT_SIZE_SS};
+use crate::layout::lyric::{
+    lyric_text_width, LyricContinuation, VerseLyric, LYRIC_HYPHEN_GAP_SS,
+};
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
@@ -963,19 +965,23 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                         .iter()
                         .find(|prior| prior.verse == lyric.verse && !prior.syllable.skip)
                     {
-                        let font_size = LYRIC_FONT_SIZE_SS * config.staff_space;
-                        let width_before = crate::layout::text_script::estimate_text_width(
+                        let width_before = lyric_text_width(
                             &prior.syllable.text,
-                            font_size,
                             prior.style,
+                            config.staff_space,
                         );
-                        let width_after = crate::layout::text_script::estimate_text_width(
+                        let width_after = lyric_text_width(
                             &lyric.syllable.text,
-                            font_size,
                             lyric.style,
+                            config.staff_space,
                         );
+                        let gap_ss = if prior.syllable.continuation == LyricContinuation::Hyphen {
+                            LYRIC_HYPHEN_GAP_SS
+                        } else {
+                            0.5
+                        };
                         let separation =
-                            (width_before + width_after) * 0.5 + 0.5 * config.staff_space;
+                            (width_before + width_after) * 0.5 + gap_ss * config.staff_space;
                         extra_gap = extra_gap.max(prior_center + separation - this_center);
                     }
                 }
