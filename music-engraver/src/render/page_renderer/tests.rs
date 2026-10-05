@@ -2147,7 +2147,11 @@ fn note_with_extender(pos: i8) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            lyric: Some(LyricSyllable::with_extender("love")),
+            lyrics: vec![crate::layout::lyric::VerseLyric {
+                verse: 1,
+                syllable: LyricSyllable::with_extender("love"),
+                style: Default::default(),
+            }],
             ..Default::default()
         },
     })
@@ -2161,7 +2165,11 @@ fn note_with_lyric_word(pos: i8, text: &str) -> MeasureEvent {
         accidental: None,
         stem_direction: None,
         annotations: NoteAnnotations {
-            lyric: Some(LyricSyllable::word(text)),
+            lyrics: vec![crate::layout::lyric::VerseLyric {
+                verse: 1,
+                syllable: LyricSyllable::word(text),
+                style: Default::default(),
+            }],
             ..Default::default()
         },
     })

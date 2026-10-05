@@ -1,10 +1,9 @@
 /// Lyric text layout — syllables positioned below the staff under each note.
 ///
-/// Standard engraving convention: lyrics appear below the staff in roman
-/// (upright) text, centered on the note they belong to. Syllables that
-/// continue to the next note show a trailing hyphen; melismatic extensions
-/// show an underscore/extender line. Lyrics sit below dynamics and expression
-/// text to avoid collision.
+/// Verses occupy independent baselines below the staff, centered under their
+/// notes. Each verse can use upright or italic serif text independently;
+/// continuations draw hyphens or melisma lines without crossing verse lanes.
+/// Lyrics sit below dynamics and expression text to avoid collision.
 use crate::layout::staff::StaffLayout;
 
 /// The continuation style after a lyric syllable.
@@ -17,6 +16,8 @@ pub enum LyricContinuation {
     /// An extender line follows, indicating the syllable is sustained
     /// (melisma) across one or more subsequent notes.
     Extender,
+    /// Continue the word without printing a hyphen (LilyPond `\once \hide LyricHyphen`).
+    HyphenHidden,
 }
 
 /// A lyric syllable with optional continuation.
@@ -26,6 +27,8 @@ pub struct LyricSyllable {
     pub text: String,
     /// How this syllable connects to the next note's lyric.
     pub continuation: LyricContinuation,
+    /// A timed lyric skip: reserves an anchor but draws no text.
+    pub skip: bool,
 }
 
 impl LyricSyllable {
@@ -34,6 +37,7 @@ impl LyricSyllable {
         Self {
             text: text.into(),
             continuation: LyricContinuation::None,
+            skip: false,
         }
     }
 
@@ -42,6 +46,7 @@ impl LyricSyllable {
         Self {
             text: text.into(),
             continuation: LyricContinuation::Hyphen,
+            skip: false,
         }
     }
 
@@ -50,8 +55,48 @@ impl LyricSyllable {
         Self {
             text: text.into(),
             continuation: LyricContinuation::Extender,
+            skip: false,
         }
     }
+
+    /// Continue a word without a visible hyphen.
+    pub fn with_hidden_hyphen(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            continuation: LyricContinuation::HyphenHidden,
+            skip: false,
+        }
+    }
+
+    /// Advance this verse past one note without drawing a syllable.
+    pub fn skip() -> Self {
+        Self {
+            text: String::new(),
+            continuation: LyricContinuation::None,
+            skip: true,
+        }
+    }
+}
+
+/// Lyric typography shares the serif text-script metrics and SVG font shape.
+pub use crate::layout::text_script::TextFont as LyricStyle;
+
+/// One verse's lyric event at a note or chord. Verse numbers start at 1.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VerseLyric {
+    pub verse: u16,
+    pub syllable: LyricSyllable,
+    pub style: LyricStyle,
+}
+
+/// Baseline distance between adjacent lyric verses, in staff spaces.
+pub const LYRIC_VERSE_GAP_SS: f64 = 2.0;
+
+/// Baseline for a numbered verse below the bottom staff line.
+pub fn verse_baseline(staff: &StaffLayout, staff_space: f64, verse: u16) -> f64 {
+    staff.y_of(0)
+        + (LYRIC_BELOW_STAFF_SS + f64::from(verse.saturating_sub(1)) * LYRIC_VERSE_GAP_SS)
+            * staff_space
 }
 
 /// Result of laying out a lyric syllable.
@@ -67,6 +112,8 @@ pub struct LyricLayout {
     pub font_size: f64,
     /// Continuation style (hyphen, extender, or none).
     pub continuation: LyricContinuation,
+    /// Font shape of this verse.
+    pub style: LyricStyle,
 }
 
 /// Distance below the bottom staff line for lyric text placement, in staff spaces.
@@ -90,18 +137,32 @@ pub fn layout_lyric(
     staff: &StaffLayout,
     staff_space: f64,
 ) -> LyricLayout {
-    let font_size = LYRIC_FONT_SIZE_SS * staff_space;
-    let below_offset = LYRIC_BELOW_STAFF_SS * staff_space;
+    layout_lyric_verse(
+        syllable,
+        note_center_x,
+        staff,
+        staff_space,
+        1,
+        LyricStyle::Upright,
+    )
+}
 
-    let bottom_line_y = staff.y_of(0);
-    let y_baseline = bottom_line_y + below_offset;
-
+/// Lay out one verse's syllable on its independent baseline.
+pub fn layout_lyric_verse(
+    syllable: &LyricSyllable,
+    note_center_x: f64,
+    staff: &StaffLayout,
+    staff_space: f64,
+    verse: u16,
+    style: LyricStyle,
+) -> LyricLayout {
     LyricLayout {
         text: syllable.text.clone(),
         x_center: note_center_x,
-        y_baseline,
-        font_size,
+        y_baseline: verse_baseline(staff, staff_space, verse),
+        font_size: LYRIC_FONT_SIZE_SS * staff_space,
         continuation: syllable.continuation.clone(),
+        style,
     }
 }
 

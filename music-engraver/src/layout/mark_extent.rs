@@ -4,7 +4,7 @@
 
 use crate::layout::dynamics::{DYNAMICS_ABOVE_STAFF_SS, DYNAMICS_BELOW_STAFF_SS};
 use crate::layout::hairpin::HAIRPIN_ABOVE_STAFF_SS;
-use crate::layout::lyric::{LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS};
+use crate::layout::lyric::{LYRIC_BELOW_STAFF_SS, LYRIC_FONT_SIZE_SS, LYRIC_VERSE_GAP_SS};
 use crate::layout::measure::{MeasureElement, NoteAnnotations};
 use crate::layout::placement::Placement;
 use crate::layout::system::SystemLayout;
@@ -57,7 +57,11 @@ pub fn annotation_extent_ss(annotations: &NoteAnnotations) -> (f64, f64) {
             }
         }
     }
-    for script in annotations.text_scripts.iter().chain(&annotations.text_marks) {
+    for script in annotations
+        .text_scripts
+        .iter()
+        .chain(&annotations.text_marks)
+    {
         let height = text_height(script);
         match script.placement {
             Placement::Above => {
@@ -66,7 +70,8 @@ pub fn annotation_extent_ss(annotations: &NoteAnnotations) -> (f64, f64) {
                 above = above.max(top);
             }
             Placement::Below => {
-                let bottom = (TEXT_SCRIPT_BELOW_STAFF_SS + TEXT_DESCENT_RATIO * TEXT_SCRIPT_FONT_SIZE_SS)
+                let bottom = (TEXT_SCRIPT_BELOW_STAFF_SS
+                    + TEXT_DESCENT_RATIO * TEXT_SCRIPT_FONT_SIZE_SS)
                     .max(cursor_below + height);
                 cursor_below = bottom + gap;
                 below = below.max(bottom);
@@ -89,13 +94,16 @@ pub fn annotation_extent_ss(annotations: &NoteAnnotations) -> (f64, f64) {
     }
     if let Some(spanner) = &annotations.text_spanner_start {
         if spanner.placement == Placement::Above {
-            above = above.max(
-                TEXT_SPANNER_ABOVE_STAFF_SS + TEXT_ASCENT_RATIO * TEXT_SPANNER_FONT_SIZE_SS,
-            );
+            above = above
+                .max(TEXT_SPANNER_ABOVE_STAFF_SS + TEXT_ASCENT_RATIO * TEXT_SPANNER_FONT_SIZE_SS);
         }
     }
-    if annotations.lyric.is_some() {
-        below = below.max(LYRIC_BELOW_STAFF_SS + TEXT_DESCENT_RATIO * LYRIC_FONT_SIZE_SS);
+    if let Some(last_verse) = annotations.lyrics.iter().map(|lyric| lyric.verse).max() {
+        below = below.max(
+            LYRIC_BELOW_STAFF_SS
+                + f64::from(last_verse.saturating_sub(1)) * LYRIC_VERSE_GAP_SS
+                + TEXT_DESCENT_RATIO * LYRIC_FONT_SIZE_SS,
+        );
     }
     (above, below)
 }
@@ -112,5 +120,7 @@ pub fn system_mark_extent_ss(system: &SystemLayout) -> (f64, f64) {
         })
         .filter_map(|positioned| element_annotations(&positioned.element))
         .map(annotation_extent_ss)
-        .fold((0.0, 0.0), |(above, below), (a, b)| (above.max(a), below.max(b)))
+        .fold((0.0, 0.0), |(above, below), (a, b)| {
+            (above.max(a), below.max(b))
+        })
 }

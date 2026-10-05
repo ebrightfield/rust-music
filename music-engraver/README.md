@@ -34,7 +34,7 @@ std::fs::write("score.svg", &svg).unwrap();
 
 ## Features
 
-- **SVG output** from glyph outlines (no text rendering required)
+- **SVG output** with SMuFL notation glyph outlines and serif SVG text for lyrics and text marks
 - **SMuFL-compliant** layout using Bravura metadata for all engraving constants
 - **Font-agnostic architecture** -- glyph lookup by SMuFL canonical name, not
   hard-coded to Bravura. Adding Petaluma or Leland requires no layout/render changes.
@@ -48,6 +48,16 @@ std::fs::write("score.svg", &svg).unwrap();
   `tuplet_ratio_with_accidentals`). Chord accidentals stack into non-colliding columns, and
   every accidental's width is reserved to the left of its note.
 - **Multi-system page layout** with configurable measures-per-system and justification
+- **Numbered lyric verses** on notes and chords (including beam/tuplet members):
+  `.lyric(syllable)` is upright verse 1; `.lyric_verse(verse, syllable, style)`
+  accepts `LyricStyle::Upright` or `LyricStyle::Italic` (serif SVG text).
+  `LyricSyllable::{word,with_hyphen,with_hidden_hyphen,with_extender,skip}`
+  independently controls each verse. A skip advances a verse without drawing
+  text; hidden hyphens continue the word without a visible hyphen.
+  `.lyric_associated_voice(verse, voice)` keeps a verse on a specified layer
+  across measure and system breaks, even when another voice is entered last;
+  `.lyric_verse_on_voice(voice, verse, syllable, style)` targets one event
+  without changing the persistent association. Verse numbers begin at 1.
 
 ## Publication boundary
 
