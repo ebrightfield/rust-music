@@ -14,13 +14,12 @@ use crate::render::svg_writer::TextStyle;
 use crate::render::system_renderer::span_event_advance;
 use crate::render::SvgWriter;
 
-#[derive(Clone)]
-struct Anchor {
+struct Anchor<'a> {
     x: f64,
     right: f64,
     top: f64,
     bottom: f64,
-    start: Option<AnalysisBracketSpec>,
+    start: Option<&'a AnalysisBracketSpec>,
     end: bool,
 }
 
@@ -41,18 +40,18 @@ fn has_bracket_start(system: &SystemLayout) -> bool {
 /// Collect event positions separately per voice, preserving measure/event order.
 /// Structural GroupMarks, meter changes, and visible or invisible barlines
 /// consume no anchor, so spans pass over them unchanged.
-fn anchors(
-    system: &SystemLayout,
+fn anchors<'a>(
+    system: &'a SystemLayout,
     font: &MusicFont,
     ss: f64,
-) -> Result<Vec<Vec<Anchor>>, FontError> {
+) -> Result<Vec<Vec<Anchor<'a>>>, FontError> {
     let voice_count = system
         .measures
         .iter()
         .map(|m| m.additional_voice_layouts.len() + 1)
         .max()
         .unwrap_or(0);
-    let mut voices = vec![Vec::new(); voice_count];
+    let mut voices: Vec<Vec<Anchor<'a>>> = (0..voice_count).map(|_| Vec::new()).collect();
     for measure in &system.measures {
         for (voice, output) in voices.iter_mut().enumerate() {
             let layout = if voice == 0 {
@@ -137,7 +136,7 @@ fn anchors(
                     right: x + width,
                     top,
                     bottom,
-                    start: start.clone(),
+                    start: start.as_ref(),
                     end,
                 });
             }
@@ -211,19 +210,19 @@ pub fn draw_analysis_bracket(svg: &mut SvgWriter, layout: &AnalysisBracketLayout
     }
 }
 
-#[derive(Clone)]
-struct Open {
-    spec: AnalysisBracketSpec,
+#[derive(Clone, Copy)]
+struct Open<'a> {
+    spec: &'a AnalysisBracketSpec,
     system_index: usize,
     anchor_index: usize,
 }
 
-struct Segment {
+struct Segment<'a> {
     system_index: usize,
     voice: usize,
     start: usize,
     end: usize,
-    open: Open,
+    open: Open<'a>,
     cross_system: bool,
     first: bool,
     last: bool,
@@ -245,8 +244,8 @@ fn draw_segments(
     let voice_count = anchors_by_system.iter().map(Vec::len).max().unwrap_or(0);
     let mut segments = Vec::new();
     for voice in 0..voice_count {
-        let mut open: Vec<Open> = Vec::new();
-        let mut pending: Vec<Segment> = Vec::new();
+        let mut open: Vec<Open<'_>> = Vec::new();
+        let mut pending: Vec<Segment<'_>> = Vec::new();
         for (sys, voices) in anchors_by_system.iter().enumerate() {
             let Some(events) = voices.get(voice) else {
                 continue;
@@ -275,7 +274,7 @@ fn draw_segments(
                                         0
                                     },
                                     end: if s == sys { idx } else { len - 1 },
-                                    open: bracket.clone(),
+                                    open: bracket,
                                     cross_system: true,
                                     first: s == bracket.system_index,
                                     last: s == sys,
@@ -295,9 +294,9 @@ fn draw_segments(
                         }
                     }
                 }
-                if let Some(spec) = &event.start {
+                if let Some(spec) = event.start {
                     open.push(Open {
-                        spec: spec.clone(),
+                        spec,
                         system_index: sys,
                         anchor_index: idx,
                     });
@@ -344,7 +343,7 @@ fn draw_segments(
             .unwrap();
         let staff = StaffLayout::new(x, y, systems[sys].0.staff_width, ss);
         if let Some(layout) = layout_analysis_bracket(
-            &segment.open.spec,
+            segment.open.spec,
             left,
             right,
             staff.y_of(8),
@@ -355,7 +354,7 @@ fn draw_segments(
             lane,
             segment.first,
             segment.last,
-            segment.first,
+            segment.first && segment.cross_system == cross_system,
         ) {
             if segment.cross_system == cross_system {
                 draw_analysis_bracket(svg, &layout);
