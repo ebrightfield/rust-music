@@ -30,6 +30,10 @@ pub enum EngraverError {
     #[error(transparent)]
     Structure(#[from] crate::score::ScoreStructureError),
 
+    /// A continuous cross-staff voice has an invalid stave or voice assignment.
+    #[error(transparent)]
+    CrossStaff(#[from] crate::score::multi_staff::CrossStaffError),
+
     /// PNG rasterization failed (requires the `png` feature).
     #[cfg(feature = "png")]
     #[error(transparent)]
