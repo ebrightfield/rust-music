@@ -160,10 +160,12 @@ pub struct MeasureMeta {
     /// keeps its metric semantics (nominal length) but draws nothing.
     pub meter_visible: bool,
     /// Expected length: the meter's, an explicit measure-length override, or
-    /// an anacrusis's partial length. `None` for unmetered and cadenza
+    /// an anacrusis's partial length; multiplied by the number of bars in a
+    /// compressed multi-measure rest. `None` for unmetered and cadenza
     /// measures, which carry no length expectation.
     pub nominal_length: Option<MeasureLength>,
-    /// Written length of the longest voice (tuplets at their performed ratio).
+    /// Performed length of the longest voice (tuplets at their performed
+    /// ratio; multi-measure rests occupy the represented number of bars).
     pub actual_length: MeasureLength,
     /// Pickup measure declared with a partial length.
     pub anacrusis: bool,

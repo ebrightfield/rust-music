@@ -17,8 +17,8 @@ use crate::layout::accidental::{
 };
 use crate::layout::barline::BarlineStyle;
 use crate::layout::grace::{GraceGroup, GraceNoteEvent};
-use crate::layout::key_signature::KeySignature;
 use crate::layout::group::{GroupMark, TupletSpec};
+use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{ChordEvent, NoteAnnotations, NoteEvent, RestEvent, SpacerEvent};
 use crate::layout::measure_meta::MeasureLength;
 use crate::layout::note_placement::pitch_to_staff_position;
@@ -58,9 +58,7 @@ pub(crate) enum ScoreEvent {
     /// measure, advance the measure number, or reset accidental state.
     Barline(BarlineStyle),
     /// Invisible rhythmic placeholder: takes `duration` but draws nothing.
-    Spacer {
-        duration: Duration,
-    },
+    Spacer { duration: Duration },
     /// Zero-duration clef change; later pitches on the staff use the new clef.
     ClefChange(ClefChange),
     /// Zero-duration meter change, valid only at the start of a measure.
@@ -73,7 +71,6 @@ impl ScoreEvent {
         matches!(self, Self::ClefChange(_) | Self::TimeSignatureChange(_))
     }
 }
-
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
 ///
@@ -260,12 +257,16 @@ fn convert_annotations(
         converted.grace_group = Some(GraceGroup {
             kind: graces.kind,
             slur: graces.slur,
-            notes: graces.notes.iter().map(|grace| GraceNoteEvent {
-                staff_position: pitch_to_staff_position(&grace.pitch, clef),
-                duration_log2: duration_kind_to_log2(grace.duration.kind()),
-                dots: grace.duration.num_dots(),
-                accidental: next_accidental(accidentals),
-            }).collect(),
+            notes: graces
+                .notes
+                .iter()
+                .map(|grace| GraceNoteEvent {
+                    staff_position: pitch_to_staff_position(&grace.pitch, clef),
+                    duration_log2: duration_kind_to_log2(grace.duration.kind()),
+                    dots: grace.duration.num_dots(),
+                    accidental: next_accidental(accidentals),
+                })
+                .collect(),
         });
         converted.grace_notes = None;
     }
@@ -438,7 +439,8 @@ fn pitch_display(annotations: &NoteAnnotations, index: usize) -> Option<Accident
 /// followed by its chord members. A grace sounds before the shared onset.
 ///
 /// Returns the event's duration in ticks scaled by `scale` and performed at
-/// the open tuplets' `ratio`; span marks and multi-measure rests take none.
+/// the open tuplets' `ratio`; span marks take none. Multi-measure rests are
+/// advanced by [`measure_timeline`] using the containing measure's length.
 fn visit_pitches(
     event: &ScoreEvent,
     scale: u64,
@@ -459,14 +461,16 @@ fn visit_pitches(
         ScoreEvent::Rest { duration, .. } | ScoreEvent::Spacer { duration } => {
             return scaled_ticks(duration, scale, ratio);
         }
-        ScoreEvent::GroupMark(_) | ScoreEvent::Barline(_) | ScoreEvent::MultiMeasureRest { .. }
-        | ScoreEvent::ClefChange(_) | ScoreEvent::TimeSignatureChange(_) => return 0,
+        ScoreEvent::GroupMark(_)
+        | ScoreEvent::Barline(_)
+        | ScoreEvent::MultiMeasureRest { .. }
+        | ScoreEvent::ClefChange(_)
+        | ScoreEvent::TimeSignatureChange(_) => return 0,
     };
     if let Some(graces) = &annotations.grace_notes {
         for grace in &graces.notes {
             visit(grace.pitch, Some(grace.accidental), true);
         }
-
     }
     for (index, pitch) in pitches.iter().enumerate() {
         visit(*pitch, pitch_display(annotations, index), false);
@@ -490,8 +494,16 @@ impl MeasureTimeline {
 pub(crate) fn measure_timeline(
     voiced_events: &[(u8, ScoreEvent)],
     open_tuplets: &[Vec<TupletSpec>],
+    nominal_length: Option<MeasureLength>,
 ) -> MeasureTimeline {
-    let scale = tuplet_tick_scale(voiced_events, open_tuplets);
+    let mut scale = tuplet_tick_scale(voiced_events, open_tuplets);
+    // A fractional measure override may have a denominator that is not a
+    // power of two or a tuplet divisor. Preserve the exact rest endpoint.
+    if let Some(nominal) = nominal_length {
+        let denominator = nominal.denominator();
+        let factor = denominator / gcd(denominator, 128);
+        scale = scale / gcd(scale, factor) * factor;
+    }
     let mut clocks: Vec<Onset> = Vec::new();
     let mut stacks = open_tuplets.to_vec();
     let mut onsets = Vec::with_capacity(voiced_events.len());
@@ -511,12 +523,24 @@ pub(crate) fn measure_timeline(
             ScoreEvent::GroupMark(GroupMark::TupletEnd { .. }) => {
                 stacks[index].pop();
             }
+            ScoreEvent::MultiMeasureRest { count, .. } => {
+                if let Some(nominal) = nominal_length {
+                    clocks[index] += nominal.numerator()
+                        * (128 * scale / nominal.denominator())
+                        * u64::from((*count).max(1));
+                }
+            }
             _ => {
-                clocks[index] += visit_pitches(event, scale, tuplet_ratio(&stacks[index]), |_, _, _| {});
+                clocks[index] +=
+                    visit_pitches(event, scale, tuplet_ratio(&stacks[index]), |_, _, _| {});
             }
         }
     }
-    MeasureTimeline { onsets, scale, length: clocks.into_iter().max().unwrap_or(0) }
+    MeasureTimeline {
+        onsets,
+        scale,
+        length: clocks.into_iter().max().unwrap_or(0),
+    }
 }
 
 /// Resolve every notated pitch's accidental in one measure of one staff, in
@@ -563,9 +587,10 @@ pub(crate) fn resolve_measure_accidentals(
             _ => {
                 let start = voice_clocks[voice_index];
                 let ratio = tuplet_ratio(&stacks[voice_index]);
-                voice_clocks[voice_index] += visit_pitches(event, scale, ratio, |pitch, display, grace| {
-                    pitches.push((start, grace, *voice, pitch, display));
-                });
+                voice_clocks[voice_index] +=
+                    visit_pitches(event, scale, ratio, |pitch, display, grace| {
+                        pitches.push((start, grace, *voice, pitch, display));
+                    });
             }
         }
     }
@@ -599,7 +624,13 @@ pub(crate) fn convert_event(
     let mut resolved = Vec::new();
     visit_pitches(event, 1, (1, 1), |pitch, display, _| {
         resolved.push(display.and_then(|display| {
-            resolve_and_track(&pitch, key_sig, display, AccidentalPolicy::Default, seen.as_deref_mut())
+            resolve_and_track(
+                &pitch,
+                key_sig,
+                display,
+                AccidentalPolicy::Default,
+                seen.as_deref_mut(),
+            )
         }));
     });
     convert_resolved_event(event, clef, &mut resolved.iter())

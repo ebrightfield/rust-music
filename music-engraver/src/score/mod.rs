@@ -45,10 +45,10 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
-use crate::layout::analysis_bracket::AnalysisBracketSpec;
 #[cfg(test)]
 use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
+use crate::layout::analysis_bracket::AnalysisBracketSpec;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::{Articulation, ArticulationMark};
 use crate::layout::bar_number::MeasureNumbering;
@@ -2186,6 +2186,9 @@ impl ScoreBuilder {
     /// staff line) and a count number above it. `count` is the number of
     /// consecutive measures of rest this frame represents — engraved parts use
     /// this convention to compress empty passages.
+    /// Its performed duration is `count` times the active measure length
+    /// (including a hidden meter or `measure_length` override), and the next
+    /// measure number advances by `count` rather than by one.
     ///
     /// Conventionally a multi-measure rest is the only event in its measure;
     /// adding notes or other rests alongside it produces undefined visual
@@ -2217,6 +2220,8 @@ impl ScoreBuilder {
     /// A bold count number is drawn above the staff (matching the H-bar
     /// convention) so a reader can scan the count without distinguishing
     /// styles.
+    /// Like [`Self::multi_measure_rest`], its duration and the next bar number
+    /// both advance by the represented measure count.
     ///
     /// For counts greater than [`CHURCH_REST_MAX_COUNT`](crate::layout::multi_measure_rest::CHURCH_REST_MAX_COUNT)
     /// the renderer silently falls back to the H-bar style — the church-rest
@@ -2371,7 +2376,35 @@ impl ScoreBuilder {
         let mut contents = Vec::with_capacity(self.measures.len());
         for (index, measure) in self.measures.iter().enumerate() {
             let voiced_events = &measure.events;
-            let timeline = measure_timeline(voiced_events, &open_tuplets);
+            let rest_count = voiced_events.iter().find_map(|(_, event)| {
+                if let ScoreEvent::MultiMeasureRest { count, .. } = event {
+                    Some((*count).max(1))
+                } else {
+                    None
+                }
+            });
+            // Only compressed full-bar rests need a nominal length in the
+            // exact onset grid. A change at a nonzero onset is rejected below.
+            let rest_bar_length = rest_count.and_then(|_| {
+                let length_meter = voiced_events
+                    .iter()
+                    .filter_map(|(_, event)| {
+                        if let ScoreEvent::TimeSignatureChange(change) = event {
+                            Some(change)
+                        } else {
+                            None
+                        }
+                    })
+                    .last()
+                    .or(meter.as_ref());
+                if measure.timing.cadenza {
+                    None
+                } else {
+                    measure.timing.partial.or(measure.timing.length_override)
+                        .or_else(|| length_meter.map(|meter| meter.kind.measure_length()))
+                }
+            });
+            let timeline = measure_timeline(voiced_events, &open_tuplets, rest_bar_length);
 
             // Clef changes in onset order (builder order among equal onsets).
             let measure_start_clef = clef;
@@ -2458,18 +2491,28 @@ impl ScoreBuilder {
             let number = if anacrusis {
                 next_number - 1
             } else {
-                next_number += 1;
-                next_number - 1
+                let number = next_number;
+                // A compressed rest frame carries `rest_count` complete bars,
+                // though it occupies one visual measure.
+                next_number += i32::try_from(rest_count.unwrap_or(1))
+                    .expect("rest count exceeds bar numbering range");
+                number
             };
-            let nominal_length = if measure.timing.cadenza {
+            let one_bar_length = if rest_count.is_some() {
+                rest_bar_length
+            } else if measure.timing.cadenza {
                 None
             } else {
-                measure
-                    .timing
-                    .partial
-                    .or(measure.timing.length_override)
+                measure.timing.partial.or(measure.timing.length_override)
                     .or_else(|| meter.as_ref().map(|meter| meter.kind.measure_length()))
             };
+            let nominal_length = one_bar_length.map(|bar| {
+                if let Some(count) = rest_count {
+                    MeasureLength::new(bar.numerator() * u64::from(count), bar.denominator())
+                } else {
+                    bar
+                }
+            });
             let meta = MeasureMeta {
                 number,
                 meter: meter.as_ref().map(|meter| meter.kind.clone()),
@@ -2741,13 +2784,13 @@ mod tests_breve;
 #[cfg(test)]
 mod tests_c_clefs;
 #[cfg(test)]
-mod tests_modus_novus_struct;
-#[cfg(test)]
 mod tests_lyrics_verses;
 #[cfg(test)]
-mod tests_rest_marks;
-#[cfg(test)]
 mod tests_modus_novus_rhythm;
+#[cfg(test)]
+mod tests_modus_novus_struct;
+#[cfg(test)]
+mod tests_rest_marks;
 #[cfg(test)]
 mod tests_structure;
 #[cfg(test)]
