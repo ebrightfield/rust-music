@@ -122,6 +122,39 @@ pub fn layout_glissando(
     })
 }
 
+/// Place a glissando between noteheads on distinct stave origins. The shared
+/// horizontal grid supplies x positions; each endpoint uses its own clef's
+/// resolved staff position and its actual page-space stave origin.
+pub fn layout_glissando_between_staves(
+    x_source: f64,
+    staff_pos_source: i8,
+    x_target: f64,
+    staff_pos_target: i8,
+    source_staff: &StaffLayout,
+    target_staff: &StaffLayout,
+    style: GlissandoStyle,
+) -> Option<GlissandoLayout> {
+    let mut line = layout_glissando(
+        x_source, staff_pos_source, x_target, staff_pos_target,
+        source_staff, style, None,
+    )?;
+    let source_y = source_staff.y_of(staff_pos_source);
+    let target_y = target_staff.y_of(staff_pos_target);
+    let rise = target_y - source_y;
+    // The line meets the perimeter rather than crossing either notehead.
+    // Near-horizontal spans keep the historical 0.15ss offset; for steep
+    // crossings the cap is one half-space above/below the head center.
+    let inset = (rise.abs() * 0.12).clamp(
+        GLISSANDO_V_OFFSET_SS * source_staff.staff_space,
+        0.48 * source_staff.staff_space,
+    );
+    let sign = rise.signum();
+    line.y_start = source_y + inset * sign;
+    line.y_end = target_y - inset * sign;
+    line.text_y = (line.y_start + line.y_end) / 2.0;
+    Some(line)
+}
+
 /// Compute a trailing half-glissando from a note to the right edge of a system.
 ///
 /// Used for cross-system glissandos: the note at the end of system N has

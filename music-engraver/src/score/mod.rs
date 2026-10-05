@@ -649,6 +649,16 @@ impl ScoreBuilder {
         self
     }
 
+    /// Assign the most recent note, chord, or rest to a stave in a
+    /// [`MultiStaffScore`](multi_staff::MultiStaffScore) continuous voice.
+    /// Stave zero is the upper stave of a grand staff.
+    pub fn on_staff(mut self, index: usize) -> Self {
+        if let Some(annotations) = self.last_annotations_mut() {
+            annotations.on_staff = Some(index);
+        }
+        self
+    }
+
     /// Add a note whose accidental follows an explicit [`AccidentalDisplay`]
     /// policy instead of automatic resolution.
     ///
