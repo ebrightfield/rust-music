@@ -888,12 +888,14 @@ fn mn_c11_r029_interior_voice_grid_cue_lyrics_and_hidden_bar() {
     let mut score = ScoreBuilder::new()
         .time_signature(4, 4)
         .first_measure_number(7)
+        .begin_beam_with(BeamSpec::new().stem_direction(StemDirection::Down))
         .note(p(Note::F, 5), dotted(DurationKind::Eighth))
         .lyric_verse(1, LyricSyllable::with_hyphen("ment"), LyricStyle::Upright)
         .lyric_verse(2, LyricSyllable::word("ment"), LyricStyle::Italic)
         .note(p(Note::G, 4), Duration::SIXTEENTH)
         .lyric_verse(1, LyricSyllable::with_hyphen("kol"), LyricStyle::Upright)
         .lyric_verse(2, LyricSyllable::with_hyphen("zu"), LyricStyle::Italic)
+        .end_beam()
         .begin_beam()
         .note(p(Note::G, 4), Duration::EIGHTH)
         .lyric_verse(1, LyricSyllable::with_hyphen("laps"), LyricStyle::Upright)
@@ -985,6 +987,9 @@ fn mn_c11_r029_interior_voice_grid_cue_lyrics_and_hidden_bar() {
         })
         .collect();
     assert_eq!(main[2].annotations.lyrics[0].syllable.text, "laps");
+    assert_eq!(main[0].stem_direction, Some(StemDirection::Down));
+    assert_eq!(main[1].stem_direction, Some(StemDirection::Down));
+    assert_eq!(main[2].stem_direction, Some(StemDirection::Up));
     let layout = page(&score);
     let first = &layout.systems[0].system.measures[0];
     let primary_g: Vec<_> = first
