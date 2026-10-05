@@ -267,10 +267,17 @@ pub(super) fn draw_cross_staff_glissandos(
                 line.y_end = line.y_start + (target_staff.y_of(to.staff_position) - source_staff.y_of(from.staff_position)).clamp(-ss * 2.0, ss * 2.0);
                 draw_glissando(svg, &line);
             }
-            // Start after the next system's prefix, never through its clef or label.
-            let left = systems[to.stave][to.system].system.measures.first().map_or(target_staff.x, |m| {
-                m.layout.elements.iter().find(|e| matches!(e.element, MeasureElement::Note(_) | MeasureElement::Chord(_) | MeasureElement::Spacer(_))).map_or(target_staff.x, |e| target_staff.x + m.x_offset + e.x - ss * 2.2)
-            });
+            // Never run an incoming fragment through the receiving system's
+            // clef, key signature, meter, or left-hand connector/label.
+            let prefix_right = systems[to.stave][to.system].system.measures.first()
+                .map(|m| m.layout.elements.iter()
+                    .take_while(|e| matches!(e.element,
+                        MeasureElement::Clef(_) | MeasureElement::KeySignature(_)
+                        | MeasureElement::TimeSignature(_)))
+                    .map(|e| target_staff.x + m.x_offset + e.x + e.width)
+                    .fold(target_staff.x, f64::max))
+                .unwrap_or(target_staff.x);
+            let left = (to.x - ss * 2.2).max(prefix_right + ss * 0.2);
             if let Some(mut line) = layout_half_glissando_left(left, to.x, to.staff_position, &target_staff, span.style) {
                 line.y_start = line.y_end - (target_staff.y_of(to.staff_position) - source_staff.y_of(from.staff_position)).clamp(-ss * 2.0, ss * 2.0);
                 draw_glissando(svg, &line);

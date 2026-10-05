@@ -261,6 +261,11 @@ fn shared_columns_and_cross_system_fragments_with_independent_voice() {
             .note(Pitch::new(Note::E,5),Duration::WHOLE).on_staff(0).end_barline())
         .explicit_line_breaks().system_width_fu(10_000.0).try_render_svg().unwrap();
     assert_eq!(svg.matches("stroke-dasharray=").count(),3,"one full span plus two cross-system fragments");
+    #[cfg(feature = "png")]
+    if let Ok(path) = std::env::var("CROSS_STAFF_BREAK_VISUAL_OUT") {
+        let png = crate::render::png::svg_to_png(&svg, 2.0).unwrap();
+        std::fs::write(path, png).unwrap();
+    }
 }
 
 #[cfg(feature="png")]

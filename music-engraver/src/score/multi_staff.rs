@@ -565,7 +565,8 @@ impl MultiStaffScore {
         // The resulting verse/annotation extents determine each stave gap.
         let laid_out_systems: Vec<Vec<SystemLayout>> = chunks
             .iter()
-            .map(|&(start, end)| {
+            .enumerate()
+            .map(|(system_index, &(start, end))| {
                 let prefixes: Vec<_> = stave_data
                     .iter()
                     .map(|(contents, prefix)| system_start_prefix(prefix, contents, start))
@@ -577,7 +578,18 @@ impl MultiStaffScore {
                         (prefix, &contents[start..end], contents.get(end))
                     })
                     .collect();
-                layout_staves_followed_by(&slices, &measure_config, Some(sys_width))
+                let mut system_config = measure_config.clone();
+                if system_index > 0 && !self.cross_staff_glissandos.is_empty() {
+                    // Reserve a short entry lane after the last prefix glyph
+                    // for a glissando coming from the preceding system. This
+                    // is applied to the shared grid, so both staves and every
+                    // independent voice retain the same onset columns.
+                    let lane = 1.6 * staff_space;
+                    system_config.clef_padding += lane;
+                    system_config.key_sig_padding += lane;
+                    system_config.time_sig_padding += lane;
+                }
+                layout_staves_followed_by(&slices, &system_config, Some(sys_width))
             })
             .collect();
         let mark_extents: Vec<Vec<_>> = laid_out_systems

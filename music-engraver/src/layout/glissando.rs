@@ -263,6 +263,28 @@ mod tests {
     const X2: f64 = 1200.0;
 
     #[test]
+    fn cross_staff_dashed_endpoints_use_both_page_space_origins() {
+        let upper = StaffLayout::new(0.0, 0.0, 5000.0, 250.0);
+        let lower = StaffLayout::new(0.0, 2500.0, 5000.0, 250.0);
+        let down = layout_glissando_between_staves(
+            X1, 4, X2, 4, &upper, &lower, GlissandoStyle::Dashed,
+        ).unwrap();
+        let source_y = upper.y_of(4);
+        let target_y = lower.y_of(4);
+        assert!(down.y_start > source_y && down.y_start < source_y + 125.0);
+        assert!(down.y_end < target_y && down.y_end > target_y - 125.0);
+        assert!(down.x_start > X1 + 250.0);
+        assert!(down.x_end < X2);
+        assert_eq!(down.style, GlissandoStyle::Dashed);
+
+        let up = layout_glissando_between_staves(
+            X1, 4, X2, 4, &lower, &upper, GlissandoStyle::Dashed,
+        ).unwrap();
+        assert!(up.y_end < up.y_start);
+        assert!(up.y_start < lower.y_of(4) && up.y_end > upper.y_of(4));
+    }
+
+    #[test]
     fn ascending_glissando_has_correct_direction() {
         let staff = test_staff();
         let layout = layout_glissando(X1, 0, X2, 4, &staff, GlissandoStyle::Line, None)
