@@ -122,17 +122,6 @@ pub enum StemVisibility {
     Hidden,
 }
 
-/// Additional tones carried by one rhythmic member of a beam or tuplet.
-///
-/// The enclosing [`NoteEvent`] supplies duration and shared annotations; this
-/// payload lets the grouped renderer engrave the member as a real chord.
-#[derive(Clone, Debug)]
-pub struct GroupedChordMember {
-    /// Staff positions in the same order as notehead style vectors.
-    pub staff_positions: Vec<StaffPosition>,
-    /// Resolved accidentals parallel to `staff_positions`.
-    pub accidentals: Vec<Option<ResolvedAccidental>>,
-}
 /// Articulation and expression annotations attached to a note or chord event.
 ///
 /// These fields are shared between [`NoteEvent`] and [`ChordEvent`], covering

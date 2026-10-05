@@ -343,6 +343,12 @@ pub enum GuitarEventSpec {
         /// Exact written duration.
         duration: Duration,
     },
+    /// A silent rhythmic member of a beam or tuplet. It occupies its own
+    /// standard-staff and TAB time slot but receives no TAB rhythm stem.
+    Rest {
+        /// Exact written duration.
+        duration: Duration,
+    },
 }
 
 impl GuitarEventSpec {
@@ -368,6 +374,7 @@ impl GuitarEventSpec {
             Self::Pitched { duration, .. }
             | Self::Dead { duration, .. }
             | Self::Slash { duration }
+            | Self::Rest { duration }
             | Self::Percussion { duration, .. } => *duration,
         }
     }
@@ -2527,6 +2534,7 @@ impl GuitarScore {
                 }
                 GuitarEventSpec::Slash { .. } => GuitarEventKind::Slash,
                 GuitarEventSpec::Percussion { target, .. } => GuitarEventKind::Percussion(target),
+                GuitarEventSpec::Rest { .. } => GuitarEventKind::Rest,
             };
             let id = self.allocate_id();
             ids.push(id);
@@ -4756,6 +4764,30 @@ mod tests {
     }
 
     #[test]
+    fn grouped_guitar_events_follow_the_active_clef_like_standalone_events() {
+        use crate::layout::system::MeasureEvent;
+        let mut guitar = GuitarScore::standard();
+        guitar.set_time_signature(2, 4);
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.clef_change(Clef::Bass);
+        guitar.beam_group(vec![
+            spec(Pitch::new(Note::E, 4), Duration::EIGHTH, 1, 0),
+            spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
+        ]).unwrap();
+        guitar.end_barline().unwrap();
+        let contents = guitar.notation_builder().build_measure_contents().unwrap();
+        let notes: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.staff_position),
+            _ => None,
+        }).collect();
+        assert_eq!(notes, vec![
+            pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba),
+            pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass),
+            pitch_to_staff_position(&Pitch::new(Note::Fis, 4), &Clef::Bass),
+        ]);
+    }
+
+    #[test]
     fn rejects_pitch_that_does_not_match_tuning() {
         let mut score = GuitarScore::standard();
         let error = score
@@ -4917,6 +4949,46 @@ mod tests {
                 + notation_center_offset(&font, score.event(*id).unwrap()).unwrap();
             assert!((anchors[id].x - expected).abs() < 1e-9);
         }
+    }
+
+    #[test]
+    fn grouped_guitar_rest_keeps_standard_and_tab_slots_without_a_rest_stem() {
+        let mut score = GuitarScore::standard();
+        score.set_time_signature(1, 4);
+        let ids = score.tuplet(3, 2, vec![
+            GuitarEventSpec::Rest { duration: Duration::EIGHTH },
+            spec(Pitch::new(Note::E, 4), Duration::EIGHTH, 1, 0),
+            spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
+        ]).unwrap();
+        score.end_barline().unwrap();
+        let notation = score.notation_builder();
+        let contents = notation.build_measure_contents().unwrap();
+        assert_eq!(contents[0].events.iter().filter(|event|
+            matches!(event, crate::layout::system::MeasureEvent::Rest(_))).count(), 1);
+        let font = crate::font::bravura_font();
+        let config = font.engraving_config();
+        let layout = crate::layout::system::layout_system(
+            &notation.build_prefix(), &contents,
+            &crate::layout::measure::MeasureLayoutConfig::from_staff_space(config.staff_space),
+            Some(10_000.0),
+        );
+        let tab = TabStaffLayout::new(500.0, 3000.0, 10_000.0, config.staff_space, 6);
+        let mut svg = SvgWriter::new(100.0, 100.0, 0.0, 0.0, 12_000.0, 6000.0);
+        let mut anchors = HashMap::new();
+        draw_guitar_tab_system(
+            &mut svg, &font, &config, &score, &score.annotation_layout(&[(0, 1)]),
+            0, 0, 1, &layout,
+            &StaffLayout::new(500.0, 1000.0, 10_000.0, config.staff_space),
+            &tab, &mut anchors,
+        ).unwrap();
+        let visual = svg.to_svg();
+        let stem = layout_tab_rhythm(&tab, 0.0, 3, config.stem_thickness_fu()).unwrap();
+        let stems = visual.lines().filter(|line| line.starts_with("  <line ")
+            && line.contains(&format!("y1=\"{}\"", stem.y_base))
+            && line.contains(&format!("y2=\"{}\"", stem.y_tip))).count();
+        assert_eq!(stems, 2, "only the two sounding members receive TAB beam stems");
+        assert!(visual.contains("<polygon "), "their TAB beam continues across the rest slot");
+        assert!(ids.windows(2).all(|pair| anchors[&pair[0]].x < anchors[&pair[1]].x));
     }
 
     #[test]
