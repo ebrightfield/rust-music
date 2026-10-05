@@ -6,6 +6,7 @@ use crate::font::bravura_font;
 use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
 use crate::layout::analysis_bracket::{AnalysisBracketSpec, AnalysisBracketStyle};
 use crate::layout::articulation::{Articulation, ArticulationMark};
+use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::grace::{GraceNoteKind, GraceNotes};
@@ -252,7 +253,10 @@ fn minor_sixth_meter_changes_bracket_below() {
         .expect("source bracket");
     assert!(bracket.x2 > xs[5] && bracket.y1 > 4.0 * bravura_font().engraving_config().staff_space);
     assert_eq!(glyphs(&svg, &bravura_font(), Glyph::TimeSigCommon).len(), 1);
-    assert_eq!(glyphs(&svg, &bravura_font(), Glyph::AccidentalNatural).len(), 1);
+    assert_eq!(
+        glyphs(&svg, &bravura_font(), Glyph::AccidentalNatural).len(),
+        1
+    );
 }
 
 /// mn-c01-h007, printed p. 24: stemless eighth heads under solid chord-to-chord / chord-to-note brackets.
@@ -260,6 +264,8 @@ fn minor_sixth_meter_changes_bracket_below() {
 fn chord_series_seven_keeps_two_distinct_bracket_endpoints() {
     let score = ScoreBuilder::new()
         .hidden_time_signature(1, 4)
+        .first_measure_number(8)
+        .measure_numbering(MeasureNumbering::EveryBar)
         .stemless()
         .chord(vec![p(Note::Cis, 4), p(Note::Ees, 4)], Duration::EIGHTH)
         .analysis_bracket_start(AnalysisBracketSpec::new(
@@ -279,6 +285,11 @@ fn chord_series_seven_keeps_two_distinct_bracket_endpoints() {
         .end_barline();
     let xs = note_positions(&score);
     let svg = score.clone().render_svg();
+    let bar_labels = texts(&svg);
+    assert!(bar_labels.iter().any(|t| t.content == "8" && t.x <= xs[0]));
+    assert!(bar_labels
+        .iter()
+        .any(|t| t.content == "9" && t.x <= xs[2] && t.x > xs[0]));
     let below: Vec<_> = lines(&svg)
         .into_iter()
         .filter(|l| {
@@ -732,6 +743,8 @@ fn major_seventh_formula_keeps_pitches_without_meter_or_stems() {
 fn chord_series_one_reinstates_natural() {
     let score = ScoreBuilder::new()
         .hidden_time_signature(1, 4)
+        .first_measure_number(8)
+        .measure_numbering(MeasureNumbering::EveryBar)
         .stemless()
         .chord(
             vec![p(Note::Bes, 3), p(Note::Ces, 4), p(Note::E, 4)],
@@ -750,6 +763,8 @@ fn chord_series_one_reinstates_natural() {
         .end_barline();
     let svg = score.clone().render_svg();
     let f = bravura_font();
+    assert!(texts(&svg).iter().any(|t| t.content == "8"));
+    assert!(texts(&svg).iter().any(|t| t.content == "9"));
     assert_eq!(glyphs(&svg, &f, Glyph::AccidentalFlat).len(), 2);
     assert_eq!(glyphs(&svg, &f, Glyph::AccidentalNatural).len(), 1);
     assert_eq!(glyphs(&svg, &f, Glyph::NoteheadBlack).len(), 6);
@@ -765,16 +780,28 @@ fn tritone_chord_series_numbers_stay_over_sonorities() {
         .stemless()
         .accidental_policy(AccidentalPolicy::Forget)
         .note(p(Note::C, 4), Duration::QTR)
-        .text_script(TextScript::above("1"))
+        .text_script(TextScript::above("1").small())
         .barline()
         .chord(vec![p(Note::C, 4), p(Note::Fis, 4)], Duration::QTR)
-        .text_script(TextScript::above("2"))
+        .text_script(TextScript::above("2").small())
+        .barline()
+        .chord(
+            vec![p(Note::C, 4), p(Note::Fis, 4), p(Note::Cis, 5)],
+            Duration::QTR,
+        )
+        .text_script(TextScript::above("3").small())
+        .barline()
+        .chord(
+            vec![p(Note::C, 4), p(Note::G, 4), p(Note::Cis, 5)],
+            Duration::QTR,
+        )
+        .text_script(TextScript::above("4").small())
         .barline()
         .chord(
             vec![p(Note::D, 4), p(Note::G, 4), p(Note::Cis, 5)],
             Duration::QTR,
         )
-        .text_script(TextScript::above("5"))
+        .text_script(TextScript::above("5").small())
         .barline()
         .chord_with_accidentals(
             vec![p(Note::D, 4), p(Note::G, 4), p(Note::C, 5)],
@@ -785,13 +812,13 @@ fn tritone_chord_series_numbers_stay_over_sonorities() {
                 AccidentalDisplay::Force,
             ],
         )
-        .text_script(TextScript::above("6"))
+        .text_script(TextScript::above("6").small())
         .barline()
         .chord(
             vec![p(Note::E, 4), p(Note::Gis, 4), p(Note::B, 4)],
             Duration::QTR,
         )
-        .text_script(TextScript::above("7"))
+        .text_script(TextScript::above("7").small())
         .barline_style(BarlineStyle::Double);
     let xs = note_positions(&score);
     let svg = score.render_svg();
@@ -799,16 +826,23 @@ fn tritone_chord_series_numbers_stay_over_sonorities() {
     for (label, x) in [
         ("1", xs[0]),
         ("2", xs[1]),
-        ("5", xs[2]),
-        ("6", xs[3]),
-        ("7", xs[4]),
+        ("3", xs[2]),
+        ("4", xs[3]),
+        ("5", xs[4]),
+        ("6", xs[5]),
+        ("7", xs[6]),
     ] {
         assert!(
             (text(&svg, label).x - x).abs() < 1e-6,
             "event number {label} follows its chord"
         );
     }
+    let labels = texts(&svg);
+    assert!(labels
+        .iter()
+        .filter(|t| ["1", "2", "3", "4", "5", "6", "7"].contains(&t.content.as_str()))
+        .all(|t| t.size < 350.0));
     assert_eq!(glyphs(&svg, &f, Glyph::AccidentalNatural).len(), 1);
-    assert_eq!(glyphs(&svg, &f, Glyph::AccidentalSharp).len(), 3);
+    assert_eq!(glyphs(&svg, &f, Glyph::AccidentalSharp).len(), 6);
     assert!(glyphs(&svg, &f, Glyph::TimeSig4).is_empty());
 }
