@@ -2731,6 +2731,8 @@ mod tests_breve;
 #[cfg(test)]
 mod tests_c_clefs;
 #[cfg(test)]
+mod tests_modus_novus_struct;
+#[cfg(test)]
 mod tests_lyrics_verses;
 #[cfg(test)]
 mod tests_rest_marks;
