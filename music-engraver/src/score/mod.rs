@@ -2753,4 +2753,6 @@ mod tests_rest_marks;
 #[cfg(test)]
 mod tests_structure;
 #[cfg(test)]
+mod tests_voice_collision;
+#[cfg(test)]
 mod tests_written_octave;

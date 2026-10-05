@@ -7932,3 +7932,14 @@
   and font-metric notehead/accidental ink. A fitting-width control preserves
   the requested staff width. The corrected first excerpt was rendered through
   Typst and visually compared with the source PDF.
+
+## 2026-10-04 — RM-MN-006: cross-voice ink at shared onsets
+- The mn-c11-r029 G4 unison exposed a detached secondary beamed stem: noteheads
+  moved for a voice collision, but the system-wide beam pass still drew stems
+  at the unchanged rhythmic column. The beam pass now uses the same per-note
+  ink displacement as the note renderer, including cue-sized members, while
+  tuplet subdivisions, text, and lyrics retain their rhythmic anchors.
+- Public `ScoreBuilder` SVG regressions cover the exact normal/tiny G4 passage,
+  a cue-size unison, same-kind opposing stems, second and third intervals,
+  displaced flag/accidental/dot/ledger geometry, and lyric anchoring. A
+  source-like PNG was compared with the LilyPond PDF around measure 7.
