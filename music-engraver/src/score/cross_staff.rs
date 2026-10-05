@@ -15,6 +15,7 @@ use crate::layout::staff::StaffLayout;
 use crate::layout::stem::StemDirection;
 use crate::layout::system::SystemLayout;
 use crate::render::glissando_renderer::draw_glissando;
+use crate::render::measure_renderer::collision_shifts;
 use crate::render::system_renderer::widest_notehead_advance;
 use crate::render::SvgWriter;
 
@@ -222,10 +223,26 @@ pub(super) fn collect_anchors(
                 system.staff_width,
                 ss,
             );
-            for voice_layout in
-                std::iter::once(&measure.layout).chain(&measure.additional_voice_layouts)
-            {
-                collect_measure_anchors(font, system_index, stave, &staff, voice_layout, anchors)?;
+            collect_measure_anchors(
+                font,
+                system_index,
+                stave,
+                &staff,
+                &measure.layout,
+                &[],
+                anchors,
+            )?;
+            for voice_layout in &measure.additional_voice_layouts {
+                let shifts = collision_shifts(font, &measure.layout, voice_layout);
+                collect_measure_anchors(
+                    font,
+                    system_index,
+                    stave,
+                    &staff,
+                    voice_layout,
+                    &shifts,
+                    anchors,
+                )?;
             }
         }
     }
@@ -238,9 +255,10 @@ fn collect_measure_anchors(
     stave: usize,
     staff: &StaffLayout,
     layout: &MeasureLayout,
+    shifts: &[f64],
     anchors: &mut HashMap<usize, CrossStaffAnchor>,
 ) -> Result<(), FontError> {
-    for element in &layout.elements {
+    for (index, element) in layout.elements.iter().enumerate() {
         let (id, pos, log2, styles, count) = match &element.element {
             MeasureElement::Note(note) => (
                 note.annotations.cross_staff_id,
@@ -273,7 +291,7 @@ fn collect_measure_anchors(
                 CrossStaffAnchor {
                     system,
                     stave,
-                    x: staff.x + element.x,
+                    x: staff.x + element.x + shifts.get(index).copied().unwrap_or(0.0),
                     y: staff.y_origin,
                     staff_position: pos,
                     head_width: widest_notehead_advance(font, log2, styles, count)?

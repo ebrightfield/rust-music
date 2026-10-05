@@ -7985,3 +7985,14 @@
   `sf2-cache-available` test requires GeneralUser GS v2.0.3 in the offline
   SoundFont cache. `cargo clippy --workspace --all-targets --all-features`
   and `cargo fmt --all --check` pass.
+
+## 2026-10-04 — Cross-staff unison glissando collision follow-up
+- A final read-only review found that routed noteheads displaced against an
+  independent unison voice kept an undisplaced glissando anchor. Reproduced
+  with a public `MultiStaffScore::cross_staff_voice` rendering: the dashed
+  line began inside the shifted C5 head. Anchor collection now applies the
+  same per-element collision shift as the notehead and beam renderers.
+- `glissando_starts_at_displaced_routed_unison` fails before and passes after
+  the correction, checking the rendered SVG notehead and dashed-line
+  coordinates. The actual SVG was rasterized and inspected: the line begins
+  outside the routed head and reaches the lower staff's G2.

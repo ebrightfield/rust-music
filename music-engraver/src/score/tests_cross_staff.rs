@@ -635,3 +635,66 @@ fn cross_staff_spacer_endpoint_keeps_destination_and_shared_tick() {
         "routing makes invisible fillers, not visible rests"
     );
 }
+
+#[test]
+fn glissando_starts_at_displaced_routed_unison() {
+    let c5 = Pitch::new(Note::C, 5);
+    let svg = MultiStaffScore::grand_staff(
+        ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .cadenza_on()
+            .note(c5, Duration::QTR)
+            .spacer(Duration::QTR)
+            .end_barline(),
+        ScoreBuilder::new().clef(Clef::Bass),
+    )
+    .cross_staff_voice(
+        ScoreBuilder::new()
+            .cadenza_on()
+            .note(c5, Duration::QTR)
+            .on_staff(0)
+            .glissando(GlissandoStyle::Dashed)
+            .note(Pitch::new(Note::G, 2), Duration::QTR)
+            .on_staff(1)
+            .end_barline(),
+    )
+    .try_render_svg()
+    .unwrap();
+    let font = bravura_font();
+    let glyph = font.glyph_outline(smufl::Glyph::NoteheadBlack).unwrap();
+    let needle = format!("d=\"{}\"", glyph.path_data);
+    let heads: Vec<_> = svg
+        .lines()
+        .filter(|line| line.contains(&needle))
+        .map(|line| {
+            let transform = line.split("translate(").nth(1).unwrap();
+            let (x, rest) = transform.split_once(',').unwrap();
+            let (y, _) = rest.split_once(')').unwrap();
+            (x.parse::<f64>().unwrap(), y.trim().parse::<f64>().unwrap())
+        })
+        .collect();
+    let unison: Vec<_> = heads
+        .iter()
+        .filter(|(_, y)| *y == heads[0].1)
+        .map(|(x, _)| *x)
+        .collect();
+    assert_eq!(unison.len(), 2, "both C5 voices must be drawn");
+    let displaced_head_x = unison.into_iter().reduce(f64::max).unwrap();
+    let gliss = svg
+        .lines()
+        .find(|line| line.contains("stroke-dasharray="))
+        .unwrap();
+    let gliss_start = gliss
+        .split("x1=\"")
+        .nth(1)
+        .unwrap()
+        .split_once('"')
+        .unwrap()
+        .0
+        .parse::<f64>()
+        .unwrap();
+    assert!(
+        gliss_start > displaced_head_x + glyph.advance_width as f64,
+        "glissando begins at {gliss_start} inside or before shifted C5 head at {displaced_head_x}"
+    );
+}
