@@ -129,10 +129,10 @@ fn mn_c04_r010_dashed_above_beam_member_and_meter() {
     let score = ScoreBuilder::new()
         .time_signature(6, 8)
         .begin_beam()
+        .note(p(Note::Gis, 4), Duration::EIGHTH)
         .note(p(Note::Cis, 5), Duration::EIGHTH)
-        .note(p(Note::E, 5), Duration::EIGHTH)
         .analysis_bracket_start(bracket(AnalysisBracketStyle::Dashed, Placement::Above))
-        .note(p(Note::G, 5), Duration::EIGHTH)
+        .note(p(Note::Gis, 4), Duration::EIGHTH)
         .end_beam()
         .barline_style(BarlineStyle::Invisible)
         .time_signature_change(2, 4)
@@ -144,7 +144,7 @@ fn mn_c04_r010_dashed_above_beam_member_and_meter() {
     let line = marked_line(&line_svg, true, true);
     assert!((attr(line, "x1") - xs[0][1]).abs() < 0.001);
     assert!(attr(line, "x2") > xs[0][3]);
-    assert!(attr(line, "y1") < 0.0);
+    assert!(attr(line, "y1") < -20.0, "bracket clears upward beam");
 }
 
 #[test]
