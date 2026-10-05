@@ -45,10 +45,10 @@ use music::note::pitch::Pitch;
 use music::note::spelling::Accidental;
 
 use crate::font::bravura_font;
-use crate::layout::analysis_bracket::AnalysisBracketSpec;
 #[cfg(test)]
 use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::accidental::{AccidentalDisplay, AccidentalPolicy};
+use crate::layout::analysis_bracket::AnalysisBracketSpec;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::{Articulation, ArticulationMark};
 use crate::layout::bar_number::MeasureNumbering;
@@ -2741,11 +2741,13 @@ mod tests_breve;
 #[cfg(test)]
 mod tests_c_clefs;
 #[cfg(test)]
-mod tests_modus_novus_struct;
-#[cfg(test)]
 mod tests_lyrics_verses;
 #[cfg(test)]
 mod tests_modus_novus_marks;
+#[cfg(test)]
+mod tests_modus_novus_struct;
+#[cfg(test)]
+mod tests_page_bounds;
 #[cfg(test)]
 mod tests_rest_marks;
 #[cfg(test)]

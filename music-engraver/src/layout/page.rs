@@ -97,7 +97,7 @@ pub enum SystemBreaking {
     Optimal,
     /// Break only at forced breaks (LilyPond's `line-break-permission ##f`
     /// with explicit `\break`s). A system holds everything between two forced
-    /// breaks, compressed to the system width even when it overflows.
+    /// breaks, expanding past the requested width if its rods cannot fit.
     Explicit,
 }
 
@@ -168,6 +168,13 @@ pub fn layout_page(
         });
     }
 
+    // Justification cannot compress the grid's rods. A fixed/explicit system
+    // can therefore exceed the desired width; the page must contain the
+    // actual staff lines rather than retaining the requested width.
+    let page_width = systems
+        .iter()
+        .map(|ps| ps.x + ps.system.staff_width)
+        .fold(page_config.left_margin + page_config.system_width, f64::max);
     // Page height: last system top + 4 staff spaces (for the staff itself) + some padding
     let page_height = match systems.last() {
         None => page_config.top_margin,
@@ -176,7 +183,7 @@ pub fn layout_page(
 
     PageLayout {
         systems,
-        page_width: page_config.system_width + page_config.left_margin,
+        page_width,
         page_height,
         measure_numbering: page_config.measure_numbering,
     }
