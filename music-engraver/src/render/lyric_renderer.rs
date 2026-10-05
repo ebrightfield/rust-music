@@ -3,7 +3,7 @@
 /// Renders serif text in each verse's font shape on its own baseline.
 /// Hyphens between adjacent syllables and melisma extender lines are drawn
 /// separately once the positions of consecutive notes are known.
-use crate::layout::lyric::{lyric_text_width, LyricLayout, LyricStyle};
+use crate::layout::lyric::{lyric_text_width, LyricLayout, LyricStyle, LYRIC_HYPHEN_MIN_GAP_SS};
 use crate::render::svg_writer::TextStyle;
 use crate::render::SvgWriter;
 
@@ -63,7 +63,7 @@ pub(crate) fn draw_lyric_hyphen_between(
     let left = from_x + lyric_text_half_width(&from.syllable.text, from.style, staff_space);
     let right = to_x - lyric_text_half_width(&to.syllable.text, to.style, staff_space);
     let font_size = crate::layout::lyric::LYRIC_FONT_SIZE_SS * staff_space;
-    if right - left < font_size * 0.333 + HYPHEN_MIN_GAP_SS * staff_space {
+    if right - left < font_size * 0.333 + LYRIC_HYPHEN_MIN_GAP_SS * staff_space {
         return false;
     }
     svg.add_text(
@@ -85,11 +85,6 @@ pub(crate) fn draw_lyric_hyphen_between(
 /// 3-letter syllable occupies ~1.5 em; half of that is ~0.75. We use
 /// 0.5 em so that even short syllables (1–2 letters) have some clearance.
 const HYPHEN_SYLLABLE_HALF_WIDTH_EM: f64 = 0.5;
-
-/// Minimum gap between source and target syllables (in staff spaces) below
-/// which no hyphen is drawn. Prevents drawing a hyphen on top of overlapping
-/// or near-overlapping syllables.
-const HYPHEN_MIN_GAP_SS: f64 = 0.6;
 
 /// Draw a hyphen between a syllable with `Hyphen` continuation and the next
 /// syllable's note position.
@@ -139,7 +134,7 @@ pub(crate) fn draw_lyric_hyphen_styled(
 ) -> bool {
     let half_width = HYPHEN_SYLLABLE_HALF_WIDTH_EM * font_size;
     let gap = to_x - from_x - 2.0 * half_width;
-    if gap < HYPHEN_MIN_GAP_SS * staff_space {
+    if gap < LYRIC_HYPHEN_MIN_GAP_SS * staff_space {
         return false;
     }
     let midpoint = 0.5 * (from_x + to_x);

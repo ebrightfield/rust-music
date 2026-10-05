@@ -125,9 +125,12 @@ pub const LYRIC_BELOW_STAFF_SS: f64 = 5.5;
 /// `layout_lyric`.
 pub const LYRIC_FONT_SIZE_SS: f64 = 1.4;
 
+/// Minimum free space around a lyric hyphen, in staff spaces.
+pub(crate) const LYRIC_HYPHEN_MIN_GAP_SS: f64 = 0.6;
 /// Enough room for the visible hyphen glyph (about one third of the lyric
-/// font's em) and the renderer's 0.6ss clearance around it.
-pub(crate) const LYRIC_HYPHEN_GAP_SS: f64 = LYRIC_FONT_SIZE_SS * 0.333 + 0.6 + 0.1;
+/// font's em) and the renderer's clearance around it.
+pub(crate) const LYRIC_HYPHEN_GAP_SS: f64 =
+    LYRIC_FONT_SIZE_SS * 0.333 + LYRIC_HYPHEN_MIN_GAP_SS + 0.1;
 
 /// Conservative width of lyric text in font design units. The score uses
 /// generic SVG `serif`: the default DejaVu Serif raster face has glyph
