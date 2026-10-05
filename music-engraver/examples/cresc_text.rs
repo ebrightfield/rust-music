@@ -89,7 +89,14 @@ fn main() {
         let staff = StaffLayout::from_config(0.0, y_origin, 10000.0, &config);
 
         draw_staff_lines(&mut svg, &staff, &config);
-        draw_clef(&mut svg, &staff, &clef_layout, &font).unwrap();
+        draw_clef(
+            &mut svg,
+            &staff,
+            staff.x + staff.staff_space,
+            &clef_layout,
+            &font,
+        )
+        .unwrap();
 
         let mut note_xs: Vec<f64> = Vec::with_capacity(8);
         let mut note_advances: Vec<f64> = Vec::with_capacity(8);

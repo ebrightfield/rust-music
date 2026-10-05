@@ -2204,8 +2204,8 @@ fn golden_treble8va_clef() {
 /// than left to the frozen baselines, so a future rebaseline cannot quietly
 /// bless an octave shift the way the pre-§7 goldens did.
 ///
-/// This compares the whole SVG, so it covers beam polygons, stems, ledger
-/// lines, and the viewBox — not just noteheads.
+/// This compares every drawn element, so it covers beam polygons, stems, and
+/// ledger lines — not just noteheads.
 #[test]
 fn transposing_clefs_place_notes_like_treble() {
     let treble = build_treble_for_octave_clef_comparison();
@@ -2214,11 +2214,14 @@ fn transposing_clefs_place_notes_like_treble() {
         ("treble8ba", build_treble8ba_clef()),
         ("treble8va", build_treble8va_clef()),
     ] {
-        // The clef glyph is the one legitimate difference: drop the first
-        // <path> (the clef) from each and require the rest to match exactly.
+        // The clef glyph is the one legitimate difference — and the viewBox
+        // that frames it, since page bounds include each clef's own ink (the
+        // "8" above or below). Drop the <svg> header and the first <path> (the
+        // clef) from each and require the rest to match exactly.
         let strip_clef = |s: &str| -> Vec<String> {
             let mut seen_clef = false;
             s.lines()
+                .filter(|l| !l.starts_with("<svg "))
                 .filter(|l| {
                     if !seen_clef && l.trim_start().starts_with("<path ") {
                         seen_clef = true;

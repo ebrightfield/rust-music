@@ -45,6 +45,7 @@ fn first_rest_annotations(builder: &ScoreBuilder) -> NoteAnnotations {
     let mut b = builder.clone();
     b.flush_pending();
     b.build_measure_contents()
+        .unwrap()
         .into_iter()
         .flat_map(|m| m.events)
         .find_map(|e| match e {
@@ -338,7 +339,7 @@ fn text_scripts_and_marks_attach_to_rests_and_barlines() {
         .end_barline();
     let mut b = builder.clone();
     b.flush_pending();
-    let contents = b.build_measure_contents();
+    let contents = b.build_measure_contents().unwrap();
     let MeasureEvent::Note(first) = &contents[0].events[0] else {
         panic!("first event must be the note");
     };
@@ -374,7 +375,7 @@ fn pitch_bound_builders_after_a_rest_attach_nowhere() {
         .end_barline();
     let mut b = builder.clone();
     b.flush_pending();
-    let contents = b.build_measure_contents();
+    let contents = b.build_measure_contents().unwrap();
     for event in &contents[0].events {
         let annotations = match event {
             MeasureEvent::Note(n) => &n.annotations,

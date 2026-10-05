@@ -76,8 +76,28 @@ impl PngRenderer {
     /// font families other than Bravura (e.g. "serif", "sans-serif",
     /// "Times New Roman"). Without this, such text may render as
     /// invisible or use a fallback glyph.
+    ///
+    /// Some fontconfig setups make the first `serif` alias a symbols-only
+    /// font (e.g. Standard Symbols PS). Choose an installed text serif for
+    /// the generic family so tempo, dynamics and lyrics keep their letters.
     pub fn load_system_fonts(&mut self) {
         self.fontdb.load_system_fonts();
+        for family in [
+            "Noto Serif",
+            "Liberation Serif",
+            "DejaVu Serif",
+            "Times New Roman",
+            "FreeSerif",
+        ] {
+            let query = fontdb::Query {
+                families: &[fontdb::Family::Name(family)],
+                ..fontdb::Query::default()
+            };
+            if self.fontdb.query(&query).is_some() {
+                self.fontdb.set_serif_family(family);
+                break;
+            }
+        }
     }
 
     /// Load a custom font from raw bytes.

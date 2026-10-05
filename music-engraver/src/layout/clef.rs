@@ -1,13 +1,27 @@
 use music::notation::clef::Clef;
 use smufl::Glyph;
 
+use super::glyph_metrics::{glyph_box, GlyphBox};
 use super::staff::StaffPosition;
+
+/// Whether a clef is drawn at full size (system start) or as a smaller
+/// mid-score change clef.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClefSize {
+    /// Full-size clef, as in a system prefix.
+    #[default]
+    Full,
+    /// Change-size clef for a clef change inside a system or as a courtesy
+    /// clef at a system end. Uses the SMuFL `*ClefChange` glyph where one
+    /// exists, otherwise the full glyph scaled by [`ClefLayout::scale`].
+    Change,
+}
 
 /// Clef placement information for layout.
 ///
 /// Maps a `Clef` to the SMuFL glyph that represents it and the staff
 /// position where the glyph's reference point sits.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClefLayout {
     /// SMuFL glyph for this clef.
     pub glyph: Glyph,
@@ -18,67 +32,80 @@ pub struct ClefLayout {
     /// C4, on which the glyph is vertically centered (alto: staff position 4 =
     /// middle line; tenor: staff position 6 = fourth line from bottom).
     pub staff_position: StaffPosition,
+    /// Full-size or change-size.
+    pub size: ClefSize,
 }
 
 impl ClefLayout {
-    /// Resolve a `&Clef` to its SMuFL glyph and staff position.
+    /// Resolve a `&Clef` to its full-size SMuFL glyph and staff position.
     pub fn from_clef_ref(clef: &Clef) -> Self {
-        match clef {
-            Clef::Treble => Self {
-                glyph: Glyph::GClef,
-                staff_position: 2,
-            },
-            Clef::Treble8va => Self {
-                glyph: Glyph::GClef8Va,
-                staff_position: 2,
-            },
-            Clef::Treble8ba => Self {
-                glyph: Glyph::GClef8Vb,
-                staff_position: 2,
-            },
-            Clef::Bass => Self {
-                glyph: Glyph::FClef,
-                staff_position: 6,
-            },
-            Clef::Alto => Self {
-                glyph: Glyph::CClef,
-                staff_position: 4,
-            },
-            Clef::Tenor => Self {
-                glyph: Glyph::CClef,
-                staff_position: 6,
-            },
+        Self::sized(clef, ClefSize::Full)
+    }
+
+    /// Resolve a `Clef` to its full-size SMuFL glyph and staff position
+    /// (consumes value).
+    pub fn from_clef(clef: Clef) -> Self {
+        Self::sized(&clef, ClefSize::Full)
+    }
+
+    /// The change-size clef for a mid-score clef change: `gClefChange`,
+    /// `fClefChange` or `cClefChange`; the octave-transposing treble clefs,
+    /// which have no SMuFL change glyph, use their full glyph scaled down.
+    pub fn change(clef: &Clef) -> Self {
+        Self::sized(clef, ClefSize::Change)
+    }
+
+    fn sized(clef: &Clef, size: ClefSize) -> Self {
+        let change = size == ClefSize::Change;
+        let (glyph, staff_position) = match clef {
+            Clef::Treble if change => (Glyph::GClefChange, 2),
+            Clef::Treble => (Glyph::GClef, 2),
+            Clef::Treble8va => (Glyph::GClef8Va, 2),
+            Clef::Treble8ba => (Glyph::GClef8Vb, 2),
+            Clef::Bass if change => (Glyph::FClefChange, 6),
+            Clef::Bass => (Glyph::FClef, 6),
+            Clef::Alto if change => (Glyph::CClefChange, 4),
+            Clef::Alto => (Glyph::CClef, 4),
+            Clef::Tenor if change => (Glyph::CClefChange, 6),
+            Clef::Tenor => (Glyph::CClef, 6),
+        };
+        Self {
+            glyph,
+            staff_position,
+            size,
         }
     }
 
-    /// Resolve a `Clef` to its SMuFL glyph and staff position (consumes value).
-    pub fn from_clef(clef: Clef) -> Self {
-        match clef {
-            Clef::Treble => Self {
-                glyph: Glyph::GClef,
-                staff_position: 2,
-            },
-            Clef::Treble8va => Self {
-                glyph: Glyph::GClef8Va,
-                staff_position: 2,
-            },
-            Clef::Treble8ba => Self {
-                glyph: Glyph::GClef8Vb,
-                staff_position: 2,
-            },
-            Clef::Bass => Self {
-                glyph: Glyph::FClef,
-                staff_position: 6,
-            },
-            Clef::Alto => Self {
-                glyph: Glyph::CClef,
-                staff_position: 4,
-            },
-            Clef::Tenor => Self {
-                glyph: Glyph::CClef,
-                staff_position: 6,
-            },
+    /// Uniform scale applied to [`Self::glyph`] when drawing: 1 except for a
+    /// change-size clef drawn from a full-size glyph, which shrinks by the
+    /// font's `gClefChange : gClef` height ratio.
+    pub fn scale(&self) -> f64 {
+        let dedicated_change_glyph = matches!(
+            self.glyph,
+            Glyph::GClefChange | Glyph::FClefChange | Glyph::CClefChange
+        );
+        if self.size == ClefSize::Full || dedicated_change_glyph {
+            return 1.0;
         }
+        match (glyph_box(Glyph::GClefChange), glyph_box(Glyph::GClef)) {
+            (Some(change), Some(full)) if full.height() > 0.0 => change.height() / full.height(),
+            _ => 1.0,
+        }
+    }
+
+    /// Inked extent of the clef as drawn, relative to its origin (which sits
+    /// on [`Self::staff_position`]), in staff spaces with the drawing scale
+    /// applied. Falls back to a 2.8 × 4 staff-space box if the font has no
+    /// bounding box for the glyph.
+    pub fn ink_box(&self) -> GlyphBox {
+        glyph_box(self.glyph)
+            .unwrap_or(GlyphBox {
+                x_left: 0.0,
+                x_right: 2.8,
+                y_top: -2.0,
+                y_bottom: 2.0,
+            })
+            .scaled(self.scale())
     }
 }
 

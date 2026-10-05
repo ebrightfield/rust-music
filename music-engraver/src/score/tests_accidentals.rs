@@ -52,7 +52,11 @@ fn voice_accidentals(events: &[MeasureEvent]) -> Vec<Option<ResolvedAccidental>>
                 .iter()
                 .flat_map(member_accidentals)
                 .collect(),
-            MeasureEvent::Rest(_) | MeasureEvent::MultiMeasureRest { .. } => Vec::new(),
+            MeasureEvent::Rest(_)
+            | MeasureEvent::MultiMeasureRest { .. }
+            | MeasureEvent::Spacer(_)
+            | MeasureEvent::ClefChange(_)
+            | MeasureEvent::TimeSignature(_) => Vec::new(),
         })
         .collect()
 }
@@ -61,6 +65,7 @@ fn voice_accidentals(events: &[MeasureEvent]) -> Vec<Option<ResolvedAccidental>>
 fn measure_accidentals(builder: &ScoreBuilder) -> Vec<Vec<Option<ResolvedAccidental>>> {
     builder
         .build_measure_contents()
+        .unwrap()
         .iter()
         .map(|measure| voice_accidentals(&measure.events))
         .collect()
@@ -68,7 +73,7 @@ fn measure_accidentals(builder: &ScoreBuilder) -> Vec<Vec<Option<ResolvedAcciden
 
 /// Accidentals of every voice of the first measure, voice 0 first.
 fn first_measure_voice_accidentals(builder: &ScoreBuilder) -> Vec<Vec<Option<ResolvedAccidental>>> {
-    let measure = &builder.build_measure_contents()[0];
+    let measure = &builder.build_measure_contents().unwrap()[0];
     std::iter::once(&measure.events)
         .chain(&measure.additional_voices)
         .map(|events| voice_accidentals(events))
@@ -578,7 +583,7 @@ fn cautionary_render_encloses_the_glyph_in_accidental_parentheses() {
 
 /// Layout of the first measure's primary voice, without a system prefix.
 fn first_measure_layout(score: &ScoreBuilder) -> crate::layout::measure::MeasureLayout {
-    let elements: Vec<_> = score.build_measure_contents()[0]
+    let elements: Vec<_> = score.build_measure_contents().unwrap()[0]
         .events
         .iter()
         .map(measure_event_to_element)

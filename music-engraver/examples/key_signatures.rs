@@ -28,8 +28,22 @@ fn main() {
     // Draw clefs
     let treble_clef = ClefLayout::from_clef(Clef::Treble);
     let bass_clef = ClefLayout::from_clef(Clef::Bass);
-    draw_clef(&mut svg, &treble_staff, &treble_clef, &font).unwrap();
-    draw_clef(&mut svg, &bass_staff, &bass_clef, &font).unwrap();
+    draw_clef(
+        &mut svg,
+        &treble_staff,
+        treble_staff.x + treble_staff.staff_space,
+        &treble_clef,
+        &font,
+    )
+    .unwrap();
+    draw_clef(
+        &mut svg,
+        &bass_staff,
+        bass_staff.x + bass_staff.staff_space,
+        &bass_clef,
+        &font,
+    )
+    .unwrap();
 
     // Key signatures to render: 1–7 sharps, then 1–7 flats
     let clef_advance = 1200.0;

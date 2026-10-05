@@ -24,6 +24,7 @@ use music::note::note::Note;
 use music::note::pitch::Pitch;
 
 use music_engraver::layout::articulation::Articulation;
+use music_engraver::layout::bar_number::MeasureNumbering;
 use music_engraver::layout::barline::BarlineStyle;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::hairpin::HairpinType;
@@ -426,7 +427,7 @@ fn samples() -> Vec<Sample> {
             .time_signature(4, 4)
             .auto_line_breaks()
             .system_width_fu(8000.0)
-            .show_measure_numbers();
+            .measure_numbering(MeasureNumbering::SystemStart);
         let melody = [
             Note::G,
             Note::A,

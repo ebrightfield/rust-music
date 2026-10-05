@@ -8,6 +8,7 @@
 pub mod accidental_renderer;
 pub mod arpeggio_renderer;
 pub mod articulation_renderer;
+pub mod bar_number_renderer;
 pub mod barline_renderer;
 pub mod beam_renderer;
 pub(crate) mod bend_gesture_renderer;

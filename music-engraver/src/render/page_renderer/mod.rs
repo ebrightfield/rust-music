@@ -1,4 +1,8 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::bar_number::{
+    layout_bar_numbers, system_bar_number_slots, MeasureNumbering, BAR_NUMBER_ABOVE_STAFF_SS,
+    BAR_NUMBER_FONT_SIZE_SS,
+};
 use crate::layout::glissando::{
     layout_half_glissando_left, layout_half_glissando_right, GlissandoStyle,
 };
@@ -28,6 +32,7 @@ use crate::layout::trill_extension::{
     layout_trill_extension_multi_speed, layout_trill_extension_with_glyph,
     trill_extension_right_edge, TrillSpeedRampSpec, TrillWiggleSpeed,
 };
+use crate::render::bar_number_renderer::draw_bar_numbers;
 use crate::render::text_spanner_renderer::draw_text_spanner;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
@@ -48,7 +53,7 @@ use crate::render::trill_bracket_renderer::{draw_trill_bracket_hook, draw_trill_
 use crate::render::trill_extension_renderer::{
     draw_trill_extension, draw_trill_extension_multi_speed,
 };
-use crate::render::{SvgWriter, TextStyle};
+use crate::render::SvgWriter;
 
 /// A note at the end of a system that has an unresolved `tie_forward`.
 struct UnresolvedTie {
@@ -86,7 +91,8 @@ struct IncomingTieTarget {
 /// the viewBox so ledger-line passages are not clipped.
 ///
 /// Tempo marks, text scripts and above-staff dynamics extend it by their
-/// estimated height ([`annotation_extent_ss`]).
+/// estimated height ([`annotation_extent_ss`]). Clefs, key signatures, and
+/// time signatures also extend it by their inked glyph boxes.
 ///
 /// Only content that leaves the staff extends the box: notes *inside* the staff
 /// already have their stems and beams covered by the page margins, so counting
@@ -163,6 +169,28 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
         }
     }
 
+    // Prefix and inline clefs, key and time signatures can reach past the
+    // staff too (a G clef's top, a tenor clef, a high key-signature sharp).
+    for ps in &page.systems {
+        if let Some((glyph_top, glyph_bottom)) = ps.system.glyph_vertical_extent_ss() {
+            let staff_space = config.staff_space;
+            if glyph_top < 0.0 {
+                top = top.min(ps.y + glyph_top * staff_space);
+            }
+            if glyph_bottom > 4.0 {
+                bottom = bottom.max(ps.y + glyph_bottom * staff_space);
+            }
+        }
+    }
+
+    // Bar numbers sit above each system's top line.
+    if page.measure_numbering != MeasureNumbering::Hidden {
+        let reach = (BAR_NUMBER_ABOVE_STAFF_SS + BAR_NUMBER_FONT_SIZE_SS) * config.staff_space;
+        for ps in &page.systems {
+            top = top.min(ps.y - reach);
+        }
+    }
+
     // Nothing reaches past the staves — the page box already covers everything.
     if !top.is_finite() && !bottom.is_finite() {
         return (0.0, page.page_height);
@@ -223,10 +251,8 @@ pub fn draw_page(
         )?;
     }
 
-    // Draw measure numbers above the start of each system
-    if page.show_measure_numbers {
-        draw_measure_numbers(&mut svg, config, page);
-    }
+    // Draw bar numbers above the systems
+    draw_measure_numbers(&mut svg, config, page);
 
     // Draw cross-system ties between adjacent systems
     draw_cross_system_ties(&mut svg, font, config, &page.systems)?;
@@ -259,50 +285,19 @@ pub fn draw_page(
     Ok(svg)
 }
 
-/// Measure number offset above the top staff line, in staff spaces.
-/// Placed slightly above rehearsal/tempo mark territory (which is at ~2.5–2.8ss).
-pub(crate) const MEASURE_NUMBER_ABOVE_STAFF_SS: f64 = 1.8;
-
-/// Font size for measure numbers, in staff spaces.
-pub(crate) const MEASURE_NUMBER_FONT_SIZE_SS: f64 = 1.2;
-
-/// Draw measure numbers above the first measure of each system.
+/// Draw the bar numbers the page's [`MeasureNumbering`] asks for above each
+/// system (see [`crate::layout::bar_number`]).
 ///
-/// Typically shows "1" above the first system, then the measure number of
-/// the first bar in each subsequent system. The number is placed above the
-/// top staff line, left-aligned with the start of the first measure's
-/// note content (after the prefix: clef, key sig, time sig).
+/// [`MeasureNumbering`]: crate::layout::bar_number::MeasureNumbering
 fn draw_measure_numbers(svg: &mut SvgWriter, config: &EngravingConfig, page: &PageLayout) {
-    let ss = config.staff_space;
-    let font_size = MEASURE_NUMBER_FONT_SIZE_SS * ss;
-    let y_offset = MEASURE_NUMBER_ABOVE_STAFF_SS * ss;
-
-    let style = TextStyle {
-        font_family: "serif",
-        font_size,
-        fill: "black",
-        anchor: "start",
-        font_weight: "normal",
-        font_style: "normal",
-        dominant_baseline: "auto",
-    };
-
     for page_system in &page.systems {
-        let system = &page_system.system;
-        if system.measures.is_empty() {
-            continue;
-        }
-
-        // x: position at the start of the first measure's content area
-        // (which is after the system prefix: clef + key sig + time sig).
-        let first_measure = &system.measures[0];
-        let x = page_system.x + first_measure.x_offset;
-
-        // y: above the top staff line (top line is at page_system.y)
-        let y = page_system.y - y_offset;
-
-        let number = page_system.first_measure_number;
-        svg.add_text(x, y, &number.to_string(), &style);
+        let numbers = layout_bar_numbers(
+            page.measure_numbering,
+            system_bar_number_slots(&page_system.system, page_system.x),
+            page_system.y,
+            config.staff_space,
+        );
+        draw_bar_numbers(svg, &numbers, config.staff_space);
     }
 }
 

@@ -27,7 +27,14 @@ fn main() {
 
     let mut svg = SvgWriter::new(800.0, 300.0, -200.0, -1200.0, 10500.0, 2500.0);
     draw_staff_lines(&mut svg, &staff, &config);
-    draw_clef(&mut svg, &staff, &clef_layout, &font).unwrap();
+    draw_clef(
+        &mut svg,
+        &staff,
+        staff.x + staff.staff_space,
+        &clef_layout,
+        &font,
+    )
+    .unwrap();
 
     // Place 4 notes with different tempo marks above them
     let notes = [
