@@ -59,6 +59,9 @@ pub enum CrossStaffError {
     /// Only one continuous (primary) voice may be routed across staves.
     #[error("cross-staff event {event} uses voice {voice}; expected voice 0")]
     InvalidVoice { event: usize, voice: u8 },
+    /// Two separately authored voices were assigned to the single-voice lane.
+    #[error("a multi-staff score accepts only one continuous cross-staff voice")]
+    DuplicateVoice,
     /// Structural/group events that cannot be distributed between staves.
     #[error("cross-staff event {event} cannot be routed: {kind}")]
     UnsupportedEvent { event: usize, kind: &'static str },
@@ -111,6 +114,7 @@ pub struct MultiStaffScore {
     joined_barlines: bool,
     /// A single musical voice whose events choose their notation stave.
     cross_staff_voice: Option<ScoreBuilder>,
+    duplicate_cross_staff_voice: bool,
     cross_staff_breaks: Option<LineBreakPlan>,
     cross_staff_glissandos: Vec<CrossStaffGlissando>,
     /// Override system width (font design units). 0 = auto.
@@ -154,6 +158,7 @@ impl MultiStaffScore {
             tab_stave: None,
             sub_brackets: Vec::new(),
             cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
             cross_staff_breaks: None,
             cross_staff_glissandos: Vec::new(),
         }
@@ -173,6 +178,7 @@ impl MultiStaffScore {
             measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
             cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
             cross_staff_breaks: None,
             cross_staff_glissandos: Vec::new(),
             sub_brackets: Vec::new(),
@@ -194,6 +200,7 @@ impl MultiStaffScore {
             tab_stave: None,
             sub_brackets: Vec::new(),
             cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
             cross_staff_breaks: None,
             cross_staff_glissandos: Vec::new(),
         }
@@ -222,6 +229,7 @@ impl MultiStaffScore {
             tab_stave: Some(guitar),
             sub_brackets: Vec::new(),
             cross_staff_voice: None,
+            duplicate_cross_staff_voice: false,
             cross_staff_breaks: None,
             cross_staff_glissandos: Vec::new(),
         }
@@ -231,8 +239,14 @@ impl MultiStaffScore {
     /// Assign notes, chords and rests with [`ScoreBuilder::on_staff`]; events
     /// without an assignment use stave zero. Non-active staves have invisible
     /// spacers at each onset, not duplicated notes or phantom rests.
+    /// Assigning a second continuous voice returns
+    /// [`CrossStaffError::DuplicateVoice`] from [`Self::try_render_svg`].
     pub fn cross_staff_voice(mut self, voice: ScoreBuilder) -> Self {
-        self.cross_staff_voice = Some(voice);
+        if self.cross_staff_voice.is_some() {
+            self.duplicate_cross_staff_voice = true;
+        } else {
+            self.cross_staff_voice = Some(voice);
+        }
         self
     }
 
@@ -467,6 +481,9 @@ impl MultiStaffScore {
             for stave in &mut self.staves {
                 stave.flush_pending();
             }
+        }
+        if self.duplicate_cross_staff_voice {
+            return Err(CrossStaffError::DuplicateVoice.into());
         }
         if let Some(mut voice) = self.cross_staff_voice.take() {
             voice.flush_pending();

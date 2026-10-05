@@ -18,6 +18,7 @@ const I001: &[(Note, i8, usize)] = &[
     (Note::Bes, 3, 1), (Note::F, 2, 1), (Note::D, 4, 0),
     (Note::C, 3, 1), (Note::Cis, 5, 0), (Note::B, 3, 1),
 ];
+const I001_MIDI: [u8; 12] = [80, 64, 54, 69, 55, 75, 58, 41, 62, 48, 73, 59];
 const I002: &[(Note, i8, usize)] = &[
     (Note::Fis,5,0),(Note::F,4,0),(Note::D,4,0),(Note::Cis,3,1),
     (Note::B,4,0),(Note::G,2,1),(Note::C,2,1),(Note::E,5,0),
@@ -46,10 +47,21 @@ const I006: &[(Note, i8, usize)] = &[
 ];
 
 fn voice(pitches: &[(Note, i8, usize)]) -> ScoreBuilder {
+    voice_with_forced(pitches, &[])
+}
+
+fn voice_with_forced(pitches: &[(Note, i8, usize)], forced: &[usize]) -> ScoreBuilder {
     let mut voice = ScoreBuilder::new().cadenza_on().accidental_policy(AccidentalPolicy::Forget);
     for (i, &(note, octave, stave)) in pitches.iter().enumerate() {
-        voice = voice.note(Pitch::new(note, octave), Duration::WHOLE).on_staff(stave);
-        if i + 1 < pitches.len() { voice = voice.glissando(GlissandoStyle::Dashed); }
+        let pitch = Pitch::new(note, octave);
+        voice = if forced.contains(&i) {
+            voice.note_with_accidental(pitch, Duration::WHOLE, AccidentalDisplay::Force)
+        } else {
+            voice.note(pitch, Duration::WHOLE)
+        }.on_staff(stave);
+        if i + 1 < pitches.len() {
+            voice = voice.glissando(GlissandoStyle::Dashed);
+        }
     }
     voice.end_barline()
 }
@@ -63,13 +75,32 @@ fn grand(voice: ScoreBuilder) -> MultiStaffScore {
 
 #[test]
 fn six_source_timelines_keep_pitch_staff_and_onset_identity() {
-    for (name, source) in [("i001",I001),("i002",I002),("i003",I003),("i004",I004),("i005",I005),("i006",I006)] {
-        let original = voice(source);
+    for (name, source, forced) in [
+        ("i001", I001, &[][..]), ("i002", I002, &[1][..]),
+        ("i003", I003, &[][..]), ("i004", I004, &[8][..]),
+        ("i005", I005, &[1, 4][..]), ("i006", I006, &[][..]),
+    ] {
+        let original = voice_with_forced(source, forced);
         let mut score = grand(original.clone());
         let mut source_voice = score.cross_staff_voice.take().unwrap();
         source_voice.flush_pending();
         let glisses = cross_staff::distribute_voice(source_voice, &mut score.staves).unwrap();
         assert_eq!(glisses.len(), source.len()-1, "{name}");
+        if name == "i001" {
+            let routed: Vec<_> = score.staves.iter()
+                .flat_map(|stave| &stave.measures[0].events)
+                .filter_map(|(_, event)| match event {
+                    crate::score::event::ScoreEvent::Note { pitch, annotations, .. } =>
+                        Some((annotations.cross_staff_id.unwrap(), *pitch)),
+                    _ => None,
+                }).collect();
+            assert_eq!(routed.len(), 12);
+            for (id, pitch) in routed {
+                assert_eq!(pitch.note, source[id].0);
+                assert_eq!(pitch.octave, source[id].1);
+                assert_eq!(pitch.midi_note, I001_MIDI[id]);
+            }
+        }
         let contents: Vec<_> = score.staves.iter().map(|s| s.build_measure_contents().unwrap()).collect();
         let mut actual = vec![None; source.len()];
         for (staff, measures) in contents.iter().enumerate() {
@@ -85,6 +116,9 @@ fn six_source_timelines_keep_pitch_staff_and_onset_identity() {
                     let clef=if staff==0 {Clef::Treble} else {Clef::Bass};
                     assert_eq!(note.staff_position,pitch_to_staff_position(&expected,&clef),"{name} event {id}");
                     assert_eq!(staff,source[id].2,"{name} event {id}");
+                    if forced.contains(&id) {
+                        assert!(note.accidental.is_some(), "{name}: forced sign missing at {id}");
+                    }
                 }
             }
         }
@@ -115,6 +149,14 @@ fn assigned_staff_accidentals_and_errors() {
     assert!(matches!(error,EngraverError::CrossStaff(CrossStaffError::InvalidStaff{staff:2,..})));
     let error=grand(ScoreBuilder::new().voice(1).note(Pitch::new(Note::C,4),Duration::WHOLE)).try_render_svg().unwrap_err();
     assert!(matches!(error,EngraverError::CrossStaff(CrossStaffError::InvalidVoice{voice:1,..})));
+    let error=MultiStaffScore::independent(Vec::new())
+        .cross_staff_voice(ScoreBuilder::new().note(Pitch::new(Note::C,4),Duration::WHOLE))
+        .try_render_svg().unwrap_err();
+    assert!(matches!(error,EngraverError::CrossStaff(CrossStaffError::InvalidStaff{staff_count:0,..})));
+    let error=grand(ScoreBuilder::new().note(Pitch::new(Note::C,4),Duration::WHOLE))
+        .cross_staff_voice(ScoreBuilder::new().note(Pitch::new(Note::D,4),Duration::WHOLE))
+        .try_render_svg().unwrap_err();
+    assert!(matches!(error,EngraverError::CrossStaff(CrossStaffError::DuplicateVoice)));
 }
 
 #[test]
