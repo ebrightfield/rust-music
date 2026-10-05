@@ -2,18 +2,12 @@ use crate::layout::measure::{MeasureElement, MeasureLayout};
 use crate::layout::staff::StaffPosition;
 use crate::layout::stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
 
-/// X-offset to apply to an additional voice's notehead to avoid collision
-/// with the primary voice.
+/// Engraving displacement of an additional voice at a shared rhythmic onset.
+/// Stored as a multiplier of normal notehead width (positive = right).
 ///
-/// Stored as a multiplier of notehead width (e.g. 1.0 = shift right by one
-/// notehead width, -1.0 = shift left).
-///
-/// Beam and tuplet members are ordinary note/chord elements, so every
-/// offset targets one element. The renderer shifts a standalone event as a
-/// whole; a beamed member's noteheads (with their accidentals, ledger lines,
-/// and dots) shift while its stem and the beam stay at the unshifted beat
-/// position — the engraving convention for second/unison collisions inside a
-/// beamed voice.
+/// The renderer moves the affected event's ink (notehead, stem, beam
+/// attachment, accidental, dot, and ledger line) but keeps its underlying
+/// rhythmic column and text/lyric anchors unchanged.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VoiceCollisionOffset {
     /// Index into the voice layout's `elements` vec.
@@ -74,15 +68,10 @@ fn resolved_element_stem_direction(element: &MeasureElement) -> Option<StemDirec
 /// Detect collisions between a primary voice layout and an additional voice
 /// layout, returning x-offsets for the additional voice's elements.
 ///
-/// Standard two-voice collision rules:
-/// - **Unison** (same position, same notehead kind): noteheads overlap — no offset.
-///   This is the traditional engraving convention: a shared notehead position
-///   means only one notehead is visible.
-/// - **Unison** (same position, different notehead kind): the down-stem voice's
-///   notehead shifts right by one notehead width so both are visible.
-/// - **Second** (adjacent positions, difference = 1): the up-stem voice keeps
-///   its notehead on the normal (left) side; the down-stem voice's notehead
-///   shifts right by one notehead width.
+/// Both same-kind and different-size/kind unisons are displaced: this keeps
+/// opposing stems legible and ensures the cue head remains independently
+/// visible. A second is also staggered by a notehead width. More distant
+/// pitches retain their common rhythmic column.
 pub fn compute_voice_collision_offsets(
     primary: &MeasureLayout,
     additional: &MeasureLayout,
@@ -149,14 +138,8 @@ fn offset_shift_direction(dir: Option<StemDirection>) -> f64 {
     }
 }
 
-/// Check if any note position in `voice_a` collides with any note in `voice_b`.
-///
-/// Returns `Some(offset_magnitude)` if a collision is found:
-/// - Unison (distance 0): `1.0` notehead widths (shift to make both visible,
-///   unless both are the same kind — but we can't distinguish kinds here,
-///   so always offset to be safe in multi-voice context).
-/// - Second (distance 1): `1.0` notehead widths.
-/// - No collision: `None`.
+/// Check for a unison or second between two voices at the same onset.
+/// Returns a one-notehead-width displacement for either, and none otherwise.
 fn detect_collision(voice_a: &[StaffPosition], voice_b: &[StaffPosition]) -> Option<f64> {
     for &pos_a in voice_a {
         for &pos_b in voice_b {

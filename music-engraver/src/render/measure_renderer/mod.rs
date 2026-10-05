@@ -12,11 +12,11 @@ use crate::layout::measure::{
     ChordEvent, MeasureElement, MeasureLayout, NoteAnnotations, NoteEvent, NoteheadStyle,
     PositionedElement, StemVisibility,
 };
-use crate::layout::staff::StaffPosition;
 use crate::layout::multi_measure_rest::{
     church_rest_supported, layout_church_rest, layout_multi_measure_rest, MultiMeasureRestStyle,
 };
 use crate::layout::staff::StaffLayout;
+use crate::layout::staff::StaffPosition;
 use crate::layout::stem::{
     auto_stem_direction, auto_stem_direction_chord, stem_length_staff_spaces, StemDirection,
 };
@@ -25,8 +25,8 @@ use crate::render::barline_renderer::draw_barline;
 use crate::render::church_rest_renderer::draw_church_rest;
 use crate::render::dot_renderer::draw_dots;
 use crate::render::flag_renderer::draw_flag;
-use crate::render::group_renderer::draw_groups;
 use crate::render::grace_renderer::draw_grace_group;
+use crate::render::group_renderer::{draw_groups, GroupItem};
 use crate::render::key_sig_renderer::draw_key_signature;
 use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
 use crate::render::note_renderer::{
@@ -68,7 +68,14 @@ pub fn draw_measure(
     let items: Vec<_> = layout
         .elements
         .iter()
-        .map(|positioned| (x_offset + positioned.x, &positioned.element))
+        .map(|positioned| {
+            let x = x_offset + positioned.x;
+            GroupItem {
+                x,
+                ink_x: x,
+                element: &positioned.element,
+            }
+        })
         .collect();
     draw_groups(svg, staff, font, config, &items)
 }
@@ -113,10 +120,28 @@ pub(crate) fn draw_measure_elements(
                 draw_time_signature(svg, staff, font, elem_x, kind)?;
             }
             MeasureElement::Note(note) => {
-                draw_note_event(svg, staff, font, config, elem_x, note, beamed[index])?;
+                draw_note_event(
+                    svg,
+                    staff,
+                    font,
+                    config,
+                    elem_x,
+                    elem_x,
+                    note,
+                    beamed[index],
+                )?;
             }
             MeasureElement::Chord(chord) => {
-                draw_chord_event(svg, staff, font, config, elem_x, chord, beamed[index])?;
+                draw_chord_event(
+                    svg,
+                    staff,
+                    font,
+                    config,
+                    elem_x,
+                    elem_x,
+                    chord,
+                    beamed[index],
+                )?;
             }
             // Span marks take no space; spans are drawn by `draw_groups`.
             MeasureElement::GroupMark(_) => {}
@@ -165,6 +190,27 @@ pub(crate) fn draw_measure_elements(
     Ok(())
 }
 
+/// Horizontal engraving displacements indexed by additional voice element.
+/// These never change the measure layout's underlying rhythmic x positions.
+pub(crate) fn collision_shifts(
+    font: &MusicFont,
+    primary: &MeasureLayout,
+    additional: &MeasureLayout,
+) -> Vec<f64> {
+    let offsets =
+        crate::layout::voice_collision::compute_voice_collision_offsets(primary, additional);
+    let mut shifts = vec![0.0; additional.elements.len()];
+    if !offsets.is_empty() {
+        let notehead_width = font
+            .glyph_outline(smufl::Glyph::NoteheadBlack)
+            .map(|outline| outline.advance_width as f64)
+            .unwrap_or(250.0);
+        for offset in offsets {
+            shifts[offset.element_index] = offset.x_offset_noteheads * notehead_width;
+        }
+    }
+    shifts
+}
 
 /// Draw additional voices for a measure at the same x-positions as the primary voice.
 ///
@@ -175,10 +221,11 @@ pub(crate) fn draw_measure_elements(
 /// move up. The displacement is 2 staff spaces. Beam and tuplet spans are not
 /// drawn here: the system renderer draws them per voice across the system.
 ///
-/// Noteheads that collide with the primary voice (unison or second apart) are
-/// offset horizontally by one notehead width to avoid overlap. A standalone
-/// note or chord moves with its stem; a beamed member's noteheads move while
-/// its stem stays on the beam at the unshifted beat position.
+/// Noteheads that collide with the primary voice (unison or second apart) move
+/// along with their ink (stem, flag, accidentals, dots, and ledger lines).
+/// The rhythmic columns and text anchors do not move. Beamed stems and beams
+/// are drawn later by the system renderer using those same ink positions.
+
 pub fn draw_additional_voices(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -188,11 +235,7 @@ pub fn draw_additional_voices(
     voice_layouts: &[MeasureLayout],
     x_offset: f64,
 ) -> Result<(), FontError> {
-    // Notehead width for computing collision offsets (filled notehead is the common case)
-    let notehead_width = font
-        .glyph_outline(smufl::Glyph::NoteheadBlack)
-        .map(|o| o.advance_width as f64)
-        .unwrap_or(250.0);
+    // The system's beam pass uses the same displacement as this ink pass.
 
     for (voice_idx, voice_layout) in voice_layouts.iter().enumerate() {
         // Voice index 0 = additional voice 1 (odd → stems down, rests displaced down)
@@ -206,20 +249,12 @@ pub fn draw_additional_voices(
             -(staff.staff_space * 2.0)
         };
 
-        // Compute collision offsets between primary and this additional voice
-        let collision_offsets = crate::layout::voice_collision::compute_voice_collision_offsets(
-            primary_layout,
-            voice_layout,
-        );
+        let collision_shifts = collision_shifts(font, primary_layout, voice_layout);
         let beamed = beamed_elements(&voice_layout.elements);
 
         for (elem_idx, positioned) in voice_layout.elements.iter().enumerate() {
-            let collision_shift = collision_offsets
-                .iter()
-                .find(|o| o.element_index == elem_idx)
-                .map(|o| o.x_offset_noteheads * notehead_width)
-                .unwrap_or(0.0);
-            let elem_x = x_offset + positioned.x + collision_shift;
+            let rhythm_x = x_offset + positioned.x;
+            let elem_x = rhythm_x + collision_shifts[elem_idx];
 
             match &positioned.element {
                 // Skip non-rhythmic elements — the primary voice already drew them.
@@ -235,15 +270,32 @@ pub fn draw_additional_voices(
                 | MeasureElement::Barline(_) => {}
 
                 MeasureElement::Note(note) => {
-                    draw_note_event(svg, staff, font, config, elem_x, note, beamed[elem_idx])?;
+                    draw_note_event(
+                        svg,
+                        staff,
+                        font,
+                        config,
+                        elem_x,
+                        rhythm_x,
+                        note,
+                        beamed[elem_idx],
+                    )?;
                 }
                 MeasureElement::Chord(chord) => {
-                    draw_chord_event(svg, staff, font, config, elem_x, chord, beamed[elem_idx])?;
+                    draw_chord_event(
+                        svg,
+                        staff,
+                        font,
+                        config,
+                        elem_x,
+                        rhythm_x,
+                        chord,
+                        beamed[elem_idx],
+                    )?;
                 }
                 MeasureElement::Rest(rest) => {
                     // Rests don't get collision offset — use original x
-                    let rest_x = x_offset + positioned.x;
-                    draw_rest_event(svg, staff, font, config, rest_x, rest, rest_displacement)?;
+                    draw_rest_event(svg, staff, font, config, rhythm_x, rest, rest_displacement)?;
                 }
             }
         }
@@ -338,6 +390,7 @@ fn draw_note_event(
     font: &MusicFont,
     config: &EngravingConfig,
     x: f64,
+    rhythm_x: f64,
     note: &NoteEvent,
     beamed: bool,
 ) -> Result<(), FontError> {
@@ -349,17 +402,14 @@ fn draw_note_event(
 
     // Draw accidental (pre-resolved) to the left of notehead
     let mut left_x = match note.accidental {
-        Some(accidental) => {
-            draw_accidental(svg, staff, font, x, 0.0, position, accidental, scale)?
-        }
+        Some(accidental) => draw_accidental(svg, staff, font, x, 0.0, position, accidental, scale)?,
         None => x,
     };
 
     // Draw notehead, enclosing it and its accidental when parenthesized
     let advance = draw_styled_notehead(svg, staff, font, x, position, kind, style, scale)?;
     if parenthesized {
-        left_x =
-            draw_notehead_parentheses(svg, staff, font, left_x, x + advance, position, scale)?;
+        left_x = draw_notehead_parentheses(svg, staff, font, left_x, x + advance, position, scale)?;
     }
 
     // Draw ledger lines
@@ -383,17 +433,29 @@ fn draw_note_event(
     let direction = needs_stem.then_some(resolved_direction);
 
     draw_principal_grace_group(
-        svg, staff, font, config, &note.annotations, note.stem_direction,
-        left_x, (x + advance / 2.0, position), resolved_direction,
+        svg,
+        staff,
+        font,
+        config,
+        &note.annotations,
+        note.stem_direction,
+        left_x,
+        (x + advance / 2.0, position),
+        resolved_direction,
     )?;
 
     // A beamed member's stem is drawn with its beam. Stemless members have
     // no flag either, but retain their noteheads and annotations.
-    if let Some(dir) = direction.filter(|_| !beamed && note.annotations.stem == StemVisibility::Visible) {
+    if let Some(dir) =
+        direction.filter(|_| !beamed && note.annotations.stem == StemVisibility::Visible)
+    {
         draw_stem(svg, staff, config, x, advance, position, dir, scale);
         let sx = stem_x(x, advance, dir, config.stem_thickness_fu() * scale);
         let (top, bottom) = stem_endpoints(staff, position, dir, scale);
-        let tip_y = match dir { StemDirection::Up => top, StemDirection::Down => bottom };
+        let tip_y = match dir {
+            StemDirection::Up => top,
+            StemDirection::Down => bottom,
+        };
         // Draw flag
         let flags = flag_count_from_log2(note.duration_log2);
         if flags > 0 {
@@ -435,6 +497,7 @@ fn draw_note_event(
     let half_head = config.staff_space / 2.0;
     let anchor = EventAnchor {
         left_x: x,
+        rhythm_x,
         width: advance,
         top_y: notehead_y - half_head,
         bottom_y: notehead_y + half_head,
@@ -461,6 +524,7 @@ fn draw_chord_event(
     font: &MusicFont,
     config: &EngravingConfig,
     x: f64,
+    rhythm_x: f64,
     chord: &ChordEvent,
     beamed: bool,
 ) -> Result<(), FontError> {
@@ -594,8 +658,7 @@ fn draw_chord_event(
     }
 
     // Draw shared stem spanning from the closest to farthest note
-    let needs_stem =
-        chord.duration_log2 >= 1 && chord.annotations.stem == StemVisibility::Visible;
+    let needs_stem = chord.duration_log2 >= 1 && chord.annotations.stem == StemVisibility::Visible;
     if needs_stem {
         // Stem attaches at the note closest to the tip direction:
         // stem up → bottom note is the attachment, tip extends above top note
@@ -701,6 +764,7 @@ fn draw_chord_event(
     let half_head = config.staff_space / 2.0;
     let anchor = EventAnchor {
         left_x: x,
+        rhythm_x,
         width: advance,
         top_y: staff.y_of(top_pos) - half_head,
         bottom_y: staff.y_of(bottom_pos) + half_head,
@@ -716,4 +780,3 @@ fn draw_chord_event(
 
     Ok(())
 }
-
