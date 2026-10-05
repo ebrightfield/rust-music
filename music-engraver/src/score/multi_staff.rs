@@ -31,7 +31,8 @@ use crate::render::multi_staff_renderer::{
     draw_joined_barline, draw_joined_dashed_barline, draw_multi_staff_connectors,
 };
 use crate::render::page_renderer::{
-    draw_cross_system_glissandos, draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
+    draw_cross_system_analysis_brackets, draw_cross_system_glissandos, draw_cross_system_hairpins,
+    draw_cross_system_lyric_extenders, draw_cross_system_lyric_hyphens,
     draw_cross_system_ottava_brackets, draw_cross_system_slurs, draw_cross_system_text_spanners,
     draw_cross_system_ties, draw_cross_system_trill_extensions,
 };
@@ -901,7 +902,9 @@ impl MultiStaffScore {
             draw_cross_system_hairpins(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_text_spanners(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_lyric_extenders(&mut svg, &config, stave_systems);
+            draw_cross_system_lyric_hyphens(&mut svg, &config, stave_systems);
             draw_cross_system_ottava_brackets(&mut svg, &font, &config, stave_systems)?;
+            draw_cross_system_analysis_brackets(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_glissandos(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_trill_extensions(&mut svg, &font, &config, stave_systems)?;
         }
@@ -946,6 +949,10 @@ impl MultiStaffScore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "tests_multi_staff_brackets.rs"]
+mod bracket_tests;
 
 #[cfg(test)]
 mod tests {

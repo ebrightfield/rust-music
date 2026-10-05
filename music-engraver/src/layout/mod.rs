@@ -7,6 +7,7 @@
 //! into complete scored layouts.
 
 pub mod accidental;
+pub mod analysis_bracket;
 pub mod arpeggio;
 pub mod articulation;
 pub mod bar_number;
@@ -70,6 +71,9 @@ pub mod voice_collision;
 pub mod volta;
 
 pub use accidental::{AccidentalDisplay, AccidentalPolicy, ResolvedAccidental};
+pub use analysis_bracket::{
+    layout_analysis_bracket, AnalysisBracketLayout, AnalysisBracketSpec, AnalysisBracketStyle,
+};
 pub use arpeggio::{layout_arpeggio, ArpeggioDirection, ArpeggioLayout, ARPEGGIO_PADDING_SS};
 pub use articulation::{
     layout_articulation, layout_articulation_stack, Articulation, ArticulationKind,

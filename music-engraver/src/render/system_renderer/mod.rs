@@ -1,6 +1,6 @@
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::dynamics::{layout_dynamic_mark, DynamicMark};
-use crate::layout::glissando::{layout_glissando, GlissandoStyle};
+use crate::layout::glissando::{layout_glissando, GlissandoStyle, GLISSANDO_NOTEHEAD_WIDTH_SS};
 use crate::layout::hairpin::{
     hairpin_reference_y, layout_hairpin_styled, HairpinType, NientePlacement,
 };
@@ -27,6 +27,7 @@ use crate::layout::trill_extension::{
     TrillWiggleSpeed,
 };
 use crate::layout::volta::layout_volta_bracket;
+use crate::render::analysis_bracket_renderer::draw_system_analysis_brackets;
 use crate::render::glissando_renderer::draw_glissando;
 use crate::render::hairpin_renderer::draw_hairpin;
 use crate::render::lyric_renderer::{draw_lyric_extender, draw_lyric_hyphen};
@@ -239,9 +240,11 @@ pub fn draw_system(
 
     // Draw ottava brackets (8va/8vb dashed lines) between marked notes
     draw_system_ottava_brackets(svg, font, config, system, &staff, x)?;
+    // Resolve standard-notation analysis brackets from laid-out event anchors.
+    draw_system_analysis_brackets(svg, font, config, system, x, y)?;
 
     // Draw glissando lines between notes marked with glissando_start
-    draw_system_glissandos(svg, config, system, &staff, x);
+    draw_system_glissandos(svg, font, system, &staff, x)?;
 
     // Draw trill wavy-line extensions to the next note for notes marked with
     // trill_extension. A "tr" glyph (the actual ornament) is already drawn by
@@ -976,15 +979,36 @@ fn draw_system_ottava_brackets(
 }
 
 /// Info about a note's glissando state for second-pass rendering.
-pub(crate) struct GlissandoNoteInfo {
+pub(crate) struct GlissandoNoteInfo<'a> {
     pub x: f64,
     pub staff_position: i8,
     pub stem_direction: Option<StemDirection>,
     pub glissando_start: Option<GlissandoStyle>,
+    pub duration_log2: i8,
+    pub notehead_styles: &'a [NoteheadStyle],
+    pub notehead_count: usize,
+}
+
+impl GlissandoNoteInfo<'_> {
+    /// Correct the historical 1.18ss head estimate only for glyphs wider
+    /// than it (notably whole notes). Preserve existing short-head spacing.
+    pub(crate) fn source_width_correction(
+        &self,
+        font: &MusicFont,
+        ss: f64,
+    ) -> Result<f64, FontError> {
+        let advance = widest_notehead_advance(
+            font,
+            self.duration_log2,
+            self.notehead_styles,
+            self.notehead_count,
+        )?;
+        Ok((advance - ss * GLISSANDO_NOTEHEAD_WIDTH_SS).max(0.0))
+    }
 }
 
 /// Collect note info relevant to glissando rendering from a system's elements.
-pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<GlissandoNoteInfo> {
+pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<GlissandoNoteInfo<'_>> {
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
@@ -995,6 +1019,9 @@ pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<Glissand
                         staff_position: n.staff_position,
                         stem_direction: n.stem_direction,
                         glissando_start: n.annotations.glissando_start,
+                        duration_log2: n.duration_log2,
+                        notehead_styles: &n.annotations.notehead_styles,
+                        notehead_count: 1,
                     });
                 }
                 MeasureElement::Chord(c) => {
@@ -1012,6 +1039,9 @@ pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<Glissand
                         staff_position: attach_pos,
                         stem_direction: c.stem_direction,
                         glissando_start: c.annotations.glissando_start,
+                        duration_log2: c.duration_log2,
+                        notehead_styles: &c.annotations.notehead_styles,
+                        notehead_count: c.staff_positions.len(),
                     });
                 }
                 _ => {}
@@ -1024,11 +1054,11 @@ pub(crate) fn collect_glissando_note_info(system: &SystemLayout) -> Vec<Glissand
 /// Draw glissando lines between notes marked with `glissando_start`.
 fn draw_system_glissandos(
     svg: &mut SvgWriter,
-    _config: &EngravingConfig,
+    font: &MusicFont,
     system: &SystemLayout,
     staff: &StaffLayout,
     system_x: f64,
-) {
+) -> Result<(), FontError> {
     let notes = collect_glissando_note_info(system);
 
     for (i, note) in notes.iter().enumerate() {
@@ -1043,7 +1073,7 @@ fn draw_system_glissandos(
         };
 
         if let Some(layout) = layout_glissando(
-            system_x + note.x,
+            system_x + note.x + note.source_width_correction(font, staff.staff_space)?,
             note.staff_position,
             system_x + target.x,
             target.staff_position,
@@ -1054,6 +1084,7 @@ fn draw_system_glissandos(
             draw_glissando(svg, &layout);
         }
     }
+    Ok(())
 }
 
 /// Info about a note's trill-extension state for second-pass rendering.

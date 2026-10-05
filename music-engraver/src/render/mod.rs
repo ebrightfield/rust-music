@@ -6,6 +6,7 @@
 //! complete SVG documents.
 
 pub mod accidental_renderer;
+pub mod analysis_bracket_renderer;
 pub mod arpeggio_renderer;
 pub mod articulation_renderer;
 pub mod bar_number_renderer;
