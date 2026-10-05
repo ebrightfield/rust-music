@@ -52,7 +52,7 @@ fn length(element: &MeasureElement) -> MeasureLength {
         MeasureElement::Note(n) => written_length(n.duration_log2, n.dots),
         MeasureElement::Rest(r) => written_length(r.duration_log2, r.dots),
         MeasureElement::Chord(c) => written_length(c.duration_log2, c.dots),
-        MeasureElement::Spacer(s) => written_length(s.duration_log2, s.dots),
+        MeasureElement::Spacer(s) => s.duration_log2.map_or(MeasureLength::ZERO, |log2| written_length(log2, s.dots)),
         _ => MeasureLength::ZERO,
     }
 }
@@ -283,9 +283,15 @@ fn position_voice(
         let col = &columns[&at];
         if is_rhythmic(&positioned.element) {
             positioned.x = col.x + col.prefix.max(col.left);
-            positioned.spring = col.spring * scale;
-            positioned.rod = col.right;
-            positioned.width = positioned.rod + positioned.spring;
+            if matches!(&positioned.element, MeasureElement::Spacer(s) if s.duration_log2.is_none()) {
+                positioned.spring = 0.0;
+                positioned.rod = 0.0;
+                positioned.width = 0.0;
+            } else {
+                positioned.spring = col.spring * scale;
+                positioned.rod = col.right;
+                positioned.width = positioned.rod + positioned.spring;
+            }
         } else if matches!(positioned.element, MeasureElement::GroupMark(_)) {
             positioned.x = col.x + col.prefix.max(col.left);
         } else if matches!(positioned.element, MeasureElement::Barline(_)) {
@@ -370,7 +376,7 @@ pub(crate) fn align_shared_grid(
                 MeasureElement::Note(n) => Some(n.duration_log2),
                 MeasureElement::Chord(c) => Some(c.duration_log2),
                 MeasureElement::Rest(r) => Some(r.duration_log2),
-                MeasureElement::Spacer(s) => Some(s.duration_log2),
+                MeasureElement::Spacer(s) => s.duration_log2,
                 _ => None,
             })
             .max()
@@ -394,7 +400,7 @@ pub(crate) fn align_shared_grid(
                         MeasureElement::Note(n) => Some(n.duration_log2),
                         MeasureElement::Chord(c) => Some(c.duration_log2),
                         MeasureElement::Rest(r) => Some(r.duration_log2),
-                        MeasureElement::Spacer(s) => Some(s.duration_log2),
+                        MeasureElement::Spacer(s) => s.duration_log2,
                         _ => None,
                     })
                     .max()

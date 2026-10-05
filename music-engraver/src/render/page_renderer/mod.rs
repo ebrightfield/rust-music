@@ -877,13 +877,17 @@ fn find_unresolved_text_spanners(
         if note_info[i + 1..].iter().any(|n| n.end) {
             continue;
         }
-        let advance = span_event_advance(
-            font,
-            info.duration_log2,
-            info.notehead_styles,
-            info.notehead_count,
-            info.is_rest,
-        )?;
+        let advance = if info.is_spacer {
+            0.0
+        } else {
+            span_event_advance(
+                font,
+                info.duration_log2,
+                info.notehead_styles,
+                info.notehead_count,
+                info.is_rest,
+            )?
+        };
         unresolved.push(UnresolvedTextSpanner {
             x_start: page_system.x + info.x + advance + 0.3 * config.staff_space,
             spanner: spanner.clone(),

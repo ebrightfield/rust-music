@@ -45,7 +45,9 @@ pub(crate) fn event_length(event: &MeasureEvent) -> MeasureLength {
         MeasureEvent::Note(note) => written_length(note.duration_log2, note.dots),
         MeasureEvent::Rest(rest) => written_length(rest.duration_log2, rest.dots),
         MeasureEvent::Chord(chord) => written_length(chord.duration_log2, chord.dots),
-        MeasureEvent::Spacer(spacer) => written_length(spacer.duration_log2, spacer.dots),
+        MeasureEvent::Spacer(spacer) => spacer
+            .duration_log2
+            .map_or(MeasureLength::ZERO, |log2| written_length(log2, spacer.dots)),
         MeasureEvent::GroupMark(_)
         | MeasureEvent::MultiMeasureRest { .. }
         | MeasureEvent::Barline(_)

@@ -125,12 +125,11 @@ pub enum StemVisibility {
     Hidden,
 }
 
-/// Articulation and expression annotations attached to a note, chord or rest.
-///
-/// These fields are shared between [`NoteEvent`], [`ChordEvent`] and
-/// [`RestEvent`], covering ties, slurs, hairpins, dynamics, rehearsal marks,
-/// tempo marks, text scripts and text spanners. On rests only the
-/// pitch-independent fields apply (see [`RestEvent::annotations`]).
+/// Expression marks attached at the onset of a note, chord, rest or
+/// invisible spacer/anchor. The fields are shared by [`NoteEvent`],
+/// [`ChordEvent`], [`RestEvent`] and [`SpacerEvent`]. On invisible onsets
+/// only pitch-independent marks (hairpins, dynamics, text/spanner and tempo
+/// marks) apply; pitch- or stem-bound marks have no glyph to attach to.
 /// All fields default to "no annotation" (`false` / `None`).
 #[derive(Clone, Debug, Default)]
 pub struct NoteAnnotations {
@@ -188,7 +187,7 @@ pub struct NoteAnnotations {
     /// Whether this note/chord is the start of a hairpin (crescendo/decrescendo wedge).
     /// The hairpin is drawn by the system renderer after all measures are laid out.
     pub hairpin_start: Option<HairpinType>,
-    /// Whether this note/chord is the end of a hairpin wedge.
+    /// Whether this onset ends a hairpin wedge (also on rests and spacers).
     pub hairpin_end: bool,
     /// Whether the hairpin starting at this note/chord should be drawn with
     /// dashed wedge lines instead of solid. Has no effect unless
@@ -480,13 +479,16 @@ pub struct RestEvent {
     pub annotations: NoteAnnotations,
 }
 
-/// An invisible rhythmic placeholder within a measure.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// An invisible onset. `None` is a zero-duration spanner anchor; a written
+/// duration advances time and contributes spacing without drawing a rest.
+#[derive(Clone, Debug)]
 pub struct SpacerEvent {
-    /// Log2 of the duration denominator: -1=breve, 0=whole, 1=half, 2=quarter, etc.
-    pub duration_log2: i8,
-    /// Number of augmentation dots (0–3).
+    /// Written duration denominator, or `None` for an instantaneous anchor.
+    pub duration_log2: Option<i8>,
+    /// Dots on a timed spacer; zero on an instantaneous anchor.
     pub dots: u8,
+    /// Pitch-independent marks at this exact onset. No note/rest glyph is drawn.
+    pub annotations: NoteAnnotations,
 }
 
 /// A positioned element within a laid-out measure.
@@ -892,12 +894,15 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     0.0,
                 )
             }
-            // A spacer occupies exactly the room of a rest of its duration,
-            // so an empty bar is as wide as the same bar holding a rest.
-            MeasureElement::Spacer(spacer) => (
-                event_rod(0.0, spacer.dots, config),
-                spring(spacer.duration_log2, 1.0),
-                0.0,
+            // Timed spacers occupy rest-like room; instantaneous anchors
+            // introduce neither a phantom glyph nor a phantom spacing rod.
+            MeasureElement::Spacer(spacer) => spacer.duration_log2.map_or(
+                (0.0, 0.0, 0.0),
+                |log2| (
+                    event_rod(0.0, spacer.dots, config),
+                    spring(log2, 1.0),
+                    0.0,
+                ),
             ),
             MeasureElement::Chord(c) => {
                 // A chord shares one stem column (one notehead rod); its stacked
@@ -1005,7 +1010,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     // rod and shifts whatever follows it.
     let spacer_only = positioned
         .iter()
-        .any(|p| matches!(p.element, MeasureElement::Spacer(_)))
+        .any(|p| matches!(&p.element, MeasureElement::Spacer(s) if s.duration_log2.is_some()))
         && !positioned.iter().any(|p| {
             matches!(
                 p.element,
@@ -1018,14 +1023,14 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     if spacer_only {
         let spacer_width: f64 = positioned
             .iter()
-            .filter(|p| matches!(p.element, MeasureElement::Spacer(_)))
+            .filter(|p| matches!(&p.element, MeasureElement::Spacer(s) if s.duration_log2.is_some()))
             .map(|p| p.width)
             .sum();
         let deficit = config.empty_measure_min_width - spacer_width;
         if deficit > 0.0 {
             let last = positioned
                 .iter()
-                .rposition(|p| matches!(p.element, MeasureElement::Spacer(_)))
+                .rposition(|p| matches!(&p.element, MeasureElement::Spacer(s) if s.duration_log2.is_some()))
                 .expect("spacer_only implies a spacer");
             positioned[last].rod += deficit;
             positioned[last].width += deficit;

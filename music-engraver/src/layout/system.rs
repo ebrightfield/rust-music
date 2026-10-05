@@ -531,7 +531,7 @@ pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
             style: *style,
         },
         MeasureEvent::Barline(style) => MeasureElement::Barline(*style),
-        MeasureEvent::Spacer(spacer) => MeasureElement::Spacer(*spacer),
+        MeasureEvent::Spacer(spacer) => MeasureElement::Spacer(spacer.clone()),
         MeasureEvent::ClefChange(change) => MeasureElement::Clef(change.clef_layout()),
         MeasureEvent::TimeSignature(kind) => MeasureElement::TimeSignature(kind.clone()),
     }

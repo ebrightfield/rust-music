@@ -159,8 +159,11 @@ pub(crate) fn draw_measure_elements(
             MeasureElement::Rest(rest) => {
                 draw_rest_event(svg, staff, font, config, elem_x, rest, 0.0)?;
             }
-            // A spacer takes time and space but draws nothing.
-            MeasureElement::Spacer(_) => {}
+            // Spacers and instantaneous anchors have no ink of their own.
+            // Their pitch-independent marks use the exact shared onset x.
+            MeasureElement::Spacer(spacer) => {
+                draw_spacer_marks(svg, staff, font, config, elem_x, &spacer.annotations)?;
+            }
             MeasureElement::MultiMeasureRest { count, style } => {
                 // The rest fills the rhythmic width allocated by layout — the
                 // measure barlines sit just outside this span, so the cluster
@@ -277,7 +280,6 @@ pub fn draw_additional_voices(
                 | MeasureElement::TimeSignature(_)
                 | MeasureElement::MultiMeasureRest { .. }
                 | MeasureElement::GroupMark(_)
-                | MeasureElement::Spacer(_)
                 | MeasureElement::Barline(_) => {}
 
                 MeasureElement::Note(note) => {
@@ -308,6 +310,9 @@ pub fn draw_additional_voices(
                         beamed[elem_idx],
                     )?;
                 }
+                MeasureElement::Spacer(spacer) => {
+                    draw_spacer_marks(svg, staff, font, config, rhythm_x, &spacer.annotations)?;
+                }
                 MeasureElement::Rest(rest) => {
                     // Rests don't get collision offset — use original x
                     draw_rest_event(svg, staff, font, config, rhythm_x, rest, rest_displacement)?;
@@ -316,6 +321,37 @@ pub fn draw_additional_voices(
         }
     }
     Ok(())
+}
+
+/// Render only marks that have meaning on an invisible onset; unlike a rest,
+/// there is neither a glyph advance nor a displaced vertical anchor.
+fn draw_spacer_marks(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    x: f64,
+    annotations: &NoteAnnotations,
+) -> Result<(), FontError> {
+    if annotations.dynamic.is_none()
+        && annotations.rehearsal_mark.is_none()
+        && annotations.tempo_mark.is_none()
+        && annotations.text_scripts.is_empty()
+    {
+        return Ok(());
+    }
+    let anchor = EventAnchor {
+        left_x: x,
+        rhythm_x: x,
+        width: 0.0,
+        top_y: staff.y_of(4),
+        bottom_y: staff.y_of(4),
+        articulation_position: 4,
+        chord_positions: None,
+        stem: StemDirection::Down,
+        ornament_position: 4,
+    };
+    draw_event_marks(svg, staff, font, config, &anchor, annotations)
 }
 
 /// Notehead kind from log2 duration: -1=breve, 0=whole, 1=half, 2+=filled.

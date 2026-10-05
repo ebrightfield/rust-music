@@ -474,6 +474,8 @@ pub(crate) struct HairpinNoteInfo<'a> {
     pub(crate) notehead_count: usize,
     pub(crate) hairpin_start: Option<HairpinType>,
     pub(crate) hairpin_end: bool,
+    /// An invisible onset has no glyph advance, whether timed or instantaneous.
+    pub(crate) is_spacer: bool,
     /// Mirror of `NoteAnnotations::hairpin_dashed`. Set on the start side of
     /// a hairpin to request a dashed wedge; ignored on notes that aren't a
     /// hairpin start. `collect_hairpin_note_info` propagates this from both
@@ -506,13 +508,17 @@ impl HairpinNoteInfo<'_> {
         let Some(mark) = self.dynamic.filter(|_| self.placement == side) else {
             return Ok(None);
         };
-        let advance = span_event_advance(
-            font,
-            self.duration_log2,
-            self.notehead_styles,
-            self.notehead_count,
-            self.is_rest,
-        )?;
+        let advance = if self.is_spacer {
+            0.0
+        } else {
+            span_event_advance(
+                font,
+                self.duration_log2,
+                self.notehead_styles,
+                self.notehead_count,
+                self.is_rest,
+            )?
+        };
         let layout = layout_dynamic_mark(mark, font, staff_space)?;
         let left = layout.left_for(self.x + advance / 2.0);
         Ok(Some((left, left + layout.line.width)))
@@ -525,13 +531,17 @@ impl HairpinNoteInfo<'_> {
         font: &MusicFont,
         staff_space: f64,
     ) -> Result<f64, FontError> {
-        let advance = span_event_advance(
-            font,
-            self.duration_log2,
-            self.notehead_styles,
-            self.notehead_count,
-            self.is_rest,
-        )?;
+        let advance = if self.is_spacer {
+            0.0
+        } else {
+            span_event_advance(
+                font,
+                self.duration_log2,
+                self.notehead_styles,
+                self.notehead_count,
+                self.is_rest,
+            )?
+        };
         let mut x = self.x + advance + 0.3 * staff_space;
         if let Some((_, right)) = self.dynamic_extent(font, staff_space, self.placement)? {
             x = x.max(right + 0.3 * staff_space);
@@ -572,6 +582,7 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         hairpin_niente: n.annotations.hairpin_niente,
                         placement: n.annotations.dynamics_placement,
                         is_rest: false,
+                        is_spacer: false,
                         dynamic: n.annotations.dynamic.as_ref(),
                     });
                 }
@@ -587,6 +598,7 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         hairpin_niente: c.annotations.hairpin_niente,
                         placement: c.annotations.dynamics_placement,
                         is_rest: false,
+                        is_spacer: false,
                         dynamic: c.annotations.dynamic.as_ref(),
                     });
                 }
@@ -602,13 +614,31 @@ pub(crate) fn collect_hairpin_note_info(system: &SystemLayout) -> Vec<HairpinNot
                         hairpin_niente: r.annotations.hairpin_niente,
                         placement: r.annotations.dynamics_placement,
                         is_rest: true,
+                        is_spacer: false,
                         dynamic: r.annotations.dynamic.as_ref(),
+                    });
+                }
+                MeasureElement::Spacer(s) => {
+                    notes.push(HairpinNoteInfo {
+                        x: elem_x,
+                        duration_log2: s.duration_log2.unwrap_or(2),
+                        notehead_styles: &[],
+                        notehead_count: 0,
+                        hairpin_start: s.annotations.hairpin_start,
+                        hairpin_end: s.annotations.hairpin_end,
+                        hairpin_dashed: s.annotations.hairpin_dashed,
+                        hairpin_niente: s.annotations.hairpin_niente,
+                        placement: s.annotations.dynamics_placement,
+                        is_rest: false,
+                        is_spacer: true,
+                        dynamic: s.annotations.dynamic.as_ref(),
                     });
                 }
                 _ => {}
             }
         }
     }
+    notes.sort_by(|left, right| left.x.total_cmp(&right.x));
     notes
 }
 
@@ -668,6 +698,7 @@ pub(crate) struct TextSpannerNoteInfo<'a> {
     pub(crate) notehead_styles: &'a [NoteheadStyle],
     pub(crate) notehead_count: usize,
     pub(crate) is_rest: bool,
+    pub(crate) is_spacer: bool,
     pub(crate) start: Option<&'a TextSpanner>,
     pub(crate) end: bool,
 }
@@ -678,12 +709,13 @@ pub(crate) fn collect_text_spanner_note_info(
     let mut notes = Vec::new();
     for measure in &system.measures {
         for (elem_x, elem) in all_measure_elements(measure) {
-            let (duration_log2, notehead_styles, notehead_count, is_rest, annotations) =
+            let (duration_log2, notehead_styles, notehead_count, is_rest, is_spacer, annotations) =
                 match &elem.element {
                     MeasureElement::Note(n) => (
                         n.duration_log2,
                         n.annotations.notehead_styles.as_slice(),
                         1,
+                        false,
                         false,
                         &n.annotations,
                     ),
@@ -692,9 +724,11 @@ pub(crate) fn collect_text_spanner_note_info(
                         c.annotations.notehead_styles.as_slice(),
                         c.staff_positions.len(),
                         false,
+                        false,
                         &c.annotations,
                     ),
-                    MeasureElement::Rest(r) => (r.duration_log2, &[][..], 1, true, &r.annotations),
+                    MeasureElement::Rest(r) => (r.duration_log2, &[][..], 1, true, false, &r.annotations),
+                    MeasureElement::Spacer(s) => (s.duration_log2.unwrap_or(2), &[][..], 0, false, true, &s.annotations),
                     _ => continue,
                 };
             notes.push(TextSpannerNoteInfo {
@@ -703,11 +737,13 @@ pub(crate) fn collect_text_spanner_note_info(
                 notehead_styles,
                 notehead_count,
                 is_rest,
+                is_spacer,
                 start: annotations.text_spanner_start.as_ref(),
                 end: annotations.text_spanner_end,
             });
         }
     }
+    notes.sort_by(|left, right| left.x.total_cmp(&right.x));
     notes
 }
 
@@ -733,13 +769,17 @@ fn draw_system_text_spanners(
         let Some(target) = note_info[i + 1..].iter().find(|n| n.end) else {
             continue;
         };
-        let advance = span_event_advance(
-            font,
-            info.duration_log2,
-            info.notehead_styles,
-            info.notehead_count,
-            info.is_rest,
-        )?;
+        let advance = if info.is_spacer {
+            0.0
+        } else {
+            span_event_advance(
+                font,
+                info.duration_log2,
+                info.notehead_styles,
+                info.notehead_count,
+                info.is_rest,
+            )?
+        };
         let x_start = system_x + info.x + advance + 0.3 * config.staff_space;
         let x_end = system_x + target.x - 0.3 * config.staff_space;
         let layout = layout_text_spanner(spanner, x_start, x_end, staff, config.staff_space);

@@ -166,14 +166,27 @@ fn last_rhythmic_event(
         })
 }
 
-/// Annotations of the most recent rhythmic event when it is a note, chord or
-/// rest. Groups and multi-measure rests carry no per-event annotations.
+/// Annotations on notes, chords and rests. Pitch-independent marks that are
+/// valid on invisible onsets use `last_spanner_annotations_mut` instead.
 fn last_annotations_mut(events: &mut [(u8, ScoreEvent)]) -> Option<&mut NoteAnnotations> {
     match last_rhythmic_event(events, None)? {
         ScoreEvent::Note { annotations, .. }
         | ScoreEvent::Chord { annotations, .. }
         | ScoreEvent::Rest { annotations, .. } => Some(annotations),
+        ScoreEvent::Spacer { .. } => panic!("this mark cannot attach to an invisible spacer"),
         _ => None,
+    }
+}
+
+fn last_spanner_annotations_mut(
+    events: &mut [(u8, ScoreEvent)],
+) -> Option<&mut NoteAnnotations> {
+    match last_rhythmic_event(events, None)? {
+        ScoreEvent::Note { annotations, .. }
+        | ScoreEvent::Chord { annotations, .. }
+        | ScoreEvent::Rest { annotations, .. }
+        | ScoreEvent::Spacer { annotations, .. } => Some(annotations),
+        _ => panic!("this mark cannot attach to a multi-measure rest"),
     }
 }
 
@@ -317,6 +330,12 @@ impl ScoreBuilder {
         last_annotations_mut(&mut self.current_events)
     }
 
+    /// Marks with a real onset but no pitch requirement may attach to an
+    /// invisible spacer or a zero-duration anchor as well as a rest.
+    fn last_spanner_annotations_mut(&mut self) -> Option<&mut NoteAnnotations> {
+        last_spanner_annotations_mut(&mut self.current_events)
+    }
+
     /// Annotations of the most recent event when it is a note or chord (the
     /// target of pitch- and stem-bound builders such as ties, slurs, lyrics
     /// and ornaments, which do not apply to rests).
@@ -325,6 +344,7 @@ impl ScoreBuilder {
             ScoreEvent::Note { annotations, .. } | ScoreEvent::Chord { annotations, .. } => {
                 Some(annotations)
             }
+            ScoreEvent::Spacer { .. } => panic!("pitch-bound mark cannot attach to an invisible spacer"),
             _ => None,
         }
     }
@@ -683,7 +703,7 @@ impl ScoreBuilder {
     /// [`MultiStaffScore`](multi_staff::MultiStaffScore) continuous voice.
     /// Stave zero is the upper stave of a grand staff.
     pub fn on_staff(mut self, index: usize) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.on_staff = Some(index);
         }
         self
@@ -776,7 +796,7 @@ impl ScoreBuilder {
     /// [`Self::dynamics_placement`] put dynamics above.
     pub fn dynamic(mut self, mark: impl Into<DynamicMark>) -> Self {
         let placement = self.dynamics_placement;
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.dynamic = Some(mark.into());
             annotations.dynamics_placement = placement;
         }
@@ -787,7 +807,7 @@ impl ScoreBuilder {
     /// [`Self::dynamics_placement`] for this one event (LilyPond `^\p` /
     /// `_\p`). A hairpin starting on the same event follows it.
     pub fn dynamic_placed(mut self, mark: impl Into<DynamicMark>, placement: Placement) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.dynamic = Some(mark.into());
             annotations.dynamics_placement = placement;
         }
@@ -804,12 +824,12 @@ impl ScoreBuilder {
     }
 
     /// Mark the start of a hairpin (crescendo or decrescendo wedge) at the
-    /// most recently added note, chord or rest. The wedge extends from this
-    /// event to the next event with `hairpin_end()`, on the side set by
-    /// [`Self::dynamics_placement`].
+    /// most recently added note, chord, rest or invisible onset. The wedge
+    /// extends from this onset to the next event with `hairpin_end()`, on
+    /// the side set by [`Self::dynamics_placement`].
     pub fn hairpin_start(mut self, kind: HairpinType) -> Self {
         let placement = self.dynamics_placement;
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.hairpin_start = Some(kind);
             if annotations.dynamic.is_none() {
                 annotations.dynamics_placement = placement;
@@ -818,10 +838,12 @@ impl ScoreBuilder {
         self
     }
 
-    /// Mark the most recently added note, chord or rest as the end of a
-    /// hairpin wedge (LilyPond `r8\!` included).
+    /// End a hairpin on the most recently added note, chord, rest or spacer.
+    /// On a timed spacer this marks its onset (LilyPond `s8\!`); for a stop
+    /// after the last sounding event use `spanner_anchor().hairpin_end()`
+    /// (LilyPond `<>\!`) without advancing the voice.
     pub fn hairpin_end(mut self) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.hairpin_end = true;
         }
         self
@@ -853,7 +875,7 @@ impl ScoreBuilder {
     /// Must be called alongside the `hairpin_start` call on the same event.
     /// Has no visible effect if that event has no `hairpin_start` set.
     pub fn hairpin_dashed(mut self) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.hairpin_dashed = true;
         }
         self
@@ -877,7 +899,7 @@ impl ScoreBuilder {
     /// Must be called alongside the `hairpin_start` call on the same event.
     /// Has no visible effect if that event has no `hairpin_start` set.
     pub fn hairpin_niente_start(mut self, placement: NientePlacement) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.hairpin_niente = Some(placement);
         }
         self
@@ -901,16 +923,17 @@ impl ScoreBuilder {
     /// `\startTextSpan`). Spanners continue across system breaks: the label
     /// stays on the first system and later systems carry the line alone.
     pub fn text_spanner_start(mut self, spanner: TextSpanner) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.text_spanner_start = Some(spanner);
         }
         self
     }
 
-    /// End the open text spanner at the most recently added note, chord or
-    /// rest (LilyPond `\stopTextSpan`). The line stops just before it.
+    /// End the open text spanner at a note, chord, rest, timed spacer onset
+    /// or zero-duration [`spanner_anchor`](Self::spanner_anchor). The line
+    /// stops just before that onset (LilyPond `\stopTextSpan`).
     pub fn text_spanner_end(mut self) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.text_spanner_end = true;
         }
         self
@@ -945,7 +968,7 @@ impl ScoreBuilder {
     /// `style` controls the enclosure (boxed or plain).
     pub fn rehearsal_mark(mut self, text: impl Into<String>, style: RehearsalStyle) -> Self {
         let mark = Some((text.into(), style));
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.rehearsal_mark = mark;
         }
         self
@@ -959,7 +982,7 @@ impl ScoreBuilder {
     /// note = note equations and stacked text.
     pub fn tempo(mut self, mark: TempoMark) -> Self {
         let m = Some(mark);
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.tempo_mark = m;
         }
         self
@@ -970,7 +993,7 @@ impl ScoreBuilder {
     /// italic "dolce" below, or a label "a)" above a rest. Several scripts on
     /// one event stack outward on their side of the staff.
     pub fn text_script(mut self, script: TextScript) -> Self {
-        if let Some(annotations) = self.last_annotations_mut() {
+        if let Some(annotations) = self.last_spanner_annotations_mut() {
             annotations.text_scripts.push(script);
         }
         self
@@ -2169,13 +2192,31 @@ impl ScoreBuilder {
         self
     }
 
-    /// Add an invisible spacer (LilyPond `s`): it takes `duration` and
-    /// horizontal room like a rest but draws nothing. A measure holding only
-    /// spacers renders as an empty bar, at least
-    /// [`MeasureLayoutConfig::empty_measure_min_width`] wide.
+    /// Add an invisible spacer (LilyPond `s`): its annotations belong to the
+    /// spacer's **onset**, not to its end. It takes `duration` and horizontal
+    /// room like a rest but draws no rest glyph.
     pub fn spacer(mut self, duration: Duration) -> Self {
-        self.current_events
-            .push((self.current_voice, ScoreEvent::Spacer { duration }));
+        self.current_events.push((
+            self.current_voice,
+            ScoreEvent::Spacer {
+                duration: Some(duration),
+                annotations: NoteAnnotations::default(),
+            },
+        ));
+        self
+    }
+
+    /// Add a zero-duration invisible attachment after the preceding event
+    /// (LilyPond `<>`). Hairpin and text-spanner ends attach at this exact
+    /// onset without lengthening the voice or drawing a notehead/rest.
+    pub fn spanner_anchor(mut self) -> Self {
+        self.current_events.push((
+            self.current_voice,
+            ScoreEvent::Spacer {
+                duration: None,
+                annotations: NoteAnnotations::default(),
+            },
+        ));
         self
     }
 

@@ -57,8 +57,12 @@ pub(crate) enum ScoreEvent {
     /// Zero-duration inline barline inside the measure. It does not end the
     /// measure, advance the measure number, or reset accidental state.
     Barline(BarlineStyle),
-    /// Invisible rhythmic placeholder: takes `duration` but draws nothing.
-    Spacer { duration: Duration },
+    /// Invisible attachment at its onset. A duration advances the voice;
+    /// `None` is a zero-duration anchor after the preceding sounding event.
+    Spacer {
+        duration: Option<Duration>,
+        annotations: NoteAnnotations,
+    },
     /// Zero-duration clef change; later pitches on the staff use the new clef.
     ClefChange(ClefChange),
     /// Zero-duration meter change, valid only at the start of a measure.
@@ -351,9 +355,13 @@ pub(crate) fn convert_resolved_event(
             style: *style,
         },
         ScoreEvent::Barline(style) => MeasureEvent::Barline(*style),
-        ScoreEvent::Spacer { duration } => MeasureEvent::Spacer(SpacerEvent {
-            duration_log2: duration_kind_to_log2(duration.kind()),
-            dots: duration.num_dots(),
+        ScoreEvent::Spacer {
+            duration,
+            annotations,
+        } => MeasureEvent::Spacer(SpacerEvent {
+            duration_log2: duration.map(|duration| duration_kind_to_log2(duration.kind())),
+            dots: duration.map_or(0, |duration| duration.num_dots()),
+            annotations: annotations.clone(),
         }),
         ScoreEvent::ClefChange(change) => MeasureEvent::ClefChange(*change),
         ScoreEvent::TimeSignatureChange(time_signature) => {
@@ -458,8 +466,11 @@ fn visit_pitches(
             duration,
             annotations,
         } => (pitches.as_slice(), duration, annotations),
-        ScoreEvent::Rest { duration, .. } | ScoreEvent::Spacer { duration } => {
+        ScoreEvent::Rest { duration, .. } => {
             return scaled_ticks(duration, scale, ratio);
+        }
+        ScoreEvent::Spacer { duration, .. } => {
+            return duration.map_or(0, |duration| scaled_ticks(&duration, scale, ratio));
         }
         ScoreEvent::GroupMark(_)
         | ScoreEvent::Barline(_)

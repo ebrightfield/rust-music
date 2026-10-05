@@ -15,12 +15,13 @@ use crate::layout::text_script::{
 };
 use crate::layout::text_spanner::{TEXT_SPANNER_ABOVE_STAFF_SS, TEXT_SPANNER_FONT_SIZE_SS};
 
-/// Annotations of a note, chord or rest element.
+/// Annotations on a visible event or an invisible onset.
 pub fn element_annotations(element: &MeasureElement) -> Option<&NoteAnnotations> {
     match element {
         MeasureElement::Note(n) => Some(&n.annotations),
         MeasureElement::Chord(c) => Some(&c.annotations),
         MeasureElement::Rest(r) => Some(&r.annotations),
+        MeasureElement::Spacer(s) => Some(&s.annotations),
         _ => None,
     }
 }

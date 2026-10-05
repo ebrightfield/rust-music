@@ -72,8 +72,9 @@ pub(super) fn distribute_voice(
             let destination = match &mut event {
                 ScoreEvent::Note { annotations, .. }
                 | ScoreEvent::Chord { annotations, .. }
-                | ScoreEvent::Rest { annotations, .. } => annotations.on_staff.unwrap_or(0),
-                ScoreEvent::Spacer { .. } | ScoreEvent::Barline(_) | ScoreEvent::TimeSignatureChange(_) => 0,
+                | ScoreEvent::Rest { annotations, .. }
+                | ScoreEvent::Spacer { annotations, .. } => annotations.on_staff.unwrap_or(0),
+                ScoreEvent::Barline(_) | ScoreEvent::TimeSignatureChange(_) => 0,
                 ScoreEvent::ClefChange(_) => return Err(CrossStaffError::UnsupportedEvent { event: next_id, kind: "clef change (set clef on destination stave)" }),
                 ScoreEvent::GroupMark(_) => return Err(CrossStaffError::UnsupportedEvent { event: next_id, kind: "beam/tuplet spanning stave changes" }),
                 ScoreEvent::MultiMeasureRest { .. } => return Err(CrossStaffError::UnsupportedEvent { event: next_id, kind: "multi-measure rest" }),
@@ -83,7 +84,8 @@ pub(super) fn distribute_voice(
             }
             if let ScoreEvent::Note { annotations, .. }
             | ScoreEvent::Chord { annotations, .. }
-            | ScoreEvent::Rest { annotations, .. } = &mut event {
+            | ScoreEvent::Rest { annotations, .. }
+            | ScoreEvent::Spacer { annotations, .. } = &mut event {
                 if !voice.leading_text_marks.is_empty() {
                     let mut marks = std::mem::take(&mut voice.leading_text_marks);
                     marks.append(&mut annotations.text_scripts);
@@ -111,8 +113,10 @@ pub(super) fn distribute_voice(
                 last_note = Some((next_id, style));
             }
             let duration = match &event {
-                ScoreEvent::Note { duration, .. } | ScoreEvent::Chord { duration, .. }
-                | ScoreEvent::Rest { duration, .. } | ScoreEvent::Spacer { duration } => Some(*duration),
+                ScoreEvent::Note { duration, .. }
+                | ScoreEvent::Chord { duration, .. }
+                | ScoreEvent::Rest { duration, .. } => Some(*duration),
+                ScoreEvent::Spacer { duration, .. } => *duration,
                 _ => None,
             };
             let replicate = matches!(event, ScoreEvent::Barline(_) | ScoreEvent::TimeSignatureChange(_));
@@ -122,7 +126,13 @@ pub(super) fn distribute_voice(
                     continue;
                 }
                 if let Some(duration) = duration {
-                    events.push((*voice_index, ScoreEvent::Spacer { duration }));
+                    events.push((
+                        *voice_index,
+                        ScoreEvent::Spacer {
+                            duration: Some(duration),
+                            annotations: Default::default(),
+                        },
+                    ));
                 } else if replicate {
                     events.push((*voice_index, event.clone()));
                 }

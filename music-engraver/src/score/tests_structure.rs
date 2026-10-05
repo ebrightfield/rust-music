@@ -641,8 +641,9 @@ fn spacer_bar_is_empty_and_at_least_the_minimum_width() {
     let config = MeasureLayoutConfig::from_staff_space(SS);
     let elements = [
         MeasureElement::Spacer(crate::layout::measure::SpacerEvent {
-            duration_log2: 1,
+            duration_log2: Some(1),
             dots: 1,
+            annotations: Default::default(),
         }),
         MeasureElement::Barline(BarlineStyle::Single),
     ];

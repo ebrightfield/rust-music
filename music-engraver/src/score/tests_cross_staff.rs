@@ -204,8 +204,8 @@ fn routed_chord_and_rest_keep_durations_and_destination_key() {
     cross_staff::distribute_voice(voice,&mut score.staves).unwrap();
     let top=score.staves[0].build_measure_contents().unwrap();
     let bottom=score.staves[1].build_measure_contents().unwrap();
-    assert!(matches!(&top[0].events[0],MeasureEvent::Spacer(s) if s.duration_log2==2));
-    assert!(matches!(&top[0].events[1],MeasureEvent::Spacer(s) if s.duration_log2==1));
+    assert!(matches!(&top[0].events[0],MeasureEvent::Spacer(s) if s.duration_log2==Some(2)));
+    assert!(matches!(&top[0].events[1],MeasureEvent::Spacer(s) if s.duration_log2==Some(1)));
     assert!(matches!(&bottom[0].events[0],MeasureEvent::Rest(r) if r.duration_log2==2));
     let MeasureEvent::Chord(chord)=&bottom[0].events[1] else { panic!("chord routed to bass") };
     assert_eq!(chord.staff_positions,vec![
@@ -215,7 +215,7 @@ fn routed_chord_and_rest_keep_durations_and_destination_key() {
     assert!(chord.accidentals[0].is_some(),"F sharp outside bass's open key");
     let MeasureEvent::Note(note)=&top[0].events[2] else { panic!("note routed to treble") };
     assert!(note.accidental.is_none(),"F sharp in treble's one-sharp key");
-    assert!(matches!(&bottom[0].events[2],MeasureEvent::Spacer(s) if s.duration_log2==2));
+    assert!(matches!(&bottom[0].events[2],MeasureEvent::Spacer(s) if s.duration_log2==Some(2)));
 }
 
 #[test]
@@ -277,4 +277,48 @@ fn full_source_excerpt_rasterizes_to_png() {
     if let Ok(path)=std::env::var("CROSS_STAFF_VISUAL_OUT") {
         std::fs::write(path,png).unwrap();
     }
+}
+
+#[test]
+fn cross_staff_spacer_endpoint_keeps_destination_and_shared_tick() {
+    use crate::layout::hairpin::HairpinType;
+    let voice = ScoreBuilder::new().time_signature(2, 4)
+        .note(Pitch::new(Note::C, 3), Duration::QTR).on_staff(1)
+        .hairpin_start(HairpinType::Decrescendo)
+        .spacer(Duration::EIGHTH).on_staff(1).hairpin_end()
+        .spacer(Duration::EIGHTH).on_staff(1)
+        .end_barline();
+    let mut score = MultiStaffScore::grand_staff(
+        ScoreBuilder::new().clef(Clef::Treble),
+        ScoreBuilder::new().clef(Clef::Bass),
+    );
+    cross_staff::distribute_voice(voice, &mut score.staves).unwrap();
+    let top = score.staves[0].build_measure_contents().unwrap();
+    let bottom = score.staves[1].build_measure_contents().unwrap();
+    assert!(matches!(&top[0].events[1], MeasureEvent::Spacer(s) if !s.annotations.hairpin_end));
+    assert!(matches!(&bottom[0].events[1], MeasureEvent::Spacer(s) if s.annotations.hairpin_end));
+    let cfg = MeasureLayoutConfig::from_staff_space(250.0);
+    let (prepared, _) = score.staves_into_systems(&cfg, 10_000.0, 4).unwrap();
+    let system = layout_staves_followed_by(
+        &[(&prepared[0].1, &prepared[0].0, None), (&prepared[1].1, &prepared[1].0, None)],
+        &cfg,
+        Some(10_000.0),
+    );
+    let onset = |staff: usize, index: usize| system[staff].measures[0].layout.elements.iter()
+        .filter(|e| matches!(e.element, MeasureElement::Note(_) | MeasureElement::Spacer(_)))
+        .nth(index).unwrap().x;
+    assert_eq!(onset(0, 1), onset(1, 1), "invisible stop shares the stave tick");
+    assert!(onset(1, 0) < onset(1, 1) && onset(1, 1) < onset(1, 2));
+    let svg = MultiStaffScore::grand_staff(
+        ScoreBuilder::new().clef(Clef::Treble),
+        ScoreBuilder::new().clef(Clef::Bass),
+    ).cross_staff_voice(
+        ScoreBuilder::new().time_signature(2, 4)
+            .note(Pitch::new(Note::C, 3), Duration::QTR).on_staff(1)
+            .hairpin_start(HairpinType::Decrescendo)
+            .spacer(Duration::EIGHTH).on_staff(1).hairpin_end()
+            .spacer(Duration::EIGHTH).on_staff(1).end_barline(),
+    ).try_render_svg().unwrap();
+    let rest = bravura_font().glyph_outline(smufl::Glyph::Rest8th).unwrap().path_data;
+    assert!(!svg.contains(&rest), "routing makes invisible fillers, not visible rests");
 }
