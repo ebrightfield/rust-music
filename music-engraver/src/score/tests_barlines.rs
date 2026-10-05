@@ -392,6 +392,29 @@ fn mid_measure_break_without_an_inline_barline_closes_the_piece_invisibly() {
     );
 }
 
+#[test]
+fn mid_measure_continuation_does_not_repeat_the_printed_bar_number() {
+    let builder = ScoreBuilder::new()
+        .measure_numbering(crate::layout::bar_number::MeasureNumbering::SystemStart)
+        .note(p(Note::C, 5), Q)
+        .inline_barline(BarlineStyle::Invisible)
+        .system_break()
+        .note(p(Note::D, 5), Q)
+        .end_barline();
+    let single = builder.clone().render_svg();
+    assert_eq!(single.matches(">1</text>").count(), 1);
+
+    let lower = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .note(p(Note::C, 3), Q)
+        .note(p(Note::D, 3), Q)
+        .end_barline();
+    let grand = MultiStaffScore::grand_staff(builder, lower)
+        .measure_numbering(crate::layout::bar_number::MeasureNumbering::SystemStart)
+        .render_svg();
+    assert_eq!(grand.matches(">1</text>").count(), 1);
+}
+
 // --- multi-staff ---
 
 fn grand_staff_systems(
@@ -443,6 +466,39 @@ fn mid_measure_break_on_one_stave_splits_every_stave_at_that_onset() {
     assert_eq!(lower_pieces[0].barline, BarlineStyle::Invisible);
     assert!(lower_pieces[1].meta.continuation);
     assert_eq!(lower_pieces[1].barline, BarlineStyle::Final);
+}
+
+#[test]
+fn empty_stave_measure_closes_at_the_sounding_staves_barline() {
+    let upper = ScoreBuilder::new()
+        .note(p(Note::C, 5), W)
+        .barline()
+        .note(p(Note::D, 5), W)
+        .end_barline();
+    let lower = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .barline()
+        .note(p(Note::G, 2), W)
+        .end_barline();
+    let all = lines(&MultiStaffScore::grand_staff(upper, lower).render_svg());
+    let mut staff_lines: Vec<_> = all
+        .iter()
+        .filter(|line| line.y1 == line.y2)
+        .map(|line| line.y1)
+        .collect();
+    staff_lines.sort_by(f64::total_cmp);
+    staff_lines.dedup();
+    let first_barline = |top, bottom| {
+        all.iter()
+            .filter(|line| line.x1 == line.x2 && line.y1 == top && line.y2 == bottom)
+            .map(|line| line.x1)
+            .min_by(f64::total_cmp)
+            .unwrap()
+    };
+    assert_eq!(
+        first_barline(staff_lines[0], staff_lines[4]),
+        first_barline(staff_lines[5], staff_lines[9])
+    );
 }
 
 #[test]

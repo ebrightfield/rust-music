@@ -645,6 +645,30 @@ fn scale_measure_springs(layout: &mut MeasureLayout, s: f64) {
     layout.total_width = layout.total_rod + layout.total_spring;
 }
 
+/// A zero-spring measure cannot be stretched by `scale_measure_springs`
+/// (typically it contains only a barline). Put the missing whitespace before
+/// its closing barline instead, so that an empty stave shares the same boundary
+/// as a sounding stave without changing any glyph's advance.
+fn fit_measure_column(layout: &mut MeasureLayout, width: f64) {
+    if layout.total_spring > 0.0 {
+        let scale = spring_scale(layout.total_rod, layout.total_spring, width);
+        scale_measure_springs(layout, scale);
+    } else if width > layout.total_width {
+        let gap = width - layout.total_width;
+        if let Some(last_barline) = layout
+            .elements
+            .iter()
+            .rposition(|element| matches!(element.element, MeasureElement::Barline(_)))
+        {
+            for element in &mut layout.elements[last_barline..] {
+                element.x += gap;
+            }
+        }
+        layout.total_spring += gap;
+        layout.total_width = width;
+    }
+}
+
 /// Give staves sharing a system the same measure boundaries.
 ///
 /// Each stave is first laid out at natural width. The widest rod and spring
@@ -680,20 +704,12 @@ pub(crate) fn align_system_measure_boundaries(systems: &mut [SystemLayout], targ
     for system in systems {
         let mut x = 0.0;
         for (measure, &width) in system.measures.iter_mut().zip(&widths) {
-            let layout = &mut measure.layout;
-            if layout.total_spring > 0.0 {
-                let scale = spring_scale(layout.total_rod, layout.total_spring, width);
-                scale_measure_springs(layout, scale);
-                for voice in &mut measure.additional_voice_layouts {
-                    if voice.total_spring > 0.0 {
-                        let voice_scale =
-                            spring_scale(voice.total_rod, voice.total_spring, layout.total_width);
-                        scale_measure_springs(voice, voice_scale);
-                    }
-                }
+            fit_measure_column(&mut measure.layout, width);
+            for voice in &mut measure.additional_voice_layouts {
+                fit_measure_column(voice, width);
             }
             measure.x_offset = x;
-            x += layout.total_width;
+            x += measure.layout.total_width;
         }
         system.total_width = x;
         system.staff_width = target_width.max(x);
