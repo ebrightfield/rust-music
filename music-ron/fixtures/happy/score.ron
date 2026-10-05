@@ -1,0 +1,47 @@
+// Minimal complete-score fixture with source provenance and measure boundaries.
+(
+  kind: "Score",
+  version: 1,
+  meta: (title: Some("Two-measure pilot"), tags: ["score", "pilot"]),
+  sources: [(
+    id: "scan",
+    path: "/private/source.pdf",
+    sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    page: Some(1),
+    work_id: Some("pilot"),
+  )],
+  parts: [
+    (id: "melody", name: "Melody", clef: "treble"),
+  ],
+  measures: [
+    (
+      number: "1",
+      meter: Some((beats: 4, unit: Qtr)),
+      key: Some((tonic: C, mode: "major")),
+      parts: [(
+        part: "melody",
+        voices: [(id: "voice-1", events: [
+          Note(pitch: "c4", duration: "4"),
+          Note(pitch: "d4", duration: "4"),
+          Note(pitch: "e4", duration: "4"),
+          Note(pitch: "f4", duration: "4"),
+        ])],
+      )],
+      harmony: [(symbol: "C", duration: "1")],
+    ),
+    (
+      number: "2",
+      parts: [(
+        part: "melody",
+        voices: [(id: "voice-1", events: [Rest(duration: "1")])],
+      )],
+      readings: [(
+        beat: Some("1"),
+        subject: "melody",
+        status: "verified",
+        confidence: "high",
+        note: "Fixture reading",
+      )],
+    ),
+  ],
+)

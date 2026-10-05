@@ -81,3 +81,13 @@ impl DocumentKind for super::OwnedIntervalMatrix {
         }
     }
 }
+
+impl DocumentKind for super::OwnedScore {
+    const KIND: &'static str = "Score";
+    fn from_document(doc: Document) -> Option<Self> {
+        match doc {
+            Document::Score(v) => Some(v),
+            _ => None,
+        }
+    }
+}

@@ -55,3 +55,8 @@ fn fixture_interval_matrix() {
         Document::IntervalMatrix(_)
     ));
 }
+
+#[test]
+fn fixture_score() {
+    assert!(matches!(parse_fixture("score"), Document::Score(_)));
+}

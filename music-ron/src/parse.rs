@@ -62,6 +62,7 @@ fn validate_version(doc: &Document, source_path: Option<PathBuf>) -> Result<(), 
         Document::ChordProgression(d) => d.version,
         Document::ScaleDiagram(d) => d.version,
         Document::IntervalMatrix(d) => d.version,
+        Document::Score(d) => d.version,
     };
     match v {
         None | Some(1) => Ok(()),

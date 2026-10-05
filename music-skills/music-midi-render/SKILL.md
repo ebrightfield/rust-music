@@ -60,7 +60,7 @@ This skill **consumes** rather than replaces:
 
 The `music-midi` crate is evolving. Before emitting any Rust:
 
-1. **Read the relevant source files** in `/home/eric/Documents/rust-music/music-midi/src/` to confirm current API. The key entry points are listed in `references/crate-api.md`.
+1. **Read the relevant source files** in `/home/eric/zooanthid/rust-music/music-midi/src/` to confirm current API. The key entry points are listed in `references/crate-api.md`.
 2. **Check the active features** by reading `music-midi/Cargo.toml`. `smf` is default; `playback`/`render` are opt-in. Tell the user which `--features` they'll need.
 3. **Confirm constructor signatures** by reading the relevant module (`smf.rs`, `render.rs`, `soundfont.rs`, etc.). Don't assume an old function name — the workspace's debt log (`docs/spec-music-midi-debt.md`) lists known-evolving areas.
 

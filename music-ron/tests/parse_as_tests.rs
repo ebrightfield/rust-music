@@ -1,4 +1,4 @@
-use music_ron::ast::{OwnedPitchCircle, OwnedSnippet, OwnedTab};
+use music_ron::ast::{OwnedPitchCircle, OwnedScore, OwnedSnippet, OwnedTab};
 use music_ron::{parse_as, MusicRonError};
 
 #[test]
@@ -20,6 +20,14 @@ fn parse_as_pitch_circle_ok() {
     let src = r#"(kind: "PitchCircle", pcs: [0, 4, 7])"#;
     let pc: OwnedPitchCircle = parse_as(src).unwrap();
     assert_eq!(pc.pcs, Some(vec![0, 4, 7]));
+}
+
+#[test]
+fn parse_as_score_ok() {
+    let src = r#"(kind: "Score", parts: [], measures: [])"#;
+    let score: OwnedScore = parse_as(src).unwrap();
+    assert!(score.parts.is_empty());
+    assert!(score.measures.is_empty());
 }
 
 #[test]

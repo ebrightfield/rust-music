@@ -2,7 +2,7 @@
 
 The entry points and call shapes you need to emit Rust against the workspace's `music-midi` crate. **Verify each shape against the live source** before pasting — the crate is evolving (see `docs/spec-music-midi-debt.md`).
 
-Source root: `/home/eric/Documents/rust-music/music-midi/`.
+Source root: `/home/eric/zooanthid/rust-music/music-midi/`.
 
 ---
 

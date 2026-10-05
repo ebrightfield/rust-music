@@ -115,3 +115,18 @@ fn roundtrip_interval_matrix() {
             if *v == vec![Pc::from(0u8), Pc::from(3u8), Pc::from(7u8)]
     ));
 }
+
+#[test]
+fn roundtrip_score_document() {
+    let doc = parse(&fixture("score")).unwrap();
+    let Document::Score(score) = doc else {
+        panic!("expected Score")
+    };
+    assert_eq!(score.sources.len(), 1);
+    assert_eq!(score.parts.len(), 1);
+    assert_eq!(score.measures.len(), 2);
+    assert_eq!(score.measures[0].parts[0].voices[0].events.len(), 4);
+
+    let serialized = ron::ser::to_string(&Document::Score(score)).unwrap();
+    assert!(matches!(parse(&serialized).unwrap(), Document::Score(_)));
+}

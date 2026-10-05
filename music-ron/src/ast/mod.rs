@@ -16,6 +16,7 @@ pub mod fretboard_shape;
 pub mod interval_matrix;
 pub mod pitch_circle;
 pub mod scale_diagram;
+pub mod score;
 pub mod snippet;
 pub mod tab;
 
@@ -26,6 +27,10 @@ pub use fretboard_shape::{OwnedFretValue, OwnedFretboardShape};
 pub use interval_matrix::OwnedIntervalMatrix;
 pub use pitch_circle::OwnedPitchCircle;
 pub use scale_diagram::{OwnedOrientation, OwnedScaleDiagram};
+pub use score::{
+    OwnedMeasure, OwnedMeasurePart, OwnedPartDefinition, OwnedReading, OwnedScore,
+    OwnedScoreSource, OwnedVoice,
+};
 pub use snippet::OwnedSnippet;
 pub use tab::{OwnedTab, OwnedTabEvent};
 
@@ -40,6 +45,7 @@ pub enum Document {
     ChordProgression(OwnedChordProgression),
     ScaleDiagram(OwnedScaleDiagram),
     IntervalMatrix(OwnedIntervalMatrix),
+    Score(OwnedScore),
 }
 
 impl Document {
@@ -53,6 +59,7 @@ impl Document {
             Document::ChordProgression(_) => "ChordProgression",
             Document::ScaleDiagram(_) => "ScaleDiagram",
             Document::IntervalMatrix(_) => "IntervalMatrix",
+            Document::Score(_) => "Score",
         }
     }
 }

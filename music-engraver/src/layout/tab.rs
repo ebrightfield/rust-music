@@ -15,8 +15,9 @@ pub const TAB_4_STRING_LINE_COUNT: u8 = 4;
 /// uses SVG conventions: y increases downward. `y_origin` is the
 /// y-coordinate of the top line.
 ///
-/// String numbering follows guitar convention: string 1 is the highest
-/// pitch (bottom line in TAB), string N is the lowest pitch (top line).
+/// String numbering follows standard guitar TAB convention: string 1 is the
+/// highest pitch and appears on the top line; string N is the lowest pitch
+/// and appears on the bottom line.
 #[derive(Clone, Debug)]
 pub struct TabStaffLayout {
     /// X-coordinate of the left edge.
@@ -76,14 +77,15 @@ impl TabStaffLayout {
             .collect()
     }
 
-    /// Y-coordinate for a given string number (1-based, 1 = highest pitch = bottom line).
+    /// Y-coordinate for a given string number (1-based, 1 = highest pitch = top line).
     ///
-    /// String 1 is at the bottom, string N is at the top — matching guitar
-    /// convention where string 1 is the thinnest (high E).
+    /// String 1 is at the top, string N is at the bottom, matching standard
+    /// guitar tablature's physical view of the strings.
     pub fn string_y(&self, string: u8) -> f64 {
-        // String 1 → bottom line, string line_count → top line.
-        // Bottom line index = line_count - 1, top line index = 0.
-        let line_index = self.line_count.saturating_sub(string);
+        // String 1 → top line index 0; string line_count → bottom line.
+        let line_index = string
+            .saturating_sub(1)
+            .min(self.line_count.saturating_sub(1));
         self.y_origin + line_index as f64 * self.staff_space
     }
 
@@ -254,30 +256,30 @@ mod tests {
     }
 
     #[test]
-    fn string_1_is_bottom_line() {
-        let staff = guitar_staff();
-        let bottom = *staff.line_ys().last().unwrap();
-        assert!(
-            (staff.string_y(1) - bottom).abs() < f64::EPSILON,
-            "string 1 (high E) should be the bottom line"
-        );
-    }
-
-    #[test]
-    fn string_6_is_top_line() {
+    fn string_1_is_top_line() {
         let staff = guitar_staff();
         let top = staff.line_ys()[0];
         assert!(
-            (staff.string_y(6) - top).abs() < f64::EPSILON,
-            "string 6 (low E) should be the top line"
+            (staff.string_y(1) - top).abs() < f64::EPSILON,
+            "string 1 (high E) should be the top line"
         );
     }
 
     #[test]
-    fn string_3_is_fourth_line_from_top() {
+    fn string_6_is_bottom_line() {
         let staff = guitar_staff();
-        // String 3 (G) → line index = 6-3 = 3 → y = 3 * staff_space
-        let expected = staff.staff_space * 3.0;
+        let bottom = *staff.line_ys().last().unwrap();
+        assert!(
+            (staff.string_y(6) - bottom).abs() < f64::EPSILON,
+            "string 6 (low E) should be the bottom line"
+        );
+    }
+
+    #[test]
+    fn string_3_is_third_line_from_top() {
+        let staff = guitar_staff();
+        // String 3 (G) → line index 2 → y = 2 * staff_space.
+        let expected = staff.staff_space * 2.0;
         assert!((staff.string_y(3) - expected).abs() < f64::EPSILON);
     }
 
@@ -346,8 +348,8 @@ mod tests {
         let staff = TabStaffLayout::guitar(0.0, 500.0, 5000.0, &config);
         let ys = staff.line_ys();
         assert!((ys[0] - 500.0).abs() < f64::EPSILON);
-        assert!((staff.string_y(6) - 500.0).abs() < f64::EPSILON);
-        let fret = layout_fret_number(&staff, 6, 3, 100.0);
+        assert!((staff.string_y(1) - 500.0).abs() < f64::EPSILON);
+        let fret = layout_fret_number(&staff, 1, 3, 100.0);
         assert!((fret.y - 500.0).abs() < f64::EPSILON);
     }
 

@@ -91,7 +91,7 @@ Two complementary checks:
 **A. Parser round-trip** (LilyPond output only) — confirms the `.ly` is well-formed in the subset the repo's parser accepts:
 
 ```bash
-cd /home/eric/Documents/rust-music && \
+cd /home/eric/zooanthid/rust-music && \
   cargo test -p lilypond-parser -- --nocapture
 # Or, for a one-off file, add it under lilypond-parser/tests/fixtures/
 # and let the existing fixture_roundtrip test pick it up.
