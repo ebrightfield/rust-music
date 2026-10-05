@@ -22,7 +22,8 @@ fn beamed_rest_and_chord_keep_kinds_and_stems() {
         .rest(Duration::EIGHTH)
         .note(p(Note::G), Duration::EIGHTH)
         .end_beam().end_barline();
-    let events = &builder.build_measure_contents()[0].events;
+    let contents = builder.build_measure_contents().unwrap();
+    let events = &contents[0].events;
     assert!(matches!(events[1], MeasureEvent::Chord(_)));
     assert!(matches!(events[2], MeasureEvent::Rest(_)));
     assert!(matches!(events[3], MeasureEvent::Note(_)));
@@ -65,7 +66,7 @@ fn chord_triplet_number_ratio_placement_and_visibility() {
     let builder = ScoreBuilder::new().begin_tuplet(spec)
         .chord(chord(), Duration::EIGHTH).chord(chord(), Duration::EIGHTH)
         .chord(chord(), Duration::EIGHTH).end_tuplet().end_barline();
-    let events = builder.build_measure_contents();
+    let events = builder.build_measure_contents().unwrap();
     assert_eq!(events[0].events.iter().filter(|event| matches!(event, MeasureEvent::Chord(_))).count(), 3);
     let svg = builder.render_svg();
     assert!(svg.contains(&bravura_font().glyph_outline(smufl::Glyph::TupletColon).unwrap().path_data));
@@ -81,7 +82,7 @@ fn chord_triplet_number_ratio_placement_and_visibility() {
 fn beam_crosses_barline_and_subdivides_secondary_beams() {
     let cross = ScoreBuilder::new().begin_beam().note(p(Note::F), Duration::EIGHTH)
         .barline().note(p(Note::G), Duration::EIGHTH).end_beam().end_barline();
-    let contents = cross.build_measure_contents();
+    let contents = cross.build_measure_contents().unwrap();
     assert!(matches!(contents[0].events.last(), Some(MeasureEvent::GroupMark(GroupMark::BeamEnd { continues: true }))));
     assert!(matches!(contents[1].events.first(), Some(MeasureEvent::GroupMark(GroupMark::BeamStart { continued: true, .. }))));
     assert!(beams(&cross.render_svg()) > 0);
@@ -110,7 +111,7 @@ fn annotations_on_tuplets_and_beam_members_have_visible_endpoints() {
     assert!(svg.contains(">hap<") && svg.contains(">py<"));
     assert!(svg.lines().filter(|line| line.starts_with("  <path ") && !line.contains("transform=")).count() >= 2,
         "both the slur and tie curves must reach beamed tuplet members");
-    let events = builder.build_measure_contents();
+    let events = builder.build_measure_contents().unwrap();
     let notes: Vec<_> = events[0].events.iter().filter_map(|event| match event {
         MeasureEvent::Note(n) => Some(n), _ => None
     }).collect();
@@ -150,7 +151,7 @@ fn nested_tuplet_onsets_apply_both_ratios_to_mixed_members() {
         .rest(Duration::EIGHTH)
         .chord(vec![p(Note::D), p(Note::Fis)], Duration::EIGHTH)
         .end_tuplet().end_tuplet().end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     let cfg = MeasureLayoutConfig::from_staff_space(bravura_font().engraving_config().staff_space);
     let system = layout_system(&builder.build_prefix(), &contents, &cfg, None);
     let elements = &system.measures[0].layout.elements;

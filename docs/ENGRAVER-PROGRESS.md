@@ -7816,3 +7816,23 @@
   for reordered beam drawing and formerly clipped lyrics were replaced
   with behavioral glyph/geometry checks; GuitarScore snapshots were not
   regenerated.
+## 2026-10-04 — RM-MN-004/010: score structure and meter
+- Added onset-aware clef changes (including after-barline placement), printed and
+  hidden meter changes, courtesy changes at system breaks, and Bravura change-size
+  clefs. `clef`/`time_signature` after content now insert changes instead of
+  rewriting earlier measures. Guitar notation carries meter and clef changes.
+- Per-measure metadata records logical number, meter visibility, nominal and
+  actual lengths, pickups, and cadenza; `partial`, `measure_length`, and
+  `spacer` expose unprinted bar structure without rejecting incomplete bars.
+  System-start/every-bar numbering shares placement across score renderers;
+  `first_measure_number` also sets a standalone TAB score's start value.
+- Clef advance/bbox controls key-signature spacing and page bounds so alto,
+  tenor, and high accidentals remain inside the SVG viewBox.
+- Verified after merging notation marks: 2,960 engraver library tests and
+  78 SVG golden/behavior tests passed; all-features workspace tests failed only
+  the known offline GeneralUser GS SoundFont test. Workspace all-targets clippy
+  completed with warnings (including the pre-existing guitar 8-argument
+  renderer helper). Rendered and visually inspected PNGs for an alto pickup
+  8/8→12/8→8/8→7/8 excerpt shape against the LilyPond excerpt PDF,
+  mid-measure/system-break changes, and grand staff; unrelated slurs/dashed
+  barlines in the reference are outside this change.

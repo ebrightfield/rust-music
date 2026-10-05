@@ -38,7 +38,14 @@ fn main() {
     let mut svg = SvgWriter::new(1100.0, 350.0, -100.0, -1200.0, 10000.0, 4500.0);
 
     draw_staff_lines(&mut svg, &staff, &config);
-    draw_clef(&mut svg, &staff, &clef_layout, &font).unwrap();
+    draw_clef(
+        &mut svg,
+        &staff,
+        staff.x + staff.staff_space,
+        &clef_layout,
+        &font,
+    )
+    .unwrap();
 
     let start_x = 1200.0;
     let spacing = 1000.0;

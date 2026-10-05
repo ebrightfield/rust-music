@@ -6,6 +6,7 @@ use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
+use music_engraver::layout::bar_number::MeasureNumbering;
 use music_engraver::score::ScoreBuilder;
 
 fn p(name: &str, octave: i8) -> Pitch {
@@ -27,7 +28,7 @@ fn main() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .measures_per_system(2)
-        .show_measure_numbers()
+        .measure_numbering(MeasureNumbering::SystemStart)
         // Measure 1
         .note(p("C", 4), Duration::QTR)
         .note(p("D", 4), Duration::QTR)

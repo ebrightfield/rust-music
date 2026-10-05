@@ -1,19 +1,20 @@
 use music::notation::clef::Clef;
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::articulation::layout_articulation_stack;
+use crate::layout::articulation::{layout_articulation_stack, layout_chord_articulation_stack};
 use crate::layout::chord::{
     chord_left_notehead_offset, layout_chord_noteheads, notehead_x_offset, ChordNote,
 };
 use crate::layout::dot::dot_staff_position;
 use crate::layout::expression::layout_expression;
-use crate::layout::grace::layout_grace_note;
+use crate::layout::grace::{grace_stem_direction, layout_grace_group, layout_grace_slur};
 use crate::layout::group::scan_groups;
 use crate::layout::lyric::layout_lyric;
 use crate::layout::measure::{
     ChordEvent, MeasureElement, MeasureLayout, NoteAnnotations, NoteEvent, NoteheadStyle,
-    PositionedElement,
+    PositionedElement, StemVisibility,
 };
+use crate::layout::staff::StaffPosition;
 use crate::layout::multi_measure_rest::{
     church_rest_supported, layout_church_rest, layout_multi_measure_rest, MultiMeasureRestStyle,
 };
@@ -31,13 +32,14 @@ use crate::render::dot_renderer::draw_dots;
 use crate::render::dynamics_renderer::draw_dynamic;
 use crate::render::expression_renderer::draw_expression;
 use crate::render::flag_renderer::draw_flag;
-use crate::render::grace_renderer::draw_grace_note;
 use crate::render::group_renderer::draw_groups;
+use crate::render::grace_renderer::draw_grace_group;
 use crate::render::key_sig_renderer::draw_key_signature;
 use crate::render::lyric_renderer::draw_lyric;
 use crate::render::multi_measure_rest_renderer::draw_multi_measure_rest;
 use crate::render::note_renderer::{
-    draw_ledger_lines, draw_styled_notehead, notehead_advance, NoteheadKind,
+    draw_ledger_lines, draw_notehead_parentheses, draw_styled_notehead, notehead_advance,
+    NoteheadKind,
 };
 use crate::render::rehearsal_renderer::draw_rehearsal_mark;
 use crate::render::rest_renderer::{draw_rest, draw_rest_displaced};
@@ -103,7 +105,7 @@ pub(crate) fn draw_measure_elements(
         let elem_x = x_offset + positioned.x;
         match &positioned.element {
             MeasureElement::Clef(clef_layout) => {
-                draw_clef(svg, staff, clef_layout, font)?;
+                draw_clef(svg, staff, elem_x, clef_layout, font)?;
             }
             MeasureElement::KeySignature(key) => {
                 draw_key_signature(svg, staff, font, elem_x, key, clef_for_key_sig)?;
@@ -122,6 +124,8 @@ pub(crate) fn draw_measure_elements(
             MeasureElement::Rest(rest) => {
                 draw_rest(svg, staff, font, elem_x, rest.duration_log2)?;
             }
+            // A spacer takes time and space but draws nothing.
+            MeasureElement::Spacer(_) => {}
             MeasureElement::MultiMeasureRest { count, style } => {
                 // The rest fills the rhythmic width allocated by layout — the
                 // measure barlines sit just outside this span, so the cluster
@@ -221,6 +225,7 @@ pub fn draw_additional_voices(
                 | MeasureElement::TimeSignature(_)
                 | MeasureElement::MultiMeasureRest { .. }
                 | MeasureElement::GroupMark(_)
+                | MeasureElement::Spacer(_)
                 | MeasureElement::Barline(_) => {}
 
                 MeasureElement::Note(note) => {
@@ -283,6 +288,51 @@ fn flag_count_from_log2(duration_log2: i8) -> u8 {
 ///
 /// A `beamed` note (a beam span member) draws everything but its stem and
 /// flag, which the beam renderer supplies.
+/// Draw the grace group carried by `annotations` so that it ends before
+/// `principal_left_x` (the principal's leftmost ink), with its slur to the
+/// principal notehead at `slur_target` when the group asks for one.
+///
+/// Grace stems follow `forced_stem` (the principal's forced direction, if
+/// any); the slur curves away from `principal_stem`.
+#[allow(clippy::too_many_arguments)]
+fn draw_principal_grace_group(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    annotations: &NoteAnnotations,
+    forced_stem: Option<StemDirection>,
+    principal_left_x: f64,
+    slur_target: (f64, StaffPosition),
+    principal_stem: StemDirection,
+) -> Result<(), FontError> {
+    let Some(group) = &annotations.grace_group else {
+        return Ok(());
+    };
+    if group.notes.is_empty() {
+        return Ok(());
+    }
+    let layout = layout_grace_group(
+        group,
+        principal_left_x,
+        grace_stem_direction(forced_stem),
+        staff,
+        config,
+    );
+    draw_grace_group(svg, staff, font, config, &layout)?;
+    if group.slur {
+        let (center_x, position) = slur_target;
+        if let Some(slur) =
+            layout_grace_slur(&layout, center_x, position, principal_stem, staff, config)
+        {
+            crate::render::slur_renderer::draw_slur(svg, &slur);
+        }
+    }
+    Ok(())
+}
+
+/// Draw a complete note event: grace group + accidental + notehead (with
+/// parentheses) + ledger lines + stem + flag + dots, at the note's size.
 fn draw_note_event(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -295,41 +345,26 @@ fn draw_note_event(
     let kind = notehead_kind_from_log2(note.duration_log2);
     let style = notehead_style(&note.annotations, 0);
     let parenthesized = parenthesized_notehead(&note.annotations, 0);
+    let scale = note.annotations.size.scale();
     let position = note.staff_position;
 
-    // Draw grace note before principal (if present)
-    if let Some((grace_pos, grace_kind)) = note.annotations.grace_note {
-        let stem_dir = note
-            .stem_direction
-            .unwrap_or_else(|| auto_stem_direction(position));
-        let grace_layout = layout_grace_note(x, grace_pos, grace_kind, stem_dir, staff);
-        draw_grace_note(svg, font, &grace_layout)?;
-
-        // Connecting slur from grace to principal (canonical for acciaccatura)
-        if note.annotations.grace_note_slur {
-            if let Some(slur) = crate::layout::grace::layout_grace_note_slur(
-                &grace_layout,
-                x,
-                position,
-                stem_dir,
-                staff,
-                config,
-            ) {
-                crate::render::slur_renderer::draw_slur(svg, &slur);
-            }
-        }
-    }
-
     // Draw accidental (pre-resolved) to the left of notehead
-    if let Some(accidental) = note.accidental {
-        draw_accidental(svg, staff, font, x, 0.0, position, accidental)?;
-    }
+    let mut left_x = match note.accidental {
+        Some(accidental) => {
+            draw_accidental(svg, staff, font, x, 0.0, position, accidental, scale)?
+        }
+        None => x,
+    };
 
-    // Draw notehead
-    let advance = draw_styled_notehead(svg, staff, font, x, position, kind, style, parenthesized)?;
+    // Draw notehead, enclosing it and its accidental when parenthesized
+    let advance = draw_styled_notehead(svg, staff, font, x, position, kind, style, scale)?;
+    if parenthesized {
+        left_x =
+            draw_notehead_parentheses(svg, staff, font, left_x, x + advance, position, scale)?;
+    }
 
     // Draw ledger lines
-    draw_ledger_lines(svg, staff, config, x, advance, position);
+    draw_ledger_lines(svg, staff, config, x, advance, position, scale);
 
     // Draw arpeggio wavy line to the left of the note if present
     if let Some(arp_dir) = note.annotations.arpeggio {
@@ -340,44 +375,35 @@ fn draw_note_event(
         }
     }
 
-    // Determine stem direction
+    // Determine stem direction (it also places articulations, slurs, and
+    // graces when the stem itself is hidden)
     let needs_stem = note.duration_log2 >= 1; // whole notes have no stem
-    let direction = if needs_stem {
-        Some(
-            note.stem_direction
-                .unwrap_or_else(|| auto_stem_direction(position)),
-        )
-    } else {
-        None
-    };
+    let resolved_direction = note
+        .stem_direction
+        .unwrap_or_else(|| auto_stem_direction(position));
+    let direction = needs_stem.then_some(resolved_direction);
 
-    // Draw stem (a beamed note's stem belongs to its beam)
-    if let Some(dir) = direction.filter(|_| !beamed) {
-        draw_stem(svg, staff, config, x, advance, position, dir);
+    draw_principal_grace_group(
+        svg, staff, font, config, &note.annotations, note.stem_direction,
+        left_x, (x + advance / 2.0, position), resolved_direction,
+    )?;
 
+    // A beamed member's stem is drawn with its beam. Stemless members have
+    // no flag either, but retain their noteheads and annotations.
+    if let Some(dir) = direction.filter(|_| !beamed && note.annotations.stem == StemVisibility::Visible) {
+        draw_stem(svg, staff, config, x, advance, position, dir, scale);
+        let sx = stem_x(x, advance, dir, config.stem_thickness_fu() * scale);
+        let (top, bottom) = stem_endpoints(staff, position, dir, scale);
+        let tip_y = match dir { StemDirection::Up => top, StemDirection::Down => bottom };
         // Draw flag
         let flags = flag_count_from_log2(note.duration_log2);
         if flags > 0 {
-            let sx = stem_x(x, advance, dir, config.stem_thickness_fu());
-            let (y_top, y_bottom) = stem_endpoints(staff, position, dir);
-            let tip_y = match dir {
-                StemDirection::Up => y_top,
-                StemDirection::Down => y_bottom,
-            };
-            draw_flag(svg, font, sx, tip_y, flags, dir)?;
+            draw_flag(svg, font, sx, tip_y, flags, dir, scale)?;
         }
-    }
 
-    // Draw tremolo slashes on the stem if present
-    if let Some(tremolo_count) = note.annotations.tremolo {
-        if let Some(dir) = direction {
-            let sx = stem_x(x, advance, dir, config.stem_thickness_fu());
+        // Draw tremolo slashes on the stem if present
+        if let Some(tremolo_count) = note.annotations.tremolo {
             let notehead_y = staff.y_of(position);
-            let (y_top, y_bottom) = stem_endpoints(staff, position, dir);
-            let tip_y = match dir {
-                StemDirection::Up => y_top,
-                StemDirection::Down => y_bottom,
-            };
             let trem_layout = crate::layout::tremolo::layout_tremolo(
                 tremolo_count,
                 sx,
@@ -393,7 +419,17 @@ fn draw_note_event(
     // Draw augmentation dots
     if note.dots > 0 {
         let dot_pos = dot_staff_position(position);
-        draw_dots(svg, staff, font, x, advance, dot_pos, note.dots)?;
+        draw_dots(
+            svg,
+            staff,
+            font,
+            x,
+            advance,
+            dot_pos,
+            note.dots,
+            scale,
+            note.annotations.parenthesized_dots,
+        )?;
     }
 
     // Draw articulation(s) near the notehead if present
@@ -484,7 +520,12 @@ fn draw_note_event(
     // Draw breath mark above the staff, to the right of the note
     if let Some(breath) = note.annotations.breath_mark {
         let note_right_x = x + advance;
-        let breath_layout = crate::layout::breath::layout_breath_mark(breath, note_right_x, staff);
+        let breath_layout = crate::layout::breath::layout_breath_mark(
+            breath,
+            note_right_x,
+            staff,
+            note.annotations.breath_mark_parenthesized,
+        );
         crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
     }
 
@@ -497,6 +538,7 @@ fn draw_note_event(
 /// each notehead at the correct x-offset, a single shared stem spanning the full chord,
 /// and optional flags/dots. A `beamed` chord (a beam span member) leaves its
 /// stem and flag to the beam renderer.
+/// and optional flags/dots, all at the chord's size.
 fn draw_chord_event(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -511,36 +553,10 @@ fn draw_chord_event(
     }
 
     let kind = notehead_kind_from_log2(chord.duration_log2);
+    let scale = chord.annotations.size.scale();
     let direction = chord
         .stem_direction
         .unwrap_or_else(|| auto_stem_direction_chord(&chord.staff_positions));
-
-    // Draw grace note before chord (if present)
-    if let Some((grace_pos, grace_kind)) = chord.annotations.grace_note {
-        let grace_layout = layout_grace_note(x, grace_pos, grace_kind, direction, staff);
-        draw_grace_note(svg, font, &grace_layout)?;
-
-        // Connecting slur from grace to nearest chord note (canonical for
-        // acciaccatura — attach to the chord member closest in pitch).
-        if chord.annotations.grace_note_slur {
-            let nearest = chord
-                .staff_positions
-                .iter()
-                .copied()
-                .min_by_key(|&p| (p as i32 - grace_pos as i32).abs())
-                .unwrap_or(grace_pos);
-            if let Some(slur) = crate::layout::grace::layout_grace_note_slur(
-                &grace_layout,
-                x,
-                nearest,
-                direction,
-                staff,
-                config,
-            ) {
-                crate::render::slur_renderer::draw_slur(svg, &slur);
-            }
-        }
-    }
 
     let chord_notes: Vec<ChordNote> = chord
         .staff_positions
@@ -559,21 +575,23 @@ fn draw_chord_event(
     // Use the widest selected head for collision columns, stem attachment, and dots.
     let advance = layouts.iter().try_fold(0.0_f64, |widest, note| {
         notehead_advance(font, chord.duration_log2, note.notehead_style)
-            .map(|width| widest.max(width))
+            .map(|width| widest.max(width * scale))
     })?;
 
     // Accidentals stack in columns left of the chord's leftmost notehead.
     let accidental_anchor = x + chord_left_notehead_offset(&layouts, direction) * advance;
-    let accidental_columns = chord_accidental_column_offsets(font, staff, &layouts)?;
+    let accidental_columns = chord_accidental_column_offsets(font, staff, &layouts, scale)?;
 
     // Draw each notehead (with offset for seconds)
+    let mut left_x = accidental_anchor;
     for (note_layout, &column_offset) in layouts.iter().zip(&accidental_columns) {
         let x_off = notehead_x_offset(note_layout.offset, direction) * advance;
         let note_x = x + x_off;
 
         // Draw accidental
+        let mut note_left = note_x;
         if let Some(accidental) = note_layout.accidental {
-            draw_accidental(
+            note_left = draw_accidental(
                 svg,
                 staff,
                 font,
@@ -581,6 +599,7 @@ fn draw_chord_event(
                 column_offset,
                 note_layout.staff_position,
                 accidental,
+                scale,
             )?;
         }
 
@@ -592,8 +611,20 @@ fn draw_chord_event(
             note_layout.staff_position,
             kind,
             note_layout.notehead_style,
-            note_layout.parenthesized,
+            scale,
         )?;
+        if note_layout.parenthesized {
+            note_left = draw_notehead_parentheses(
+                svg,
+                staff,
+                font,
+                note_left,
+                note_x + note_advance,
+                note_layout.staff_position,
+                scale,
+            )?;
+        }
+        left_x = left_x.min(note_left);
 
         // Draw ledger lines for this note
         draw_ledger_lines(
@@ -603,6 +634,7 @@ fn draw_chord_event(
             note_x,
             note_advance,
             note_layout.staff_position,
+            scale,
         );
     }
 
@@ -615,12 +647,40 @@ fn draw_chord_event(
         }
     }
 
-    // Draw shared stem spanning from the closest to farthest note
-    let needs_stem = chord.duration_log2 >= 1;
-    if needs_stem {
-        let min_pos = layouts.iter().map(|n| n.staff_position).min().unwrap();
-        let max_pos = layouts.iter().map(|n| n.staff_position).max().unwrap();
+    let min_pos = layouts.iter().map(|n| n.staff_position).min().unwrap();
+    let max_pos = layouts.iter().map(|n| n.staff_position).max().unwrap();
 
+    // Draw the grace group before the chord's leftmost ink, slurred to the
+    // chord member closest in pitch to the first grace note.
+    if let Some(first_grace) = chord
+        .annotations
+        .grace_group
+        .as_ref()
+        .and_then(|group| group.notes.first())
+    {
+        let nearest = chord
+            .staff_positions
+            .iter()
+            .copied()
+            .min_by_key(|&p| (i32::from(p) - i32::from(first_grace.staff_position)).abs())
+            .unwrap_or(first_grace.staff_position);
+        draw_principal_grace_group(
+            svg,
+            staff,
+            font,
+            config,
+            &chord.annotations,
+            chord.stem_direction,
+            left_x,
+            (x + advance / 2.0, nearest),
+            direction,
+        )?;
+    }
+
+    // Draw shared stem spanning from the closest to farthest note
+    let needs_stem =
+        chord.duration_log2 >= 1 && chord.annotations.stem == StemVisibility::Visible;
+    if needs_stem {
         // Stem attaches at the note closest to the tip direction:
         // stem up → bottom note is the attachment, tip extends above top note
         // stem down → top note is the attachment, tip extends below bottom note
@@ -630,7 +690,7 @@ fn draw_chord_event(
         };
 
         // Compute stem tip: start from the far note and extend by standard stem length
-        let stem_len_ss = stem_length_staff_spaces(far_pos, direction);
+        let stem_len_ss = stem_length_staff_spaces(far_pos, direction, scale);
         let stem_len_fu = stem_len_ss * staff.staff_space;
 
         let attach_y = staff.y_of(attach_pos);
@@ -652,9 +712,9 @@ fn draw_chord_event(
             .find(|note| note.staff_position == attach_pos)
             .expect("the selected chord attachment position must exist");
         let attach_advance =
-            notehead_advance(font, chord.duration_log2, attach_note.notehead_style)?;
+            notehead_advance(font, chord.duration_log2, attach_note.notehead_style)? * scale;
         let attach_x = x + notehead_x_offset(attach_note.offset, direction) * advance;
-        let thickness = config.stem_thickness_fu();
+        let thickness = config.stem_thickness_fu() * scale;
         let sx = stem_x(attach_x, attach_advance, direction, thickness);
         if !beamed {
             svg.add_line(sx, y_top, sx, y_bottom, "black", thickness);
@@ -666,7 +726,7 @@ fn draw_chord_event(
                     StemDirection::Up => y_top,
                     StemDirection::Down => y_bottom,
                 };
-                draw_flag(svg, font, sx, tip_y, flags, direction)?;
+                draw_flag(svg, font, sx, tip_y, flags, direction, scale)?;
             }
         }
 
@@ -678,8 +738,8 @@ fn draw_chord_event(
             };
             // Use the far note (tip side) as the notehead reference
             let far_pos = match direction {
-                StemDirection::Up => layouts.iter().map(|n| n.staff_position).max().unwrap(),
-                StemDirection::Down => layouts.iter().map(|n| n.staff_position).min().unwrap(),
+                StemDirection::Up => max_pos,
+                StemDirection::Down => min_pos,
             };
             let notehead_y = staff.y_of(far_pos);
             let trem_layout = crate::layout::tremolo::layout_tremolo(
@@ -704,23 +764,28 @@ fn draw_chord_event(
         // Draw dots for each note in the chord
         for note_layout in &layouts {
             let dot_pos = dot_staff_position(note_layout.staff_position);
-            draw_dots(svg, staff, font, dot_base_x, advance, dot_pos, chord.dots)?;
+            draw_dots(
+                svg,
+                staff,
+                font,
+                dot_base_x,
+                advance,
+                dot_pos,
+                chord.dots,
+                scale,
+                chord.annotations.parenthesized_dots,
+            )?;
         }
     }
 
-    // Draw articulation(s) near the chord if present (uses outer note position)
+    // Draw articulation(s) near the chord if present: marks above stack from
+    // the highest note, marks below from the lowest.
     if !chord.annotations.articulations.is_empty() {
         let chord_center_x = x + advance / 2.0;
-        // Articulation attaches to the note on the opposite side from the stem:
-        // stem-up → articulation below → use lowest note; stem-down → above → use highest
-        let attach_pos = match direction {
-            StemDirection::Up => chord.staff_positions.iter().copied().min().unwrap_or(4),
-            StemDirection::Down => chord.staff_positions.iter().copied().max().unwrap_or(4),
-        };
-        let artic_layouts = layout_articulation_stack(
+        let artic_layouts = layout_chord_articulation_stack(
             &chord.annotations.articulations,
             chord_center_x,
-            attach_pos,
+            (min_pos, max_pos),
             direction,
             staff,
         );
@@ -803,9 +868,15 @@ fn draw_chord_event(
     // Draw breath mark above the staff, to the right of the chord
     if let Some(breath) = chord.annotations.breath_mark {
         let chord_right_x = x + advance;
-        let breath_layout = crate::layout::breath::layout_breath_mark(breath, chord_right_x, staff);
+        let breath_layout = crate::layout::breath::layout_breath_mark(
+            breath,
+            chord_right_x,
+            staff,
+            chord.annotations.breath_mark_parenthesized,
+        );
         crate::render::breath_renderer::draw_breath_mark(svg, font, &breath_layout)?;
     }
 
     Ok(())
 }
+

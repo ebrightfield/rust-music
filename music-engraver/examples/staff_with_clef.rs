@@ -25,7 +25,14 @@ fn render_staff_with_clef(clef: Clef, filename: &str) {
     draw_staff_lines(&mut svg, &staff, &config);
 
     let clef_layout = ClefLayout::from_clef(clef);
-    draw_clef(&mut svg, &staff, &clef_layout, &font).expect("draw clef");
+    draw_clef(
+        &mut svg,
+        &staff,
+        staff.x + staff.staff_space,
+        &clef_layout,
+        &font,
+    )
+    .expect("draw clef");
 
     let output = svg.to_svg();
     let out_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/output");

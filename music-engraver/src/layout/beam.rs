@@ -155,6 +155,17 @@ pub fn layout_beam_group(
     direction: StemDirection,
     staff_space: f64,
 ) -> BeamGroupLayout {
+    layout_beam_group_scaled(notes, direction, staff_space, |_| 1.0)
+}
+
+/// Layout for beams containing cue-sized notes. `scale(index)` controls the
+/// required stem length of each member while their tips share one beam line.
+pub(crate) fn layout_beam_group_scaled(
+    notes: &[BeamedNote],
+    direction: StemDirection,
+    staff_space: f64,
+    scale: impl Fn(usize) -> f64,
+) -> BeamGroupLayout {
     assert!(!notes.is_empty(), "beam group must have at least one note");
 
     let half_space = staff_space / 2.0;
@@ -175,11 +186,13 @@ pub fn layout_beam_group(
     // Compute "natural" stem tip for each note (extending by base_stem_fu)
     let natural_tips: Vec<f64> = notes
         .iter()
-        .map(|n| {
+        .enumerate()
+        .map(|(index, n)| {
             let notehead_y = staff_position_to_y(n.staff_position, half_space);
+            let length = base_stem_fu * scale(index);
             match direction {
-                StemDirection::Up => notehead_y - base_stem_fu,
-                StemDirection::Down => notehead_y + base_stem_fu,
+                StemDirection::Up => notehead_y - length,
+                StemDirection::Down => notehead_y + length,
             }
         })
         .collect();
@@ -223,7 +236,7 @@ pub fn layout_beam_group(
     // Ensure minimum stem length for every note
     for (i, note) in notes.iter().enumerate() {
         let notehead_y = staff_position_to_y(note.staff_position, half_space);
-        let min_stem_fu = MIN_BEAMED_STEM_SS * staff_space;
+        let min_stem_fu = MIN_BEAMED_STEM_SS * staff_space * scale(i);
         match direction {
             StemDirection::Up => {
                 let max_tip = notehead_y - min_stem_fu;

@@ -126,9 +126,9 @@ struct VoiceSpans {
 /// spans whose members can be engraved. Spans may cross barlines.
 pub(crate) fn validate_group_spans(measures: &[CompletedMeasure]) -> Result<(), GroupSpanError> {
     let mut voices: Vec<VoiceSpans> = Vec::new();
-    for (index, (events, ..)) in measures.iter().enumerate() {
+    for (index, completed) in measures.iter().enumerate() {
         let measure = index + 1;
-        for (voice, event) in events {
+        for (voice, event) in &completed.events {
             let slot = usize::from(*voice);
             if voices.len() <= slot {
                 voices.resize_with(slot + 1, VoiceSpans::default);
@@ -188,6 +188,9 @@ pub(crate) fn validate_group_spans(measures: &[CompletedMeasure]) -> Result<(), 
                         return Err(GroupSpanError::MultiMeasureRestInSpan { measure, voice });
                     }
                 }
+                ScoreEvent::Spacer { .. }
+                | ScoreEvent::ClefChange(_)
+                | ScoreEvent::TimeSignatureChange(_) => {}
             }
         }
     }

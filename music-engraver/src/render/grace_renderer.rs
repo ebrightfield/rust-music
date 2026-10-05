@@ -1,220 +1,142 @@
-use crate::font::{FontError, MusicFont};
-use crate::layout::grace::GraceNoteLayout;
+use smufl::Glyph;
+
+use crate::font::{EngravingConfig, FontError, MusicFont};
+use crate::layout::flag::flag_glyph;
+use crate::layout::grace::GraceGroupLayout;
+use crate::layout::measure::NoteheadStyle;
+use crate::layout::staff::StaffLayout;
+use crate::layout::stem::StemDirection;
+use crate::render::accidental_renderer::draw_accidental;
+use crate::render::dot_renderer::draw_dots;
+use crate::render::flag_renderer::draw_flag;
+use crate::render::note_renderer::{draw_ledger_lines, draw_styled_notehead, NoteheadKind};
 use crate::render::SvgWriter;
 
-/// Draw a grace note glyph at the computed position with the appropriate scale.
-///
-/// The SMuFL composite grace note glyph includes notehead, stem, flag, and
-/// (for acciaccatura) the slash — all rendered as a single scaled path.
-pub fn draw_grace_note(
-    writer: &mut SvgWriter,
-    font: &MusicFont,
-    layout: &GraceNoteLayout,
-) -> Result<(), FontError> {
-    let outline = font.glyph_outline(layout.glyph)?;
+/// Bravura's `flag8thUp` slash anchors (`graceNoteSlashSW`, `graceNoteSlashNE`),
+/// in staff spaces relative to the stem tip with y up; used when the font's
+/// metadata lacks them.
+const SLASH_UP_FALLBACK: ((f64, f64), (f64, f64)) = ((-0.644, -2.456), (1.284, -0.796));
 
-    // Apply both translation and scale. The grace note glyph is rendered at
-    // GRACE_NOTE_SCALE size, centered on the glyph origin.
-    let transform = format!(
-        "translate({},{}) scale({},{})",
-        layout.x, layout.y, layout.scale, layout.scale
-    );
-    writer.add_path(&outline.path_data, "black", Some(&transform));
+/// Bravura's `flag8thDown` slash anchors (`graceNoteSlashNW`, `graceNoteSlashSE`).
+const SLASH_DOWN_FALLBACK: ((f64, f64), (f64, f64)) = ((-0.596, 2.168), (1.328, 0.628));
+
+/// Draw a grace group laid out by [`crate::layout::grace::layout_grace_group`]:
+/// every note's accidental, scaled notehead, ledger lines, dots, stem and
+/// flag, then the group's beams and the acciaccatura slash through the first
+/// stem.
+pub fn draw_grace_group(
+    svg: &mut SvgWriter,
+    staff: &StaffLayout,
+    font: &MusicFont,
+    config: &EngravingConfig,
+    layout: &GraceGroupLayout,
+) -> Result<(), FontError> {
+    let scale = layout.scale;
+    let thickness = config.stem_thickness_fu() * scale;
+    for note in &layout.notes {
+        if let Some(accidental) = note.accidental {
+            draw_accidental(
+                svg,
+                staff,
+                font,
+                note.x,
+                0.0,
+                note.staff_position,
+                accidental,
+                scale,
+            )?;
+        }
+        let kind = match note.duration_log2 {
+            ..=-1 => NoteheadKind::DoubleWhole,
+            0 => NoteheadKind::Whole,
+            1 => NoteheadKind::Half,
+            _ => NoteheadKind::Filled,
+        };
+        let advance = draw_styled_notehead(
+            svg,
+            staff,
+            font,
+            note.x,
+            note.staff_position,
+            kind,
+            NoteheadStyle::Normal,
+            scale,
+        )?;
+        draw_ledger_lines(svg, staff, config, note.x, advance, note.staff_position, scale);
+        draw_dots(
+            svg,
+            staff,
+            font,
+            note.x,
+            advance,
+            note.staff_position,
+            note.dots,
+            scale,
+            false,
+        )?;
+        if let Some(stem) = note.stem {
+            svg.add_line(stem.x, stem.y_notehead, stem.x, stem.y_tip, "black", thickness);
+            draw_flag(
+                svg,
+                font,
+                stem.x,
+                stem.y_tip,
+                note.flags,
+                layout.stem_direction,
+                scale,
+            )?;
+        }
+    }
+
+    for beam in &layout.beams {
+        let inward = match layout.stem_direction {
+            StemDirection::Up => layout.beam_thickness,
+            StemDirection::Down => -layout.beam_thickness,
+        };
+        svg.add_polygon(
+            &[
+                (beam.x1, beam.y1),
+                (beam.x2, beam.y2),
+                (beam.x2, beam.y2 + inward),
+                (beam.x1, beam.y1 + inward),
+            ],
+            "black",
+        );
+    }
+
+    if layout.slashed {
+        if let Some(stem) = layout.notes.first().and_then(|note| note.stem) {
+            let ((x1, y1), (x2, y2)) = slash_anchors(font, layout.stem_direction);
+            let unit = staff.staff_space * scale;
+            svg.add_line(
+                stem.x + x1 * unit,
+                stem.y_tip - y1 * unit,
+                stem.x + x2 * unit,
+                stem.y_tip - y2 * unit,
+                "black",
+                thickness,
+            );
+        }
+    }
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::font::bravura_font;
-    use crate::layout::grace::{layout_grace_note, GraceNoteKind};
-    use crate::layout::staff::StaffLayout;
-    use crate::layout::stem::StemDirection;
-
-    fn test_font() -> MusicFont<'static> {
-        bravura_font()
-    }
-
-    fn test_staff() -> StaffLayout {
-        let font = test_font();
-        let config = font.engraving_config();
-        StaffLayout::from_config(0.0, 0.0, 5000.0, &config)
-    }
-
-    fn test_writer() -> SvgWriter {
-        SvgWriter::new(200.0, 100.0, 0.0, 0.0, 1000.0, 500.0)
-    }
-
-    #[test]
-    fn draw_acciaccatura_produces_path() {
-        let font = test_font();
-        let staff = test_staff();
-        let layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Acciaccatura,
-            StemDirection::Up,
-            &staff,
-        );
-        let mut writer = test_writer();
-        draw_grace_note(&mut writer, &font, &layout).unwrap();
-        let svg = writer.to_svg();
-        assert!(svg.contains("<path"), "should contain a path element");
-        assert!(
-            svg.contains("translate("),
-            "should have translate transform"
-        );
-        assert!(svg.contains("scale("), "should have scale transform");
-    }
-
-    #[test]
-    fn draw_appoggiatura_produces_path() {
-        let font = test_font();
-        let staff = test_staff();
-        let layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Appoggiatura,
-            StemDirection::Down,
-            &staff,
-        );
-        let mut writer = test_writer();
-        draw_grace_note(&mut writer, &font, &layout).unwrap();
-        let svg = writer.to_svg();
-        assert!(svg.contains("<path"), "should contain a path element");
-    }
-
-    #[test]
-    fn acciaccatura_and_appoggiatura_produce_different_paths() {
-        let font = test_font();
-        let staff = test_staff();
-
-        let acc_layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Acciaccatura,
-            StemDirection::Up,
-            &staff,
-        );
-        let app_layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Appoggiatura,
-            StemDirection::Up,
-            &staff,
-        );
-
-        let mut w1 = test_writer();
-        draw_grace_note(&mut w1, &font, &acc_layout).unwrap();
-        let svg1 = w1.to_svg();
-
-        let mut w2 = test_writer();
-        draw_grace_note(&mut w2, &font, &app_layout).unwrap();
-        let svg2 = w2.to_svg();
-
-        assert_ne!(svg1, svg2, "acciaccatura and appoggiatura should differ");
-    }
-
-    #[test]
-    fn stem_up_and_down_produce_different_paths() {
-        let font = test_font();
-        let staff = test_staff();
-
-        let up_layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Acciaccatura,
-            StemDirection::Up,
-            &staff,
-        );
-        let down_layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Acciaccatura,
-            StemDirection::Down,
-            &staff,
-        );
-
-        let mut w1 = test_writer();
-        draw_grace_note(&mut w1, &font, &up_layout).unwrap();
-        let svg1 = w1.to_svg();
-
-        let mut w2 = test_writer();
-        draw_grace_note(&mut w2, &font, &down_layout).unwrap();
-        let svg2 = w2.to_svg();
-
-        assert_ne!(
-            svg1, svg2,
-            "stem up and down should produce different glyphs"
-        );
-    }
-
-    #[test]
-    fn scale_factor_embedded_in_transform() {
-        let font = test_font();
-        let staff = test_staff();
-        let layout = layout_grace_note(
-            500.0,
-            4,
-            GraceNoteKind::Acciaccatura,
-            StemDirection::Up,
-            &staff,
-        );
-        let mut writer = test_writer();
-        draw_grace_note(&mut writer, &font, &layout).unwrap();
-        let svg = writer.to_svg();
-        assert!(
-            svg.contains("scale(0.6,0.6)"),
-            "should contain scale(0.6,0.6) in transform"
-        );
-    }
-
-    #[test]
-    fn x_coordinate_embedded_in_transform() {
-        let font = test_font();
-        let staff = test_staff();
-        let layout = layout_grace_note(
-            1234.0,
-            4,
-            GraceNoteKind::Appoggiatura,
-            StemDirection::Up,
-            &staff,
-        );
-        let mut writer = test_writer();
-        draw_grace_note(&mut writer, &font, &layout).unwrap();
-        let svg = writer.to_svg();
-        // The x coordinate of the grace note should appear in the SVG.
-        // The x is to the left of 1234, so it will be a positive number
-        // starting with digits in the hundreds range.
-        let x_prefix = format!("{:.0}", layout.x);
-        assert!(
-            svg.contains(&x_prefix),
-            "SVG should contain grace note x-coordinate {x_prefix}"
-        );
-    }
-
-    #[test]
-    fn all_four_variants_render_without_error() {
-        let font = test_font();
-        let staff = test_staff();
-        let kinds = [GraceNoteKind::Acciaccatura, GraceNoteKind::Appoggiatura];
-        let dirs = [StemDirection::Up, StemDirection::Down];
-
-        for kind in &kinds {
-            for dir in &dirs {
-                let layout = layout_grace_note(500.0, 4, *kind, *dir, &staff);
-                let mut writer = test_writer();
-                let result = draw_grace_note(&mut writer, &font, &layout);
-                assert!(
-                    result.is_ok(),
-                    "{kind:?} {dir:?} should render without error"
-                );
-                let svg = writer.to_svg();
-                assert!(
-                    svg.contains("<path"),
-                    "{kind:?} {dir:?} should produce a path"
-                );
-            }
-        }
+/// The two ends of the acciaccatura slash in staff spaces relative to the
+/// stem tip (y up), from the eighth-note flag's SMuFL `graceNoteSlash*`
+/// anchors.
+fn slash_anchors(font: &MusicFont, direction: StemDirection) -> ((f64, f64), (f64, f64)) {
+    let flag = flag_glyph(1, direction).unwrap_or(Glyph::Flag8thUp);
+    let anchors = font.metadata().anchors.get(flag);
+    let point = |coord: Option<smufl::Coord>| coord.map(|c| (c.x().0, c.y().0));
+    match direction {
+        StemDirection::Up => anchors
+            .and_then(|a| Some((point(a.grace_note_slash_sw)?, point(a.grace_note_slash_ne)?)))
+            .unwrap_or(SLASH_UP_FALLBACK),
+        StemDirection::Down => anchors
+            .and_then(|a| Some((point(a.grace_note_slash_nw)?, point(a.grace_note_slash_se)?)))
+            .unwrap_or(SLASH_DOWN_FALLBACK),
     }
 }
+
+#[cfg(test)]
+mod tests;

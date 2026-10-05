@@ -4,6 +4,7 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent, RestEvent};
+use crate::layout::measure_meta::MeasureMeta;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::system::{layout_system, MeasureContent, MeasureEvent, SystemPrefix};
 use crate::layout::time_signature::TimeSignatureKind;
@@ -51,6 +52,7 @@ fn system_renders_staff_lines() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -74,12 +76,14 @@ fn two_measure_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(2), quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -104,6 +108,7 @@ fn system_with_x_y_offset() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -132,6 +137,7 @@ fn system_with_key_signature() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&prefix, &measures, &mcfg, None);
 
@@ -157,6 +163,7 @@ fn system_with_rests() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -176,6 +183,7 @@ fn target_width_produces_wider_staff() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
 
     let natural = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -218,18 +226,21 @@ fn three_measure_system_has_correct_element_count() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -266,6 +277,7 @@ fn tie_within_measure_draws_filled_path() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -279,6 +291,7 @@ fn tie_within_measure_draws_filled_path() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let untied_system = layout_system(&treble_prefix(), &untied_measures, &mcfg, None);
     let mut svg_untied = make_svg();
@@ -304,12 +317,14 @@ fn tie_across_barline_draws_filled_path() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -340,6 +355,7 @@ fn no_tie_when_tie_forward_is_false() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -364,6 +380,7 @@ fn tie_not_drawn_when_no_matching_target() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -388,6 +405,7 @@ fn multiple_ties_in_system() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -414,6 +432,7 @@ fn collect_note_positions_skips_non_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
@@ -458,6 +477,7 @@ fn collect_note_positions_includes_chord_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
@@ -478,6 +498,7 @@ fn chord_tie_draws_ties_for_all_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -503,6 +524,7 @@ fn chord_tie_to_single_note_at_matching_position() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -526,6 +548,7 @@ fn untied_chord_draws_no_ties() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -546,12 +569,14 @@ fn chord_tie_across_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![untied_chord(vec![2, 6])],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -602,6 +627,7 @@ fn slur_within_measure_draws_filled_path() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -628,12 +654,14 @@ fn slur_across_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -654,6 +682,7 @@ fn no_slur_without_flags() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -673,12 +702,14 @@ fn slur_differs_from_no_slur() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let without_slur = vec![MeasureContent {
         events: vec![quarter_note(2), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
 
     let sys_s = layout_system(&treble_prefix(), &with_slur, &mcfg, None);
@@ -704,6 +735,7 @@ fn slur_start_without_end_draws_nothing() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -755,6 +787,7 @@ fn hairpin_within_measure_draws_two_lines() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -768,6 +801,7 @@ fn hairpin_within_measure_draws_two_lines() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     let mut svg_no = make_svg();
@@ -788,6 +822,7 @@ fn no_hairpin_without_flags() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -808,12 +843,14 @@ fn hairpin_start_without_end_draws_nothing_extra() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let without = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_s = layout_system(&treble_prefix(), &with_start, &mcfg, None);
     let sys_n = layout_system(&treble_prefix(), &without, &mcfg, None);
@@ -835,6 +872,7 @@ fn decrescendo_differs_from_crescendo() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let decresc_measures = vec![MeasureContent {
         events: vec![
@@ -854,6 +892,7 @@ fn decrescendo_differs_from_crescendo() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
 
     let sys_c = layout_system(&treble_prefix(), &cresc_measures, &mcfg, None);
@@ -880,12 +919,14 @@ fn hairpin_across_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -901,12 +942,14 @@ fn hairpin_across_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let sys_no = layout_system(&treble_prefix(), &without_measures, &mcfg, None);
@@ -974,6 +1017,7 @@ fn cresc_text_within_measure_emits_label_and_dashed_line() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let baseline = vec![MeasureContent {
         events: vec![
@@ -985,6 +1029,7 @@ fn cresc_text_within_measure_emits_label_and_dashed_line() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_m = layout_system(&treble_prefix(), &with_marking, &mcfg, None);
     let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
@@ -1037,12 +1082,14 @@ fn no_cresc_text_without_start_flag() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let baseline = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_e = layout_system(&treble_prefix(), &end_only, &mcfg, None);
     let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
@@ -1072,12 +1119,14 @@ fn cresc_text_start_without_end_draws_nothing_extra() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let baseline = vec![MeasureContent {
         events: vec![quarter_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_s = layout_system(&treble_prefix(), &start_only, &mcfg, None);
     let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
@@ -1112,6 +1161,7 @@ fn cresc_text_kinds_differ_in_label_content() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
         let mut svg = make_svg();
@@ -1175,12 +1225,14 @@ fn cresc_text_across_barline_emits_one_label_and_one_line() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(7), cresc_text_end_note(2)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let baseline = vec![
@@ -1189,12 +1241,14 @@ fn cresc_text_across_barline_emits_one_label_and_one_line() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(7), quarter_note(2)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let sys_m = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -1240,6 +1294,7 @@ fn cresc_text_dashed_line_endpoints_lie_between_start_and_end_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1297,6 +1352,7 @@ fn cresc_text_renders_independently_of_a_hairpin_on_other_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let baseline = vec![MeasureContent {
         events: vec![
@@ -1310,6 +1366,7 @@ fn cresc_text_renders_independently_of_a_hairpin_on_other_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_m = layout_system(&treble_prefix(), &mixed, &mcfg, None);
     let sys_b = layout_system(&treble_prefix(), &baseline, &mcfg, None);
@@ -1371,6 +1428,7 @@ fn lyric_extender_within_measure_draws_line() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1389,6 +1447,7 @@ fn lyric_extender_within_measure_draws_line() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let sys = layout_system(&treble_prefix(), &m, &mcfg, None);
         let mut s = make_svg();
@@ -1416,6 +1475,7 @@ fn no_extender_for_word_continuation() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1428,6 +1488,7 @@ fn no_extender_for_word_continuation() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
     let mut svg_none = make_svg();
@@ -1453,6 +1514,7 @@ fn no_extender_for_hyphen_continuation() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1465,6 +1527,7 @@ fn no_extender_for_hyphen_continuation() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
     let mut svg_none = make_svg();
@@ -1487,12 +1550,14 @@ fn lyric_extender_across_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![note_with_lyric(6, LyricSyllable::word("you"))],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -1507,12 +1572,14 @@ fn lyric_extender_across_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![note_with_lyric(6, LyricSyllable::word("you"))],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
@@ -1539,6 +1606,7 @@ fn lyric_extender_differs_from_no_extender() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let without = vec![MeasureContent {
         events: vec![
@@ -1548,6 +1616,7 @@ fn lyric_extender_differs_from_no_extender() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
 
     let sys_w = layout_system(&treble_prefix(), &with, &mcfg, None);
@@ -1578,6 +1647,7 @@ fn volta_bracket_adds_lines_to_system() {
             hooks: VoltaHooks::Both,
         }),
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1590,6 +1660,7 @@ fn volta_bracket_adds_lines_to_system() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     let mut svg_no = make_svg();
@@ -1612,6 +1683,7 @@ fn volta_bracket_text_appears_in_svg() {
             hooks: VoltaHooks::Both,
         }),
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1632,6 +1704,7 @@ fn volta_no_bracket_without_annotation() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1653,6 +1726,7 @@ fn volta_left_only_adds_two_lines() {
             hooks: VoltaHooks::LeftOnly,
         }),
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -1664,6 +1738,7 @@ fn volta_left_only_adds_two_lines() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     let mut svg_no = make_svg();
@@ -1685,6 +1760,7 @@ fn volta_multi_measure_two_brackets() {
                 hooks: VoltaHooks::LeftOnly,
             }),
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
@@ -1694,6 +1770,7 @@ fn volta_multi_measure_two_brackets() {
                 hooks: VoltaHooks::RightOnly,
             }),
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -1711,12 +1788,14 @@ fn volta_multi_measure_two_brackets() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
@@ -1772,6 +1851,7 @@ fn ottava_bracket_adds_dashed_line_and_text() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1795,6 +1875,7 @@ fn ottava_bracket_has_end_hook() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1817,6 +1898,7 @@ fn no_ottava_without_flags() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1840,6 +1922,7 @@ fn ottava_8vb_has_different_label() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1859,6 +1942,7 @@ fn ottava_start_without_end_draws_nothing() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1914,6 +1998,7 @@ fn glissando_within_measure_adds_line() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     // Justify to a wide target width so notes are well-separated
     let system = layout_system(&treble_prefix(), &measures, &mcfg, Some(8000.0));
@@ -1943,6 +2028,7 @@ fn glissando_within_measure_adds_line() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, Some(8000.0));
     let mut svg_no = make_svg();
@@ -1967,6 +2053,7 @@ fn no_glissando_without_flag() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -1987,12 +2074,14 @@ fn glissando_cross_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // Wide target so cross-barline notes have enough separation
@@ -2008,12 +2097,14 @@ fn glissando_cross_barline() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, Some(8000.0));
@@ -2036,6 +2127,7 @@ fn glissando_with_text_shows_label() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     // Wide target to ensure enough horizontal space for glissando line
     let system = layout_system(&treble_prefix(), &measures, &mcfg, Some(8000.0));
@@ -2056,6 +2148,7 @@ fn glissando_start_without_target_draws_nothing() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -2068,6 +2161,7 @@ fn glissando_start_without_target_draws_nothing() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     draw_system(&mut svg_no, &font, &config, &system_no, 0.0, 0.0).unwrap();
@@ -2122,6 +2216,7 @@ fn tie_in_additional_voice_draws_filled_path() {
             voice_tied_note(0, StemDirection::Down),
             voice_note(0, StemDirection::Down),
         ]],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -2140,6 +2235,7 @@ fn tie_in_additional_voice_draws_filled_path() {
             voice_note(0, StemDirection::Down),
             voice_note(0, StemDirection::Down),
         ]],
+        meta: MeasureMeta::default(),
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no_tie, &mcfg, None);
     let mut svg_no = make_svg();
@@ -2188,6 +2284,7 @@ fn slur_in_additional_voice_draws_filled_path() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![vec![slur_start_note, slur_end_note]],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -2206,6 +2303,7 @@ fn slur_in_additional_voice_draws_filled_path() {
             voice_note(0, StemDirection::Down),
             voice_note(4, StemDirection::Down),
         ]],
+        meta: MeasureMeta::default(),
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     let mut svg_no = make_svg();
@@ -2255,6 +2353,7 @@ fn hairpin_in_additional_voice_draws_lines() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![vec![hp_start_note, hp_end_note]],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -2273,6 +2372,7 @@ fn hairpin_in_additional_voice_draws_lines() {
             voice_note(0, StemDirection::Down),
             voice_note(4, StemDirection::Down),
         ]],
+        meta: MeasureMeta::default(),
     }];
     let system_no = layout_system(&treble_prefix(), &measures_no, &mcfg, None);
     let mut svg_no = make_svg();
@@ -2296,6 +2396,7 @@ fn collect_note_positions_includes_additional_voices() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![vec![voice_note(0, StemDirection::Down)]],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
@@ -2323,6 +2424,7 @@ fn collect_note_positions_without_additional_voices_unchanged() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let positions = collect_note_positions(&system);
@@ -2383,6 +2485,7 @@ fn trill_extension_collector_flags_only_marked_notes() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -2416,6 +2519,7 @@ fn trill_extension_collector_requires_trill_ornament() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -2434,6 +2538,7 @@ fn trill_extension_renders_at_least_one_wiggle_path() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2448,6 +2553,7 @@ fn trill_extension_renders_at_least_one_wiggle_path() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
     let mut svg2 = make_svg();
@@ -2473,6 +2579,7 @@ fn trill_extension_wiggle_shares_trill_glyph_y() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2507,6 +2614,7 @@ fn no_trill_extension_without_flag() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2541,6 +2649,7 @@ fn last_note_in_system_with_trill_extension_extends_to_system_edge() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2555,6 +2664,7 @@ fn last_note_in_system_with_trill_extension_extends_to_system_edge() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
     let mut svg2 = make_svg();
@@ -2581,6 +2691,7 @@ fn last_note_trill_extension_wiggle_stays_inside_system_edge() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2638,6 +2749,7 @@ fn last_note_trill_extension_wiggle_shares_trill_glyph_y() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2679,6 +2791,7 @@ fn last_note_trill_extension_silently_skips_when_no_room() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -2736,6 +2849,7 @@ fn trill_extension_on_chord_uses_top_note_position() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -2813,6 +2927,7 @@ fn trill_bracket_collector_propagates_bracket_when_extension_active() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -2846,6 +2961,7 @@ fn trill_bracket_collector_drops_bracket_when_no_extension() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -2869,6 +2985,7 @@ fn trill_bracket_both_within_system_renders_two_hooks_more_than_no_bracket() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures_bracketed, &mcfg, None);
     let mut svg = make_svg();
@@ -2880,6 +2997,7 @@ fn trill_bracket_both_within_system_renders_two_hooks_more_than_no_bracket() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
     let mut svg2 = make_svg();
@@ -2906,6 +3024,7 @@ fn trill_bracket_start_only_renders_one_hook_more() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -2917,6 +3036,7 @@ fn trill_bracket_start_only_renders_one_hook_more() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
     let mut svg2 = make_svg();
@@ -2943,6 +3063,7 @@ fn trill_bracket_end_only_within_system_renders_one_hook_more() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -2954,6 +3075,7 @@ fn trill_bracket_end_only_within_system_renders_one_hook_more() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
     let mut svg2 = make_svg();
@@ -2979,6 +3101,7 @@ fn trill_bracket_no_bracket_renders_zero_extra_hooks() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -3011,6 +3134,7 @@ fn trill_bracket_no_bracket_renders_zero_extra_hooks() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
     let mut svg2 = make_svg();
@@ -3035,6 +3159,7 @@ fn trill_bracket_end_hook_for_last_note_in_system_is_suppressed_in_system_pass()
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -3046,6 +3171,7 @@ fn trill_bracket_end_hook_for_last_note_in_system_is_suppressed_in_system_pass()
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
     let mut svg2 = make_svg();
@@ -3073,6 +3199,7 @@ fn trill_bracket_both_on_last_note_in_system_emits_only_start_hook() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let mut svg = make_svg();
@@ -3084,6 +3211,7 @@ fn trill_bracket_both_on_last_note_in_system_emits_only_start_hook() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
     let mut svg2 = make_svg();
@@ -3136,6 +3264,7 @@ fn trill_bracket_custom_collector_propagates_direction_and_length() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3181,6 +3310,7 @@ fn trill_bracket_custom_collector_drops_direction_and_length_without_bracket() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3208,6 +3338,7 @@ fn trill_bracket_custom_length_changes_hook_line_geometry() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures_short, &mcfg, None);
     let mut svg = make_svg();
@@ -3222,6 +3353,7 @@ fn trill_bracket_custom_length_changes_hook_line_geometry() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system_long = layout_system(&treble_prefix(), &measures_long, &mcfg, None);
     let mut svg_long = make_svg();
@@ -3254,6 +3386,7 @@ fn trill_bracket_custom_direction_up_flips_hook_y_extents() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         }];
         let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
         let mut svg = make_svg();
@@ -3285,6 +3418,7 @@ fn trill_bracket_custom_defaults_match_plain_bracketed() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures_custom, &mcfg, None);
     let mut svg = make_svg();
@@ -3299,6 +3433,7 @@ fn trill_bracket_custom_defaults_match_plain_bracketed() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system_plain = layout_system(&treble_prefix(), &measures_plain, &mcfg, None);
     let mut svg_plain = make_svg();
@@ -3345,6 +3480,7 @@ fn trill_wiggle_speed_collector_propagates_speed_when_extension_active() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3382,6 +3518,7 @@ fn trill_wiggle_speed_collector_drops_speed_when_no_extension() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3407,6 +3544,7 @@ fn trill_wiggle_speed_fast_tiles_more_segments_than_slow() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let measures_slow = vec![MeasureContent {
         events: vec![
@@ -3416,6 +3554,7 @@ fn trill_wiggle_speed_fast_tiles_more_segments_than_slow() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
 
     let system_fast = layout_system(&treble_prefix(), &measures_fast, &mcfg, None);
@@ -3479,6 +3618,7 @@ fn trill_wiggle_speed_none_uses_default_glyph() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let measures_standard = vec![MeasureContent {
         events: vec![
@@ -3488,6 +3628,7 @@ fn trill_wiggle_speed_none_uses_default_glyph() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
 
     let s_none = layout_system(&treble_prefix(), &measures_none, &mcfg, None);
@@ -3532,6 +3673,7 @@ fn trill_extension_collector_accepts_trill_with_mordent() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3568,6 +3710,7 @@ fn trill_extension_collector_drops_short_trill() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3603,6 +3746,7 @@ fn trill_extension_collector_drops_non_trill_ornament_field() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3619,6 +3763,7 @@ fn trill_extension_collector_propagates_trill_variant() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
     let info = collect_trill_extension_note_info(&system);
@@ -3649,6 +3794,7 @@ fn trill_with_mordent_extension_renders_wiggle_paths() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
 
@@ -3678,6 +3824,7 @@ fn trill_with_mordent_extension_renders_wiggle_paths() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system3 = layout_system(&treble_prefix(), &measures3, &mcfg, None);
     let mut svg3 = make_svg();
@@ -3700,6 +3847,7 @@ fn trill_with_mordent_extension_renders_wiggle_paths() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let system2 = layout_system(&treble_prefix(), &measures2, &mcfg, None);
     let mut svg2 = make_svg();
@@ -3757,6 +3905,7 @@ fn collector_propagates_explicit_length_when_trill_extension_active() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let (_font, _config, mcfg) = setup();
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -3790,6 +3939,7 @@ fn collector_drops_explicit_length_when_trill_extension_inactive() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let (_font, _config, mcfg) = setup();
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -3813,12 +3963,14 @@ fn explicit_length_renders_fewer_paths_than_default_when_shorter() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let natural = vec![MeasureContent {
         events: vec![trill_ext_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_short = layout_system(&treble_prefix(), &short, &mcfg, None);
     let sys_natural = layout_system(&treble_prefix(), &natural, &mcfg, None);
@@ -3847,12 +3999,14 @@ fn explicit_length_larger_than_natural_clamps_to_natural() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let natural = vec![MeasureContent {
         events: vec![trill_ext_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_huge = layout_system(&treble_prefix(), &huge, &mcfg, None);
     let sys_natural = layout_system(&treble_prefix(), &natural, &mcfg, None);
@@ -3883,12 +4037,14 @@ fn explicit_length_zero_produces_no_wiggle() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let plain_trill = vec![MeasureContent {
         events: vec![trill_no_ext_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_zero = layout_system(&treble_prefix(), &zero_length, &mcfg, None);
     let sys_plain = layout_system(&treble_prefix(), &plain_trill, &mcfg, None);
@@ -3915,12 +4071,14 @@ fn explicit_length_negative_produces_no_wiggle() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let plain_trill = vec![MeasureContent {
         events: vec![trill_no_ext_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_neg = layout_system(&treble_prefix(), &negative_length, &mcfg, None);
     let sys_plain = layout_system(&treble_prefix(), &plain_trill, &mcfg, None);
@@ -3957,6 +4115,7 @@ fn explicit_length_in_chord_collector_propagates() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let (_font, _config, mcfg) = setup();
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -3991,12 +4150,14 @@ fn explicit_length_on_last_note_avoids_cross_system_extension() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let without_explicit = vec![MeasureContent {
         events: vec![quarter_note(4), trill_ext_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_explicit = layout_system(&treble_prefix(), &with_explicit, &mcfg, None);
     let sys_natural = layout_system(&treble_prefix(), &without_explicit, &mcfg, None);
@@ -4048,12 +4209,14 @@ fn explicit_length_with_end_bracket_anchors_at_shortened_terminus() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let without_length = vec![MeasureContent {
         events: vec![make_event(None), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_with = layout_system(&treble_prefix(), &with_length, &mcfg, None);
     let sys_without = layout_system(&treble_prefix(), &without_length, &mcfg, None);
@@ -4104,6 +4267,7 @@ fn collector_propagates_to_note_offset_when_trill_extension_active() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let (_font, _config, mcfg) = setup();
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -4136,6 +4300,7 @@ fn collector_drops_to_note_offset_when_trill_extension_inactive() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let (_font, _config, mcfg) = setup();
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -4159,12 +4324,14 @@ fn to_note_offset_two_renders_more_paths_than_offset_one() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let to_two = vec![MeasureContent {
         events: vec![trill_ext_to_note(4, 2), quarter_note(6), quarter_note(8)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_one = layout_system(&treble_prefix(), &to_one, &mcfg, None);
     let sys_two = layout_system(&treble_prefix(), &to_two, &mcfg, None);
@@ -4194,12 +4361,14 @@ fn to_note_offset_one_byte_equivalent_to_natural_default() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let natural = vec![MeasureContent {
         events: vec![trill_ext_note(4), quarter_note(6)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_off = layout_system(&treble_prefix(), &with_offset_one, &mcfg, None);
     let sys_nat = layout_system(&treble_prefix(), &natural, &mcfg, None);
@@ -4227,6 +4396,7 @@ fn to_note_offset_zero_drops_wiggle() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let plain_trill_ornament = vec![MeasureContent {
         events: vec![
@@ -4247,6 +4417,7 @@ fn to_note_offset_zero_drops_wiggle() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_zero = layout_system(&treble_prefix(), &zero_offset, &mcfg, None);
     let sys_plain = layout_system(&treble_prefix(), &plain_trill_ornament, &mcfg, None);
@@ -4279,12 +4450,14 @@ fn to_note_offset_overshoot_falls_back_to_system_edge() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let to_one = vec![MeasureContent {
         events: vec![trill_ext_to_note(4, 1), quarter_note(6), quarter_note(8)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_overshoot = layout_system(&treble_prefix(), &overshoot, &mcfg, None);
     let sys_one = layout_system(&treble_prefix(), &to_one, &mcfg, None);
@@ -4321,12 +4494,14 @@ fn to_note_offset_overshoot_renders_byte_identical_to_last_note_natural() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let last_note_natural = vec![MeasureContent {
         events: vec![trill_ext_note(4)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_overshoot = layout_system(&treble_prefix(), &overshoot, &mcfg, None);
     let sys_natural = layout_system(&treble_prefix(), &last_note_natural, &mcfg, None);
@@ -4369,6 +4544,7 @@ fn to_note_offset_in_chord_collector_propagates() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let (_font, _config, mcfg) = setup();
     let system = layout_system(&treble_prefix(), &measures, &mcfg, None);
@@ -4425,12 +4601,14 @@ fn to_note_offset_yields_to_explicit_length_when_both_set() {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let measures_length = vec![MeasureContent {
         events: vec![length_only, quarter_note(6), quarter_note(8)],
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let sys_both = layout_system(&treble_prefix(), &measures_both, &mcfg, None);
     let sys_length = layout_system(&treble_prefix(), &measures_length, &mcfg, None);

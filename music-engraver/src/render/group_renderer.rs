@@ -11,20 +11,20 @@
 //! loses its hook on that side.
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
-use crate::layout::beam::{beam_level, layout_beam_group, subdivide_beam_counts, BeamedNote};
+use crate::layout::beam::{beam_level, layout_beam_group_scaled, subdivide_beam_counts, BeamedNote};
 use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::group::{
     scan_groups, BeamSpec, GroupScan, GroupSegment, TupletBracketVisibility, TupletNumberDisplay,
     TupletSpec,
 };
-use crate::layout::measure::{MeasureElement, NoteheadStyle};
+use crate::layout::measure::{MeasureElement, NoteheadStyle, StemVisibility};
 use crate::layout::staff::StaffLayout;
 use crate::layout::stem::{auto_stem_direction, auto_stem_direction_chord, StemDirection};
 use crate::layout::tuplet::{
     layout_tuplet_bracket_at, tuplet_number_glyphs, tuplet_placement_from_stem,
     tuplet_ratio_glyphs, TupletPlacement,
 };
-use crate::render::beam_renderer::draw_beam_group_with_advances;
+use crate::render::beam_renderer::draw_beam_group_with_styles;
 use crate::render::note_renderer::notehead_advance;
 use crate::render::stem_renderer::{stem_endpoints, stem_x};
 use crate::render::tuplet_renderer::draw_tuplet_bracket;
@@ -58,6 +58,8 @@ struct MemberStem {
     /// Staff position of the notehead nearest the beam.
     beam_side_position: i8,
     duration_log2: i8,
+    scale: f64,
+    visible: bool,
 }
 
 /// Geometry of a drawn beam that tuplet brackets must clear.
@@ -139,10 +141,12 @@ fn member_stem(
                 font,
                 note.duration_log2,
                 style_at(&note.annotations.notehead_styles, 0),
-            )?,
+            )? * note.annotations.size.scale(),
             attach_position: note.staff_position,
             beam_side_position: note.staff_position,
             duration_log2: note.duration_log2,
+            scale: note.annotations.size.scale(),
+            visible: note.annotations.stem == StemVisibility::Visible,
         })),
         MeasureElement::Chord(chord) if !chord.staff_positions.is_empty() => {
             // Mirror the chord renderer's notehead columns so the beam stem
@@ -164,9 +168,10 @@ fn member_stem(
                 })
                 .collect();
             let layouts = layout_chord_noteheads(&chord_notes, direction);
+            let scale = chord.annotations.size.scale();
             let widest = layouts.iter().try_fold(0.0_f64, |widest, layout| {
                 notehead_advance(font, chord.duration_log2, layout.notehead_style)
-                    .map(|advance| widest.max(advance))
+                    .map(|advance| widest.max(advance * scale))
             })?;
             let lowest = layouts.iter().map(|layout| layout.staff_position).min();
             let highest = layouts.iter().map(|layout| layout.staff_position).max();
@@ -184,10 +189,12 @@ fn member_stem(
             Ok(Some(MemberStem {
                 item,
                 attach_x: x + notehead_x_offset(attach.offset, direction) * widest,
-                attach_advance: notehead_advance(font, chord.duration_log2, attach.notehead_style)?,
+                attach_advance: notehead_advance(font, chord.duration_log2, attach.notehead_style)? * scale,
                 attach_position,
                 beam_side_position,
                 duration_log2: chord.duration_log2,
+                scale,
+                visible: chord.annotations.stem == StemVisibility::Visible,
             }))
         }
         _ => Ok(None),
@@ -230,8 +237,8 @@ fn draw_beam(
             stems.push(stem);
         }
     }
-    // A piece of a broken beam may hold only rests: nothing to draw.
-    if stems.is_empty() {
+    // No beam can attach to a span of rests or wholly stemless members.
+    if !stems.iter().any(|stem| stem.visible) {
         return Ok(None);
     }
 
@@ -239,7 +246,8 @@ fn draw_beam(
     for stem in &stems {
         // Chord stems run from the far notehead to the beam-side notehead;
         // the beam renderer continues them to the beam.
-        if stem.attach_position != stem.beam_side_position {
+        if stem.visible && stem.attach_position != stem.beam_side_position {
+            let thickness = config.stem_thickness_fu() * stem.scale;
             let sx = stem_x(stem.attach_x, stem.attach_advance, direction, thickness);
             svg.add_line(
                 sx,
@@ -261,7 +269,7 @@ fn draw_beam(
         })
         .collect();
     let advances: Vec<f64> = stems.iter().map(|stem| stem.attach_advance).collect();
-    let mut layout = layout_beam_group(&notes, direction, staff.staff_space);
+    let mut layout = layout_beam_group_scaled(&notes, direction, staff.staff_space, |i| stems[i].scale);
     if let Some(interval_log2) = segment.spec.subdivide_log2 {
         let onsets: Vec<f64> = stems.iter().map(|stem| scan.onsets[stem.item]).collect();
         subdivide_beam_counts(
@@ -287,7 +295,8 @@ fn draw_beam(
             layout.beams_left[last] = layout.beams_left[last].min(layout.beams_right[last - 1].max(1));
         }
     }
-    draw_beam_group_with_advances(svg, staff, config, &notes, &layout, &advances);
+    draw_beam_group_with_styles(svg, staff, config, &notes, &layout, &advances,
+        |i| stems[i].scale, |i| stems[i].visible);
 
     let tips: Vec<f64> = layout
         .stem_tip_ys
@@ -425,7 +434,11 @@ fn member_extent(
                 StemDirection::Up => highest,
                 StemDirection::Down => lowest,
             };
-            let (top, bottom) = stem_endpoints(staff, far, direction);
+            let (top, bottom) = stem_endpoints(staff, far, direction, match element {
+                MeasureElement::Note(note) => note.annotations.size.scale(),
+                MeasureElement::Chord(chord) => chord.annotations.size.scale(),
+                _ => 1.0,
+            });
             match direction {
                 StemDirection::Up => top,
                 StemDirection::Down => bottom,

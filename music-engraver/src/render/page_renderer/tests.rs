@@ -4,6 +4,7 @@ use crate::layout::barline::BarlineStyle;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteEvent};
+use crate::layout::measure_meta::MeasureMeta;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
 use crate::layout::system::{MeasureContent, MeasureEvent, SystemPrefix};
@@ -33,6 +34,7 @@ fn make_measure(pos: i8) -> MeasureContent {
         barline: BarlineStyle::Single,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }
 }
 
@@ -197,12 +199,14 @@ fn cross_system_tie_draws_two_half_ties() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // 1 measure per system → forces cross-system tie
@@ -239,12 +243,14 @@ fn no_cross_system_tie_without_tie_forward() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -276,12 +282,14 @@ fn cross_system_tie_with_no_matching_target_draws_right_half_only() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -317,12 +325,14 @@ fn within_system_tie_does_not_produce_cross_system_tie() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -355,12 +365,14 @@ fn cross_system_tie_differs_from_no_tie() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -370,12 +382,14 @@ fn cross_system_tie_differs_from_no_tie() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -447,12 +461,14 @@ fn cross_system_slur_draws_two_half_slurs() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // 1 measure per system → forces cross-system slur
@@ -489,12 +505,14 @@ fn no_cross_system_slur_without_flags() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -526,12 +544,14 @@ fn cross_system_slur_right_half_only_when_no_end() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)], // no slur_end
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -567,12 +587,14 @@ fn within_system_slur_not_duplicated_as_cross_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -608,12 +630,14 @@ fn cross_system_slur_differs_from_no_slur() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![slur_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let without_slur = vec![
@@ -622,12 +646,14 @@ fn cross_system_slur_differs_from_no_slur() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -701,12 +727,14 @@ fn cross_system_hairpin_draws_four_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // 1 measure per system → forces cross-system hairpin
@@ -729,12 +757,14 @@ fn cross_system_hairpin_draws_four_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let no_hp_page = layout_page(
@@ -771,12 +801,14 @@ fn no_cross_system_hairpin_without_flags() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -811,12 +843,14 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)], // no hairpin_end
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -837,12 +871,14 @@ fn cross_system_hairpin_right_half_only_when_no_end() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let no_hp_page = layout_page(
@@ -878,12 +914,14 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -905,12 +943,14 @@ fn within_system_hairpin_not_duplicated_as_cross_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let no_hp_page = layout_page(
@@ -945,12 +985,14 @@ fn cross_system_hairpin_differs_from_no_hairpin() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let without_hp = vec![
@@ -959,12 +1001,14 @@ fn cross_system_hairpin_differs_from_no_hairpin() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -1005,12 +1049,14 @@ fn cross_system_decresc_differs_from_cresc() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let decresc = vec![
@@ -1029,12 +1075,14 @@ fn cross_system_decresc_differs_from_cresc() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -1141,12 +1189,14 @@ fn cross_system_hairpin_page(kind: HairpinType) -> String {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1212,12 +1262,14 @@ fn cross_system_hairpin_total_line_count_unchanged_by_dashed_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let baseline_page = layout_page(
@@ -1312,12 +1364,14 @@ fn cross_system_hairpin_right_half_only_when_no_end_emits_no_dasharray() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)], // no hairpin_end
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1390,12 +1444,14 @@ fn within_system_hairpin_emits_no_dasharray() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // Both measures fit on one system (Fixed(2)) — no cross-system hairpin.
@@ -1464,12 +1520,14 @@ fn cross_system_cresc_text_page(kind: CrescTextKind) -> String {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![cresc_text_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1498,12 +1556,14 @@ fn cross_system_cresc_text_baseline() -> String {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1603,6 +1663,7 @@ fn cross_system_cresc_text_orphan_start_emits_trailing_half_only() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             // No cresc_text_end — orphan start.
@@ -1610,6 +1671,7 @@ fn cross_system_cresc_text_orphan_start_emits_trailing_half_only() {
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1655,12 +1717,14 @@ fn cross_system_cresc_text_orphan_end_emits_nothing() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![cresc_text_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1702,12 +1766,14 @@ fn within_system_cresc_text_not_duplicated_as_cross_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![cresc_text_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -1880,14 +1946,24 @@ fn cross_system_cresc_text_label_lives_on_source_system_left_of_incoming_dashed(
 
 // ---- Measure number tests ----
 
+/// Number measures 1, 2, 3, … as a score builder would.
+fn number_measures(mut measures: Vec<MeasureContent>) -> Vec<MeasureContent> {
+    for (index, measure) in measures.iter_mut().enumerate() {
+        measure.meta.number = index as i32 + 1;
+    }
+    measures
+}
+
+use crate::layout::bar_number::{MeasureNumbering, BAR_NUMBER_FONT_SIZE_SS};
+
 #[test]
 fn measure_numbers_enabled_adds_text_elements() {
     let (font, config) = setup();
     let ss = config.staff_space;
     let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
-    page_cfg.show_measure_numbers = true;
+    page_cfg.measure_numbering = MeasureNumbering::SystemStart;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+    let measures: Vec<_> = number_measures((0..6).map(|i| make_measure(i as i8)).collect());
     let page = layout_page(
         &prefix(),
         &measures,
@@ -1913,9 +1989,9 @@ fn measure_numbers_enabled_adds_text_elements() {
 fn measure_numbers_disabled_no_text_elements() {
     let (font, config) = setup();
     let ss = config.staff_space;
-    let page_cfg = PageLayoutConfig::new(ss, 8000.0); // default: show_measure_numbers = false
+    let page_cfg = PageLayoutConfig::new(ss, 8000.0); // default: MeasureNumbering::Hidden
     let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures: Vec<_> = (0..6).map(|i| make_measure(i as i8)).collect();
+    let measures: Vec<_> = number_measures((0..6).map(|i| make_measure(i as i8)).collect());
     let page = layout_page(
         &prefix(),
         &measures,
@@ -1941,9 +2017,9 @@ fn measure_numbers_show_correct_values_across_three_systems() {
     let (font, config) = setup();
     let ss = config.staff_space;
     let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
-    page_cfg.show_measure_numbers = true;
+    page_cfg.measure_numbering = MeasureNumbering::SystemStart;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures: Vec<_> = (0..9).map(|i| make_measure((i % 8) as i8)).collect();
+    let measures: Vec<_> = number_measures((0..9).map(|i| make_measure((i % 8) as i8)).collect());
     let page = layout_page(
         &prefix(),
         &measures,
@@ -1953,9 +2029,6 @@ fn measure_numbers_show_correct_values_across_three_systems() {
     );
 
     assert_eq!(page.systems.len(), 3);
-    assert_eq!(page.systems[0].first_measure_number, 1);
-    assert_eq!(page.systems[1].first_measure_number, 4);
-    assert_eq!(page.systems[2].first_measure_number, 7);
 
     let svg = draw_page(&font, &config, &page).unwrap().to_svg();
     assert!(svg.contains(">1</text>"));
@@ -1968,9 +2041,9 @@ fn measure_numbers_positioned_above_staff() {
     let (font, config) = setup();
     let ss = config.staff_space;
     let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
-    page_cfg.show_measure_numbers = true;
+    page_cfg.measure_numbering = MeasureNumbering::SystemStart;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures = vec![make_measure(4)];
+    let measures = number_measures(vec![make_measure(4)]);
     let page = layout_page(
         &prefix(),
         &measures,
@@ -2004,9 +2077,9 @@ fn measure_numbers_font_size_scales_with_staff_space() {
     let (font, config) = setup();
     let ss = config.staff_space;
     let mut page_cfg = PageLayoutConfig::new(ss, 8000.0);
-    page_cfg.show_measure_numbers = true;
+    page_cfg.measure_numbering = MeasureNumbering::SystemStart;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures = vec![make_measure(4)];
+    let measures = number_measures(vec![make_measure(4)]);
     let page = layout_page(
         &prefix(),
         &measures,
@@ -2017,8 +2090,8 @@ fn measure_numbers_font_size_scales_with_staff_space() {
 
     let svg = draw_page(&font, &config, &page).unwrap().to_svg();
 
-    // Font size should be MEASURE_NUMBER_FONT_SIZE_SS * staff_space
-    let expected_size = MEASURE_NUMBER_FONT_SIZE_SS * ss;
+    // Font size should be BAR_NUMBER_FONT_SIZE_SS * staff_space
+    let expected_size = BAR_NUMBER_FONT_SIZE_SS * ss;
     let font_size_str = format!("font-size=\"{}\"", expected_size as u32);
     assert!(
         svg.contains(&font_size_str),
@@ -2027,40 +2100,14 @@ fn measure_numbers_font_size_scales_with_staff_space() {
 }
 
 #[test]
-fn first_measure_number_set_correctly_for_auto_breaks() {
-    let ss = 250.0;
-    let mut page_cfg = PageLayoutConfig::new(ss, 3000.0); // narrow to force breaks
-    page_cfg.show_measure_numbers = true;
-    let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures: Vec<_> = (0..8).map(|i| make_measure((i % 8) as i8)).collect();
-    let page = layout_page(&prefix(), &measures, &mc, &page_cfg, &SystemBreaking::Auto);
-
-    // With auto breaks and narrow width, should have multiple systems
-    assert!(page.systems.len() > 1);
-    // First system always starts at measure 1
-    assert_eq!(page.systems[0].first_measure_number, 1);
-    // Each system's first_measure_number should be monotonically increasing
-    for i in 1..page.systems.len() {
-        assert!(
-            page.systems[i].first_measure_number > page.systems[i - 1].first_measure_number,
-            "system {} measure number {} should be > system {} measure number {}",
-            i,
-            page.systems[i].first_measure_number,
-            i - 1,
-            page.systems[i - 1].first_measure_number,
-        );
-    }
-}
-
-#[test]
 fn measure_numbers_enabled_differs_from_disabled() {
     let (font, config) = setup();
     let ss = config.staff_space;
     let mc = MeasureLayoutConfig::from_staff_space(ss);
-    let measures: Vec<_> = (0..4).map(|i| make_measure(i as i8)).collect();
+    let measures: Vec<_> = number_measures((0..4).map(|i| make_measure(i as i8)).collect());
 
     let mut page_cfg_on = PageLayoutConfig::new(ss, 8000.0);
-    page_cfg_on.show_measure_numbers = true;
+    page_cfg_on.measure_numbering = MeasureNumbering::SystemStart;
     let page_on = layout_page(
         &prefix(),
         &measures,
@@ -2134,12 +2181,14 @@ fn cross_system_lyric_extender_draws_two_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // 1 measure per system → forces cross-system extender
@@ -2165,12 +2214,14 @@ fn cross_system_lyric_extender_draws_two_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_no_ext = layout_page(
@@ -2206,12 +2257,14 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2231,12 +2284,14 @@ fn no_cross_system_lyric_extender_without_extender_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_bare = layout_page(
@@ -2271,12 +2326,14 @@ fn within_system_extender_does_not_produce_cross_system_extender() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2312,12 +2369,14 @@ fn cross_system_lyric_extender_differs_from_no_extender() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let measures_bare = vec![
@@ -2326,12 +2385,14 @@ fn cross_system_lyric_extender_differs_from_no_extender() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -2372,12 +2433,14 @@ fn cross_system_lyric_extender_lines_are_horizontal() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![note_with_lyric_word(4, "day")],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2462,12 +2525,14 @@ fn cross_system_ottava_draws_two_brackets() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![ottava_end_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // 1 measure per system → forces cross-system ottava
@@ -2490,12 +2555,14 @@ fn cross_system_ottava_draws_two_brackets() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let no_ott_page = layout_page(
@@ -2549,12 +2616,14 @@ fn no_cross_system_ottava_without_flags() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2592,12 +2661,14 @@ fn cross_system_ottava_right_half_only_when_no_end() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(12)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2635,6 +2706,7 @@ fn within_system_ottava_not_duplicated_by_cross_system() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let page = layout_page(
         &prefix(),
@@ -2669,12 +2741,14 @@ fn cross_system_ottava_8vb_draws_below_staff() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![ottava_end_note(-4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2700,12 +2774,14 @@ fn cross_system_ottava_8vb_draws_below_staff() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![ottava_end_note(-4)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_8va = layout_page(
@@ -2753,12 +2829,14 @@ fn cross_system_glissando_draws_two_half_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -2777,12 +2855,14 @@ fn cross_system_glissando_draws_two_half_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let no_gliss_page = layout_page(
@@ -2817,12 +2897,14 @@ fn no_cross_system_glissando_without_flag() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let measures_with_flag = vec![
@@ -2831,12 +2913,14 @@ fn no_cross_system_glissando_without_flag() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_no = layout_page(
@@ -2877,6 +2961,7 @@ fn within_system_glissando_not_duplicated_as_cross_system() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let page = layout_page(
         &prefix(),
@@ -2910,12 +2995,14 @@ fn cross_system_glissando_differs_from_no_glissando() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let without_gliss = vec![
@@ -2924,12 +3011,14 @@ fn cross_system_glissando_differs_from_no_glissando() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -2969,12 +3058,14 @@ fn cross_system_glissando_with_text_shows_label() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![quarter_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -3045,12 +3136,14 @@ fn cross_system_trill_extension_adds_incoming_wiggle_paths_on_next_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let without_trill = vec![
@@ -3059,12 +3152,14 @@ fn cross_system_trill_extension_adds_incoming_wiggle_paths_on_next_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3120,12 +3215,14 @@ fn cross_system_trill_extension_only_when_last_note_is_trilled() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // For comparison: trill is the last note of system 1, so cross-system fires.
@@ -3135,12 +3232,14 @@ fn cross_system_trill_extension_only_when_last_note_is_trilled() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3191,6 +3290,7 @@ fn cross_system_trill_extension_no_target_system_no_incoming_wiggle() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let page = layout_page(
         &prefix(),
@@ -3227,12 +3327,14 @@ fn cross_system_trill_extension_incoming_y_anchored_to_target_staff() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -3308,12 +3410,14 @@ fn cross_system_trill_extension_no_op_without_trill() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -3377,12 +3481,14 @@ fn cross_system_trill_bracket_end_adds_one_hook_on_target_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -3391,12 +3497,14 @@ fn cross_system_trill_bracket_end_adds_one_hook_on_target_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3444,12 +3552,14 @@ fn cross_system_trill_bracket_both_adds_start_on_n_and_end_on_n_plus_1() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -3458,12 +3568,14 @@ fn cross_system_trill_bracket_both_adds_start_on_n_and_end_on_n_plus_1() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3508,12 +3620,14 @@ fn cross_system_trill_bracket_start_adds_only_one_hook_on_source_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -3522,12 +3636,14 @@ fn cross_system_trill_bracket_start_adds_only_one_hook_on_source_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3605,12 +3721,14 @@ fn cross_system_trill_bracket_custom_length_changes_n_plus_1_hook() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let long = vec![
@@ -3624,12 +3742,14 @@ fn cross_system_trill_bracket_custom_length_changes_n_plus_1_hook() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3678,12 +3798,14 @@ fn cross_system_trill_bracket_custom_direction_changes_n_plus_1_hook() {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![whole_note(8)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ]
     };
@@ -3737,12 +3859,14 @@ fn cross_system_trill_bracket_custom_defaults_match_plain_bracketed() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -3751,12 +3875,14 @@ fn cross_system_trill_bracket_custom_defaults_match_plain_bracketed() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3822,12 +3948,14 @@ fn cross_system_trill_extension_fast_speed_adds_more_incoming_paths_than_slow() 
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![whole_note(8)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ]
     }
@@ -3877,12 +4005,14 @@ fn cross_system_trill_extension_speed_changes_svg_byte_for_byte() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let slow_measures = vec![
@@ -3891,12 +4021,14 @@ fn cross_system_trill_extension_speed_changes_svg_byte_for_byte() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -3940,12 +4072,14 @@ fn cross_system_trill_extension_standard_speed_matches_unset_speed() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let unset = vec![
@@ -3954,12 +4088,14 @@ fn cross_system_trill_extension_standard_speed_matches_unset_speed() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4057,12 +4193,14 @@ fn cross_system_multi_speed_trill_adds_incoming_paths_on_next_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let without_trill = vec![
@@ -4071,12 +4209,14 @@ fn cross_system_multi_speed_trill_adds_incoming_paths_on_next_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4132,12 +4272,14 @@ fn cross_system_multi_speed_trill_renders_distinct_svg_from_single_speed() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let single_speed_measures = vec![
@@ -4146,12 +4288,14 @@ fn cross_system_multi_speed_trill_renders_distinct_svg_from_single_speed() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4211,12 +4355,14 @@ fn cross_system_multi_speed_trill_uses_multiple_distinct_wiggle_glyphs() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4294,12 +4440,14 @@ fn cross_system_multi_speed_trill_explicit_length_suppresses_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let no_ramp_score = vec![
@@ -4308,12 +4456,14 @@ fn cross_system_multi_speed_trill_explicit_length_suppresses_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4354,12 +4504,14 @@ fn cross_system_multi_speed_trill_explicit_length_suppresses_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let p_continued = layout_page(
@@ -4441,12 +4593,14 @@ fn cross_system_trill_to_note_offset_suppresses_cross_system_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // The "natural" comparison: same first-system trilled note WITHOUT
@@ -4458,12 +4612,14 @@ fn cross_system_trill_to_note_offset_suppresses_cross_system_continuation() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4525,12 +4681,14 @@ fn cross_system_multi_speed_trill_bracket_end_adds_one_hook_on_target_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -4546,12 +4704,14 @@ fn cross_system_multi_speed_trill_bracket_end_adds_one_hook_on_target_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4609,12 +4769,14 @@ fn cross_system_multi_speed_trill_bracket_both_adds_start_on_n_and_end_on_n_plus
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -4630,12 +4792,14 @@ fn cross_system_multi_speed_trill_bracket_both_adds_start_on_n_and_end_on_n_plus
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4691,12 +4855,14 @@ fn cross_system_multi_speed_trill_bracket_start_only_adds_no_hook_on_target() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain = vec![
@@ -4712,12 +4878,14 @@ fn cross_system_multi_speed_trill_bracket_start_only_adds_no_hook_on_target() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4773,12 +4941,14 @@ fn cross_system_multi_speed_trill_accel_distinct_from_decel() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let decel = vec![
@@ -4794,12 +4964,14 @@ fn cross_system_multi_speed_trill_accel_distinct_from_decel() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4852,12 +5024,14 @@ fn cross_system_multi_speed_constant_ramp_equals_single_speed_when_one_region() 
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let single_speed = vec![
@@ -4866,12 +5040,14 @@ fn cross_system_multi_speed_constant_ramp_equals_single_speed_when_one_region() 
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![whole_note(8)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
 
@@ -4936,6 +5112,7 @@ fn cross_system_multi_speed_trill_no_target_system_no_crash() {
         barline: BarlineStyle::Final,
         volta: None,
         additional_voices: vec![],
+        meta: MeasureMeta::default(),
     }];
     let page = layout_page(
         &prefix(),
@@ -4992,12 +5169,14 @@ fn within_system_dashed_hairpin_emits_two_dasharrays() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // Both measures fit on one system → entirely within-system path.
@@ -5025,12 +5204,14 @@ fn within_system_dashed_hairpin_emits_two_dasharrays() {
                 barline: BarlineStyle::Single,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
             MeasureContent {
                 events: vec![hairpin_end_note(6)],
                 barline: BarlineStyle::Final,
                 volta: None,
                 additional_voices: vec![],
+                meta: MeasureMeta::default(),
             },
         ];
         let solid_page = layout_page(
@@ -5071,12 +5252,14 @@ fn within_system_dashed_hairpin_dasharray_value_matches_layout_constants() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -5116,12 +5299,14 @@ fn cross_system_dashed_hairpin_emits_dasharray_on_all_four_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     // 1 measure per system → forces cross-system hairpin.
@@ -5154,12 +5339,14 @@ fn cross_system_dashed_hairpin_emits_dasharray_on_all_four_lines() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let solid_page = layout_page(
@@ -5199,12 +5386,14 @@ fn cross_system_dashed_hairpin_trailing_half_uses_dasharray_layout_constants() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -5320,12 +5509,14 @@ fn within_system_niente_closed_end_emits_one_circle() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -5344,12 +5535,14 @@ fn within_system_niente_closed_end_emits_one_circle() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let plain_page = layout_page(
@@ -5393,12 +5586,14 @@ fn within_system_niente_radius_matches_layout_constant() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -5442,12 +5637,14 @@ fn within_system_niente_svg(start_note: MeasureEvent) -> String {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -5567,12 +5764,14 @@ fn within_system_niente_combined_with_dashed_keeps_circle_solid() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page = layout_page(
@@ -5621,12 +5820,14 @@ fn cross_system_niente_crescendo_closed_circle_on_source_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_c = layout_page(
@@ -5655,12 +5856,14 @@ fn cross_system_niente_crescendo_closed_circle_on_source_system() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_d = layout_page(
@@ -5710,12 +5913,14 @@ fn cross_system_niente_open_end_flips_owning_half() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_closed = layout_page(
@@ -5735,12 +5940,14 @@ fn cross_system_niente_open_end_flips_owning_half() {
             barline: BarlineStyle::Single,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
         MeasureContent {
             events: vec![hairpin_end_note(6)],
             barline: BarlineStyle::Final,
             volta: None,
             additional_voices: vec![],
+            meta: MeasureMeta::default(),
         },
     ];
     let page_open = layout_page(

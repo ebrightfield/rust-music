@@ -28,16 +28,18 @@ pub fn stem_x(
     }
 }
 
-/// Compute the y-coordinates (top, bottom) of a stem for a note at the given position.
+/// Compute the y-coordinates (top, bottom) of a stem for a note at the given
+/// position drawn at `scale` (1.0 for normal size).
 ///
 /// Returns `(y_top, y_bottom)` where `y_top < y_bottom` (SVG: y increases downward).
 pub fn stem_endpoints(
     staff: &StaffLayout,
     position: StaffPosition,
     direction: StemDirection,
+    scale: f64,
 ) -> (f64, f64) {
     let notehead_y = staff.y_of(position);
-    let length_ss = stem_length_staff_spaces(position, direction);
+    let length_ss = stem_length_staff_spaces(position, direction, scale);
     let length_fu = length_ss * staff.staff_space;
 
     match direction {
@@ -52,10 +54,11 @@ pub fn stem_endpoints(
     }
 }
 
-/// Draw a stem for a note.
+/// Draw a stem for a note drawn at `scale` (1.0 for normal size).
 ///
 /// The stem is drawn as a vertical line from the notehead to the stem tip,
 /// using `stem_thickness` from the engraving config.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_stem(
     svg: &mut SvgWriter,
     staff: &StaffLayout,
@@ -64,10 +67,11 @@ pub fn draw_stem(
     notehead_advance: f64,
     position: StaffPosition,
     direction: StemDirection,
+    scale: f64,
 ) {
-    let thickness = config.stem_thickness_fu();
+    let thickness = config.stem_thickness_fu() * scale;
     let x = stem_x(notehead_x, notehead_advance, direction, thickness);
-    let (y_top, y_bottom) = stem_endpoints(staff, position, direction);
+    let (y_top, y_bottom) = stem_endpoints(staff, position, direction, scale);
 
     svg.add_line(x, y_top, x, y_bottom, "black", thickness);
 }
@@ -116,7 +120,7 @@ mod tests {
     fn stem_up_from_bottom_line() {
         let (_, _, staff) = setup();
         // Position 0 (bottom line), stem up, default length 3.5 ss
-        let (y_top, y_bottom) = stem_endpoints(&staff, 0, StemDirection::Up);
+        let (y_top, y_bottom) = stem_endpoints(&staff, 0, StemDirection::Up, 1.0);
         let notehead_y = staff.y_of(0); // 1000.0
         assert!((y_bottom - notehead_y).abs() < f64::EPSILON);
         // Stem goes up (negative y direction): 3.5 * 250 = 875
@@ -128,7 +132,7 @@ mod tests {
     fn stem_down_from_top_line() {
         let (_, _, staff) = setup();
         // Position 8 (top line), stem down, default length 3.5 ss
-        let (y_top, y_bottom) = stem_endpoints(&staff, 8, StemDirection::Down);
+        let (y_top, y_bottom) = stem_endpoints(&staff, 8, StemDirection::Down, 1.0);
         let notehead_y = staff.y_of(8); // 0.0
         assert!((y_top - notehead_y).abs() < f64::EPSILON);
         let expected_bottom = notehead_y + 875.0;
@@ -139,7 +143,7 @@ mod tests {
     fn stem_up_from_middle_line() {
         let (_, _, staff) = setup();
         // Position 4, stem up, default length 3.5 ss
-        let (y_top, y_bottom) = stem_endpoints(&staff, 4, StemDirection::Up);
+        let (y_top, y_bottom) = stem_endpoints(&staff, 4, StemDirection::Up, 1.0);
         let notehead_y = staff.y_of(4); // 500.0
         assert!((y_bottom - notehead_y).abs() < f64::EPSILON);
         assert!((y_top - (500.0 - 875.0)).abs() < f64::EPSILON);
@@ -149,7 +153,7 @@ mod tests {
     fn stem_extends_for_far_ledger_note() {
         let (_, _, staff) = setup();
         // Position -4, stem up: length = (4-(-4))/2 = 4.0 ss
-        let (y_top, y_bottom) = stem_endpoints(&staff, -4, StemDirection::Up);
+        let (y_top, y_bottom) = stem_endpoints(&staff, -4, StemDirection::Up, 1.0);
         let notehead_y = staff.y_of(-4); // (8-(-4)) * 125 = 1500
         assert!((y_bottom - notehead_y).abs() < f64::EPSILON);
         let expected_top = notehead_y - 4.0 * 250.0; // 1500 - 1000 = 500
@@ -163,7 +167,7 @@ mod tests {
         let (_, _, staff) = setup();
         for pos in -6..=14 {
             for dir in [StemDirection::Up, StemDirection::Down] {
-                let (y_top, y_bottom) = stem_endpoints(&staff, pos, dir);
+                let (y_top, y_bottom) = stem_endpoints(&staff, pos, dir, 1.0);
                 assert!(
                     y_top < y_bottom,
                     "pos={pos}, dir={dir:?}: y_top={y_top} should be < y_bottom={y_bottom}"
@@ -186,6 +190,7 @@ mod tests {
             295.0,
             4,
             StemDirection::Up,
+            1.0,
         );
         let output = svg.to_svg();
         assert_eq!(
@@ -207,6 +212,7 @@ mod tests {
             295.0,
             4,
             StemDirection::Down,
+            1.0,
         );
         let output = svg.to_svg();
         let expected_sw = format!("stroke-width=\"{}\"", config.stem_thickness_fu());
@@ -230,6 +236,7 @@ mod tests {
             advance,
             2,
             StemDirection::Up,
+            1.0,
         );
         let output = svg.to_svg();
 
@@ -256,6 +263,7 @@ mod tests {
             advance,
             6,
             StemDirection::Down,
+            1.0,
         );
         let output = svg.to_svg();
 
@@ -281,10 +289,11 @@ mod tests {
             295.0,
             0,
             StemDirection::Up,
+            1.0,
         );
         let output = svg.to_svg();
 
-        let (y_top, y_bottom) = stem_endpoints(&staff, 0, StemDirection::Up);
+        let (y_top, y_bottom) = stem_endpoints(&staff, 0, StemDirection::Up, 1.0);
         let y1_str = format!("y1=\"{y_top}\"");
         let y2_str = format!("y2=\"{y_bottom}\"");
         assert!(output.contains(&y1_str), "should contain y1 (top)");

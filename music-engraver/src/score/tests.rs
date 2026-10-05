@@ -3162,27 +3162,6 @@ fn stack_long_fermata_with_staccato_adds_two_paths() {
     );
 }
 
-#[test]
-fn articulation_convert_event_preserves_field() {
-    use crate::layout::articulation::Articulation;
-    let key_sig = KeySignature::Open;
-    let event = ScoreEvent::Note {
-        pitch: p("E", 4),
-        duration: Duration::QTR,
-        annotations: NoteAnnotations {
-            articulations: vec![Articulation::Tenuto],
-            ..NoteAnnotations::default()
-        },
-    };
-    let clef = Clef::Treble;
-    let result = convert_event(&event, &clef, &key_sig, None);
-    match result {
-        MeasureEvent::Note(ne) => {
-            assert_eq!(ne.annotations.articulations, vec![Articulation::Tenuto]);
-        }
-        _ => panic!("expected Note event"),
-    }
-}
 
 #[test]
 fn stacked_articulations_add_two_paths() {
@@ -3256,273 +3235,6 @@ fn stacked_fermata_plus_staccato_adds_two_paths() {
         "staccato + fermata should add two paths: without={}, with={}",
         count_without,
         count_with
-    );
-}
-
-#[test]
-fn stacked_convert_event_preserves_multiple() {
-    use crate::layout::articulation::Articulation;
-    let key_sig = KeySignature::Open;
-    let event = ScoreEvent::Note {
-        pitch: p("E", 4),
-        duration: Duration::QTR,
-        annotations: NoteAnnotations {
-            articulations: vec![Articulation::Staccato, Articulation::Accent],
-            ..NoteAnnotations::default()
-        },
-    };
-    let clef = Clef::Treble;
-    let result = convert_event(&event, &clef, &key_sig, None);
-    match result {
-        MeasureEvent::Note(ne) => {
-            assert_eq!(ne.annotations.articulations.len(), 2);
-            assert_eq!(ne.annotations.articulations[0], Articulation::Staccato);
-            assert_eq!(ne.annotations.articulations[1], Articulation::Accent);
-        }
-        _ => panic!("expected Note event"),
-    }
-}
-
-#[test]
-fn grace_note_acciaccatura_adds_extra_path() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    let count_without = without.matches("<path").count();
-    let count_with = with.matches("<path").count();
-    assert!(
-        count_with > count_without,
-        "grace note should add at least one path: {} vs {}",
-        count_with,
-        count_without
-    );
-}
-
-#[test]
-fn grace_note_on_rest_is_noop() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .grace_note(p("C", 4), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    assert_eq!(without, with, "grace note on rest should be no-op");
-}
-
-#[test]
-fn acciaccatura_vs_appoggiatura_differ() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let acc = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    let app = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .grace_note(p("D", 4), GraceNoteKind::Appoggiatura)
-        .end_barline()
-        .render_svg();
-
-    assert_ne!(
-        acc, app,
-        "acciaccatura and appoggiatura should produce different SVGs"
-    );
-}
-
-#[test]
-fn grace_note_on_chord_adds_path() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .chord(vec![p("C", 4), p("E", 4)], Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .chord(vec![p("C", 4), p("E", 4)], Duration::QTR)
-        .grace_note(p("B", 3), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    let count_without = without.matches("<path").count();
-    let count_with = with.matches("<path").count();
-    assert!(
-        count_with > count_without,
-        "grace note on chord should add a path: {} vs {}",
-        count_with,
-        count_without
-    );
-}
-
-#[test]
-fn grace_note_convert_event_preserves_field() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let key_sig = KeySignature::Open;
-    let event = ScoreEvent::Note {
-        pitch: p("E", 4),
-        duration: Duration::QTR,
-        annotations: NoteAnnotations {
-            grace_note: Some((2, GraceNoteKind::Acciaccatura)),
-            ..Default::default()
-        },
-    };
-    let clef = Clef::Treble;
-    let result = convert_event(&event, &clef, &key_sig, None);
-    match result {
-        MeasureEvent::Note(ne) => {
-            assert_eq!(
-                ne.annotations.grace_note,
-                Some((2, GraceNoteKind::Acciaccatura))
-            );
-        }
-        _ => panic!("expected Note event from grace_note_convert_event"),
-    }
-}
-
-#[test]
-fn grace_note_slur_adds_filled_path_vs_plain_grace() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let no_slur = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .grace_note(p("D", 4), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    let with_slur = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("E", 4), Duration::QTR)
-        .grace_note_slur(p("D", 4), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    // Exactly one extra filled (stroke="none") path: the slur crescent.
-    let stroke_none_without = no_slur.matches(r#"stroke="none""#).count();
-    let stroke_none_with = with_slur.matches(r#"stroke="none""#).count();
-    assert_eq!(
-            stroke_none_with,
-            stroke_none_without + 1,
-            "grace_note_slur should add exactly one filled path: {stroke_none_without} → {stroke_none_with}"
-        );
-
-    // Both still contain the grace glyph (scale 0.6).
-    assert!(with_slur.contains("scale(0.6"));
-    assert!(no_slur.contains("scale(0.6"));
-
-    // Differ structurally.
-    assert_ne!(no_slur, with_slur);
-}
-
-#[test]
-fn grace_note_slur_on_rest_is_noop() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .grace_note_slur(p("C", 4), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    assert_eq!(without, with, "grace_note_slur on rest should be no-op");
-}
-
-#[test]
-fn grace_note_slur_on_chord_adds_filled_path() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let plain = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::HALF)
-        .grace_note(p("B", 3), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    let slurred = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::HALF)
-        .grace_note_slur(p("B", 3), GraceNoteKind::Acciaccatura)
-        .end_barline()
-        .render_svg();
-
-    let plain_filled = plain.matches(r#"stroke="none""#).count();
-    let slurred_filled = slurred.matches(r#"stroke="none""#).count();
-    assert_eq!(
-        slurred_filled,
-        plain_filled + 1,
-        "chord grace_note_slur should add exactly one filled path"
-    );
-}
-
-#[test]
-fn grace_note_slur_persists_grace_note_field() {
-    use crate::layout::grace::GraceNoteKind;
-
-    let svg = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .note(p("F", 4), Duration::HALF)
-        .grace_note_slur(p("E", 4), GraceNoteKind::Appoggiatura)
-        .end_barline()
-        .render_svg();
-
-    // Grace glyph (scale 0.6) and the slur (stroke="none") must both be present.
-    assert!(
-        svg.contains("scale(0.6"),
-        "grace_note_slur must still emit the grace glyph"
-    );
-    assert!(
-        svg.contains(r#"stroke="none""#),
-        "grace_note_slur must emit a filled slur path"
     );
 }
 
@@ -4372,7 +4084,7 @@ fn show_measure_numbers_adds_text_to_svg() {
     let svg = ScoreBuilder::new()
         .clef(Clef::Treble)
         .time_signature(4, 4)
-        .show_measure_numbers()
+        .measure_numbering(MeasureNumbering::SystemStart)
         .note(Pitch::new(Note::C, 4), Duration::WHOLE)
         .barline()
         .note(Pitch::new(Note::D, 4), Duration::WHOLE)
@@ -4388,7 +4100,7 @@ fn show_measure_numbers_multi_system_shows_correct_numbers() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .measures_per_system(2)
-        .show_measure_numbers()
+        .measure_numbering(MeasureNumbering::SystemStart)
         .note(Pitch::new(Note::C, 4), Duration::WHOLE)
         .barline()
         .note(Pitch::new(Note::D, 4), Duration::WHOLE)
@@ -4432,7 +4144,9 @@ fn show_measure_numbers_on_vs_off_differs() {
             .end_barline()
     };
 
-    let svg_on = builder().show_measure_numbers().render_svg();
+    let svg_on = builder()
+        .measure_numbering(MeasureNumbering::SystemStart)
+        .render_svg();
     let svg_off = builder().render_svg();
 
     assert_ne!(
@@ -5889,7 +5603,7 @@ fn single_voice_no_additional_voices() {
         .note(p("C", 4), Duration::QTR)
         .note(p("D", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     assert_eq!(contents.len(), 1);
     assert_eq!(contents[0].events.len(), 2);
     assert!(contents[0].additional_voices.is_empty());
@@ -5904,7 +5618,7 @@ fn two_voices_splits_into_primary_and_additional() {
         .voice(1)
         .note(p("C", 4), Duration::WHOLE)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     assert_eq!(contents.len(), 1);
     // Voice 0: 2 half notes
     assert_eq!(contents[0].events.len(), 2);
@@ -5924,7 +5638,7 @@ fn multi_voice_forces_stem_up_on_voice_0() {
         .voice(1)
         .note(p("C", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 0 note should have stem up forced
     match &contents[0].events[0] {
         MeasureEvent::Note(n) => {
@@ -5948,7 +5662,7 @@ fn multi_voice_forces_stem_down_on_voice_1() {
         // Low note normally gets stem up, but voice 1 forces stem down
         .note(p("C", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 1 note should have stem down forced
     match &contents[0].additional_voices[0][0] {
         MeasureEvent::Note(n) => {
@@ -5968,7 +5682,7 @@ fn single_voice_does_not_force_stems() {
         .clef(Clef::Treble)
         .note(p("A", 5), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Single voice should use auto stem direction (None = auto)
     match &contents[0].events[0] {
         MeasureEvent::Note(n) => {
@@ -6013,7 +5727,7 @@ fn voice_reset_across_measures() {
         // After barline, voice should be 0 again
         .note(p("D", 5), Duration::WHOLE)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Measure 0: multi-voice (voice 0 + voice 1)
     assert_eq!(contents[0].additional_voices.len(), 1);
     // Measure 1: single voice (only voice 0)
@@ -6035,7 +5749,7 @@ fn multi_voice_beam_group_forces_stems() {
         .voice(1)
         .note(p("C", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Every stemmed member of voice 0's beam points up in a multi-voice measure.
     let members: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
         MeasureEvent::Note(note) => Some(note.stem_direction),
@@ -6053,7 +5767,7 @@ fn multi_voice_chord_forces_stems() {
         .voice(1)
         .chord(vec![p("C", 4), p("E", 4)], Duration::HALF)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 0 chord: stems up
     match &contents[0].events[0] {
         MeasureEvent::Chord(c) => {
@@ -6078,7 +5792,7 @@ fn multi_voice_rest_has_no_stem_direction() {
         .voice(1)
         .rest(Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 1 rest should still be a rest (no stem to force)
     match &contents[0].additional_voices[0][0] {
         MeasureEvent::Rest(r) => {
@@ -6187,7 +5901,7 @@ fn multi_voice_secondary_note_has_forced_stem_down() {
         .note(p("C", 4), Duration::QTR)
         .end_barline();
 
-    let contents = multi.build_measure_contents();
+    let contents = multi.build_measure_contents().unwrap();
     // Voice 0 should have stem up (forced for multi-voice)
     match &contents[0].events[0] {
         MeasureEvent::Note(n) => {
@@ -10706,4 +10420,367 @@ fn speed_ramp_supersedes_speed_field_for_glyph_selection() {
         "ramp must supersede speed field for glyph selection — same speed but with a ramp \
              must render distinct SVG"
     );
+}
+
+// LilyPond source: mn-c12-r009 (\accidentalStyle forget, \once \omit
+// Accidental, \grace { aes,8[ ees,8] }, \slashedGrace { f8( } g!4).
+#[test]
+fn forget_policy_judges_each_pitch_against_the_key_signature() {
+    let f_sharp = Pitch::new(Note::Fis, 4);
+    let f = Pitch::new(Note::F, 4);
+    let events = [
+        (f_sharp, AccidentalDisplay::Auto),
+        (f_sharp, AccidentalDisplay::Auto),
+        (f, AccidentalDisplay::Auto),
+        (f_sharp, AccidentalDisplay::Auto),
+    ]
+    .map(|(pitch, display)| {
+        (
+            0,
+            ScoreEvent::Note {
+                pitch,
+                duration: Duration::QTR,
+                annotations: NoteAnnotations {
+                    accidental_displays: vec![display],
+                    ..Default::default()
+                },
+            },
+        )
+    });
+    let forget = resolve_measure_accidentals(
+        &events,
+        &KeySignature::Sharps(1),
+        &[],
+        AccidentalPolicy::Forget,
+    );
+    let default = resolve_measure_accidentals(
+        &events,
+        &KeySignature::Sharps(1),
+        &[],
+        AccidentalPolicy::Default,
+    );
+    assert_eq!(
+        forget,
+        vec![
+            None,
+            None,
+            Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalNatural)),
+            None,
+        ]
+    );
+    assert_eq!(
+        default[3],
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp)),
+        "default reinstates the key's sharp after an F-natural"
+    );
+}
+
+#[test]
+fn hidden_accidental_mutates_default_policy_but_forget_repeats_the_written_sign() {
+    let fis = Pitch::new(Note::Fis, 4);
+    let events: Vec<_> = [AccidentalDisplay::Hide, AccidentalDisplay::Auto]
+        .into_iter()
+        .map(|display| {
+            (
+                0,
+                ScoreEvent::Note {
+                    pitch: fis,
+                    duration: Duration::QTR,
+                    annotations: NoteAnnotations {
+                        accidental_displays: vec![display],
+                        ..Default::default()
+                    },
+                },
+            )
+        })
+        .collect();
+    assert_eq!(
+        resolve_measure_accidentals(&events, &KeySignature::Open, &[], AccidentalPolicy::Default),
+        vec![None, None]
+    );
+    assert_eq!(
+        resolve_measure_accidentals(&events, &KeySignature::Open, &[], AccidentalPolicy::Forget),
+        vec![
+            None,
+            Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp)),
+        ]
+    );
+}
+
+#[test]
+fn grace_accidentals_sound_before_the_principal_and_follow_measure_policy() {
+    let graces = GraceNotes::new(crate::layout::grace::GraceNoteKind::Appoggiatura)
+        .note(Pitch::new(Note::Aes, 2), Duration::EIGHTH)
+        .note(Pitch::new(Note::Ees, 2), Duration::EIGHTH);
+    let score = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .note(Pitch::new(Note::Aes, 2), Duration::EIGHTH)
+        .grace_notes(graces)
+        .note(Pitch::new(Note::Ees, 2), Duration::QTR)
+        .end_barline();
+    let contents = score.build_measure_contents().unwrap();
+    let MeasureEvent::Note(first) = &contents[0].events[0] else {
+        panic!("expected first note");
+    };
+    let group = first.annotations.grace_group.as_ref().unwrap();
+    assert!(group.is_beamed());
+    assert_eq!(group.notes.len(), 2);
+    assert_eq!(
+        group.notes[0].accidental,
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalFlat))
+    );
+    assert_eq!(
+        group.notes[1].accidental,
+        Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalFlat))
+    );
+    assert_eq!(first.accidental, None, "grace A-flat alters its principal");
+    let MeasureEvent::Note(second) = &contents[0].events[1] else {
+        panic!("expected second note");
+    };
+    assert_eq!(second.accidental, None, "grace E-flat alters the later note");
+}
+
+#[test]
+fn stemless_score_omits_stems_and_flags_on_notes_chords_and_beams() {
+    let score = ScoreBuilder::new()
+        .note(Pitch::new(Note::C, 4), Duration::EIGHTH)
+        .chord(
+            vec![Pitch::new(Note::E, 4), Pitch::new(Note::G, 4)],
+            Duration::EIGHTH,
+        )
+        .beam_group(vec![
+            (Pitch::new(Note::D, 4), Duration::EIGHTH),
+            (Pitch::new(Note::F, 4), Duration::EIGHTH),
+        ])
+        .end_barline()
+        .stemless();
+    let contents = score.clone().build_measure_contents().unwrap();
+    for event in &contents[0].events {
+        match event {
+            MeasureEvent::Note(note) => assert_eq!(note.annotations.stem, StemVisibility::Hidden),
+            MeasureEvent::Chord(chord) => assert_eq!(chord.annotations.stem, StemVisibility::Hidden),
+            MeasureEvent::GroupMark(_) => {}
+            _ => panic!("unexpected event"),
+        }
+    }
+    let svg = score.render_svg();
+    assert!(!svg.contains("<polygon"), "stemless groups must not emit beams");
+}
+
+#[test]
+fn cue_note_shrinks_notehead_stem_and_incompressible_rod() {
+    use crate::layout::measure::{layout_measure, MeasureElement};
+    use smufl::Glyph;
+
+    let build = |size| {
+        let score = ScoreBuilder::new()
+            .clef(Clef::Treble)
+            .note(Pitch::new(Note::Cis, 4), Duration::EIGHTH)
+            .note_size(size)
+            .end_barline();
+        let contents = score.build_measure_contents().unwrap();
+        let MeasureEvent::Note(note) = &contents[0].events[0] else {
+            panic!("expected note");
+        };
+        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
+        let rod = layout_measure(&[MeasureElement::Note(note.clone())], &cfg).total_rod;
+        (score.render_svg(), rod)
+    };
+    let (normal, normal_rod) = build(NoteSize::Normal);
+    let (cue, cue_rod) = build(NoteSize::Cue);
+    let head = bravura_font().glyph_outline(Glyph::NoteheadBlack).unwrap().path_data;
+    assert!(normal.contains(&head) && cue.contains(&head));
+    assert!(cue.contains(&format!("scale({})", NoteSize::Cue.scale())));
+    assert!(cue_rod < normal_rod, "cue accidental and notehead need smaller rods");
+
+    // Two vertical line end coordinates from the eighth's stem; the same
+    // pitch/staff are used, so only the stem's glyph-scale length changes.
+    let stem_length = |svg: &str| {
+        let segment = svg
+            .split("<line ")
+            .find(|part| part.contains("stroke=\"black\"") && part.contains("x1=") && {
+                let x1 = part.split("x1=\"").nth(1).unwrap().split('"').next().unwrap();
+                let x2 = part.split("x2=\"").nth(1).unwrap().split('"').next().unwrap();
+                x1 == x2
+            })
+            .expect("a stem line");
+        let y = |key: &str| -> f64 {
+            segment.split(key).nth(1).unwrap().split('"').next().unwrap().parse().unwrap()
+        };
+        (y("y1=\"") - y("y2=\"")).abs()
+    };
+    assert!(stem_length(&cue) < stem_length(&normal));
+}
+
+#[test]
+fn custom_mark_stacks_above_built_in_and_parentheses_enclose_pause_marks() {
+    use crate::layout::articulation::ArticulationMark;
+    use smufl::Glyph;
+    let font = bravura_font();
+    let custom = Glyph::ArticMarcatoAbove;
+    let score = ScoreBuilder::new()
+        .note(Pitch::new(Note::C, 4), Duration::QTR)
+        .articulation_mark(ArticulationMark::custom(custom).above())
+        .articulation_mark(ArticulationMark::from(Articulation::Staccato).above())
+        .note(Pitch::new(Note::D, 4), Duration::QTR)
+        .articulation_mark(ArticulationMark::from(Articulation::Fermata).parenthesized())
+        .note(Pitch::new(Note::E, 4), Duration::QTR)
+        .parenthesized_breath_mark(BreathMark::Comma)
+        .end_barline();
+    let svg = score.render_svg();
+    for glyph in [
+        custom,
+        Glyph::ArticStaccatoAbove,
+        Glyph::FermataAbove,
+        Glyph::BreathMarkComma,
+    ] {
+        assert!(
+            svg.contains(&font.glyph_outline(glyph).unwrap().path_data),
+            "missing glyph {glyph:?}"
+        );
+    }
+    let left = font.glyph_outline(Glyph::AccidentalParensLeft).unwrap().path_data;
+    let right = font.glyph_outline(Glyph::AccidentalParensRight).unwrap().path_data;
+    assert_eq!(svg.matches(&left).count(), 2);
+    assert_eq!(svg.matches(&right).count(), 2);
+}
+
+#[test]
+fn parenthesized_cue_note_and_dots_use_their_own_smufl_parentheses() {
+    use smufl::Glyph;
+    let font = bravura_font();
+    let svg = ScoreBuilder::new()
+        .note(
+            Pitch::new(Note::E, 4),
+            Duration::new(DurationKind::Qtr, 1),
+        )
+        .parenthesize()
+        .parenthesize_dots()
+        .note_size(NoteSize::Cue)
+        .hide_stem()
+        .end_barline()
+        .render_svg();
+    for glyph in [
+        Glyph::NoteheadParenthesisLeft,
+        Glyph::NoteheadParenthesisRight,
+    ] {
+        let path = font.glyph_outline(glyph).unwrap().path_data;
+        assert_eq!(svg.matches(&path).count(), 2, "notehead and dots need separate {glyph:?}");
+    }
+}
+
+#[test]
+fn mixed_cue_beam_keeps_beam_and_omits_only_hidden_member_stem() {
+    let make = |hidden| {
+        let builder = ScoreBuilder::new()
+            .begin_beam()
+            .note(Pitch::new(Note::C, 4), Duration::EIGHTH)
+            .note_size(NoteSize::Cue);
+        let builder = if hidden { builder.hide_stem() } else { builder };
+        builder
+            .note(Pitch::new(Note::E, 4), Duration::EIGHTH)
+            .end_beam()
+            .end_barline()
+            .render_svg()
+    };
+    let normal = make(false);
+    let hidden = make(true);
+    assert!(hidden.contains("<polygon"), "the visible note still owns the beam");
+    assert!(hidden.contains(&format!("scale({})", NoteSize::Cue.scale())));
+    assert_eq!(normal.matches("<line ").count(), hidden.matches("<line ").count() + 1);
+}
+
+#[test]
+fn grace_group_moves_principal_right_by_its_reserved_width() {
+    use crate::layout::measure::{layout_measure, MeasureElement};
+    let make = |with_graces| {
+        let mut builder = ScoreBuilder::new().note(Pitch::new(Note::C, 4), Duration::QTR);
+        if with_graces {
+            builder = builder.grace_notes(
+                GraceNotes::new(crate::layout::grace::GraceNoteKind::Appoggiatura)
+                    .note(Pitch::new(Note::Aes, 3), Duration::EIGHTH)
+                    .note(Pitch::new(Note::Ees, 4), Duration::EIGHTH),
+            );
+        }
+        let content = builder.end_barline().build_measure_contents().unwrap();
+        let MeasureEvent::Note(note) = &content[0].events[0] else {
+            panic!("expected a note");
+        };
+        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
+        layout_measure(&[MeasureElement::Note(note.clone())], &cfg).elements[0].x
+    };
+    assert!(make(true) > make(false) + 250.0);
+}
+
+#[test]
+fn forget_never_auto_cancels_an_in_measure_sharp() {
+    let events: Vec<_> = [Note::Fis, Note::Fis, Note::F, Note::F]
+        .into_iter()
+        .map(|note| (
+            0,
+            ScoreEvent::Note {
+                pitch: Pitch::new(note, 4),
+                duration: Duration::QTR,
+                annotations: NoteAnnotations::default(),
+            },
+        ))
+        .collect();
+    let result = resolve_measure_accidentals(
+        &events,
+        &KeySignature::Open,
+        &[],
+        AccidentalPolicy::Forget,
+    );
+    assert_eq!(
+        result,
+        vec![
+            Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp)),
+            Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalSharp)),
+            None,
+            None,
+        ]
+    );
+}
+
+#[test]
+fn c12_r009_slashed_grace_connects_to_its_principal_by_slur() {
+    let make = |slur| {
+        let mut graces = GraceNotes::new(crate::layout::grace::GraceNoteKind::Acciaccatura)
+            .note(Pitch::new(Note::F, 3), Duration::EIGHTH);
+        if slur {
+            graces = graces.slur();
+        }
+        ScoreBuilder::new()
+            .clef(Clef::Bass)
+            .note(Pitch::new(Note::G, 3), Duration::QTR)
+            .grace_notes(graces)
+            .end_barline()
+            .render_svg()
+    };
+    let unslurred = make(false);
+    let slurred = make(true);
+    assert_eq!(
+        slurred.matches("stroke=\"none\"").count(),
+        unslurred.matches("stroke=\"none\"").count() + 1,
+        "only the requested slur adds a filled curved path"
+    );
+}
+
+#[test]
+fn c12_r009_broad_mark_has_long_bar_and_hanging_block_above_note() {
+    use crate::layout::articulation::ArticulationMark;
+    let font = bravura_font();
+    let bar = font
+        .glyph_outline(smufl::Glyph::ArticTenutoAbove)
+        .unwrap()
+        .path_data;
+    let svg = ScoreBuilder::new()
+        .clef(Clef::Bass)
+        .note(Pitch::new(Note::B, 3), Duration::EIGHTH)
+        .articulation_mark(ArticulationMark::broad_mark().above())
+        .end_barline()
+        .render_svg();
+    assert!(svg.contains(&bar), "the broad mark's bar uses a real glyph");
+    assert!(svg.contains("scale(2.5,1)"), "the bar spans several noteheads");
+    assert!(svg.contains("<rect"), "a solid block hangs under the bar");
 }

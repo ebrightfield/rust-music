@@ -11,6 +11,7 @@ use crate::error::EngraverError;
 use crate::font::{EngravingConfig, MusicFont};
 use crate::layout::barline::BarlineStyle;
 use crate::layout::group::TupletSpec;
+use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::bend_gesture::{BendFragment, BendSegmentLayout, BendSegmentPhase, BendView};
 use crate::layout::key_signature::KeySignature;
 #[cfg(test)]
@@ -905,10 +906,24 @@ impl GuitarGroup {
     }
 }
 
+/// A clef directive between two groups of one voice, with its exact onset
+/// shared across all voices of the measure.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GuitarClefChange {
+    voice: u8,
+    after_group: usize,
+    onset: Fraction,
+    clef: ClefKind,
+    after_barline: bool,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct GuitarMeasure {
     pub(crate) voices: BTreeMap<u8, Vec<GuitarGroup>>,
     pub(crate) barline: BarlineStyle,
+    /// Meter change at the start of this measure.
+    pub(crate) time_signature_change: Option<(u8, u8)>,
+    pub(crate) clef_changes: Vec<GuitarClefChange>,
 }
 
 #[derive(Clone, Debug)]
@@ -1208,6 +1223,8 @@ pub enum GuitarScoreError {
     },
     #[error("the current measure is empty")]
     EmptyMeasure,
+    #[error("a time signature change must precede the first event of its measure")]
+    MidMeasureTimeSignatureChange,
 }
 
 /// One validated timeline that drives both standard notation and TAB.
@@ -1218,9 +1235,19 @@ pub struct GuitarScore {
     tuning_display: TuningDisplay,
     clef: ClefKind,
     key_signature: KeySignature,
+    /// Meter at the start of the score.
+    initial_time_signature: Option<(u8, u8)>,
+    /// Meter in force for the measure in progress (validation).
     time_signature: Option<(u8, u8)>,
+    /// Meter change entered at the start of the measure in progress.
+    pending_time_signature_change: Option<(u8, u8)>,
+    /// A meter change entered mid-measure, reported when the measure ends.
+    pending_meter_error: Option<GuitarScoreError>,
     current_voice: u8,
     current_voices: BTreeMap<u8, Vec<GuitarGroup>>,
+    pending_clef_changes: Vec<GuitarClefChange>,
+    pub(crate) measure_numbering: MeasureNumbering,
+    first_measure_number: i32,
     pub(crate) measures: Vec<GuitarMeasure>,
     pub(crate) spans: Vec<GuitarSpan>,
     pub(crate) bends: Vec<BendGesture>,
@@ -1236,9 +1263,15 @@ impl GuitarScore {
             tuning_display: TuningDisplay::Hidden,
             clef: ClefKind::Treble8ba,
             key_signature: KeySignature::Open,
+            initial_time_signature: None,
             time_signature: None,
+            pending_time_signature_change: None,
+            pending_meter_error: None,
             current_voice: 0,
             current_voices: BTreeMap::new(),
+            pending_clef_changes: Vec::new(),
+            measure_numbering: MeasureNumbering::Hidden,
+            first_measure_number: 1,
             measures: Vec::new(),
             spans: Vec::new(),
             bends: Vec::new(),
@@ -1251,8 +1284,54 @@ impl GuitarScore {
         Self::new(GuitarTuning::standard())
     }
 
+    /// Set the score's initial clef before content; afterward insert a clef
+    /// change at the current voice's onset without rewriting earlier notes.
     pub fn set_clef(&mut self, clef: Clef) -> &mut Self {
-        self.clef = ClefKind::from_clef(&clef);
+        if self.measures.is_empty()
+            && self.pending_clef_changes.is_empty()
+            && self.current_voices.values().all(Vec::is_empty)
+        {
+            self.clef = ClefKind::from_clef(&clef);
+            return self;
+        }
+        self.clef_change(clef)
+    }
+
+    /// Insert a clef change at the current voice's onset. At a measure start
+    /// its change-size clef precedes the previous barline.
+    pub fn clef_change(&mut self, clef: Clef) -> &mut Self {
+        self.push_clef_change(clef, false)
+    }
+
+    /// Like [`Self::clef_change`], but put a measure-start change after the
+    /// barline (as explicitly requested by some scores).
+    pub fn clef_change_after_barline(&mut self, clef: Clef) -> &mut Self {
+        self.push_clef_change(clef, true)
+    }
+
+    fn push_clef_change(&mut self, clef: Clef, after_barline: bool) -> &mut Self {
+        let groups = self.current_voices.get(&self.current_voice);
+        self.pending_clef_changes.push(GuitarClefChange {
+            voice: self.current_voice,
+            after_group: groups.map_or(0, Vec::len),
+            onset: groups.map_or(Fraction::default(), |groups| {
+                groups.iter().fold(Fraction::default(), |sum, group| sum + group.effective_ticks())
+            }),
+            clef: ClefKind::from_clef(&clef),
+            after_barline,
+        });
+        self
+    }
+
+    /// Set which guitar measures print their logical bar number.
+    pub fn set_measure_numbering(&mut self, numbering: MeasureNumbering) -> &mut Self {
+        self.measure_numbering = numbering;
+        self
+    }
+
+    /// Set the number of the first non-pickup guitar measure.
+    pub fn set_first_measure_number(&mut self, number: i32) -> &mut Self {
+        self.first_measure_number = number;
         self
     }
 
@@ -1261,9 +1340,38 @@ impl GuitarScore {
         self
     }
 
+    /// Set the meter at the start of the score. Once events have been
+    /// added this is a meter change, identical to
+    /// [`Self::time_signature_change`]; a mid-measure call is reported as
+    /// [`GuitarScoreError::MidMeasureTimeSignatureChange`] when the measure
+    /// ends.
     pub fn set_time_signature(&mut self, numerator: u8, denominator: u8) -> &mut Self {
-        self.time_signature = Some((numerator, denominator));
+        if let Err(error) = self.time_signature_change(numerator, denominator) {
+            self.pending_meter_error.get_or_insert(error);
+        }
         self
+    }
+
+    /// Change the meter from the measure in progress on: measures are
+    /// validated against it and the standard notation prints it after the
+    /// barline (or in the next system's prefix). Must precede the first
+    /// event of the measure.
+    pub fn time_signature_change(
+        &mut self,
+        numerator: u8,
+        denominator: u8,
+    ) -> Result<&mut Self, GuitarScoreError> {
+        if !self.current_voices.values().all(Vec::is_empty) {
+            return Err(GuitarScoreError::MidMeasureTimeSignatureChange);
+        }
+        let meter = Some((numerator, denominator));
+        if self.measures.is_empty() {
+            self.initial_time_signature = meter;
+        } else {
+            self.pending_time_signature_change = meter;
+        }
+        self.time_signature = meter;
+        Ok(self)
     }
 
     pub fn set_voice(&mut self, voice: u8) -> &mut Self {
@@ -1818,6 +1926,9 @@ impl GuitarScore {
     }
 
     pub fn end_measure(&mut self, barline: BarlineStyle) -> Result<&mut Self, GuitarScoreError> {
+        if let Some(error) = self.pending_meter_error.take() {
+            return Err(error);
+        }
         if self.current_voices.values().all(Vec::is_empty) {
             return Err(GuitarScoreError::EmptyMeasure);
         }
@@ -1825,6 +1936,8 @@ impl GuitarScore {
         self.measures.push(GuitarMeasure {
             voices: std::mem::take(&mut self.current_voices),
             barline,
+            time_signature_change: self.pending_time_signature_change.take(),
+            clef_changes: std::mem::take(&mut self.pending_clef_changes),
         });
         self.current_voice = 0;
         Ok(self)
@@ -2013,17 +2126,50 @@ impl GuitarScore {
     pub(crate) fn notation_builder(&self) -> ScoreBuilder {
         let mut score = ScoreBuilder::new()
             .clef(self.clef.to_clef())
+            .first_measure_number(self.first_measure_number)
             .key_signature(self.key_signature.clone());
-        if let Some((numerator, denominator)) = self.time_signature {
+        if let Some((numerator, denominator)) = self.initial_time_signature {
             score = score.time_signature(numerator, denominator);
         }
+        let mut active_clef = self.clef;
         for measure in &self.measures {
-            for (&voice, groups) in &measure.voices {
+            if let Some((numerator, denominator)) = measure.time_signature_change {
+                score = score.time_signature_change(numerator, denominator);
+            }
+            let changes = &measure.clef_changes;
+            let max_voice = measure
+                .voices
+                .keys()
+                .copied()
+                .chain(changes.iter().map(|change| change.voice))
+                .max()
+                .unwrap_or(0);
+            for voice in 0..=max_voice {
                 score = score.voice(voice);
-                for group in groups {
+                let groups = measure.voices.get(&voice).map_or(&[][..], Vec::as_slice);
+                let mut onset = Fraction::default();
+                for (index, group) in groups.iter().enumerate() {
+                    for change in changes
+                        .iter()
+                        .filter(|change| change.voice == voice && change.after_group == index)
+                    {
+                        score = if change.after_barline {
+                            score.clef_change_after_barline(change.clef.to_clef())
+                        } else {
+                            score.clef_change(change.clef.to_clef())
+                        };
+                    }
+                    // A clef directive applies at its onset across all voices,
+                    // even when the voice carrying the directive is projected
+                    // after this one into the ScoreBuilder.
+                    let clef = changes
+                        .iter()
+                        .filter(|change| change.onset <= onset)
+                        .max_by_key(|change| change.onset)
+                        .map_or(active_clef, |change| change.clef);
                     score = match group {
                         GuitarGroup::Event(event) => {
-                            add_event_to_score(score, event, self.clef, &self.bends)
+                            add_event_to_score(score, event, clef, &self.bends)
                         }
                         GuitarGroup::Beam(events) => {
                             add_events_to_score(score.begin_beam(), events, self.clef, &self.bends)
@@ -2052,7 +2198,21 @@ impl GuitarScore {
                             score.end_tuplet()
                         }
                     };
+                    onset = onset + group.effective_ticks();
                 }
+                for change in changes
+                    .iter()
+                    .filter(|change| change.voice == voice && change.after_group == groups.len())
+                {
+                    score = if change.after_barline {
+                        score.clef_change_after_barline(change.clef.to_clef())
+                    } else {
+                        score.clef_change(change.clef.to_clef())
+                    };
+                }
+            }
+            if let Some(change) = changes.iter().max_by_key(|change| change.onset) {
+                active_clef = change.clef;
             }
             score = score.barline_style(measure.barline);
         }
@@ -4524,6 +4684,78 @@ mod tests {
     }
 
     #[test]
+    fn guitar_clef_in_secondary_voice_changes_other_voices_at_the_same_onset() {
+        use crate::layout::system::MeasureEvent;
+
+        let mut guitar = GuitarScore::standard();
+        guitar.set_time_signature(2, 4);
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.set_voice(1);
+        guitar.note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0).unwrap();
+        guitar.clef_change(Clef::Bass);
+        guitar.note(Pitch::new(Note::B, 3), Duration::QTR, 2, 0).unwrap();
+        guitar.end_barline().unwrap();
+
+        let contents = guitar.notation_builder().build_measure_contents().unwrap();
+        let positions = contents[0].events.iter().filter_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.staff_position),
+            _ => None,
+        }).collect::<Vec<_>>();
+        assert_eq!(
+            positions,
+            [
+                pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba),
+                pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass),
+            ]
+        );
+        assert!(matches!(contents[0].events[1],
+            MeasureEvent::ClefChange(change) if change.clef == ClefKind::Bass));
+    }
+
+    #[test]
+    fn guitar_mid_score_clef_and_meter_keep_earlier_measure_and_written_pitch() {
+        use crate::layout::measure_meta::MeasureLength;
+        use crate::layout::system::MeasureEvent;
+
+        let mut guitar = GuitarScore::standard();
+        guitar.set_time_signature(1, 4);
+        guitar.set_measure_numbering(MeasureNumbering::EveryBar);
+        guitar.set_first_measure_number(17);
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.barline().unwrap();
+        guitar.time_signature_change(2, 4).unwrap();
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.set_clef(Clef::Bass);
+        guitar.note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0).unwrap();
+        guitar.end_barline().unwrap();
+
+        let contents = guitar.notation_builder().build_measure_contents().unwrap();
+        assert_eq!(contents[0].meta.nominal_length, Some(MeasureLength::new(1, 4)));
+        assert_eq!(contents[1].meta.nominal_length, Some(MeasureLength::new(1, 2)));
+        assert_eq!((contents[0].meta.number, contents[1].meta.number), (17, 18));
+        let first = contents[0].events.iter().find_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.staff_position),
+            _ => None,
+        }).unwrap();
+        let second_notes = contents[1].events.iter().filter_map(|event| match event {
+            MeasureEvent::Note(note) => Some(note.staff_position),
+            _ => None,
+        }).collect::<Vec<_>>();
+        assert_eq!(first, pitch_to_staff_position(&Pitch::new(Note::E, 5), &Clef::Treble8ba));
+        assert_eq!(second_notes[0], first);
+        assert_eq!(second_notes[1], pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass));
+        assert!(matches!(contents[1].events[0], MeasureEvent::TimeSignature(_)));
+        assert!(contents[1].events.iter().any(|event| matches!(event,
+            MeasureEvent::ClefChange(change) if change.clef == ClefKind::Bass)));
+        let svg = guitar.try_render_svg().unwrap();
+        assert!(svg.contains(">17</text>") && svg.contains(">18</text>"));
+        let path = crate::font::bravura_font()
+            .glyph_outline(Glyph::FClefChange).unwrap().path_data;
+        assert!(svg.contains(&path), "guitar path must render the change-size F clef");
+    }
+
+    #[test]
     fn rejects_pitch_that_does_not_match_tuning() {
         let mut score = GuitarScore::standard();
         let error = score
@@ -4605,7 +4837,7 @@ mod tests {
         score.end_barline().unwrap();
 
         let notation = score.notation_builder();
-        let contents = notation.build_measure_contents();
+        let contents = notation.build_measure_contents().unwrap();
         let prefix = notation.build_prefix();
         let font = crate::font::bravura_font();
         let config = font.engraving_config();
@@ -4659,7 +4891,7 @@ mod tests {
         let font = crate::font::bravura_font();
         let config = font.engraving_config();
         let layout = crate::layout::system::layout_system(
-            &notation.build_prefix(), &notation.build_measure_contents(),
+            &notation.build_prefix(), &notation.build_measure_contents().unwrap(),
             &crate::layout::measure::MeasureLayoutConfig::from_staff_space(config.staff_space),
             Some(10_000.0),
         );
@@ -4698,7 +4930,7 @@ mod tests {
 
         let notation = score.notation_builder();
         assert_eq!(notation.build_prefix().clef_kind, ClefKind::Treble8ba);
-        let contents = notation.build_measure_contents();
+        let contents = notation.build_measure_contents().unwrap();
         let crate::layout::system::MeasureEvent::Note(note) = &contents[0].events[0] else {
             panic!("expected one notation note");
         };
@@ -4730,7 +4962,7 @@ mod tests {
         measure_config.barline_width = GUITAR_BARLINE_WIDTH_SS * config.staff_space;
         let layout = crate::layout::system::layout_system(
             &notation.build_prefix(),
-            &notation.build_measure_contents(),
+            &notation.build_measure_contents().unwrap(),
             &measure_config,
             Some(10_000.0),
         );
@@ -5183,7 +5415,7 @@ mod tests {
             score.end_barline().unwrap();
 
             let notation = score.notation_builder();
-            let contents = notation.build_measure_contents();
+            let contents = notation.build_measure_contents().unwrap();
             let tuplet = contents[0].events.iter().find_map(|event| match event {
                 crate::layout::system::MeasureEvent::GroupMark(crate::layout::group::GroupMark::TupletStart { spec, .. }) => Some(spec),
                 _ => None,
@@ -5400,7 +5632,7 @@ mod tests {
             )
             .unwrap();
 
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         let crate::layout::system::MeasureEvent::Note(arrival_note) = &contents[0].events[1] else {
             panic!("expected projected arrival note")
         };
@@ -5452,7 +5684,7 @@ mod tests {
             )
             .unwrap();
 
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         let crate::layout::system::MeasureEvent::Note(note) = &contents[0].events[1] else {
             panic!("expected projected reattack note")
         };
@@ -5475,7 +5707,7 @@ mod tests {
             ))
             .unwrap();
 
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         let crate::layout::system::MeasureEvent::Note(note) = &contents[0].events[0] else {
             panic!("expected projected pre-bend note")
         };
@@ -5522,7 +5754,7 @@ mod tests {
         }
         score.end_barline().unwrap();
 
-        let notation = score.notation_builder().build_measure_contents();
+        let notation = score.notation_builder().build_measure_contents().unwrap();
         let expected = [
             Pitch::new(Note::E, 6),
             Pitch::new(Note::E, 6),
@@ -5606,7 +5838,7 @@ mod tests {
             }
         ));
 
-        let notation = score.notation_builder().build_measure_contents();
+        let notation = score.notation_builder().build_measure_contents().unwrap();
         let crate::layout::system::MeasureEvent::Note(note) = &notation[0].events[0] else {
             panic!("a realized comping chord projects to one neutral slash");
         };
@@ -5693,7 +5925,7 @@ mod tests {
             );
         }
         score.show_technique_legend().end_barline().unwrap();
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         assert!(
             contents[0]
                 .events
@@ -5750,7 +5982,7 @@ mod tests {
             .unwrap();
         score.end_barline().unwrap();
 
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         let members: Vec<_> = contents[0].events.iter().filter_map(|event| match event {
             crate::layout::system::MeasureEvent::Note(n) => Some((1, &n.annotations)),
             crate::layout::system::MeasureEvent::Chord(c) => Some((c.staff_positions.len(), &c.annotations)),
@@ -6033,7 +6265,7 @@ mod tests {
             .unwrap();
         score.end_barline().unwrap();
 
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         let members: Vec<_> = contents[0].events.iter().filter(|event| {
             matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
         }).collect();
@@ -6200,7 +6432,7 @@ mod tests {
             score.slash(Duration::QTR);
             score.percussion(PercussionTarget::Body, Duration::QTR);
             score.end_barline().unwrap();
-            let contents = score.notation_builder().build_measure_contents();
+            let contents = score.notation_builder().build_measure_contents().unwrap();
             let crate::layout::system::MeasureEvent::Chord(dead) = &contents[0].events[0] else {
                 panic!("multi-string dead attack must remain a standard chord");
             };
@@ -6261,7 +6493,7 @@ mod tests {
             .unwrap();
         score.end_barline().unwrap();
 
-        let contents = score.notation_builder().build_measure_contents();
+        let contents = score.notation_builder().build_measure_contents().unwrap();
         let crate::layout::system::MeasureEvent::Note(dead_note) = &contents[0].events[0] else {
             panic!("single-string dead attack projects as one note");
         };
@@ -6308,7 +6540,7 @@ mod tests {
             .note(Pitch::new(Note::B, 4), Duration::QTR, 1, 7)
             .unwrap();
         flat_key.end_barline().unwrap();
-        let flat_contents = flat_key.notation_builder().build_measure_contents();
+        let flat_contents = flat_key.notation_builder().build_measure_contents().unwrap();
         let projected: Vec<_> = flat_contents[0].events.iter().filter(|event| {
             matches!(event, crate::layout::system::MeasureEvent::Note(_) | crate::layout::system::MeasureEvent::Chord(_))
         }).collect();

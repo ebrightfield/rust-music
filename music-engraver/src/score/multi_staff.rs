@@ -6,14 +6,21 @@
 use std::collections::HashMap;
 
 use crate::font::bravura_font;
+use crate::layout::bar_number::{
+    layout_bar_numbers, system_bar_number_slots, MeasureNumbering, BAR_NUMBER_ABOVE_STAFF_SS,
+    BAR_NUMBER_FONT_SIZE_SS,
+};
 use crate::layout::measure::MeasureLayoutConfig;
 use crate::layout::multi_staff::{layout_multi_staff, ConnectorKind, StaffGroup, SubBracket};
 use crate::layout::page::{
     break_measures_auto, break_measures_optimal, PageSystem, SystemBreaking,
 };
 use crate::layout::staff::StaffLayout;
-use crate::layout::system::{layout_system, SystemLayout};
+use crate::layout::system::{
+    layout_system_followed_by, staff_prefix_glyph_extent_ss, system_start_prefix, SystemLayout,
+};
 use crate::layout::tab::TabStaffLayout;
+use crate::render::bar_number_renderer::draw_bar_numbers;
 use crate::render::multi_staff_renderer::{draw_joined_barline, draw_multi_staff_connectors};
 use crate::render::page_renderer::{
     draw_cross_system_glissandos, draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
@@ -77,8 +84,8 @@ pub struct MultiStaffScore {
     auto_breaks: bool,
     /// When true, use optimal (Knuth-Plass DP) line breaking.
     optimal_breaks: bool,
-    /// Display measure numbers above the start of each system.
-    show_measure_numbers: bool,
+    /// Which measures print their number (above the top stave).
+    measure_numbering: MeasureNumbering,
     /// Optional tablature derived from the same semantic guitar timeline.
     tab_stave: Option<GuitarScore>,
     /// Nested sub-bracket groupings within a [`ConnectorKind::Bracket`]
@@ -103,7 +110,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
-            show_measure_numbers: false,
+            measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
             sub_brackets: Vec::new(),
         }
@@ -119,7 +126,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
-            show_measure_numbers: false,
+            measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
             sub_brackets: Vec::new(),
         }
@@ -135,7 +142,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
-            show_measure_numbers: false,
+            measure_numbering: MeasureNumbering::Hidden,
             tab_stave: None,
             sub_brackets: Vec::new(),
         }
@@ -148,6 +155,7 @@ impl MultiStaffScore {
     /// and technique spans all come from `guitar`; callers cannot supply
     /// independently authored staves.
     pub fn guitar(guitar: GuitarScore) -> Self {
+        let numbering = guitar.measure_numbering;
         Self {
             // Standard notation is derived only after the guitar timeline has
             // finalized its pending measure in `try_render_svg`.
@@ -158,7 +166,7 @@ impl MultiStaffScore {
             measures_per_system: 0,
             auto_breaks: false,
             optimal_breaks: false,
-            show_measure_numbers: false,
+            measure_numbering: numbering,
             tab_stave: Some(guitar),
             sub_brackets: Vec::new(),
         }
@@ -205,12 +213,10 @@ impl MultiStaffScore {
         self
     }
 
-    /// Show measure numbers above the start of each system.
-    ///
-    /// Each system displays the 1-based measure number of its first bar
-    /// above the top staff. Only the topmost stave displays numbers.
-    pub fn show_measure_numbers(mut self) -> Self {
-        self.show_measure_numbers = true;
+    /// Choose which measures print their number. Numbers come from the
+    /// first stave's measures and are drawn above the topmost stave only.
+    pub fn measure_numbering(mut self, numbering: MeasureNumbering) -> Self {
+        self.measure_numbering = numbering;
         self
     }
 
@@ -341,11 +347,11 @@ impl MultiStaffScore {
         }
 
         // Build measure contents and prefixes for each stave (needed early for auto breaking)
-        let stave_data: Vec<_> = self
+        let stave_data = self
             .staves
             .iter()
-            .map(|s| (s.build_measure_contents(), s.build_prefix()))
-            .collect();
+            .map(|s| Ok((s.build_measure_contents()?, s.build_prefix())))
+            .collect::<Result<Vec<_>, crate::error::EngraverError>>()?;
 
         // Break measures into system chunks
         let use_optimal = self.optimal_breaks || self.staves.iter().any(|s| s.optimal_breaks);
@@ -444,10 +450,35 @@ impl MultiStaffScore {
         } else {
             side_margin
         };
-        let bottom_margin = side_margin;
+        // Clefs and key/time signatures of the outer staves can reach past
+        // the staff lines (a G clef's top, a tenor clef): keep them inside.
+        let (top_margin, bottom_margin) = if self.tab_stave.is_some() {
+            (top_margin, side_margin)
+        } else {
+            let first = stave_data
+                .first()
+                .and_then(|(contents, prefix)| staff_prefix_glyph_extent_ss(prefix, contents));
+            let last = stave_data
+                .last()
+                .and_then(|(contents, prefix)| staff_prefix_glyph_extent_ss(prefix, contents));
+            let numbers = if self.measure_numbering == MeasureNumbering::Hidden {
+                0.0
+            } else {
+                (BAR_NUMBER_ABOVE_STAFF_SS + BAR_NUMBER_FONT_SIZE_SS) * staff_space
+            };
+            (
+                top_margin
+                    .max(first.map_or(0.0, |(top, _)| (-top) * staff_space) + side_margin)
+                    .max(numbers),
+                side_margin.max(
+                    last.map_or(0.0, |(_, bottom)| (bottom - 4.0) * staff_space) + side_margin,
+                ),
+            )
+        };
         let vb_x = -side_margin - left_margin;
         let vb_y = -top_margin;
-        let vb_w = page_width + 2.0 * side_margin;
+        // The staves end at `left_margin + sys_width` (= `page_width`).
+        let vb_w = page_width + side_margin - vb_x;
         let vb_h = page_height + top_margin + bottom_margin;
         let px_per_unit = 7.0 / staff_space;
         let px_w = vb_w * px_per_unit;
@@ -501,18 +532,14 @@ impl MultiStaffScore {
                     continue;
                 }
 
-                let sys_prefix = if sys_idx == 0 {
-                    prefix.clone()
-                } else {
-                    crate::layout::system::SystemPrefix {
-                        clef_layout: prefix.clef_layout.clone(),
-                        clef_kind: prefix.clef_kind,
-                        key_signature: prefix.key_signature.clone(),
-                        time_signature: None,
-                    }
-                };
-
-                let system = layout_system(&sys_prefix, slice, &measure_config, Some(sys_width));
+                let sys_prefix = system_start_prefix(prefix, contents, stave_start);
+                let system = layout_system_followed_by(
+                    &sys_prefix,
+                    slice,
+                    contents.get(stave_end),
+                    &measure_config,
+                    Some(sys_width),
+                );
 
                 draw_system(&mut svg, &font, &config, &system, left_margin, stave_y)?;
 
@@ -520,7 +547,6 @@ impl MultiStaffScore {
                     x: left_margin,
                     y: stave_y,
                     system: system.clone(),
-                    first_measure_number: start + 1,
                 });
 
                 stave_systems.push(system);
@@ -578,34 +604,15 @@ impl MultiStaffScore {
                 guitar_tab_staves.push(tab_staff);
             }
 
-            // --- Measure numbers ---
-            if self.show_measure_numbers {
-                if let Some(first_system) = stave_systems.first() {
-                    if !first_system.measures.is_empty() {
-                        let first_measure = &first_system.measures[0];
-                        let num_x = left_margin + first_measure.x_offset;
-                        let num_y = ms_layout.staff_y_origins[0]
-                            - crate::render::page_renderer::MEASURE_NUMBER_ABOVE_STAFF_SS
-                                * staff_space;
-                        let font_size =
-                            crate::render::page_renderer::MEASURE_NUMBER_FONT_SIZE_SS * staff_space;
-                        let measure_number = start + 1;
-                        svg.add_text(
-                            num_x,
-                            num_y,
-                            &measure_number.to_string(),
-                            &TextStyle {
-                                font_family: "serif",
-                                font_size,
-                                fill: "black",
-                                anchor: "start",
-                                font_weight: "normal",
-                                font_style: "normal",
-                                dominant_baseline: "auto",
-                            },
-                        );
-                    }
-                }
+            // --- Measure numbers (top stave only) ---
+            if let Some(first_system) = stave_systems.first() {
+                let numbers = layout_bar_numbers(
+                    self.measure_numbering,
+                    system_bar_number_slots(first_system, left_margin),
+                    ms_layout.staff_y_origins[0],
+                    staff_space,
+                );
+                draw_bar_numbers(&mut svg, &numbers, staff_space);
             }
 
             // --- Joined barlines spanning all staves (notation + tab) ---

@@ -34,7 +34,7 @@ fn main() {
     draw_staff_lines(&mut svg, &staff, &config);
 
     let clef = ClefLayout::from_clef(Clef::Treble);
-    draw_clef(&mut svg, &staff, &clef, &font).unwrap();
+    draw_clef(&mut svg, &staff, staff.x + staff.staff_space, &clef, &font).unwrap();
 
     let start_x = 1200.0;
     let spacing = 800.0;
@@ -47,7 +47,7 @@ fn main() {
         // Whole notes don't get stems
         if *kind != NoteheadKind::Whole {
             let direction = auto_stem_direction(pos);
-            draw_stem(&mut svg, &staff, &config, x, advance, pos, direction);
+            draw_stem(&mut svg, &staff, &config, x, advance, pos, direction, 1.0);
         }
     }
 

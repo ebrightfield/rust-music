@@ -1,14 +1,14 @@
 use crate::layout::accidental::{layout_accidental_columns, AccidentalDisplay, ResolvedAccidental};
 use crate::layout::arpeggio::ArpeggioDirection;
-use crate::layout::articulation::Articulation;
+use crate::layout::articulation::ArticulationMark;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
-use crate::layout::clef::ClefLayout;
+use crate::layout::clef::{ClefLayout, ClefSize};
 use crate::layout::cresc_text::CrescTextKind;
 use crate::layout::dynamics::Dynamic;
 use crate::layout::glissando::GlissandoStyle;
-use crate::layout::grace::GraceNoteKind;
 use crate::layout::group::{GroupMark, TupletSpec};
+use crate::layout::grace::{grace_group_extent, grace_stem_direction, GraceGroup, GraceNotes};
 use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::lyric::LyricSyllable;
@@ -85,6 +85,54 @@ impl NoteheadStyle {
     }
 }
 
+/// Engraved size of a note or chord.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum NoteSize {
+    /// Ordinary size.
+    #[default]
+    Normal,
+    /// Small (cue) notes, LilyPond `\tiny` / font size −2: noteheads,
+    /// accidentals, dots, stems, flags, and their spacing rods all shrink by
+    /// [`NoteSize::scale`].
+    Cue,
+}
+
+impl NoteSize {
+    /// Glyph and spacing scale factor: 1 for normal notes, `2^(−2/6)` ≈ 0.794
+    /// for cue notes.
+    pub fn scale(self) -> f64 {
+        match self {
+            Self::Normal => 1.0,
+            Self::Cue => CUE_NOTE_SCALE,
+        }
+    }
+}
+
+/// Size of [`NoteSize::Cue`] notes: LilyPond font size −2, `2^(−2/6)`.
+pub const CUE_NOTE_SCALE: f64 = 0.793_700_525_984_1;
+
+/// Whether a note or chord's stem (and with it its flags) is engraved.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum StemVisibility {
+    /// Engrave the stem and flags its duration calls for.
+    #[default]
+    Visible,
+    /// Engrave neither stem nor flags (LilyPond `\omit Stem` / `\omit
+    /// Flag`): stemless formulas, chord series, and imagined notes.
+    Hidden,
+}
+
+/// Additional tones carried by one rhythmic member of a beam or tuplet.
+///
+/// The enclosing [`NoteEvent`] supplies duration and shared annotations; this
+/// payload lets the grouped renderer engrave the member as a real chord.
+#[derive(Clone, Debug)]
+pub struct GroupedChordMember {
+    /// Staff positions in the same order as notehead style vectors.
+    pub staff_positions: Vec<StaffPosition>,
+    /// Resolved accidentals parallel to `staff_positions`.
+    pub accidentals: Vec<Option<ResolvedAccidental>>,
+}
 /// Articulation and expression annotations attached to a note or chord event.
 ///
 /// These fields are shared between [`NoteEvent`] and [`ChordEvent`], covering
@@ -96,8 +144,18 @@ pub struct NoteAnnotations {
     /// means [`NoteheadStyle::Normal`] for every pitch.
     pub notehead_styles: Vec<NoteheadStyle>,
     /// Whether each resolved notehead is enclosed by real SMuFL notehead
-    /// parentheses. Entries are parallel to pitches; missing entries are false.
+    /// parentheses (LilyPond `\parenthesize`). The enclosure also takes in the
+    /// notehead's own accidental. Entries are parallel to pitches; missing
+    /// entries are false.
     pub parenthesized_noteheads: Vec<bool>,
+    /// Engraved size of the whole note/chord (noteheads, accidentals, dots,
+    /// stem, flags, and their spacing rods).
+    pub size: NoteSize,
+    /// Whether the stem and flags are engraved.
+    pub stem: StemVisibility,
+    /// Whether the augmentation dots are enclosed in parentheses (LilyPond
+    /// `Dots.parenthesized`).
+    pub parenthesized_dots: bool,
     /// Accidental display policies parallel to the note/chord's pitches. An
     /// empty vector (or a missing entry) means [`AccidentalDisplay::Auto`].
     pub accidental_displays: Vec<AccidentalDisplay>,
@@ -165,18 +223,18 @@ pub struct NoteAnnotations {
     pub tempo_mark: Option<TempoMark>,
     /// Optional expression text displayed below the staff in italic (e.g. "dolce").
     pub expression: Option<String>,
-    /// Articulation markings (staccato, tenuto, accent, marcato, etc.)
-    /// placed near the notehead. Multiple articulations stack outward from
-    /// the note (e.g., staccato + accent = portato accent).
-    pub articulations: Vec<Articulation>,
-    /// Optional grace note preceding the principal note.
-    /// Tuple of (grace note staff position, grace note kind).
-    pub grace_note: Option<(i8, GraceNoteKind)>,
-    /// Whether to draw a connecting slur from the grace note to the principal note.
-    /// Has no effect when `grace_note` is `None`. The slur arcs away from the
-    /// principal note's stem in the conventional direction. This is the canonical
-    /// engraving for acciaccatura and is also common for appoggiatura.
-    pub grace_note_slur: bool,
+    /// Articulation-like marks (staccato, tenuto, accent, fermata, caller
+    /// glyphs, …) placed near the notehead. Marks on one side stack outward
+    /// from the note in order (e.g., staccato + accent = portato accent).
+    pub articulations: Vec<ArticulationMark>,
+    /// Written grace notes engraved before this note/chord, as given to the
+    /// score builder. Score conversion resolves them into
+    /// [`Self::grace_group`]; layout and rendering read only that field.
+    pub grace_notes: Option<GraceNotes>,
+    /// Resolved grace group engraved before this note/chord: staff positions
+    /// and accidentals ready for layout. Its width is reserved before the
+    /// note, so the principal moves right.
+    pub grace_group: Option<GraceGroup>,
     /// Optional lyric syllable displayed below the staff under this note/chord.
     pub lyric: Option<LyricSyllable>,
     /// Optional chord symbol displayed above the staff (e.g. "Cmaj7", "Am").
@@ -200,6 +258,8 @@ pub struct NoteAnnotations {
     /// Optional breath mark (comma, tick, or caesura) placed above the staff
     /// to the right of this note/chord, indicating a brief pause or lift.
     pub breath_mark: Option<BreathMark>,
+    /// Whether the breath mark is enclosed in parentheses.
+    pub breath_mark_parenthesized: bool,
     /// Whether this note/chord starts a glissando line to the next note.
     /// The diagonal line is drawn by the system renderer after all measures
     /// are laid out.
@@ -376,6 +436,10 @@ pub enum MeasureElement {
         /// Visual style (H-bar or church-rest).
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// Invisible rhythmic placeholder (a LilyPond spacer `s`): takes time
+    /// and space like a rest but draws nothing. A measure holding only
+    /// spacers renders as an empty bar.
+    Spacer(SpacerEvent),
     /// Barline at the end of the measure.
     Barline(BarlineStyle),
 }
@@ -401,6 +465,15 @@ pub struct NoteEvent {
 /// A rest to be laid out within a measure.
 #[derive(Clone, Debug)]
 pub struct RestEvent {
+    /// Log2 of the duration denominator: -1=breve, 0=whole, 1=half, 2=quarter, etc.
+    pub duration_log2: i8,
+    /// Number of augmentation dots (0–3).
+    pub dots: u8,
+}
+
+/// An invisible rhythmic placeholder within a measure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SpacerEvent {
     /// Log2 of the duration denominator: -1=breve, 0=whole, 1=half, 2=quarter, etc.
     pub duration_log2: i8,
     /// Number of augmentation dots (0–3).
@@ -448,23 +521,59 @@ pub struct MeasureLayout {
     pub total_spring: f64,
 }
 
+impl MeasureLayout {
+    /// The measure's closing barline: its last `Barline` element. Courtesy
+    /// elements at a system end may follow it.
+    fn closing_barline(&self) -> Option<&PositionedElement> {
+        self.elements
+            .iter()
+            .rev()
+            .find(|element| matches!(element.element, MeasureElement::Barline(_)))
+    }
+
+    /// Measure-relative x of the closing barline element (the measure's
+    /// right edge when it has none).
+    pub fn closing_barline_x(&self) -> f64 {
+        self.closing_barline()
+            .map_or(self.total_width, |element| element.x)
+    }
+
+    /// Measure-relative right edge of the closing barline element (the
+    /// measure's right edge when it has none). Equals `total_width` unless
+    /// courtesy elements follow the barline.
+    pub fn closing_barline_end(&self) -> f64 {
+        self.closing_barline()
+            .map_or(self.total_width, |element| element.x + element.width)
+    }
+}
+
 /// Configuration for measure layout.
 #[derive(Clone, Debug)]
 pub struct MeasureLayoutConfig {
-    /// Width to allocate for a clef, in font design units.
-    pub clef_width: f64,
-    /// Padding after clef before next element.
+    /// Staff space in font design units. Glyph metrics (clef bounding boxes,
+    /// time-signature advances) are given in staff spaces and scale by it.
+    pub staff_space: f64,
+    /// Space reserved left of a full-size (system-start) clef, between the
+    /// start of the staff and the clef's ink.
+    pub clef_left_margin: f64,
+    /// Space reserved left of a change-size clef, after the preceding element.
+    pub clef_change_margin: f64,
+    /// Padding after a clef's ink before the next element.
     pub clef_padding: f64,
     /// Width allocated per key signature accidental.
     pub key_sig_accidental_width: f64,
     /// Padding after key signature.
     pub key_sig_padding: f64,
-    /// Width for a time signature.
-    pub time_sig_width: f64,
     /// Padding after time signature before first note.
     pub time_sig_padding: f64,
+    /// Space reserved left of a time signature that follows a barline (a
+    /// meter change, or a courtesy signature ending a system).
+    pub time_sig_change_margin: f64,
     /// Width for a barline.
     pub barline_width: f64,
+    /// Minimum rhythmic width of a measure that holds only spacers (an empty
+    /// bar), in font design units.
+    pub empty_measure_min_width: f64,
     /// Gourlay spacing exponent `c` in the spring rest length `k · duration^c`.
     /// Default 0.6 (Gould/Gourlay empirical range 0.5–0.7). Larger `c` widens
     /// the gap between long and short notes.
@@ -486,6 +595,12 @@ pub struct MeasureLayoutConfig {
     pub accidental_column_gap: f64,
     /// Additional rod width per augmentation dot (in font design units).
     pub dot_rod: f64,
+    /// Further rod width when a note's dots are parenthesized (in font
+    /// design units).
+    pub dot_parens_rod: f64,
+    /// Rod width of one notehead parenthesis (in font design units); a
+    /// parenthesized note reserves one before and one after its noteheads.
+    pub notehead_parens_rod: f64,
     /// Minimum padding included in every rhythmic rod (in font design units).
     pub min_rod_padding: f64,
 }
@@ -494,13 +609,16 @@ impl MeasureLayoutConfig {
     /// Default config using a staff space value (typically from EngravingConfig).
     pub fn from_staff_space(ss: f64) -> Self {
         Self {
-            clef_width: 2.5 * ss,
+            staff_space: ss,
+            clef_left_margin: 1.0 * ss,
+            clef_change_margin: 0.5 * ss,
             clef_padding: 0.5 * ss,
             key_sig_accidental_width: 1.0 * ss,
             key_sig_padding: 0.75 * ss,
-            time_sig_width: 2.0 * ss,
             time_sig_padding: 0.75 * ss,
+            time_sig_change_margin: 0.5 * ss,
             barline_width: 0.5 * ss,
+            empty_measure_min_width: 4.0 * ss,
             spacing_exponent: 0.6,
             // Phase 4 calibration (see `examples/spacing_calibration.rs` and the
             // 2026-08-06 progress entry): k = 1.0·ss. Matching the legacy
@@ -520,6 +638,9 @@ impl MeasureLayoutConfig {
             accidental_parens_rod: 1.128 * ss,
             accidental_column_gap: crate::layout::accidental::ACCIDENTAL_COLUMN_GAP_SS * ss,
             dot_rod: 0.35 * ss,
+            dot_parens_rod: crate::layout::dot::DOT_PARENTHESES_EXTRA_SS * ss,
+            // Bravura's noteheadParenthesisLeft/Right each advance 0.436 ss.
+            notehead_parens_rod: 0.436 * ss,
             min_rod_padding: 0.3 * ss,
         }
     }
@@ -546,6 +667,29 @@ fn spring_rest_length(
 /// accidentals extend `accidental_extent` to the left of its noteheads.
 fn event_rod(accidental_extent: f64, dots: u8, config: &MeasureLayoutConfig) -> f64 {
     config.min_rod_padding + config.notehead_rod + accidental_extent + dots as f64 * config.dot_rod
+}
+
+/// Rod of a note or chord at its annotated size: padding, notehead, dots
+/// (with their parentheses), the closing notehead parenthesis, and an inner
+/// accidental extent (`0.0` unless it is a later beam/tuplet member).
+fn note_rod(
+    accidental_extent: f64,
+    dots: u8,
+    annotations: &NoteAnnotations,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    let scale = annotations.size.scale();
+    let mut rod = config.min_rod_padding
+        + config.notehead_rod * scale
+        + accidental_extent
+        + dots as f64 * config.dot_rod * scale;
+    if dots > 0 && annotations.parenthesized_dots {
+        rod += config.dot_parens_rod * scale;
+    }
+    if annotations.parenthesized_noteheads.contains(&true) {
+        rod += config.notehead_parens_rod * scale;
+    }
+    rod
 }
 
 /// Estimated rod width of one engraved accidental, including its parentheses.
@@ -585,22 +729,55 @@ fn accidental_left_extent(
     layout_accidental_columns(&stacked, config.accidental_column_gap).extent
 }
 
-fn note_accidental_extent(note: &NoteEvent, config: &MeasureLayoutConfig) -> f64 {
-    accidental_left_extent(
+/// Estimated extent of everything a note or chord engraves left of its
+/// notehead column, at its annotated size: accidentals, the opening notehead
+/// parenthesis, and a preceding grace group (whose stems follow
+/// `stem_direction`, the principal's forced direction if any).
+fn annotated_left_extent(
+    staff_positions: &[StaffPosition],
+    accidentals: &[Option<ResolvedAccidental>],
+    annotations: &NoteAnnotations,
+    stem_direction: Option<StemDirection>,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    let scale = annotations.size.scale();
+    let mut extent = accidental_left_extent(staff_positions, accidentals, config) * scale;
+    if annotations.parenthesized_noteheads.contains(&true) {
+        extent += config.notehead_parens_rod * scale;
+    }
+    if let Some(group) = &annotations.grace_group {
+        extent += grace_group_extent(
+            group,
+            grace_stem_direction(stem_direction),
+            config.staff_space,
+        );
+    }
+    extent
+}
+
+fn note_left_extent(note: &NoteEvent, config: &MeasureLayoutConfig) -> f64 {
+    annotated_left_extent(
         std::slice::from_ref(&note.staff_position),
         std::slice::from_ref(&note.accidental),
+        &note.annotations,
+        note.stem_direction,
         config,
     )
 }
 
-/// Estimated extent of the accidentals left of an element's first notehead
-/// column (zero for non-rhythmic elements, rests, and unaltered notes).
+/// Space reserved before an element: its accidental, grace and parenthesis
+/// extent, or a clef's margin (zero for rests and bare notes).
 fn element_left_extent(element: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
     match element {
-        MeasureElement::Note(note) => note_accidental_extent(note, config),
-        MeasureElement::Chord(chord) => {
-            accidental_left_extent(&chord.staff_positions, &chord.accidentals, config)
-        }
+        MeasureElement::Note(note) => note_left_extent(note, config),
+        MeasureElement::Chord(chord) => annotated_left_extent(
+            &chord.staff_positions, &chord.accidentals, &chord.annotations,
+            chord.stem_direction, config,
+        ),
+        MeasureElement::Clef(clef) => match clef.size {
+            ClefSize::Full => config.clef_left_margin,
+            ClefSize::Change => config.clef_change_margin,
+        },
         _ => 0.0,
     }
 }
@@ -624,6 +801,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     let mut positioned = Vec::with_capacity(elements.len());
     let mut x = 0.0;
     let mut reserved_accidental_gaps = 0.0;
+    let mut previous: Option<&MeasureElement> = None;
 
     // Find the shortest written duration. Tuplet ratios scale their springs
     // below, preserving both the established Gourlay baseline and performed
@@ -653,7 +831,13 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
         // except their leading accidental extent, reserved before them below.
         let (rod, spr, trailing) =
             match elem {
-                MeasureElement::Clef(_) => (config.clef_width, 0.0, config.clef_padding),
+                // The clef's origin sits at the element x (after its leading
+                // margin); its rod is the inked width right of the origin.
+                MeasureElement::Clef(clef) => (
+                    clef.ink_box().x_right * config.staff_space,
+                    0.0,
+                    config.clef_padding,
+                ),
                 MeasureElement::KeySignature(key) => {
                     let count = match key {
                         KeySignature::Sharps(n) | KeySignature::Flats(n) => *n as f64,
@@ -663,11 +847,13 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     let trailing = if w > 0.0 { config.key_sig_padding } else { 0.0 };
                     (w, 0.0, trailing)
                 }
-                MeasureElement::TimeSignature(_) => {
-                    (config.time_sig_width, 0.0, config.time_sig_padding)
-                }
+                MeasureElement::TimeSignature(kind) => (
+                    kind.width_ss() * config.staff_space,
+                    0.0,
+                    config.time_sig_padding,
+                ),
                 MeasureElement::Note(n) => (
-                    event_rod(0.0, n.dots, config),
+                    note_rod(0.0, n.dots, &n.annotations, config),
                     spring(n.duration_log2, time_scale),
                     0.0,
                 ),
@@ -680,11 +866,18 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                         0.0,
                     )
                 }
+                // A spacer occupies exactly the room of a rest of its duration,
+                // so an empty bar is as wide as the same bar holding a rest.
+                MeasureElement::Spacer(spacer) => (
+                    event_rod(0.0, spacer.dots, config),
+                    spring(spacer.duration_log2, 1.0),
+                    0.0,
+                ),
                 MeasureElement::Chord(c) => {
                     // A chord shares one stem column (one notehead rod); its stacked
                     // accidental columns are its leading accidental extent.
                     (
-                        event_rod(0.0, c.dots, config),
+                        note_rod(0.0, c.dots, &c.annotations, config),
                         spring(c.duration_log2, time_scale),
                         0.0,
                     )
@@ -710,7 +903,16 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                 MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
             };
 
-        let leading = element_left_extent(elem, config);
+        let leading = element_left_extent(elem, config)
+            + match (elem, previous) {
+                // A time signature opening a measure follows the previous
+                // measure's barline.
+                (MeasureElement::TimeSignature(_), None | Some(MeasureElement::Barline(_))) => {
+                    config.time_sig_change_margin
+                }
+                _ => 0.0,
+            };
+        previous = Some(elem);
         x += leading;
         reserved_accidental_gaps += leading;
         let width = rod + spr;
@@ -722,6 +924,43 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             spring: spr,
         });
         x += width + trailing;
+    }
+
+    // A bar holding nothing visible (only spacers) keeps a minimum rhythmic
+    // width, so an empty measure still reads as a bar rather than collapsing
+    // to a sliver between two barlines. The deficit widens the last spacer's
+    // rod and shifts whatever follows it.
+    let spacer_only = positioned
+        .iter()
+        .any(|p| matches!(p.element, MeasureElement::Spacer(_)))
+        && !positioned.iter().any(|p| {
+            matches!(
+                p.element,
+                MeasureElement::Note(_)
+                    | MeasureElement::Rest(_)
+                    | MeasureElement::Chord(_)
+                    | MeasureElement::MultiMeasureRest { .. }
+            )
+        });
+    if spacer_only {
+        let spacer_width: f64 = positioned
+            .iter()
+            .filter(|p| matches!(p.element, MeasureElement::Spacer(_)))
+            .map(|p| p.width)
+            .sum();
+        let deficit = config.empty_measure_min_width - spacer_width;
+        if deficit > 0.0 {
+            let last = positioned
+                .iter()
+                .rposition(|p| matches!(p.element, MeasureElement::Spacer(_)))
+                .expect("spacer_only implies a spacer");
+            positioned[last].rod += deficit;
+            positioned[last].width += deficit;
+            for p in &mut positioned[last + 1..] {
+                p.x += deficit;
+            }
+            x += deficit;
+        }
     }
 
     let total_rod: f64 = positioned.iter().map(|p| p.rod).sum::<f64>()
@@ -821,10 +1060,12 @@ mod tests {
         ];
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 2);
-        // Note should start after clef_width + clef_padding
-        let expected_x = cfg.clef_width + cfg.clef_padding;
+        // The clef origin sits after its left margin; the note follows the
+        // clef's ink (Bravura gClef: 2.684 ss right of the origin) plus padding.
+        assert!((layout.elements[0].x - cfg.clef_left_margin).abs() < f64::EPSILON);
+        let expected_x = cfg.clef_left_margin + 2.684 * cfg.staff_space + cfg.clef_padding;
         assert!(
-            (layout.elements[1].x - expected_x).abs() < f64::EPSILON,
+            (layout.elements[1].x - expected_x).abs() < 1e-6,
             "note should start after clef, got {} expected {}",
             layout.elements[1].x,
             expected_x,
@@ -1216,7 +1457,7 @@ mod tests {
     fn config_from_staff_space_scales() {
         let cfg1 = MeasureLayoutConfig::from_staff_space(100.0);
         let cfg2 = MeasureLayoutConfig::from_staff_space(200.0);
-        assert!((cfg2.clef_width - 2.0 * cfg1.clef_width).abs() < f64::EPSILON);
+        assert!((cfg2.clef_left_margin - 2.0 * cfg1.clef_left_margin).abs() < f64::EPSILON);
         assert!((cfg2.spring_constant - 2.0 * cfg1.spring_constant).abs() < f64::EPSILON);
         assert!((cfg2.notehead_rod - 2.0 * cfg1.notehead_rod).abs() < f64::EPSILON);
         // c is dimensionless and does not scale with staff space.
