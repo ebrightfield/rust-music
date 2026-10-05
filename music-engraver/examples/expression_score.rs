@@ -8,6 +8,7 @@ use music::note::note::Note;
 use music::note::pitch::Pitch;
 use music_engraver::layout::dynamics::Dynamic;
 use music_engraver::layout::key_signature::KeySignature;
+use music_engraver::layout::text_script::TextScript;
 use music_engraver::score::ScoreBuilder;
 
 fn main() {
@@ -19,30 +20,30 @@ fn main() {
         // Measure 1: lyrical opening with "dolce" + piano dynamic
         .note(Pitch::new(Note::E, 4), Duration::QTR)
         .dynamic(Dynamic::Piano)
-        .expression("dolce")
+        .text_script(TextScript::below("dolce").italic().centered())
         .note(Pitch::new(Note::G, 4), Duration::QTR)
         .note(Pitch::new(Note::A, 4), Duration::QTR)
         .note(Pitch::new(Note::G, 4), Duration::QTR)
         .barline()
         // Measure 2: expressive continuation with "espressivo"
         .note(Pitch::new(Note::C, 5), Duration::HALF)
-        .expression("espressivo")
+        .text_script(TextScript::below("espressivo").italic().centered())
         .note(Pitch::new(Note::B, 4), Duration::QTR)
         .note(Pitch::new(Note::A, 4), Duration::QTR)
         .barline()
         // Measure 3: legato passage with "legato"
         .note(Pitch::new(Note::G, 4), Duration::QTR)
         .dynamic(Dynamic::Mp)
-        .expression("legato")
+        .text_script(TextScript::below("legato").italic().centered())
         .note(Pitch::new(Note::F, 4), Duration::QTR)
         .note(Pitch::new(Note::E, 4), Duration::QTR)
         .note(Pitch::new(Note::D, 4), Duration::QTR)
         .barline()
         // Measure 4: gentle ending with "cantabile" + "morendo"
         .note(Pitch::new(Note::C, 4), Duration::HALF)
-        .expression("cantabile")
+        .text_script(TextScript::below("cantabile").italic().centered())
         .note(Pitch::new(Note::E, 4), Duration::QTR)
-        .expression("morendo")
+        .text_script(TextScript::below("morendo").italic().centered())
         .rest(Duration::QTR) // expression on rest is a no-op
         .end_barline()
         .render_svg();

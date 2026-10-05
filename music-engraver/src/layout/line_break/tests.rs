@@ -82,7 +82,7 @@ fn event_length_and_voice_length_respect_independent_tuplets_and_beams() {
     assert_eq!(event_length(&MeasureEvent::Note(note(2, 1))), len(3, 8));
     assert_eq!(event_length(&MeasureEvent::Note(note(1, 2))), len(7, 8));
     let eighth = MeasureEvent::Note(note(3, 0));
-    let rest = MeasureEvent::Rest(RestEvent { duration_log2: 3, dots: 0 });
+    let rest = MeasureEvent::Rest(RestEvent { duration_log2: 3, dots: 0, annotations: NoteAnnotations::default() });
     assert_eq!(event_length(&rest), len(1, 8));
     let events = vec![
         MeasureEvent::GroupMark(GroupMark::TupletStart { spec: TupletSpec::new(3, 2), continued: false }),

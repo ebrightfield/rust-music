@@ -35,6 +35,7 @@ pub(crate) enum ScoreEvent {
     },
     Rest {
         duration: Duration,
+        annotations: NoteAnnotations,
     },
     Chord {
         pitches: Vec<Pitch>,
@@ -72,6 +73,7 @@ impl ScoreEvent {
         matches!(self, Self::ClefChange(_) | Self::TimeSignatureChange(_))
     }
 }
+
 
 /// Convert a `DurationKind` to the log2 representation used by the layout engine.
 ///
@@ -303,13 +305,17 @@ pub(crate) fn convert_resolved_event(
                 annotations: annotations.clone(),
             })
         }
-        ScoreEvent::Rest { duration } => {
+        ScoreEvent::Rest {
+            duration,
+            annotations,
+        } => {
             let log2 = duration_kind_to_log2(duration.kind());
             let dots = duration.num_dots();
 
             MeasureEvent::Rest(RestEvent {
                 duration_log2: log2,
                 dots,
+                annotations: annotations.clone(),
             })
         }
         ScoreEvent::Chord {
@@ -450,7 +456,7 @@ fn visit_pitches(
             duration,
             annotations,
         } => (pitches.as_slice(), duration, annotations),
-        ScoreEvent::Rest { duration } | ScoreEvent::Spacer { duration } => {
+        ScoreEvent::Rest { duration, .. } | ScoreEvent::Spacer { duration } => {
             return scaled_ticks(duration, scale, ratio);
         }
         ScoreEvent::GroupMark(_) | ScoreEvent::Barline(_) | ScoreEvent::MultiMeasureRest { .. }

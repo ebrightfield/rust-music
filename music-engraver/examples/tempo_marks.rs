@@ -63,52 +63,47 @@ fn main() {
 
     // 1. Text-only: "Allegro" above first note
     let l1 = layout_tempo_mark(
-        &TempoMark::Text("Allegro".into()),
+        &TempoMark::text("Allegro"),
         notes[0].2,
-        &staff,
+        tempo_baseline(&staff, staff_space),
+        &font,
         staff_space,
-    );
-    draw_tempo_mark(&mut svg, &l1, &font);
+    )
+    .unwrap();
+    draw_tempo_mark(&mut svg, &l1, &font).unwrap();
 
     // 2. Metronome only: quarter = 120 above second note
     let l2 = layout_tempo_mark(
-        &TempoMark::Metronome {
-            note_kind: MetronomeNoteKind::Quarter,
-            dotted: false,
-            bpm: 120,
-        },
+        &TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Quarter, 120)),
         notes[1].2,
-        &staff,
+        tempo_baseline(&staff, staff_space),
+        &font,
         staff_space,
-    );
-    draw_tempo_mark(&mut svg, &l2, &font);
+    )
+    .unwrap();
+    draw_tempo_mark(&mut svg, &l2, &font).unwrap();
 
     // 3. Combined: "Andante" dotted quarter = 72 above third note
     let l3 = layout_tempo_mark(
-        &TempoMark::TextWithMetronome {
-            text: "Andante".into(),
-            note_kind: MetronomeNoteKind::Quarter,
-            dotted: true,
-            bpm: 72,
-        },
+        &TempoMark::metronome(MetronomeMark::bpm(MetronomeUnit::dotted(MetronomeNoteKind::Quarter), 72)).with_text("Andante"),
         notes[2].2,
-        &staff,
+        tempo_baseline(&staff, staff_space),
+        &font,
         staff_space,
-    );
-    draw_tempo_mark(&mut svg, &l3, &font);
+    )
+    .unwrap();
+    draw_tempo_mark(&mut svg, &l3, &font).unwrap();
 
     // 4. Eighth = 160 above fourth note
     let l4 = layout_tempo_mark(
-        &TempoMark::Metronome {
-            note_kind: MetronomeNoteKind::Eighth,
-            dotted: false,
-            bpm: 160,
-        },
+        &TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Eighth, 160)),
         notes[3].2,
-        &staff,
+        tempo_baseline(&staff, staff_space),
+        &font,
         staff_space,
-    );
-    draw_tempo_mark(&mut svg, &l4, &font);
+    )
+    .unwrap();
+    draw_tempo_mark(&mut svg, &l4, &font).unwrap();
 
     let output = svg.to_svg();
 

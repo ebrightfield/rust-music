@@ -17,10 +17,8 @@ pub mod breath;
 pub mod chord;
 pub mod chord_symbol;
 pub mod clef;
-pub mod cresc_text;
 pub mod dot;
 pub mod dynamics;
-pub mod expression;
 pub mod flag;
 pub mod glissando;
 pub mod glyph_metrics;
@@ -30,6 +28,7 @@ pub mod hairpin;
 pub mod key_signature;
 pub(crate) mod line_break;
 pub mod lyric;
+pub mod mark_extent;
 pub mod measure;
 pub mod measure_meta;
 pub mod multi_measure_rest;
@@ -40,6 +39,7 @@ pub mod ornament;
 pub mod ottava;
 pub mod page;
 pub mod pedal;
+pub mod placement;
 pub mod rehearsal;
 pub mod rest;
 pub mod slur;
@@ -56,6 +56,8 @@ pub mod tab_rhythm;
 pub mod tab_slide;
 pub mod tab_vibrato;
 pub mod tempo;
+pub mod text_script;
+pub mod text_spanner;
 pub mod tie;
 pub mod time_signature;
 pub mod tremolo;
@@ -96,8 +98,10 @@ pub use chord_symbol::{
 };
 pub use clef::ClefLayout;
 pub use dot::{dot_staff_position, dot_xs};
-pub use dynamics::{layout_dynamic, Dynamic, DynamicLayout, DYNAMICS_BELOW_STAFF_SS};
-pub use expression::{layout_expression, ExpressionLayout};
+pub use dynamics::{
+    layout_dynamic, layout_dynamic_mark, CustomDynamic, Dynamic, DynamicLayout, DynamicMark,
+    DynamicMarkLayout, DynamicPart, DYNAMICS_ABOVE_STAFF_SS, DYNAMICS_BELOW_STAFF_SS,
+};
 pub use flag::flag_glyph;
 pub use glissando::{
     layout_glissando, layout_half_glissando_left, layout_half_glissando_right, GlissandoLayout,
@@ -170,7 +174,13 @@ pub use tab_palm_mute::{
 pub use tab_rhythm::{layout_tab_rhythm, needs_stem, tab_flag_count, TabRhythmLayout};
 pub use tab_slide::{layout_tab_slide, TabSlideLayout};
 pub use tab_vibrato::{layout_tab_vibrato, TabVibratoLayout, VibratoKind};
-pub use tempo::{layout_tempo_mark, MetronomeNoteKind, TempoMark, TempoMarkLayout};
+pub use placement::Placement;
+pub use tempo::{
+    layout_tempo_mark, MetronomeMark, MetronomeNoteKind, MetronomeUnit, MetronomeValue, TempoMark,
+    TempoMarkLayout, TempoText,
+};
+pub use text_script::{TextAlign, TextFont, TextItem, TextScript, TextSize};
+pub use text_spanner::{SpannerLine, TextSpanner};
 pub use tie::{
     layout_half_tie_left, layout_half_tie_right, layout_tie, tie_direction_from_stem, TieDirection,
     TieLayout,

@@ -1,6 +1,7 @@
 use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{layout_measure, MeasureElement, MeasureLayoutConfig};
+use crate::layout::mark_extent::system_mark_extent_ss;
 use crate::layout::measure_meta::LineBreak;
 use crate::layout::system::{
     layout_system_followed_by, measure_event_to_element, system_start_prefix, MeasureContent,
@@ -47,6 +48,10 @@ impl PageLayoutConfig {
         self.system_spacing_ss * self.staff_space
     }
 }
+
+/// Minimum gap between one system's lowest marks and the next system's
+/// highest marks, in staff spaces.
+pub const SYSTEM_MARK_CLEARANCE_SS: f64 = 1.0;
 
 /// A system positioned on a page, with its vertical offset.
 #[derive(Clone, Debug)]
@@ -127,6 +132,8 @@ pub fn layout_page(
 
     let mut systems = Vec::with_capacity(chunks.len());
     let mut y = page_config.top_margin;
+    // The previous system's top-line y and how far its marks reach below it.
+    let mut previous: Option<(f64, f64)> = None;
 
     for (start, end) in &chunks {
         let slice = &measures[*start..*end];
@@ -144,13 +151,21 @@ pub fn layout_page(
             Some(page_config.system_width),
         );
 
+        // Systems keep the configured spacing unless the marks below the
+        // previous staff and above this one need more room.
+        let (above, below) = system_mark_extent_ss(&system);
+        if let Some((previous_y, previous_below)) = previous {
+            let clearance =
+                (4.0 + previous_below + SYSTEM_MARK_CLEARANCE_SS + above) * page_config.staff_space;
+            y = previous_y + page_config.system_spacing_fu().max(clearance);
+        }
+        previous = Some((y, below));
+
         systems.push(PageSystem {
             x: page_config.left_margin,
             y,
             system,
         });
-
-        y += page_config.system_spacing_fu();
     }
 
     // Page height: last system top + 4 staff spaces (for the staff itself) + some padding

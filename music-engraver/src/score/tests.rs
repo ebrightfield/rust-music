@@ -1,4 +1,7 @@
 use super::*;
+use crate::layout::dynamics::Dynamic;
+use crate::layout::tempo::MetronomeMark;
+use crate::layout::text_script::TextScript;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::stem::StemDirection;
 use crate::layout::tremolo::TremoloCount;
@@ -401,7 +404,10 @@ fn convert_event_note_preserves_staff_position() {
 fn convert_event_rest_preserves_duration() {
     let builder = ScoreBuilder::new();
     let dur = Duration::new(DurationKind::Half, 1); // dotted half
-    let event = ScoreEvent::Rest { duration: dur };
+    let event = ScoreEvent::Rest {
+        duration: dur,
+        annotations: NoteAnnotations::default(),
+    };
     let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
     match result {
         MeasureEvent::Rest(r) => {
@@ -1286,33 +1292,13 @@ fn dynamic_on_chord_produces_extra_path() {
 }
 
 #[test]
-fn dynamic_on_rest_has_no_effect() {
-    let svg_with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .dynamic(Dynamic::Mf) // should be ignored — last event is a rest
-        .end_barline()
-        .render_svg();
-    let svg_without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    assert_eq!(
-        svg_with, svg_without,
-        "dynamic on rest should have no effect"
-    );
-}
-
-#[test]
 fn convert_event_preserves_dynamic() {
     let builder = ScoreBuilder::new().clef(Clef::Treble);
     let event = ScoreEvent::Note {
         pitch: Pitch::new(Note::E, 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            dynamic: Some(Dynamic::Pp),
+            dynamic: Some(Dynamic::Pp.into()),
             ..NoteAnnotations::default()
         },
     };
@@ -1321,7 +1307,7 @@ fn convert_event_preserves_dynamic() {
         MeasureEvent::Note(n) => {
             assert_eq!(
                 n.annotations.dynamic,
-                Some(Dynamic::Pp),
+                Some(Dynamic::Pp.into()),
                 "dynamic should be preserved"
             );
         }
@@ -1337,7 +1323,7 @@ fn convert_event_with_tracking_preserves_dynamic() {
         pitch: Pitch::new(Note::E, 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            dynamic: Some(Dynamic::Fff),
+            dynamic: Some(Dynamic::Fff.into()),
             ..NoteAnnotations::default()
         },
     };
@@ -1346,7 +1332,7 @@ fn convert_event_with_tracking_preserves_dynamic() {
         MeasureEvent::Note(n) => {
             assert_eq!(
                 n.annotations.dynamic,
-                Some(Dynamic::Fff),
+                Some(Dynamic::Fff.into()),
                 "tracked conversion preserves dynamic"
             );
         }
@@ -1361,7 +1347,7 @@ fn convert_event_chord_preserves_dynamic() {
         pitches: vec![Pitch::new(Note::C, 4), Pitch::new(Note::E, 4)],
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            dynamic: Some(Dynamic::Sfz),
+            dynamic: Some(Dynamic::Sfz.into()),
             ..NoteAnnotations::default()
         },
     };
@@ -1370,7 +1356,7 @@ fn convert_event_chord_preserves_dynamic() {
         MeasureEvent::Chord(c) => {
             assert_eq!(
                 c.annotations.dynamic,
-                Some(Dynamic::Sfz),
+                Some(Dynamic::Sfz.into()),
                 "chord dynamic should be preserved"
             );
         }
@@ -1667,29 +1653,6 @@ fn decresc_differs_from_cresc() {
 }
 
 #[test]
-fn hairpin_on_rest_is_noop() {
-    let svg1 = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .cresc()
-        .note(p("E", 4), Duration::QTR)
-        .hairpin_end()
-        .end_barline()
-        .render_svg();
-
-    let svg2 = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .note(p("E", 4), Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    // cresc() on a rest is a no-op, so hairpin_start is never set
-    // hairpin_end without matching start produces no hairpin
-    assert_eq!(svg1, svg2, "hairpin on rest should be no-op");
-}
-
-#[test]
 fn convert_event_preserves_hairpin_fields() {
     let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
     let event = ScoreEvent::Note {
@@ -1867,33 +1830,6 @@ fn hairpin_dashed_without_hairpin_start_renders_no_wedge() {
     assert_eq!(
         svg_lone, svg_plain,
         "hairpin_dashed without hairpin_start must not emit any wedge"
-    );
-}
-
-#[test]
-fn hairpin_dashed_on_rest_is_noop() {
-    // hairpin_dashed after a rest cannot set the flag (the rest event
-    // carries no NoteAnnotations). Mirror of `hairpin_on_rest_is_noop`.
-    let svg_rest_dashed = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .cresc()
-        .hairpin_dashed()
-        .note(p("E", 4), Duration::QTR)
-        .hairpin_end()
-        .end_barline()
-        .render_svg();
-
-    let svg_plain = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .note(p("E", 4), Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    assert_eq!(
-        svg_rest_dashed, svg_plain,
-        "cresc().hairpin_dashed() on a rest must be a no-op end-to-end"
     );
 }
 
@@ -2110,31 +2046,6 @@ fn hairpin_niente_without_hairpin_start_renders_no_circle() {
 }
 
 #[test]
-fn hairpin_niente_on_rest_is_noop() {
-    // `.hairpin_niente()` after a rest cannot set the flag (RestEvent
-    // carries no NoteAnnotations). Mirror of `hairpin_dashed_on_rest_is_noop`.
-    let svg_rest_niente = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .cresc()
-        .hairpin_niente()
-        .note(p("E", 4), Duration::QTR)
-        .hairpin_end()
-        .end_barline()
-        .render_svg();
-    let svg_plain = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .note(p("E", 4), Duration::QTR)
-        .end_barline()
-        .render_svg();
-    assert_eq!(
-        svg_rest_niente, svg_plain,
-        "cresc().hairpin_niente() on a rest must be a no-op end-to-end"
-    );
-}
-
-#[test]
 fn hairpin_niente_decrescendo_also_renders_circle() {
     // Direction-agnostic: a decrescendo with closed-end niente also
     // emits the open "o" — at the closing tip (right side of the
@@ -2161,7 +2072,7 @@ fn hairpin_niente_decrescendo_also_renders_circle() {
 #[test]
 fn cresc_text_adds_label_and_dashed_line_to_svg() {
     // Verifies the full ScoreBuilder → event → measure → system_renderer
-    // chain: calling .cresc_text() / .cresc_text_end() must produce a
+    // chain: calling .cresc_text() / .text_spanner_end() must produce a
     // dashed-text marking in the rendered SVG.
     let svg_with = ScoreBuilder::new()
         .clef(Clef::Treble)
@@ -2170,7 +2081,7 @@ fn cresc_text_adds_label_and_dashed_line_to_svg() {
         .cresc_text()
         .note(p("E", 4), Duration::QTR)
         .note(p("G", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .rest(Duration::QTR)
         .end_barline()
         .render_svg();
@@ -2209,7 +2120,7 @@ fn decresc_text_label_differs_from_cresc_text() {
         .note(p("C", 4), Duration::QTR)
         .cresc_text()
         .note(p("E", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .end_barline()
         .render_svg();
 
@@ -2218,7 +2129,7 @@ fn decresc_text_label_differs_from_cresc_text() {
         .note(p("C", 4), Duration::QTR)
         .decresc_text()
         .note(p("E", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .end_barline()
         .render_svg();
 
@@ -2227,7 +2138,7 @@ fn decresc_text_label_differs_from_cresc_text() {
         .note(p("C", 4), Duration::QTR)
         .dim_text()
         .note(p("E", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .end_barline()
         .render_svg();
 
@@ -2252,35 +2163,9 @@ fn decresc_text_label_differs_from_cresc_text() {
 }
 
 #[test]
-fn cresc_text_on_rest_is_noop() {
-    // Calling .cresc_text() right after .rest() should be a no-op
-    // (the convenience methods only apply to Notes and Chords), so
-    // the dangling cresc_text_end() has nothing to pair with and
-    // also renders nothing.
-    let svg1 = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .cresc_text()
-        .note(p("E", 4), Duration::QTR)
-        .cresc_text_end()
-        .end_barline()
-        .render_svg();
-
-    let svg2 = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .note(p("E", 4), Duration::QTR)
-        .end_barline()
-        .render_svg();
-
-    assert_eq!(svg1, svg2, "cresc_text on rest must be a no-op");
-    assert!(!svg1.contains(">cresc.</text>"), "must not emit label");
-}
-
-#[test]
-fn cresc_text_start_without_end_renders_no_marking() {
+fn text_spanner_start_without_end_renders_no_marking() {
     // Orphan start: dangling .cresc_text() with no matching
-    // .cresc_text_end() produces no marking.
+    // .text_spanner_end() produces no marking.
     let svg_orphan = ScoreBuilder::new()
         .clef(Clef::Treble)
         .note(p("C", 4), Duration::QTR)
@@ -2298,7 +2183,7 @@ fn cresc_text_start_without_end_renders_no_marking() {
 
     assert_eq!(
         svg_orphan, svg_baseline,
-        "orphan cresc_text_start (no matching cresc_text_end) must produce no marking"
+        "orphan text_spanner_start (no matching text_spanner_end) must produce no marking"
     );
 }
 
@@ -2318,7 +2203,7 @@ fn cresc_text_and_hairpin_coexist_independently() {
         .note(p("G", 4), Duration::QTR)
         .cresc_text()
         .note(p("A", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .end_barline()
         .render_svg();
 
@@ -2339,13 +2224,13 @@ fn cresc_text_and_hairpin_coexist_independently() {
 fn convert_event_preserves_cresc_text_fields() {
     // The annotations flow through convert_event unchanged — required
     // for the system_renderer to see the flags downstream.
-    use crate::layout::cresc_text::CrescTextKind;
+    use crate::layout::text_spanner::TextSpanner;
     let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
     let event = ScoreEvent::Note {
         pitch: p("C", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            cresc_text_start: Some(CrescTextKind::Diminuendo),
+            text_spanner_start: Some(TextSpanner::dim()),
             ..NoteAnnotations::default()
         },
     };
@@ -2354,23 +2239,23 @@ fn convert_event_preserves_cresc_text_fields() {
     match result {
         MeasureEvent::Note(n) => {
             assert_eq!(
-                n.annotations.cresc_text_start,
-                Some(CrescTextKind::Diminuendo)
+                n.annotations.text_spanner_start,
+                Some(TextSpanner::dim())
             );
-            assert!(!n.annotations.cresc_text_end);
+            assert!(!n.annotations.text_spanner_end);
         }
         _ => panic!("expected Note"),
     }
 }
 
 #[test]
-fn convert_event_preserves_cresc_text_end_flag() {
+fn convert_event_preserves_text_spanner_end_flag() {
     let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
     let event = ScoreEvent::Note {
         pitch: p("C", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            cresc_text_end: true,
+            text_spanner_end: true,
             ..NoteAnnotations::default()
         },
     };
@@ -2379,8 +2264,8 @@ fn convert_event_preserves_cresc_text_end_flag() {
     let result = convert_event(&event, &clef, &builder.key_sig, Some(&mut seen));
     match result {
         MeasureEvent::Note(n) => {
-            assert!(n.annotations.cresc_text_start.is_none());
-            assert!(n.annotations.cresc_text_end);
+            assert!(n.annotations.text_spanner_start.is_none());
+            assert!(n.annotations.text_spanner_end);
         }
         _ => panic!("expected Note"),
     }
@@ -2388,13 +2273,13 @@ fn convert_event_preserves_cresc_text_end_flag() {
 
 #[test]
 fn chord_cresc_text_preserved_in_convert() {
-    use crate::layout::cresc_text::CrescTextKind;
+    use crate::layout::text_spanner::TextSpanner;
     let builder = ScoreBuilder::new().key_signature(KeySignature::Open);
     let event = ScoreEvent::Chord {
         pitches: vec![p("C", 4), p("E", 4)],
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            cresc_text_start: Some(CrescTextKind::Crescendo),
+            text_spanner_start: Some(TextSpanner::cresc()),
             ..NoteAnnotations::default()
         },
     };
@@ -2403,10 +2288,10 @@ fn chord_cresc_text_preserved_in_convert() {
     match result {
         MeasureEvent::Chord(c) => {
             assert_eq!(
-                c.annotations.cresc_text_start,
-                Some(CrescTextKind::Crescendo)
+                c.annotations.text_spanner_start,
+                Some(TextSpanner::cresc())
             );
-            assert!(!c.annotations.cresc_text_end);
+            assert!(!c.annotations.text_spanner_end);
         }
         _ => panic!("expected Chord"),
     }
@@ -2421,7 +2306,7 @@ fn cresc_text_on_chord_renders_label() {
         .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::QTR)
         .cresc_text()
         .note(p("A", 4), Duration::QTR)
-        .cresc_text_end()
+        .text_spanner_end()
         .end_barline()
         .render_svg();
     assert!(
@@ -2494,26 +2379,6 @@ fn plain_rehearsal_mark_has_text_but_no_rect() {
     assert!(
         !svg.contains("<rect "),
         "plain rehearsal mark should not have a rect"
-    );
-}
-
-#[test]
-fn rehearsal_mark_on_rest_is_noop() {
-    let svg_with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::WHOLE)
-        .rehearsal_mark("X", RehearsalStyle::Boxed)
-        .end_barline()
-        .render_svg();
-    let svg_without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::WHOLE)
-        .end_barline()
-        .render_svg();
-    // rehearsal_mark after rest is a no-op
-    assert_eq!(
-        svg_with, svg_without,
-        "rehearsal_mark on rest should have no effect"
     );
 }
 
@@ -2619,7 +2484,7 @@ fn tempo_mark_adds_text_to_svg() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .note(p("E", 4), Duration::QTR)
-        .tempo(TempoMark::Text("Allegro".into()))
+        .tempo(TempoMark::text("Allegro"))
         .rest(Duration::new(DurationKind::Half, 1))
         .end_barline()
         .render_svg();
@@ -2634,11 +2499,7 @@ fn tempo_metronome_adds_bpm_to_svg() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .note(p("C", 4), Duration::QTR)
-        .tempo(TempoMark::Metronome {
-            note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
-            dotted: false,
-            bpm: 120,
-        })
+        .tempo(TempoMark::metronome(MetronomeMark::bpm(crate::layout::tempo::MetronomeNoteKind::Quarter, 120)))
         .rest(Duration::new(DurationKind::Half, 1))
         .end_barline()
         .render_svg();
@@ -2647,28 +2508,12 @@ fn tempo_metronome_adds_bpm_to_svg() {
 }
 
 #[test]
-fn tempo_on_rest_is_noop() {
-    let svg_with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::WHOLE)
-        .tempo(TempoMark::Text("Andante".into()))
-        .end_barline()
-        .render_svg();
-
-    // tempo() on rest should be ignored — "Andante" should NOT appear
-    assert!(
-        !svg_with.contains(">Andante<"),
-        "tempo mark on rest should be ignored"
-    );
-}
-
-#[test]
 fn tempo_differs_from_no_tempo() {
     let with = ScoreBuilder::new()
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .note(p("E", 4), Duration::WHOLE)
-        .tempo(TempoMark::Text("Vivace".into()))
+        .tempo(TempoMark::text("Vivace"))
         .end_barline()
         .render_svg();
 
@@ -2689,7 +2534,7 @@ fn convert_event_preserves_tempo_mark() {
         pitch: p("C", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            tempo_mark: Some(TempoMark::Text("Largo".into())),
+            tempo_mark: Some(TempoMark::text("Largo")),
             ..NoteAnnotations::default()
         },
     };
@@ -2698,7 +2543,7 @@ fn convert_event_preserves_tempo_mark() {
         MeasureEvent::Note(n) => {
             assert_eq!(
                 n.annotations.tempo_mark,
-                Some(TempoMark::Text("Largo".into()))
+                Some(TempoMark::text("Largo"))
             );
         }
         _ => panic!("expected Note"),
@@ -2713,11 +2558,7 @@ fn tracked_convert_preserves_tempo_mark() {
         pitch: p("D", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            tempo_mark: Some(TempoMark::Metronome {
-                note_kind: crate::layout::tempo::MetronomeNoteKind::Quarter,
-                dotted: false,
-                bpm: 60,
-            }),
+            tempo_mark: Some(TempoMark::metronome(MetronomeMark::bpm(crate::layout::tempo::MetronomeNoteKind::Quarter, 60))),
             ..NoteAnnotations::default()
         },
     };
@@ -2737,7 +2578,7 @@ fn chord_convert_preserves_tempo_mark() {
         pitches: vec![p("C", 4), p("E", 4)],
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            tempo_mark: Some(TempoMark::Text("Adagio".into())),
+            tempo_mark: Some(TempoMark::text("Adagio")),
             ..NoteAnnotations::default()
         },
     };
@@ -2746,7 +2587,7 @@ fn chord_convert_preserves_tempo_mark() {
         MeasureEvent::Chord(c) => {
             assert_eq!(
                 c.annotations.tempo_mark,
-                Some(TempoMark::Text("Adagio".into()))
+                Some(TempoMark::text("Adagio"))
             );
         }
         _ => panic!("expected Chord"),
@@ -2761,7 +2602,7 @@ fn expression_adds_italic_text_to_svg() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .note(p("E", 4), Duration::QTR)
-        .expression("dolce")
+        .text_script(TextScript::below("dolce").italic().centered())
         .rest(Duration::new(DurationKind::Half, 1))
         .end_barline()
         .render_svg();
@@ -2774,27 +2615,12 @@ fn expression_adds_italic_text_to_svg() {
 }
 
 #[test]
-fn expression_on_rest_is_noop() {
-    let svg = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::WHOLE)
-        .expression("legato")
-        .end_barline()
-        .render_svg();
-
-    assert!(
-        !svg.contains(">legato<"),
-        "expression on rest should be ignored"
-    );
-}
-
-#[test]
 fn expression_differs_from_no_expression() {
     let with = ScoreBuilder::new()
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .note(p("E", 4), Duration::WHOLE)
-        .expression("espressivo")
+        .text_script(TextScript::below("espressivo").italic().centered())
         .end_barline()
         .render_svg();
 
@@ -2815,14 +2641,17 @@ fn convert_event_preserves_expression() {
         pitch: p("C", 4),
         duration: Duration::QTR,
         annotations: NoteAnnotations {
-            expression: Some("cantabile".into()),
+            text_scripts: vec![TextScript::below("cantabile").italic().centered()],
             ..NoteAnnotations::default()
         },
     };
     let result = convert_event(&event, &Clef::Treble, &builder.key_sig, None);
     match result {
         MeasureEvent::Note(n) => {
-            assert_eq!(n.annotations.expression, Some("cantabile".into()));
+            assert_eq!(
+                n.annotations.text_scripts,
+                vec![TextScript::below("cantabile").italic().centered()]
+            );
         }
         _ => panic!("expected Note"),
     }
@@ -2834,7 +2663,7 @@ fn chord_expression_produces_text() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .chord(vec![p("C", 4), p("E", 4), p("G", 4)], Duration::WHOLE)
-        .expression("sostenuto")
+        .text_script(TextScript::below("sostenuto").italic().centered())
         .end_barline()
         .render_svg();
 
@@ -2984,23 +2813,6 @@ fn articulation_staccato_adds_extra_path() {
         count_without + 1,
         "staccato should add exactly one extra path element"
     );
-}
-
-#[test]
-fn articulation_on_rest_is_noop() {
-    use crate::layout::articulation::Articulation;
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::QTR)
-        .articulation(Articulation::Staccato)
-        .end_barline()
-        .render_svg();
-    assert_eq!(without, with, "articulation on rest should be no-op");
 }
 
 #[test]
@@ -3492,22 +3304,6 @@ fn chord_symbol_adds_text_element() {
         texts_without
     );
     assert!(with.contains(">Cmaj7<"), "should contain 'Cmaj7'");
-}
-
-#[test]
-fn chord_symbol_on_rest_is_noop() {
-    let svg = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .chord_symbol("Am")
-        .end_barline()
-        .render_svg();
-
-    assert!(
-        !svg.contains(">Am<"),
-        "chord symbol on rest should be ignored"
-    );
 }
 
 #[test]
@@ -4436,23 +4232,6 @@ fn navigation_sign_coda_adds_path() {
 }
 
 #[test]
-fn navigation_sign_rest_noop() {
-    use crate::layout::navigation::NavigationSign;
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::WHOLE)
-        .end_barline()
-        .render_svg();
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .rest(Duration::WHOLE)
-        .navigation_sign(NavigationSign::Segno)
-        .end_barline()
-        .render_svg();
-    assert_eq!(without, with, "navigation sign on rest should be a no-op");
-}
-
-#[test]
 fn navigation_sign_segno_differs_from_coda() {
     use crate::layout::navigation::NavigationSign;
     let segno = ScoreBuilder::new()
@@ -4757,24 +4536,6 @@ fn pedal_down_and_up_produce_different_svg() {
 }
 
 #[test]
-fn pedal_on_rest_is_noop() {
-    let with_pedal = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .pedal_down()
-        .end_barline()
-        .render_svg();
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-    assert_eq!(with_pedal, without, "pedal on rest should be no-op");
-}
-
-#[test]
 fn pedal_on_chord_adds_path() {
     let baseline = ScoreBuilder::new()
         .clef(Clef::Treble)
@@ -4897,44 +4658,6 @@ fn all_four_pedal_score_builders_produce_distinct_svg() {
             );
         }
     }
-}
-
-#[test]
-fn pedal_half_on_rest_is_noop() {
-    // Mirrors pedal_on_rest_is_noop for the Half variant — the builder
-    // silently drops the annotation when the last event is a rest.
-    let with_pedal = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .pedal_half()
-        .end_barline()
-        .render_svg();
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-    assert_eq!(with_pedal, without, "pedal_half on rest should be no-op");
-}
-
-#[test]
-fn pedal_sost_on_rest_is_noop() {
-    let with_pedal = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .pedal_sost()
-        .end_barline()
-        .render_svg();
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::QTR)
-        .end_barline()
-        .render_svg();
-    assert_eq!(with_pedal, without, "pedal_sost on rest should be no-op");
 }
 
 #[test]
@@ -5260,25 +4983,6 @@ fn breath_mark_adds_path_to_svg() {
         paths_without + 1,
         "breath mark should add exactly 1 path"
     );
-}
-
-#[test]
-fn breath_mark_on_rest_is_noop() {
-    use crate::layout::breath::BreathMark;
-    let with = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::WHOLE)
-        .breath_mark(BreathMark::Comma)
-        .end_barline()
-        .render_svg();
-    let without = ScoreBuilder::new()
-        .clef(Clef::Treble)
-        .time_signature(4, 4)
-        .rest(Duration::WHOLE)
-        .end_barline()
-        .render_svg();
-    assert_eq!(with, without, "breath mark on rest should be no-op");
 }
 
 #[test]

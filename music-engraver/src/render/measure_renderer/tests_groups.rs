@@ -300,3 +300,71 @@ fn post_span_notehead_marks_still_target_the_last_rhythmic_member() {
     let svg = score.render_svg();
     assert!(svg.contains(&bravura_font().glyph_outline(smufl::Glyph::NoteheadParenthesisLeft).unwrap().path_data));
 }
+
+#[test]
+fn rest_member_marks_render_at_the_rest_not_the_adjacent_note() {
+    use crate::layout::dynamics::Dynamic;
+    use crate::layout::hairpin::HairpinType;
+    use crate::layout::tempo::TempoMark;
+    use crate::layout::text_script::TextScript;
+    use crate::svg_probe::{glyph, text};
+
+    let score = ScoreBuilder::new()
+        .begin_tuplet(TupletSpec::new(3, 2))
+        .begin_beam()
+        .note(p(Note::C), Duration::EIGHTH)
+        .rest(Duration::EIGHTH)
+        .dynamic(Dynamic::Piano)
+        .hairpin_start(HairpinType::Crescendo)
+        .text_script(TextScript::above("rest mark"))
+        .tempo(TempoMark::text("Andante"))
+        .note(p(Note::G), Duration::EIGHTH)
+        .hairpin_end()
+        .end_beam()
+        .end_tuplet()
+        .end_barline();
+    let contents = score.build_measure_contents().unwrap();
+    let MeasureEvent::Rest(rest) = &contents[0].events[3] else {
+        panic!("the marked tuplet member must remain a rest");
+    };
+    assert!(rest.annotations.dynamic.is_some());
+    assert!(rest.annotations.hairpin_start.is_some());
+    assert_eq!(rest.annotations.text_scripts.len(), 1);
+    assert!(rest.annotations.tempo_mark.is_some());
+
+    let svg = score.render_svg();
+    let font = bravura_font();
+    let rest = glyph(&svg, &font, smufl::Glyph::Rest8th);
+    let dynamic = glyph(&svg, &font, smufl::Glyph::DynamicPiano);
+    let rest_center = rest.x + f64::from(font.glyph_advance(smufl::Glyph::Rest8th).unwrap()) / 2.0;
+    let dynamic_center = dynamic.x + f64::from(font.glyph_advance(smufl::Glyph::DynamicPiano).unwrap()) / 2.0;
+    assert!((rest_center - dynamic_center).abs() < 0.01);
+    assert!((text(&svg, "rest mark").x - rest.x).abs() < 0.01);
+    assert!((text(&svg, "Andante").x - rest.x).abs() < 0.01);
+    assert!(beams(&svg) > 0);
+}
+
+#[test]
+fn inline_barline_break_splits_an_open_tuplet_and_beam_on_the_performed_onset() {
+    use crate::layout::barline::BarlineStyle;
+    let score = ScoreBuilder::new().time_signature(4, 4)
+        .begin_tuplet(TupletSpec::new(3, 2))
+        .begin_beam()
+        .note(p(Note::C), Duration::EIGHTH)
+        .system_break()
+        .inline_barline(BarlineStyle::Dashed)
+        .note(p(Note::D), Duration::EIGHTH)
+        .end_beam()
+        .rest(Duration::EIGHTH)
+        .end_tuplet().end_barline();
+    let mut for_layout = score.clone();
+    let page = for_layout.page_layout(bravura_font().engraving_config().staff_space)
+        .unwrap().unwrap();
+    assert_eq!(page.systems.len(), 2);
+    assert_eq!(page.systems[0].system.measures.len(), 1);
+    assert_eq!(page.systems[1].system.measures.len(), 1);
+    let svg = score.render_svg();
+    assert!(beams(&svg) >= 2, "each system must retain its partial beam");
+    let numeral = bravura_font().glyph_outline(smufl::Glyph::Tuplet3).unwrap().path_data;
+    assert!(svg.contains(&numeral), "the divided tuplet must keep its number");
+}

@@ -1,5 +1,10 @@
 use smufl::Glyph;
 
+use crate::font::{FontError, MusicFont};
+use crate::layout::text_script::{
+    layout_text_line, LineItem, PlacedLineItem, TextFont, TextLineLayout,
+};
+
 /// A dynamic marking placed below (or above) the staff.
 ///
 /// Each variant maps to a single SMuFL composite glyph from the Dynamics
@@ -194,6 +199,142 @@ pub fn layout_dynamic(
     let y = staff_bottom_y + DYNAMICS_BELOW_STAFF_SS * staff_space;
 
     DynamicLayout { glyph, x, y }
+}
+
+/// Distance from the top staff line up to the baseline of a dynamic placed
+/// above the staff (`\dynamicUp`), in staff spaces.
+pub const DYNAMICS_ABOVE_STAFF_SS: f64 = 1.3;
+
+/// Font size of the italic words of a custom dynamic ("più" in "più p"),
+/// in staff spaces.
+pub const DYNAMIC_TEXT_FONT_SIZE_SS: f64 = 1.4;
+
+/// Gap between the words and the glyphs of a custom dynamic, in staff spaces.
+pub const DYNAMIC_TEXT_GAP_SS: f64 = 0.3;
+
+/// One piece of a [`CustomDynamic`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DynamicPart {
+    /// Italic words in the text font ("più", "subito", "sempre").
+    Text(String),
+    /// A SMuFL dynamic glyph.
+    Mark(Dynamic),
+}
+
+/// A dynamic composed of italic words and dynamic glyphs, e.g. "più p"
+/// (LilyPond `make-dynamic-script`).
+///
+/// The first dynamic glyph is centered on the note exactly like a plain
+/// [`Dynamic`]; the words extend to either side of it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CustomDynamic {
+    /// Parts, left to right.
+    pub parts: Vec<DynamicPart>,
+}
+
+impl CustomDynamic {
+    /// An empty custom dynamic; add parts with [`Self::text`] and [`Self::mark`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Append italic words.
+    pub fn text(mut self, text: impl Into<String>) -> Self {
+        self.parts.push(DynamicPart::Text(text.into()));
+        self
+    }
+
+    /// Append a dynamic glyph.
+    pub fn mark(mut self, dynamic: Dynamic) -> Self {
+        self.parts.push(DynamicPart::Mark(dynamic));
+        self
+    }
+}
+
+/// A dynamic attached to an event: a standard SMuFL dynamic or a custom
+/// text-plus-glyph dynamic.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DynamicMark {
+    /// One SMuFL composite dynamic glyph.
+    Standard(Dynamic),
+    /// Words plus dynamic glyphs.
+    Custom(CustomDynamic),
+}
+
+impl From<Dynamic> for DynamicMark {
+    fn from(dynamic: Dynamic) -> Self {
+        Self::Standard(dynamic)
+    }
+}
+
+impl From<CustomDynamic> for DynamicMark {
+    fn from(custom: CustomDynamic) -> Self {
+        Self::Custom(custom)
+    }
+}
+
+/// A dynamic mark composed as one line, plus the x within the line that is
+/// centered on the note.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DynamicMarkLayout {
+    /// The composed line (origin: left edge, baseline).
+    pub line: TextLineLayout,
+    /// Line-relative x that sits on the note's center: the center of the
+    /// first dynamic glyph, or of the whole line when it has none.
+    pub center_x: f64,
+}
+
+impl DynamicMarkLayout {
+    /// Left edge of the line when centered on `note_center_x`.
+    pub fn left_for(&self, note_center_x: f64) -> f64 {
+        note_center_x - self.center_x
+    }
+}
+
+/// Compose a dynamic mark: glyphs at staff size, words in italic at
+/// [`DYNAMIC_TEXT_FONT_SIZE_SS`].
+pub fn layout_dynamic_mark(
+    mark: &DynamicMark,
+    font: &MusicFont,
+    staff_space: f64,
+) -> Result<DynamicMarkLayout, FontError> {
+    let glyph_item = |d: Dynamic| LineItem::Glyph {
+        glyph: d.glyph(),
+        scale: 1.0,
+        dy: 0.0,
+    };
+    let items: Vec<LineItem> = match mark {
+        DynamicMark::Standard(d) => vec![glyph_item(*d)],
+        DynamicMark::Custom(custom) => {
+            let mut items = Vec::with_capacity(custom.parts.len() * 2);
+            for (i, part) in custom.parts.iter().enumerate() {
+                let previous_is_text = i > 0 && matches!(custom.parts[i - 1], DynamicPart::Text(_));
+                let is_text = matches!(part, DynamicPart::Text(_));
+                if i > 0 && (previous_is_text || is_text) {
+                    items.push(LineItem::Gap(DYNAMIC_TEXT_GAP_SS * staff_space));
+                }
+                items.push(match part {
+                    DynamicPart::Text(text) => LineItem::Text {
+                        text: text.clone(),
+                        font: TextFont::Italic,
+                        font_size: DYNAMIC_TEXT_FONT_SIZE_SS * staff_space,
+                    },
+                    DynamicPart::Mark(d) => glyph_item(*d),
+                });
+            }
+            items
+        }
+    };
+    let line = layout_text_line(&items, font)?;
+    let first_glyph = line.items.iter().find_map(|item| match item {
+        PlacedLineItem::Glyph { x, glyph, .. } => Some((*x, *glyph)),
+        PlacedLineItem::Text { .. } => None,
+    });
+    let center_x = match first_glyph {
+        Some((x, glyph)) => x + f64::from(font.glyph_advance(glyph)?) / 2.0,
+        None => line.width / 2.0,
+    };
+    Ok(DynamicMarkLayout { line, center_x })
 }
 
 #[cfg(test)]

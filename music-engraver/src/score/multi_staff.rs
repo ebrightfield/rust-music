@@ -28,7 +28,7 @@ use crate::render::multi_staff_renderer::{
 use crate::render::page_renderer::{
     draw_cross_system_glissandos, draw_cross_system_hairpins, draw_cross_system_lyric_extenders,
     draw_cross_system_ottava_brackets, draw_cross_system_slurs, draw_cross_system_ties,
-    draw_cross_system_trill_extensions,
+    draw_cross_system_text_spanners, draw_cross_system_trill_extensions,
 };
 use crate::render::staff_renderer::draw_staff_lines;
 use crate::render::system_renderer::draw_system;
@@ -811,6 +811,7 @@ impl MultiStaffScore {
             draw_cross_system_ties(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_slurs(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_hairpins(&mut svg, &font, &config, stave_systems)?;
+            draw_cross_system_text_spanners(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_lyric_extenders(&mut svg, &config, stave_systems);
             draw_cross_system_ottava_brackets(&mut svg, &font, &config, stave_systems)?;
             draw_cross_system_glissandos(&mut svg, &font, &config, stave_systems)?;

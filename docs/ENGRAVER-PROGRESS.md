@@ -7804,18 +7804,31 @@
   chord, and rest events. Tuplet ratio, number display, bracket visibility,
   and placement are independent of the beam; `BeamSpec` permits forced
   stems and beat subdivisions. Typed span errors surface from
-  `try_render_svg`; measures preserve a continuing beam across barlines.
-- Standalone and grouped events share accidental resolution, all
-  per-member annotations, system/page spanner collectors, and a single
-  positioned-element x coordinate. GuitarScore projects grouped attacks as
-  actual chords/rests/notes and keeps TAB rhythmic anchors aligned.
-  Page bounds include tuplet marks and lyrics, avoiding PNG clipping.
-- Verification: 2,926 engraver library tests pass; the visual smoke
-  reproduced the unbeamed rest triplet and quarter-triplet with a partial
-  beam from mn-c12-r002 and mn-c11-r028. Obsolete byte-exact SVG snapshots
-  for reordered beam drawing and formerly clipped lyrics were replaced
-  with behavioral glyph/geometry checks; GuitarScore snapshots were not
-  regenerated.
+  `try_render_svg`; measures preserve continuing beams across barlines and
+  explicitly split open beams/tuplets at forced mid-measure system breaks
+  while keeping exact performed-tuplet onsets and inline barlines.
+- Standalone and grouped events share accidental resolution, annotation
+  rendering (including tempo, dynamics and text on rest members), all
+  system/page spanner collectors, and a single positioned-element x coordinate.
+  GuitarScore projects grouped attacks as actual chords/rests/notes and keeps
+  TAB rhythmic anchors aligned. Page bounds include tuplet marks, lyrics and
+  rest-attached marks, avoiding PNG clipping.
+- Verification: 2,888 engraver library tests and 75 SVG golden tests passed
+  after Barlines and RestMarks integration; the only full-workspace failure
+  needs an uncached offline GeneralUser GS SoundFont in `music-midi`. PNGs
+  of representative mn-c12-r002 (rest triplet with lyrics and a dynamic)
+  and mn-c11-r028 (quarter triplet with an inner beam) bars were rendered
+  and compared with their LilyPond PDF rasters. Byte-exact incidental beam
+  and lyric snapshots were replaced by glyph and geometry assertions.
+
+## 2026-10-04 — Modus Novus rest marks, text scripts/spanners, dynamics and tempo
+- Rests now carry `NoteAnnotations`, so tempo, dynamics, hairpin endpoints, articulations (including fermata), rehearsal marks and text scripts attach to the rest glyph. Pitch-specific builders (ties, slurs, grace notes, ornaments, lyrics) remain note/chord-only.
+- `TextScript` renders stacked above/below styled text and inline SMuFL glyphs on events and barlines; the old expression channel is replaced by italic scripts. General `TextSpanner` replaces `CrescText`, preserving cresc./decresc. and adding configurable rit./dim. with dashed, solid or no continuation line across systems.
+- Custom dynamics mix italic words and SMuFL dynamic glyphs; dynamics and hairpins support above/below placement via `ScoreBuilder::dynamics_placement` and per-mark `dynamic_placed`.
+- Composable tempo marks support dotted values, 32nd notes, c. prefixes, BPM ranges, parenthesized marks, text before/after/below, and note = note equations.
+- Focused score/renderer position tests and SVG golden tests cover these marks. Visual PNG smokes were compared against the mn-c11-r015 and mn-c03-m008 LilyPond reference PDFs; the demos select representative bars, not complete transcriptions. The previously drifting `golden_advanced_guitar_vocabulary` fixture passes after the structure integration.
+- Native PNG font loading now maps generic serif to an installed text-serif family; one Linux fontconfig alias selected Standard Symbols PS and silently mangled "c.", "rit." and "più" into symbol-font characters. A rest/tempo/rit./custom-dynamic two-system PNG smoke now shows the intended Latin text as well as the expected Bravura glyphs.
+
 ## 2026-10-04 — G1/G2/G3/G15: inline barlines and explicit system breaks
 - Added `BarlineStyle::{Dashed,Invisible,Tick}`: dashed/tick use Bravura
   SMuFL barline glyphs; invisible draws nothing and reserves no barline rod.
@@ -7830,6 +7843,7 @@
   points across staves; guitar notation and TAB share measure-boundary breaks.
 - Verified with focused layout, score, TAB, and glyph regressions plus a PNG
   smoke of mn-c04-r038's eight dashed inline barlines against its LilyPond PDF.
+
 ## 2026-10-04 — RM-MN-004/010: score structure and meter
 - Added onset-aware clef changes (including after-barline placement), printed and
   hidden meter changes, courtesy changes at system breaks, and Bravura change-size

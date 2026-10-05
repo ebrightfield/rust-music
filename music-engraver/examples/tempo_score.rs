@@ -6,7 +6,7 @@ use music::notation::clef::Clef;
 use music::notation::rhythm::duration::Duration;
 use music::note::note::Note;
 use music::note::pitch::Pitch;
-use music_engraver::layout::tempo::{MetronomeNoteKind, TempoMark};
+use music_engraver::layout::tempo::{MetronomeMark, MetronomeNoteKind, MetronomeUnit, TempoMark};
 use music_engraver::score::ScoreBuilder;
 
 fn p(name: &str, octave: i8) -> Pitch {
@@ -30,12 +30,7 @@ fn main() {
         .measures_per_system(2)
         // Measure 1 — "Allegro" text tempo at start + metronome ♩=120
         .note(p("C", 4), Duration::QTR)
-        .tempo(TempoMark::TextWithMetronome {
-            text: "Allegro".into(),
-            note_kind: MetronomeNoteKind::Quarter,
-            dotted: false,
-            bpm: 132,
-        })
+        .tempo(TempoMark::metronome(MetronomeMark::bpm(MetronomeNoteKind::Quarter, 132)).with_text("Allegro"))
         .note(p("D", 4), Duration::QTR)
         .note(p("E", 4), Duration::QTR)
         .note(p("F", 4), Duration::QTR)
@@ -48,18 +43,14 @@ fn main() {
         .barline()
         // Measure 3 — tempo change: "Andante" text only
         .note(p("B", 4), Duration::QTR)
-        .tempo(TempoMark::Text("Andante".into()))
+        .tempo(TempoMark::text("Andante"))
         .note(p("A", 4), Duration::QTR)
         .note(p("G", 4), Duration::QTR)
         .note(p("F", 4), Duration::QTR)
         .barline()
         // Measure 4 — metronome only: dotted quarter = 72
         .note(p("E", 4), Duration::QTR)
-        .tempo(TempoMark::Metronome {
-            note_kind: MetronomeNoteKind::Quarter,
-            dotted: true,
-            bpm: 72,
-        })
+        .tempo(TempoMark::metronome(MetronomeMark::bpm(MetronomeUnit::dotted(MetronomeNoteKind::Quarter), 72)))
         .note(p("D", 4), Duration::QTR)
         .rest(Duration::HALF)
         .end_barline()
