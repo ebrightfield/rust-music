@@ -73,7 +73,6 @@ pub fn layout_analysis_bracket(
     top: f64,
     bottom: f64,
     staff_space: f64,
-    lane: usize,
     start_hook: bool,
     end_hook: bool,
     show_label: bool,
@@ -82,8 +81,8 @@ pub fn layout_analysis_bracket(
         return None;
     }
     let y = match spec.placement {
-        Placement::Above => staff_top.min(top) - staff_space * (0.95 + lane as f64 * 0.75),
-        Placement::Below => staff_bottom.max(bottom) + staff_space * (0.95 + lane as f64 * 0.75),
+        Placement::Above => staff_top.min(top) - staff_space * 0.95,
+        Placement::Below => staff_bottom.max(bottom) + staff_space * 0.95,
     };
     Some(AnalysisBracketLayout {
         x_start,

@@ -305,8 +305,10 @@ fn draw_segments(
         }
         segments.extend(pending);
     }
-    // Occupied horizontal lanes on each system, separately per above/below.
-    let mut occupied: Vec<Vec<(f64, f64, Placement, usize)>> = vec![Vec::new(); systems.len()];
+    // Resolve local brackets first so incoming/outgoing segments choose lanes
+    // outside them in the page pass, matching positions already drawn per system.
+    segments.sort_by_key(|segment| segment.cross_system);
+    let mut occupied: Vec<Vec<(f64, f64, Placement, f64)>> = vec![Vec::new(); systems.len()];
     for segment in segments {
         let sys = segment.system_index;
         let (_, x, y) = systems[sys];
@@ -334,15 +336,8 @@ fn draw_segments(
             .fold(0.0_f64, f64::max)
             + y
             + ss * 4.0;
-        let lane = (0..)
-            .find(|lane| {
-                !occupied[sys].iter().any(|(a, b, side, n)| {
-                    *side == segment.open.spec.placement && *n == *lane && left < *b && right > *a
-                })
-            })
-            .unwrap();
         let staff = StaffLayout::new(x, y, systems[sys].0.staff_width, ss);
-        if let Some(layout) = layout_analysis_bracket(
+        if let Some(mut layout) = layout_analysis_bracket(
             segment.open.spec,
             left,
             right,
@@ -351,15 +346,22 @@ fn draw_segments(
             top,
             bottom,
             ss,
-            lane,
             segment.first,
             segment.last,
             segment.first && segment.cross_system == cross_system,
         ) {
+            for &(a, b, side, existing_y) in &occupied[sys] {
+                if side == layout.placement && left < b && right > a {
+                    layout.y = match side {
+                        Placement::Above => layout.y.min(existing_y - ss * 0.75),
+                        Placement::Below => layout.y.max(existing_y + ss * 0.75),
+                    };
+                }
+            }
             if segment.cross_system == cross_system {
                 draw_analysis_bracket(svg, &layout);
             }
-            occupied[sys].push((left, right, segment.open.spec.placement, lane));
+            occupied[sys].push((left, right, segment.open.spec.placement, layout.y));
         }
     }
     Ok(())

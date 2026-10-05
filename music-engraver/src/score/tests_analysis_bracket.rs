@@ -325,3 +325,40 @@ fn tuplet_member_bracket_anchors_across_inline_barline() {
         .expect("bracket line on tuplet member");
     assert!(attr(segment, "x2") > xs[0][2]);
 }
+
+#[test]
+fn continuation_avoids_a_local_bracket_on_the_same_staff() {
+    let score = ScoreBuilder::new()
+        .measures_per_system(1)
+        .note(p(Note::C, 5), Duration::QTR)
+        .analysis_bracket_start(bracket(AnalysisBracketStyle::Dashed, Placement::Below))
+        .note(p(Note::D, 5), Duration::QTR)
+        .analysis_bracket_start(bracket(AnalysisBracketStyle::Solid, Placement::Below))
+        .note(p(Note::E, 5), Duration::QTR)
+        .analysis_bracket_end()
+        .barline()
+        .note(p(Note::F, 5), Duration::QTR)
+        .analysis_bracket_end()
+        .end_barline();
+    let xs = event_xs(&score);
+    let svg = score.render_svg();
+    let crossing = svg
+        .lines()
+        .find(|line| {
+            line.contains("stroke-dasharray") && (attr(line, "x1") - xs[0][0]).abs() < 0.001
+        })
+        .unwrap();
+    let local = svg
+        .lines()
+        .find(|line| {
+            line.contains("<line ")
+                && !line.contains("stroke-dasharray")
+                && (attr(line, "x1") - xs[0][1]).abs() < 0.001
+                && (attr(line, "y1") - attr(line, "y2")).abs() < 0.001
+        })
+        .unwrap();
+    assert!(
+        attr(crossing, "y1") - attr(local, "y1")
+            >= bravura_font().engraving_config().staff_space * 0.75
+    );
+}
