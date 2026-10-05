@@ -108,11 +108,99 @@ fn annotations_on_tuplets_and_beam_members_have_visible_endpoints() {
         .note(p(Note::D), Duration::EIGHTH).end_beam().end_tuplet().end_barline();
     let svg = builder.clone().render_svg();
     assert!(svg.contains(">hap<") && svg.contains(">py<"));
-    assert!(svg.contains("<polygon"), "tie or beam filled geometry");
+    assert!(svg.lines().filter(|line| line.starts_with("  <path ") && !line.contains("transform=")).count() >= 2,
+        "both the slur and tie curves must reach beamed tuplet members");
     let events = builder.build_measure_contents();
     let notes: Vec<_> = events[0].events.iter().filter_map(|event| match event {
         MeasureEvent::Note(n) => Some(n), _ => None
     }).collect();
     assert!(notes[0].annotations.slur_start && notes[0].annotations.tie_forward);
     assert!(notes[1].annotations.slur_end);
+}
+
+#[test]
+fn malformed_group_spans_return_specific_render_errors() {
+    use crate::error::EngraverError;
+    use crate::score::GroupSpanError;
+
+    let nested = ScoreBuilder::new().begin_beam().note(p(Note::C), Duration::EIGHTH)
+        .begin_beam().note(p(Note::D), Duration::EIGHTH).end_beam().end_barline();
+    assert!(matches!(nested.try_render_svg(),
+        Err(EngraverError::Group(GroupSpanError::NestedBeam { .. }))));
+
+    let unbeamable = ScoreBuilder::new().begin_beam()
+        .note(p(Note::C), Duration::QTR).end_beam().end_barline();
+    assert!(matches!(unbeamable.try_render_svg(),
+        Err(EngraverError::Group(GroupSpanError::UnbeamableNote { .. }))));
+
+    let open = ScoreBuilder::new().begin_tuplet(TupletSpec::new(3, 2))
+        .rest(Duration::EIGHTH).end_barline();
+    assert!(matches!(open.try_render_svg(),
+        Err(EngraverError::Group(GroupSpanError::UnclosedTuplet { .. }))));
+}
+
+#[test]
+fn nested_tuplet_onsets_apply_both_ratios_to_mixed_members() {
+    use crate::layout::group::scan_groups;
+    use crate::layout::system::layout_system;
+    use crate::layout::measure::MeasureLayoutConfig;
+    let builder = ScoreBuilder::new().begin_tuplet(TupletSpec::new(3, 2))
+        .note(p(Note::C), Duration::QTR)
+        .begin_tuplet(TupletSpec::new(5, 4))
+        .rest(Duration::EIGHTH)
+        .chord(vec![p(Note::D), p(Note::Fis)], Duration::EIGHTH)
+        .end_tuplet().end_tuplet().end_barline();
+    let contents = builder.build_measure_contents();
+    let cfg = MeasureLayoutConfig::from_staff_space(bravura_font().engraving_config().staff_space);
+    let system = layout_system(&builder.build_prefix(), &contents, &cfg, None);
+    let elements = &system.measures[0].layout.elements;
+    let scan = scan_groups(elements.iter().map(|item| &item.element));
+    let notes: Vec<_> = elements.iter().enumerate().filter(|(_, item)| matches!(
+        item.element, crate::layout::measure::MeasureElement::Note(_)
+            | crate::layout::measure::MeasureElement::Chord(_)
+            | crate::layout::measure::MeasureElement::Rest(_)
+    )).map(|(index, item)| (scan.onsets[index], &item.element)).collect();
+    assert_eq!(notes.len(), 3);
+    assert!((notes[1].0 - 1.0 / 6.0).abs() < 1e-9, "nested rest begins after outer quarter");
+    assert!((notes[2].0 - (1.0 / 6.0 + 1.0 / 8.0 * 2.0 / 3.0 * 4.0 / 5.0)).abs() < 1e-9);
+}
+
+#[test]
+fn glissando_and_dynamic_attach_to_group_member_noteheads() {
+    use crate::layout::dynamics::Dynamic;
+    use crate::layout::glissando::{GlissandoStyle, GLISSANDO_H_PADDING_SS};
+    use crate::layout::hairpin::HairpinType;
+    let builder = ScoreBuilder::new().begin_beam()
+        .note(p(Note::C), Duration::EIGHTH)
+        .glissando(GlissandoStyle::LineWithText)
+        .dynamic(Dynamic::Piano).hairpin_start(HairpinType::Crescendo)
+        .note(p(Note::G), Duration::EIGHTH)
+        .note(p(Note::A), Duration::EIGHTH).hairpin_end()
+        .end_beam().end_barline();
+    let svg = builder.render_svg();
+    let head = bravura_font().glyph_outline(smufl::Glyph::NoteheadBlack).unwrap().path_data;
+    let heads: Vec<f64> = svg.lines().filter(|line| line.contains(&head))
+        .filter_map(|line| line.split("translate(").nth(1))
+        .map(|xy| xy.split(',').next().unwrap().parse::<f64>().unwrap()).collect();
+    assert_eq!(heads.len(), 3);
+    let gliss = svg.lines().find(|line| line.starts_with("  <line ")
+        && line.contains("stroke-width=\"20\"")).expect("slanted glissando must render");
+    let value = |key: &str| -> f64 {
+        gliss.split(&format!("{key}=\"")).nth(1).unwrap().split('"').next().unwrap().parse().unwrap()
+    };
+    let ss = bravura_font().engraving_config().staff_space;
+    assert!((value("x1") - (heads[0] + (1.18 + GLISSANDO_H_PADDING_SS) * ss)).abs() < 0.01);
+    assert!((value("x2") - (heads[1] - GLISSANDO_H_PADDING_SS * ss)).abs() < 0.01);
+    assert!(svg.contains("gliss."), "the start member's labeled glissando stays visible");
+    let piano = bravura_font().glyph_outline(smufl::Glyph::DynamicPiano).unwrap().path_data;
+    assert!(svg.contains(&piano), "the start member's dynamic stays visible");
+    let ends: Vec<f64> = svg.lines().filter(|line| line.starts_with("  <line "))
+        .filter_map(|line| {
+            let attr = |key: &str| -> Option<f64> {
+                line.split(&format!("{key}=\"")).nth(1)?.split('"').next()?.parse().ok()
+            };
+            (attr("y1")? > 1000.0 && attr("y2")? > 1000.0
+                && (attr("x2")? - (heads[2] - 0.3 * ss)).abs() < 1.0).then(|| attr("x2").unwrap())
+        }).collect();
+    assert_eq!(ends.len(), 2, "both hairpin edges end beside the final beamed note");
 }
