@@ -2400,7 +2400,10 @@ impl ScoreBuilder {
                 if measure.timing.cadenza {
                     None
                 } else {
-                    measure.timing.partial.or(measure.timing.length_override)
+                    measure
+                        .timing
+                        .partial
+                        .or(measure.timing.length_override)
                         .or_else(|| length_meter.map(|meter| meter.kind.measure_length()))
                 }
             });
@@ -2503,7 +2506,10 @@ impl ScoreBuilder {
             } else if measure.timing.cadenza {
                 None
             } else {
-                measure.timing.partial.or(measure.timing.length_override)
+                measure
+                    .timing
+                    .partial
+                    .or(measure.timing.length_override)
                     .or_else(|| meter.as_ref().map(|meter| meter.kind.measure_length()))
             };
             let nominal_length = one_bar_length.map(|bar| {
