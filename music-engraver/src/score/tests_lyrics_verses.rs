@@ -221,8 +221,8 @@ fn c12_r002_unbeamed_rest_triplet_keeps_german_skip_on_its_own_verse() {
         ("hab", 1.880, "Angst,", 3.239),
         ("Angst,", 3.239, "Sodo.", 2.847),
     ] {
-        let centers = attribute(text_element(&svg, second), "x")
-            - attribute(text_element(&svg, first), "x");
+        let centers =
+            attribute(text_element(&svg, second), "x") - attribute(text_element(&svg, first), "x");
         let required = (first_em + second_em) * 0.5 * 1.4 * 250.0 + 0.2 * 250.0;
         assert!(
             centers >= required,

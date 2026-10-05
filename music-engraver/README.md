@@ -58,6 +58,8 @@ std::fs::write("score.svg", &svg).unwrap();
   across measure and system breaks, even when another voice is entered last;
   `.lyric_verse_on_voice(voice, verse, syllable, style)` targets one event
   without changing the persistent association. Verse numbers begin at 1.
+  Serif glyph widths and visible hyphens reserve incompressible space during
+  justification; multi-staff systems expand inter-stave gaps for lower verses.
 
 ## Publication boundary
 

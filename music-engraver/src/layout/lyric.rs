@@ -138,11 +138,8 @@ pub(crate) const LYRIC_HYPHEN_GAP_SS: f64 =
 /// especially in italic words with accented letters. Reserve that width
 /// before compressing note springs, and use the same edges for continuations.
 pub(crate) fn lyric_text_width(text: &str, style: LyricStyle, staff_space: f64) -> f64 {
-    crate::layout::text_script::estimate_text_width(
-        text,
-        LYRIC_FONT_SIZE_SS * staff_space,
-        style,
-    ) * 1.4
+    crate::layout::text_script::estimate_text_width(text, LYRIC_FONT_SIZE_SS * staff_space, style)
+        * 1.4
 }
 
 /// Lay out a lyric syllable below the staff.

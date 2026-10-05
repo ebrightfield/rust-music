@@ -1569,7 +1569,12 @@ fn lyric_extender_across_barline() {
             meta: MeasureMeta::default(),
         },
     ];
-    let system = layout_system(&treble_prefix(), &measures, &mcfg, Some(20.0 * config.staff_space));
+    let system = layout_system(
+        &treble_prefix(),
+        &measures,
+        &mcfg,
+        Some(20.0 * config.staff_space),
+    );
 
     let mut svg = make_svg();
     draw_system(&mut svg, &font, &config, &system, 0.0, 0.0).unwrap();
@@ -1591,7 +1596,12 @@ fn lyric_extender_across_barline() {
             meta: MeasureMeta::default(),
         },
     ];
-    let sys_no = layout_system(&treble_prefix(), &measures_no, &mcfg, Some(20.0 * config.staff_space));
+    let sys_no = layout_system(
+        &treble_prefix(),
+        &measures_no,
+        &mcfg,
+        Some(20.0 * config.staff_space),
+    );
     let mut svg_no = make_svg();
     draw_system(&mut svg_no, &font, &config, &sys_no, 0.0, 0.0).unwrap();
 
