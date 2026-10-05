@@ -17,6 +17,7 @@ use crate::layout::key_signature::KeySignature;
 #[cfg(test)]
 use crate::layout::measure::MeasureLayout;
 use crate::layout::measure::{MeasureElement, NoteAnnotations, NoteheadStyle};
+use crate::layout::measure_meta::LineBreak;
 use crate::layout::note_placement::pitch_to_staff_position;
 use crate::layout::staff::StaffLayout;
 use crate::layout::system::{ClefKind, SystemLayout};
@@ -928,6 +929,8 @@ pub(crate) struct GuitarClefChange {
 pub(crate) struct GuitarMeasure {
     pub(crate) voices: BTreeMap<u8, Vec<GuitarGroup>>,
     pub(crate) barline: BarlineStyle,
+    /// Line-break permission after this measure.
+    pub(crate) line_break: LineBreak,
     /// Meter change at the start of this measure.
     pub(crate) time_signature_change: Option<(u8, u8)>,
     pub(crate) clef_changes: Vec<GuitarClefChange>,
@@ -1230,6 +1233,8 @@ pub enum GuitarScoreError {
     },
     #[error("the current measure is empty")]
     EmptyMeasure,
+    #[error("a system break or no-break must directly follow a completed measure")]
+    LineBreakNotAtBarline,
     #[error("a time signature change must precede the first event of its measure")]
     MidMeasureTimeSignatureChange,
 }
@@ -1943,6 +1948,7 @@ impl GuitarScore {
         self.measures.push(GuitarMeasure {
             voices: std::mem::take(&mut self.current_voices),
             barline,
+            line_break: LineBreak::Auto,
             time_signature_change: self.pending_time_signature_change.take(),
             clef_changes: std::mem::take(&mut self.pending_clef_changes),
         });
@@ -1956,6 +1962,39 @@ impl GuitarScore {
 
     pub fn end_barline(&mut self) -> Result<&mut Self, GuitarScoreError> {
         self.end_measure(BarlineStyle::Final)
+    }
+
+    /// Force a system break after the most recently completed measure
+    /// (LilyPond `\break` at a barline). Standard notation and TAB break
+    /// together, in every breaking mode of [`MultiStaffScore`].
+    ///
+    /// # Errors
+    ///
+    /// [`GuitarScoreError::LineBreakNotAtBarline`] when the current measure
+    /// already holds events or no measure has been completed yet.
+    pub fn system_break(&mut self) -> Result<&mut Self, GuitarScoreError> {
+        self.set_line_break(LineBreak::Force)
+    }
+
+    /// Forbid a system break after the most recently completed measure
+    /// (LilyPond `\noBreak` at a barline).
+    ///
+    /// # Errors
+    ///
+    /// As for [`Self::system_break`].
+    pub fn no_break(&mut self) -> Result<&mut Self, GuitarScoreError> {
+        self.set_line_break(LineBreak::Forbid)
+    }
+
+    fn set_line_break(&mut self, kind: LineBreak) -> Result<&mut Self, GuitarScoreError> {
+        if !self.current_voices.values().all(Vec::is_empty) {
+            return Err(GuitarScoreError::LineBreakNotAtBarline);
+        }
+        self.measures
+            .last_mut()
+            .ok_or(GuitarScoreError::LineBreakNotAtBarline)?
+            .line_break = kind;
+        Ok(self)
     }
 
     pub fn try_render_svg(mut self) -> Result<String, EngraverError> {
@@ -2222,6 +2261,11 @@ impl GuitarScore {
                 active_clef = change.clef;
             }
             score = score.barline_style(measure.barline);
+            score = match measure.line_break {
+                LineBreak::Auto => score,
+                LineBreak::Force => score.system_break(),
+                LineBreak::Forbid => score.no_break(),
+            };
         }
         score
     }
@@ -3386,10 +3430,18 @@ pub(crate) fn draw_guitar_tab_system(
             }
         }
 
-        if let Some(barline_x) = system_measure.layout.elements.iter().find_map(|element| {
-            matches!(element.element, MeasureElement::Barline(_))
-                .then_some(tab_staff.x + system_measure.x_offset + element.x)
-        }) {
+        // The measure's closing barline is its last `Barline` element; any
+        // earlier ones are inline barlines.
+        if let Some(barline_x) = system_measure
+            .layout
+            .elements
+            .iter()
+            .rev()
+            .find_map(|element| {
+                matches!(element.element, MeasureElement::Barline(_))
+                    .then_some(tab_staff.x + system_measure.x_offset + element.x)
+            })
+        {
             super::tab::draw_measure_barline(
                 svg,
                 font,

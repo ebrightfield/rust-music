@@ -28,6 +28,7 @@ pub mod grace;
 pub mod group;
 pub mod hairpin;
 pub mod key_signature;
+pub(crate) mod line_break;
 pub mod lyric;
 pub mod measure;
 pub mod measure_meta;

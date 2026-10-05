@@ -34,7 +34,8 @@ pub struct MeasureContent {
 }
 
 /// An event within a measure: a rhythmic event (note, rest, chord, group,
-/// spacer) or a zero-duration structural change (clef, time signature).
+/// spacer) or a zero-duration inline barline or structural change (clef,
+/// time signature).
 ///
 /// Structural changes travel in the primary voice's `events`, ordered by
 /// onset. Changes at the very start of a measure (its *leading changes*) are
@@ -57,6 +58,10 @@ pub enum MeasureEvent {
         /// Visual style (H-bar or church-rest).
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// A zero-duration barline inside the measure (LilyPond `\bar` between
+    /// bar checks). It neither ends the measure nor resets its accidentals;
+    /// the measure's closing barline is [`MeasureContent::barline`].
+    Barline(BarlineStyle),
     /// Invisible rhythmic placeholder (LilyPond spacer `s`).
     Spacer(SpacerEvent),
     /// Clef change (zero duration); every later pitch on the staff is placed
@@ -641,6 +646,81 @@ fn scale_measure_springs(layout: &mut MeasureLayout, s: f64) {
     layout.total_width = layout.total_rod + layout.total_spring;
 }
 
+/// A zero-spring measure cannot be stretched by `scale_measure_springs`
+/// (typically it contains only a barline). Put the missing whitespace before
+/// its closing barline instead, so that an empty stave shares the same boundary
+/// as a sounding stave without changing any glyph's advance.
+fn fit_measure_column(layout: &mut MeasureLayout, width: f64) {
+    if layout.total_spring > 0.0 {
+        let scale = spring_scale(layout.total_rod, layout.total_spring, width);
+        scale_measure_springs(layout, scale);
+    } else if width > layout.total_width {
+        let gap = width - layout.total_width;
+        if let Some(last_barline) = layout
+            .elements
+            .iter()
+            .rposition(|element| matches!(element.element, MeasureElement::Barline(_)))
+        {
+            for element in &mut layout.elements[last_barline..] {
+                element.x += gap;
+            }
+        }
+        layout.total_spring += gap;
+        layout.total_width = width;
+    }
+}
+
+/// Give staves sharing a system the same measure boundaries.
+///
+/// Each stave is first laid out at natural width. The widest rod and spring
+/// of each measure column define a shared system, whose springs are fitted
+/// once to `target_width`. Then each stave's own springs fit that column,
+/// preserving incompressible glyph widths and aligning closing barlines.
+pub(crate) fn align_system_measure_boundaries(systems: &mut [SystemLayout], target_width: f64) {
+    if systems.len() < 2 {
+        return;
+    }
+    let count = systems
+        .iter()
+        .map(|system| system.measures.len())
+        .max()
+        .unwrap_or(0);
+    let columns: Vec<(f64, f64)> = (0..count)
+        .map(|index| {
+            systems
+                .iter()
+                .filter_map(|system| system.measures.get(index))
+                .fold((0.0_f64, 0.0_f64), |(rod, spring), measure| {
+                    (
+                        rod.max(measure.layout.total_rod),
+                        spring.max(measure.layout.total_spring),
+                    )
+                })
+        })
+        .collect();
+    let rods: f64 = columns.iter().map(|(rod, _)| rod).sum();
+    let springs: f64 = columns.iter().map(|(_, spring)| spring).sum();
+    let shared_scale = spring_scale(rods, springs, target_width);
+    let widths: Vec<f64> = columns
+        .iter()
+        .map(|(rod, spring)| rod + spring * shared_scale)
+        .collect();
+
+    for system in systems {
+        let mut x = 0.0;
+        for (measure, &width) in system.measures.iter_mut().zip(&widths) {
+            fit_measure_column(&mut measure.layout, width);
+            for voice in &mut measure.additional_voice_layouts {
+                fit_measure_column(voice, width);
+            }
+            measure.x_offset = x;
+            x += measure.layout.total_width;
+        }
+        system.total_width = x;
+        system.staff_width = target_width.max(x);
+    }
+}
+
 pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
     match event {
         MeasureEvent::Note(n) => MeasureElement::Note(n.clone()),
@@ -651,6 +731,7 @@ pub(crate) fn measure_event_to_element(event: &MeasureEvent) -> MeasureElement {
             count: *count,
             style: *style,
         },
+        MeasureEvent::Barline(style) => MeasureElement::Barline(*style),
         MeasureEvent::Spacer(spacer) => MeasureElement::Spacer(*spacer),
         MeasureEvent::ClefChange(change) => MeasureElement::Clef(change.clef_layout()),
         MeasureEvent::TimeSignature(kind) => MeasureElement::TimeSignature(kind.clone()),

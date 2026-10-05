@@ -60,13 +60,14 @@ use crate::layout::grace::GraceNotes;
 use crate::layout::hairpin::{HairpinType, NientePlacement};
 use crate::layout::group::{BeamSpec, GroupMark, TupletSpec};
 use crate::layout::key_signature::KeySignature;
+use crate::layout::line_break::{LineBreakPlan, LineBreakRequest};
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations, NoteSize, StemVisibility};
-use crate::layout::measure_meta::{MeasureLength, MeasureMeta};
+use crate::layout::measure_meta::{LineBreak, MeasureLength, MeasureMeta};
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
-use crate::layout::page::{layout_page, PageLayoutConfig, SystemBreaking};
+use crate::layout::page::{layout_page, PageLayout, PageLayoutConfig, SystemBreaking};
 use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
 use crate::layout::system::{
@@ -128,16 +129,20 @@ pub enum ScoreStructureError {
 fn force_stem_direction(event: &mut MeasureEvent, voice: usize) {
     let dir = groups::voice_stem_direction(voice);
     match event {
-        MeasureEvent::Note(n) => {
-            n.stem_direction.get_or_insert(dir);
+        MeasureEvent::Note(note) => {
+            note.stem_direction.get_or_insert(dir);
         }
-        MeasureEvent::Chord(c) => {
-            c.stem_direction.get_or_insert(dir);
+        MeasureEvent::Chord(chord) => {
+            chord.stem_direction.get_or_insert(dir);
         }
-        // Span marks, structural changes, spacers and rests have no stem.
-        MeasureEvent::GroupMark(_) | MeasureEvent::Rest(_)
-        | MeasureEvent::MultiMeasureRest { .. } | MeasureEvent::Spacer(_)
-        | MeasureEvent::ClefChange(_) | MeasureEvent::TimeSignature(_) => {}
+        // Span marks, barlines, spacers, structural changes and rests have no stem.
+        MeasureEvent::GroupMark(_)
+        | MeasureEvent::Rest(_)
+        | MeasureEvent::MultiMeasureRest { .. }
+        | MeasureEvent::Spacer(_)
+        | MeasureEvent::Barline(_)
+        | MeasureEvent::ClefChange(_)
+        | MeasureEvent::TimeSignature(_) => {}
     }
 }
 
@@ -190,6 +195,10 @@ pub struct ScoreBuilder {
     pub(crate) auto_breaks: bool,
     /// Use optimal (Knuth-Plass style DP) line breaking instead of greedy.
     pub(crate) optimal_breaks: bool,
+    /// Break systems only where `system_break()` was called.
+    pub(crate) explicit_breaks: bool,
+    /// `system_break()` / `no_break()` calls, in call order.
+    line_break_requests: Vec<LineBreakRequest>,
     /// Which measures print their number.
     pub(crate) measure_numbering: MeasureNumbering,
     /// Whether we are currently inside a volta bracket region.
@@ -223,6 +232,8 @@ impl ScoreBuilder {
             system_width: 0.0,
             auto_breaks: false,
             optimal_breaks: false,
+            explicit_breaks: false,
+            line_break_requests: Vec::new(),
             measure_numbering: MeasureNumbering::Hidden,
             in_volta: false,
             volta_text: None,
@@ -441,9 +452,13 @@ impl ScoreBuilder {
     }
 
     /// Set the number of measures per system for line breaking.
+    ///
+    /// Explicit [`system_break`](Self::system_break)s still apply; the count
+    /// restarts after each one.
     pub fn measures_per_system(mut self, n: usize) -> Self {
         self.measures_per_system = n;
         self.auto_breaks = false;
+        self.explicit_breaks = false;
         self
     }
 
@@ -458,6 +473,7 @@ impl ScoreBuilder {
     pub fn auto_line_breaks(mut self) -> Self {
         self.auto_breaks = true;
         self.optimal_breaks = false;
+        self.explicit_breaks = false;
         self
     }
 
@@ -473,6 +489,79 @@ impl ScoreBuilder {
     pub fn optimal_line_breaks(mut self) -> Self {
         self.optimal_breaks = true;
         self.auto_breaks = false;
+        self.explicit_breaks = false;
+        self
+    }
+
+    /// Break systems only where [`system_break`](Self::system_break) was
+    /// called (LilyPond's `line-break-permission ##f`). Everything between
+    /// two explicit breaks shares one system, compressed to the system width
+    /// even when it overflows.
+    ///
+    /// Overrides any previous `measures_per_system`, `auto_line_breaks`, or
+    /// `optimal_line_breaks` setting.
+    pub fn explicit_line_breaks(mut self) -> Self {
+        self.explicit_breaks = true;
+        self.auto_breaks = false;
+        self.optimal_breaks = false;
+        self
+    }
+
+    /// Force a system break at the current position (LilyPond `\break`).
+    ///
+    /// The position is the end of the primary voice (voice 0) as entered so
+    /// far:
+    /// - right after `barline()` (or any measure-closing call), or before the
+    ///   first event of a measure, the break falls on that barline;
+    /// - after the last event of a measure, it falls on the measure's
+    ///   closing barline;
+    /// - inside a measure, the measure is split across two systems at that
+    ///   onset. The first piece ends with the inline barline at that point
+    ///   (see [`inline_barline`](Self::inline_barline); an invisible one when
+    ///   there is none). The logical measure keeps one measure number and
+    ///   one accidental state across the break.
+    ///
+    /// Every breaking mode honors explicit breaks. A break before the first
+    /// measure or after the final barline has no effect.
+    pub fn system_break(self) -> Self {
+        self.request_line_break(LineBreak::Force)
+    }
+
+    /// Forbid a system break at the current position (LilyPond `\noBreak`),
+    /// positioned like [`system_break`](Self::system_break). Measures joined
+    /// by forbidden breaks stay on one system in every breaking mode. Inside a
+    /// measure there is nothing to forbid: systems break inside a measure
+    /// only at an explicit `system_break()`. The last call at a position wins.
+    pub fn no_break(self) -> Self {
+        self.request_line_break(LineBreak::Forbid)
+    }
+
+    fn request_line_break(mut self, kind: LineBreak) -> Self {
+        let position = self
+            .current_events
+            .iter()
+            .filter(|(voice, _)| *voice == 0)
+            .count();
+        self.line_break_requests.push(LineBreakRequest {
+            measure: self.measures.len(),
+            position,
+            kind,
+        });
+        self
+    }
+
+    /// Insert a barline inside the current measure (LilyPond `\bar` between
+    /// bar checks, e.g. the dashed `\bar "!"` subdividing a long bar or the
+    /// invisible `\bar ""` marking a break point).
+    ///
+    /// The barline takes no musical time: it does not end the measure,
+    /// advance the measure number, or reset accidentals. It belongs to the
+    /// primary voice (voice 0) and follows the voice-0 events entered so far,
+    /// whatever voice is active. A [`BarlineStyle::Invisible`] barline takes
+    /// no space; a following [`system_break`](Self::system_break) breaks the
+    /// system there.
+    pub fn inline_barline(mut self, style: BarlineStyle) -> Self {
+        self.current_events.push((0, ScoreEvent::Barline(style)));
         self
     }
 
@@ -504,8 +593,8 @@ impl ScoreBuilder {
                     return Some(annotations);
                 }
                 ScoreEvent::Rest { .. } | ScoreEvent::MultiMeasureRest { .. }
-                | ScoreEvent::Spacer { .. } | ScoreEvent::ClefChange(_)
-                | ScoreEvent::TimeSignatureChange(_) => return None,
+                | ScoreEvent::Spacer { .. } | ScoreEvent::Barline(_)
+                | ScoreEvent::ClefChange(_) | ScoreEvent::TimeSignatureChange(_) => return None,
             }
         }
         None
@@ -2061,6 +2150,10 @@ impl ScoreBuilder {
 
     /// End the current measure with a specific barline style.
     /// Resets the active voice to 0.
+    ///
+    /// [`BarlineStyle::Invisible`] closes the measure without drawing a
+    /// barline; as the last call it ends the piece with no final barline,
+    /// e.g. on an incomplete bar.
     pub fn barline_style(mut self, style: BarlineStyle) -> Self {
         self.close_measure(style);
         self
@@ -2309,49 +2402,71 @@ impl ScoreBuilder {
         }
     }
 
-    /// Render the score to an SVG string.
-    ///
-    /// Flushes any pending events as a final measure (with `Final` barline)
-    /// if no explicit end barline was provided. Returns
-    /// [`crate::error::EngraverError::Group`] for malformed beam or tuplet
-    /// spans and [`crate::error::EngraverError::Font`] if font operations fail.
-    #[must_use = "the SVG string is returned but not used"]
-    pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
-        self.flush_pending();
-        self.validate_group_spans()?;
-
-        if self.measures.is_empty() {
-            return Ok(String::from(
-                "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
-            ));
-        }
-
-        let font = bravura_font();
-        let config = font.engraving_config();
-        let staff_space = config.staff_space;
-
-        let measure_contents = self.build_measure_contents()?;
-        let prefix = self.build_prefix();
-        let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
-        let sys_width = self.effective_system_width(staff_space);
-        let mut page_config = PageLayoutConfig::new(staff_space, sys_width);
-        page_config.measure_numbering = self.measure_numbering;
-        let breaking = if self.optimal_breaks {
+    /// The system-breaking policy selected on this builder.
+    pub(crate) fn system_breaking(&self) -> SystemBreaking {
+        if self.explicit_breaks {
+            SystemBreaking::Explicit
+        } else if self.optimal_breaks {
             SystemBreaking::Optimal
         } else if self.auto_breaks {
             SystemBreaking::Auto
         } else {
             SystemBreaking::Fixed(self.effective_measures_per_system())
-        };
+        }
+    }
 
-        let page_layout = layout_page(
+    /// This builder's `system_break()` / `no_break()` requests resolved
+    /// against its logical measures (from
+    /// [`build_measure_contents`](Self::build_measure_contents)).
+    pub(crate) fn line_break_plan(&self, logical: &[MeasureContent]) -> LineBreakPlan {
+        LineBreakPlan::from_requests(&self.line_break_requests, logical)
+    }
+
+    /// Flush any pending measure and lay the score out as a page: logical
+    /// measures with this builder's explicit line breaks applied, broken
+    /// into systems by its breaking policy. `None` when there are no measures.
+    pub(crate) fn page_layout(
+        &mut self,
+        staff_space: f64,
+    ) -> Result<Option<PageLayout>, ScoreStructureError> {
+        self.flush_pending();
+        if self.measures.is_empty() {
+            return Ok(None);
+        }
+
+        let logical = self.build_measure_contents()?;
+        let measure_contents = self.line_break_plan(&logical).apply(logical);
+        let prefix = self.build_prefix();
+        let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
+        let sys_width = self.effective_system_width(staff_space);
+        let mut page_config = PageLayoutConfig::new(staff_space, sys_width);
+        page_config.measure_numbering = self.measure_numbering;
+
+        Ok(Some(layout_page(
             &prefix,
             &measure_contents,
             &measure_config,
             &page_config,
-            &breaking,
-        );
+            &self.system_breaking(),
+        )))
+    }
 
+    /// Render the score to an SVG string, returning an error if font operations fail.
+    ///
+    /// Flushes any pending events as a final measure (with `Final` barline)
+    /// if no explicit end barline was provided; to end without one, close the
+    /// last measure with `barline_style(BarlineStyle::Invisible)`.
+    #[must_use = "the SVG string is returned but not used"]
+    pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
+        self.flush_pending();
+        self.validate_group_spans()?;
+        let font = bravura_font();
+        let config = font.engraving_config();
+        let Some(page_layout) = self.page_layout(config.staff_space)? else {
+            return Ok(String::from(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
+            ));
+        };
         Ok(draw_page(&font, &config, &page_layout)?.to_svg())
     }
 
@@ -2433,6 +2548,8 @@ impl Default for ScoreBuilder {
 mod tests;
 #[cfg(test)]
 mod tests_accidentals;
+#[cfg(test)]
+mod tests_barlines;
 #[cfg(test)]
 mod tests_breve;
 #[cfg(test)]

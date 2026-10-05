@@ -7816,6 +7816,20 @@
   for reordered beam drawing and formerly clipped lyrics were replaced
   with behavioral glyph/geometry checks; GuitarScore snapshots were not
   regenerated.
+## 2026-10-04 — G1/G2/G3/G15: inline barlines and explicit system breaks
+- Added `BarlineStyle::{Dashed,Invisible,Tick}`: dashed/tick use Bravura
+  SMuFL barline glyphs; invisible draws nothing and reserves no barline rod.
+  `ScoreBuilder::inline_barline(style)` inserts a zero-duration barline without
+  ending the logical measure or resetting its accidental state. Explicitly
+  close an incomplete final measure with `barline_style(Invisible)` to suppress
+  the final barline.
+- `system_break()` and `no_break()` control line breaks in fixed, greedy,
+  optimal, and explicit-only modes. A forced mid-measure break splits the
+  *visual* measure at its musical onset; continuation pieces keep the logical
+  bar number and already-resolved accidentals. Multi-staff scores share break
+  points across staves; guitar notation and TAB share measure-boundary breaks.
+- Verified with focused layout, score, TAB, and glyph regressions plus a PNG
+  smoke of mn-c04-r038's eight dashed inline barlines against its LilyPond PDF.
 ## 2026-10-04 — RM-MN-004/010: score structure and meter
 - Added onset-aware clef changes (including after-barline placement), printed and
   hidden meter changes, courtesy changes at system breaks, and Bravura change-size

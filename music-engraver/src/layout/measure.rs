@@ -429,7 +429,8 @@ pub enum MeasureElement {
     /// and space like a rest but draws nothing. A measure holding only
     /// spacers renders as an empty bar.
     Spacer(SpacerEvent),
-    /// Barline at the end of the measure.
+    /// A closing or inline barline; an inline barline neither ends the
+    /// logical measure nor resets its accidental state.
     Barline(BarlineStyle),
 }
 
@@ -889,6 +890,9 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                     // as rod so it neither compresses nor stretches.
                     (event_rod(0.0, 0, config) + spring(0, 1.0), 0.0, 0.0)
                 }
+                // An invisible barline marks a position (a break point or an
+                // unmarked end) without taking any space.
+                MeasureElement::Barline(style) if !style.is_visible() => (0.0, 0.0, 0.0),
                 MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
             };
 

@@ -15,6 +15,7 @@ use music::note::spelling::{Accidental, Spelling};
 use crate::layout::accidental::{
     accidental_glyph, AccidentalDisplay, AccidentalPolicy, ResolvedAccidental,
 };
+use crate::layout::barline::BarlineStyle;
 use crate::layout::grace::{GraceGroup, GraceNoteEvent};
 use crate::layout::key_signature::KeySignature;
 use crate::layout::group::{GroupMark, TupletSpec};
@@ -52,6 +53,9 @@ pub(crate) enum ScoreEvent {
         count: u32,
         style: crate::layout::multi_measure_rest::MultiMeasureRestStyle,
     },
+    /// Zero-duration inline barline inside the measure. It does not end the
+    /// measure, advance the measure number, or reset accidental state.
+    Barline(BarlineStyle),
     /// Invisible rhythmic placeholder: takes `duration` but draws nothing.
     Spacer {
         duration: Duration,
@@ -339,6 +343,7 @@ pub(crate) fn convert_resolved_event(
             count: *count,
             style: *style,
         },
+        ScoreEvent::Barline(style) => MeasureEvent::Barline(*style),
         ScoreEvent::Spacer { duration } => MeasureEvent::Spacer(SpacerEvent {
             duration_log2: duration_kind_to_log2(duration.kind()),
             dots: duration.num_dots(),
@@ -448,13 +453,14 @@ fn visit_pitches(
         ScoreEvent::Rest { duration } | ScoreEvent::Spacer { duration } => {
             return scaled_ticks(duration, scale, ratio);
         }
-        ScoreEvent::GroupMark(_) | ScoreEvent::MultiMeasureRest { .. }
+        ScoreEvent::GroupMark(_) | ScoreEvent::Barline(_) | ScoreEvent::MultiMeasureRest { .. }
         | ScoreEvent::ClefChange(_) | ScoreEvent::TimeSignatureChange(_) => return 0,
     };
     if let Some(graces) = &annotations.grace_notes {
         for grace in &graces.notes {
             visit(grace.pitch, Some(grace.accidental), true);
         }
+
     }
     for (index, pitch) in pitches.iter().enumerate() {
         visit(*pitch, pitch_display(annotations, index), false);

@@ -189,6 +189,7 @@ pub(crate) fn validate_group_spans(measures: &[CompletedMeasure]) -> Result<(), 
                     }
                 }
                 ScoreEvent::Spacer { .. }
+                | ScoreEvent::Barline(_)
                 | ScoreEvent::ClefChange(_)
                 | ScoreEvent::TimeSignatureChange(_) => {}
             }
