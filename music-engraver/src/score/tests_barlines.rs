@@ -23,6 +23,7 @@ fn staff_space() -> f64 {
 fn page(mut builder: ScoreBuilder) -> PageLayout {
     builder
         .page_layout(staff_space())
+        .expect("valid score")
         .expect("score has measures")
 }
 
@@ -134,7 +135,7 @@ fn inline_barline_stays_inside_its_measure_and_keeps_accidental_state() {
         .note(p(Note::Fis, 4), Q)
         .end_barline();
 
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     assert_eq!(
         contents.len(),
         2,
@@ -179,7 +180,7 @@ fn inline_barline_stays_inside_its_measure_and_keeps_accidental_state() {
 fn inline_barline_does_not_advance_the_measure_number() {
     let builder = ScoreBuilder::new()
         .measures_per_system(1)
-        .show_measure_numbers()
+        .measure_numbering(crate::layout::bar_number::MeasureNumbering::SystemStart)
         .note(p(Note::C, 5), Q)
         .inline_barline(BarlineStyle::Dashed)
         .note(p(Note::D, 5), Q)
@@ -187,10 +188,10 @@ fn inline_barline_does_not_advance_the_measure_number() {
         .note(p(Note::E, 5), Q)
         .end_barline();
     let page = page(builder);
-    let numbers: Vec<usize> = page
+    let numbers: Vec<i32> = page
         .systems
         .iter()
-        .map(|system| system.first_measure_number)
+        .map(|system| system.system.measures[0].meta.number)
         .collect();
     assert_eq!(numbers, vec![1, 2]);
 }
@@ -204,13 +205,15 @@ fn invisible_inline_barline_takes_no_space_and_dashed_takes_a_barline_rod() {
             .note(p(Note::D, 5), Q)
             .end_barline()
             .build_measure_contents()
+            .unwrap()
     };
     let plain = natural(
         &ScoreBuilder::new()
             .note(p(Note::C, 5), Q)
             .note(p(Note::D, 5), Q)
             .end_barline()
-            .build_measure_contents()[0],
+            .build_measure_contents()
+            .unwrap()[0],
     );
     let invisible = natural(&with(BarlineStyle::Invisible)[0]);
     let dashed = natural(&with(BarlineStyle::Dashed)[0]);
@@ -376,7 +379,7 @@ fn mid_measure_break_without_an_inline_barline_closes_the_piece_invisibly() {
         .system_break()
         .note(p(Note::D, 5), Q)
         .end_barline();
-    let logical = builder.build_measure_contents();
+    let logical = builder.build_measure_contents().unwrap();
     let pieces = builder.line_break_plan(&logical).apply(logical);
     assert_eq!(pieces.len(), 2);
     assert_eq!(pieces[0].barline, BarlineStyle::Invisible);
@@ -384,7 +387,7 @@ fn mid_measure_break_without_an_inline_barline_closes_the_piece_invisibly() {
     assert!(pieces[1].meta.continuation);
     assert_eq!(pieces[1].barline, BarlineStyle::Final);
     assert_eq!(
-        system_sizes(&builder.page_layout(staff_space()).unwrap()),
+        system_sizes(&builder.page_layout(staff_space()).unwrap().unwrap()),
         vec![1, 1]
     );
 }
@@ -400,7 +403,7 @@ fn grand_staff_systems(
         &MeasureLayoutConfig::from_staff_space(ss),
         40.0 * ss,
         4,
-    )
+    ).unwrap()
 }
 
 type StaveDataOf = crate::score::multi_staff::StaveData;

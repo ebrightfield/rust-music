@@ -9,6 +9,7 @@
 pub mod accidental;
 pub mod arpeggio;
 pub mod articulation;
+pub mod bar_number;
 pub mod barline;
 pub mod beam;
 pub(crate) mod bend_gesture;
@@ -22,6 +23,7 @@ pub mod dynamics;
 pub mod expression;
 pub mod flag;
 pub mod glissando;
+pub mod glyph_metrics;
 pub mod grace;
 pub mod hairpin;
 pub mod key_signature;

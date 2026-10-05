@@ -63,7 +63,11 @@ pub(crate) fn event_length(event: &MeasureEvent) -> MeasureLength {
                 )
             }
         }
-        MeasureEvent::MultiMeasureRest { .. } | MeasureEvent::Barline(_) => MeasureLength::ZERO,
+        MeasureEvent::Spacer(spacer) => written_length(spacer.duration_log2, spacer.dots),
+        MeasureEvent::MultiMeasureRest { .. }
+        | MeasureEvent::Barline(_)
+        | MeasureEvent::ClefChange(_)
+        | MeasureEvent::TimeSignature(_) => MeasureLength::ZERO,
     }
 }
 

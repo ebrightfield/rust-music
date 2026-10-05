@@ -43,7 +43,8 @@ fn breve_note_rest_and_chord_convert_to_breve_log2_with_dots() {
         .note(pitch(Note::G, 4), Duration::new(DurationKind::Breve, 1))
         .rest(Duration::WHOLE)
         .barline()
-        .build_measure_contents();
+        .build_measure_contents()
+        .unwrap();
 
     let MeasureEvent::Note(note) = &contents[0].events[0] else {
         panic!("measure 1 holds the breve note");
@@ -99,7 +100,8 @@ fn breve_members_of_beam_tuplet_and_styled_groups_keep_breve_log2() {
         .styled_beam_group(members())
         .styled_tuplet_ratio(3, 2, members())
         .barline()
-        .build_measure_contents();
+        .build_measure_contents()
+        .unwrap();
 
     let events = &contents[0].events;
     assert_eq!(member_log2s(&events[0]), vec![BREVE_LOG2; 2]);
@@ -117,7 +119,7 @@ fn guitar_breve_projects_breve_log2_to_standard_notation() {
     score.rest(breve());
     score.barline().unwrap();
 
-    let contents = score.notation_builder().build_measure_contents();
+    let contents = score.notation_builder().build_measure_contents().unwrap();
     let MeasureEvent::Note(note) = &contents[0].events[0] else {
         panic!("the fretted breve projects to a standard-staff note");
     };

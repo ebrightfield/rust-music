@@ -31,6 +31,13 @@ pub fn bravura_font() -> MusicFont<'static> {
         .expect("bundled Bravura OTF + metadata are compile-time constants validated by tests")
 }
 
+/// The bundled Bravura font, parsed once per process and shared.
+///
+/// Layout code reads glyph metrics (SMuFL bounding boxes, advances) from it so
+/// that reserved space matches what the renderers draw with [`bravura_font`].
+pub static BUNDLED_BRAVURA: std::sync::LazyLock<MusicFont<'static>> =
+    std::sync::LazyLock::new(bravura_font);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,6 @@
 use smufl::Glyph;
 
+use crate::layout::glyph_metrics::glyph_advance;
 use crate::layout::measure_meta::MeasureLength;
 
 /// Time signature display style.
@@ -11,6 +12,17 @@ pub enum TimeSignatureKind {
     Common,
     /// Cut time / alla breve symbol (₵).
     CutCommon,
+}
+
+/// A meter declaration: the time signature it shows and whether it is
+/// printed. A hidden meter keeps its metric meaning (the nominal measure
+/// length) but draws nothing, like LilyPond's `\omit TimeSignature`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TimeSignature {
+    /// What the signature shows when printed (and the meter it means).
+    pub kind: TimeSignatureKind,
+    /// Whether the signature is printed.
+    pub visible: bool,
 }
 
 impl TimeSignatureKind {
@@ -25,6 +37,12 @@ impl TimeSignatureKind {
             Self::Common => MeasureLength::new(4, 4),
             Self::CutCommon => MeasureLength::new(2, 2),
         }
+    }
+
+    /// Engraved width of this time signature in staff spaces: the wider of
+    /// its numerator and denominator rows, from the bundled font's advances.
+    pub fn width_ss(&self) -> f64 {
+        time_signature_layout(self, glyph_advance).width
     }
 }
 

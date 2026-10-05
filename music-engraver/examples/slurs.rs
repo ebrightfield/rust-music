@@ -27,7 +27,14 @@ fn main() {
     let mut svg = SvgWriter::new(1100.0, 200.0, 0.0, -200.0, 11000.0, 2000.0);
 
     draw_staff_lines(&mut svg, &staff, &config);
-    draw_clef(&mut svg, &staff, &clef_layout, &font).unwrap();
+    draw_clef(
+        &mut svg,
+        &staff,
+        staff.x + staff.staff_space,
+        &clef_layout,
+        &font,
+    )
+    .unwrap();
     let base_x = 900.0;
 
     let notehead_width = font.glyph_advance(smufl::Glyph::NoteheadBlack).unwrap_or(0) as f64;

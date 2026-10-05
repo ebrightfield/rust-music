@@ -15,7 +15,7 @@ use smufl::Glyph;
 /// `(staff_position, accidental glyph)` for each single-note event of measure 0.
 /// Every accidental here is automatic, hence never parenthesized.
 fn placed_notes(builder: &ScoreBuilder) -> Vec<(i8, Option<Glyph>)> {
-    builder.build_measure_contents()[0]
+    builder.build_measure_contents().unwrap()[0]
         .events
         .iter()
         .map(|event| match event {

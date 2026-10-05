@@ -1,8 +1,10 @@
+use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::key_signature::KeySignature;
 use crate::layout::measure::{layout_measure, MeasureElement, MeasureLayoutConfig};
 use crate::layout::measure_meta::LineBreak;
 use crate::layout::system::{
-    layout_system, measure_event_to_element, MeasureContent, SystemLayout, SystemPrefix,
+    layout_system_followed_by, measure_event_to_element, system_start_prefix, MeasureContent,
+    SystemLayout, SystemPrefix,
 };
 
 /// Configuration for page-level layout.
@@ -20,9 +22,9 @@ pub struct PageLayoutConfig {
     pub top_margin: f64,
     /// Staff space in font design units (from the font).
     pub staff_space: f64,
-    /// Whether to render measure numbers above the start of each system.
-    /// The first system shows "1" (or whatever the first measure number is).
-    pub show_measure_numbers: bool,
+    /// Which measures print their number (taken from each measure's
+    /// [`MeasureMeta::number`](crate::layout::measure_meta::MeasureMeta::number)).
+    pub measure_numbering: MeasureNumbering,
 }
 
 impl PageLayoutConfig {
@@ -36,7 +38,7 @@ impl PageLayoutConfig {
             left_margin: 0.0,
             top_margin: 0.0,
             staff_space,
-            show_measure_numbers: false,
+            measure_numbering: MeasureNumbering::Hidden,
         }
     }
 
@@ -55,9 +57,6 @@ pub struct PageSystem {
     pub y: f64,
     /// The laid-out system.
     pub system: SystemLayout,
-    /// 1-based measure number of the first measure in this system.
-    /// Used for rendering measure numbers above each system.
-    pub first_measure_number: usize,
 }
 
 /// A complete page of music: multiple systems stacked vertically.
@@ -69,8 +68,8 @@ pub struct PageLayout {
     pub page_width: f64,
     /// Total page height in font design units (from top margin to bottom of last system + some padding).
     pub page_height: f64,
-    /// Whether to render measure numbers above the start of each system.
-    pub show_measure_numbers: bool,
+    /// Which measures print their number.
+    pub measure_numbering: MeasureNumbering,
 }
 
 /// Policy for breaking measures into systems.
@@ -114,7 +113,7 @@ pub fn layout_page(
             systems: vec![],
             page_width: page_config.system_width + page_config.left_margin,
             page_height: page_config.top_margin,
-            show_measure_numbers: page_config.show_measure_numbers,
+            measure_numbering: page_config.measure_numbering,
         };
     }
 
@@ -129,25 +128,18 @@ pub fn layout_page(
     let mut systems = Vec::with_capacity(chunks.len());
     let mut y = page_config.top_margin;
 
-    for (i, (start, end)) in chunks.iter().enumerate() {
+    for (start, end) in &chunks {
         let slice = &measures[*start..*end];
 
-        // First system gets full prefix; subsequent systems get prefix without
-        // time signature (conventional: time sig only on first system).
-        let sys_prefix = if i == 0 {
-            prefix.clone()
-        } else {
-            SystemPrefix {
-                clef_layout: prefix.clef_layout.clone(),
-                clef_kind: prefix.clef_kind,
-                key_signature: prefix.key_signature.clone(),
-                time_signature: None,
-            }
-        };
+        // Each system starts with the clef in force there; the meter shows on
+        // the first system and wherever a printed meter change opens a system
+        // (conventional: no repeated time signature on continuation systems).
+        let sys_prefix = system_start_prefix(prefix, measures, *start);
 
-        let system = layout_system(
+        let system = layout_system_followed_by(
             &sys_prefix,
             slice,
+            measures.get(*end),
             measure_config,
             Some(page_config.system_width),
         );
@@ -156,7 +148,6 @@ pub fn layout_page(
             x: page_config.left_margin,
             y,
             system,
-            first_measure_number: start + 1, // 1-based
         });
 
         y += page_config.system_spacing_fu();
@@ -172,7 +163,7 @@ pub fn layout_page(
         systems,
         page_width: page_config.system_width + page_config.left_margin,
         page_height,
-        show_measure_numbers: page_config.show_measure_numbers,
+        measure_numbering: page_config.measure_numbering,
     }
 }
 

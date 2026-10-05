@@ -48,6 +48,7 @@ use crate::layout::accidental::AccidentalDisplay;
 use crate::layout::accidental::ResolvedAccidental;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::Articulation;
+use crate::layout::bar_number::MeasureNumbering;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
 use crate::layout::cresc_text::CrescTextKind;
@@ -59,17 +60,18 @@ use crate::layout::key_signature::KeySignature;
 use crate::layout::line_break::{LineBreakPlan, LineBreakRequest};
 use crate::layout::lyric::LyricSyllable;
 use crate::layout::measure::{MeasureLayoutConfig, NoteAnnotations};
-use crate::layout::measure_meta::LineBreak;
-use crate::layout::measure_meta::MeasureMeta;
+use crate::layout::measure_meta::{LineBreak, MeasureLength, MeasureMeta};
 use crate::layout::navigation::NavigationSign;
 use crate::layout::ornament::Ornament;
 use crate::layout::ottava::OttavaKind;
 use crate::layout::page::{layout_page, PageLayout, PageLayoutConfig, SystemBreaking};
 use crate::layout::pedal::PedalMark;
 use crate::layout::rehearsal::RehearsalStyle;
-use crate::layout::system::{ClefKind, MeasureContent, MeasureEvent, SystemPrefix};
+use crate::layout::system::{
+    ClefChange, ClefChangePlacement, ClefKind, MeasureContent, MeasureEvent, SystemPrefix,
+};
 use crate::layout::tempo::TempoMark;
-use crate::layout::time_signature::TimeSignatureKind;
+use crate::layout::time_signature::{TimeSignature, TimeSignatureKind};
 use crate::layout::tremolo::TremoloCount;
 use crate::layout::trill_extension::TrillWiggleSpeed;
 use crate::layout::volta::{VoltaAnnotation, VoltaHooks};
@@ -80,10 +82,41 @@ use event::{
     convert_event, duration_kind_to_log2, note_altered_in_key, note_key, resolve_accidental,
     should_show_accidental, AccidentalTracker,
 };
-use event::{convert_resolved_event, resolve_measure_accidentals, ScoreEvent};
+use event::{convert_resolved_event, measure_timeline, resolve_measure_accidentals, ScoreEvent};
 
-/// A completed measure: voiced events, barline style, and optional volta annotation.
-pub(crate) type CompletedMeasure = (Vec<(u8, ScoreEvent)>, BarlineStyle, Option<VoltaAnnotation>);
+/// Measure-level timing directives in force when a measure was closed.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct MeasureTiming {
+    /// Pickup length declared with [`ScoreBuilder::partial`].
+    partial: Option<MeasureLength>,
+    /// Nominal length set with [`ScoreBuilder::measure_length`].
+    length_override: Option<MeasureLength>,
+    /// Whether any part of the measure was in cadenza mode.
+    cadenza: bool,
+}
+
+/// A completed measure: voiced events, barline style, optional volta
+/// annotation, and its timing directives.
+#[derive(Clone, Debug)]
+pub(crate) struct CompletedMeasure {
+    pub(crate) events: Vec<(u8, ScoreEvent)>,
+    pub(crate) barline: BarlineStyle,
+    pub(crate) volta: Option<VoltaAnnotation>,
+    pub(crate) timing: MeasureTiming,
+}
+
+/// A score whose structure cannot be engraved as written.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ScoreStructureError {
+    /// A time-signature change was entered after the first event of a
+    /// measure. Meter changes take effect at a measure start; close the
+    /// measure with a barline first.
+    #[error("time signature change in measure {measure} (0-based) is not at the measure start")]
+    MidMeasureTimeSignatureChange {
+        /// 0-based index of the offending measure.
+        measure: usize,
+    },
+}
 
 /// Force stem direction on a `MeasureEvent` based on voice index.
 ///
@@ -101,11 +134,13 @@ fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
         MeasureEvent::Chord(c) => c.stem_direction = Some(dir),
         MeasureEvent::BeamGroup(bg) => bg.stem_direction = Some(dir),
         MeasureEvent::TupletGroup(tg) => tg.beam_group.stem_direction = Some(dir),
-        // Multi-measure rests, ordinary rests, and inline barlines have no
-        // stem to flip.
+        // Rests, spacers, barlines, and structural changes have no stem.
         MeasureEvent::Rest(_)
         | MeasureEvent::MultiMeasureRest { .. }
-        | MeasureEvent::Barline(_) => {}
+        | MeasureEvent::Spacer(_)
+        | MeasureEvent::Barline(_)
+        | MeasureEvent::ClefChange(_)
+        | MeasureEvent::TimeSignature(_) => {}
     }
 }
 
@@ -117,12 +152,22 @@ fn force_stem_direction(event: &mut MeasureEvent, voice: u8) {
 #[derive(Clone, Debug)]
 #[must_use = "a ScoreBuilder does nothing until .render_svg() or .try_render_svg() is called"]
 pub struct ScoreBuilder {
+    /// Clef at the start of the score.
     clef: ClefKind,
     key_sig: KeySignature,
-    time_sig: Option<(u8, u8)>,
-    /// Override for time signature display style (Common/CutCommon).
-    /// When None and time_sig is Some, uses Numeric display.
-    time_sig_kind: Option<TimeSignatureKind>,
+    /// Meter declared at the start of the score (`None` = unmetered).
+    time_signature: Option<TimeSignature>,
+    /// Number of the first measure that is not a pickup.
+    first_measure_number: i32,
+    /// Pickup length declared for the measure in progress.
+    pending_partial: Option<MeasureLength>,
+    /// Measure-length override in force (LilyPond `Timing.measureLength`);
+    /// cleared by meter changes and [`Self::reset_measure_length`].
+    length_override: Option<MeasureLength>,
+    /// Cadenza mode is on.
+    cadenza: bool,
+    /// Cadenza mode was on at some point of the measure in progress.
+    cadenza_in_measure: bool,
     /// Events accumulated for the current (in-progress) measure.
     /// Each entry is `(voice_index, event)` where voice 0 is the primary voice.
     current_events: Vec<(u8, ScoreEvent)>,
@@ -144,8 +189,8 @@ pub struct ScoreBuilder {
     pub(crate) explicit_breaks: bool,
     /// `system_break()` / `no_break()` calls, in call order.
     line_break_requests: Vec<LineBreakRequest>,
-    /// Display measure numbers above the start of each system.
-    pub(crate) show_measure_numbers: bool,
+    /// Which measures print their number.
+    pub(crate) measure_numbering: MeasureNumbering,
     /// Whether we are currently inside a volta bracket region.
     in_volta: bool,
     /// Text label for the current volta bracket (set on `.volta_start()`).
@@ -160,8 +205,12 @@ impl ScoreBuilder {
         Self {
             clef: ClefKind::Treble,
             key_sig: KeySignature::Open,
-            time_sig: None,
-            time_sig_kind: None,
+            time_signature: None,
+            first_measure_number: 1,
+            pending_partial: None,
+            length_override: None,
+            cadenza: false,
+            cadenza_in_measure: false,
             current_events: Vec::new(),
             measures: Vec::new(),
             current_voice: 0,
@@ -171,17 +220,72 @@ impl ScoreBuilder {
             optimal_breaks: false,
             explicit_breaks: false,
             line_break_requests: Vec::new(),
-            show_measure_numbers: false,
+            measure_numbering: MeasureNumbering::Hidden,
             in_volta: false,
             volta_text: None,
             volta_ending: false,
         }
     }
 
-    /// Set the clef.
+    /// Set the clef at the start of the score.
+    ///
+    /// Once content has begun (any event entered or measure closed), this
+    /// is a clef change: identical to [`Self::clef_change`]. It never
+    /// rewrites earlier measures.
     pub fn clef(mut self, clef: Clef) -> Self {
+        if self.has_content() {
+            return self.clef_change(clef);
+        }
         self.clef = ClefKind::from_clef(&clef);
         self
+    }
+
+    /// Change the clef at this point of the score.
+    ///
+    /// Every later pitch (in every voice) whose onset is at or after this
+    /// point is placed in the new clef. The change is drawn as a change-size
+    /// clef: mid-measure just before the next event; at the start of a
+    /// measure before the preceding barline (LilyPond's default); at the start
+    /// of a system in the system prefix, with a courtesy clef ending the
+    /// previous system.
+    pub fn clef_change(self, clef: Clef) -> Self {
+        self.push_clef_change(clef, ClefChangePlacement::BeforeBarline)
+    }
+
+    /// Change the clef like [`Self::clef_change`], but draw a change at the
+    /// start of a measure after the barline instead of before it.
+    pub fn clef_change_after_barline(self, clef: Clef) -> Self {
+        self.push_clef_change(clef, ClefChangePlacement::AfterBarline)
+    }
+
+    fn push_clef_change(mut self, clef: Clef, placement: ClefChangePlacement) -> Self {
+        self.current_events.push((
+            self.current_voice,
+            ScoreEvent::ClefChange(ClefChange {
+                clef: ClefKind::from_clef(&clef),
+                placement,
+            }),
+        ));
+        self
+    }
+
+    /// Whether any event has been entered or any measure closed.
+    fn has_content(&self) -> bool {
+        !self.measures.is_empty() || !self.current_events.is_empty()
+    }
+
+    /// The clef in force at the end of the content entered so far.
+    fn active_clef(&self) -> ClefKind {
+        self.measures
+            .iter()
+            .flat_map(|measure| &measure.events)
+            .chain(&self.current_events)
+            .filter_map(|(_, event)| match event {
+                ScoreEvent::ClefChange(change) => Some(change.clef),
+                _ => None,
+            })
+            .last()
+            .unwrap_or(self.clef)
     }
 
     /// Set the key signature.
@@ -190,24 +294,158 @@ impl ScoreBuilder {
         self
     }
 
-    /// Set the time signature (numerator, denominator).
-    pub fn time_signature(mut self, numerator: u8, denominator: u8) -> Self {
-        self.time_sig = Some((numerator, denominator));
-        self.time_sig_kind = None;
+    /// Set the time signature (numerator, denominator) at the start of the
+    /// score. Once content has begun this is a printed meter change, identical
+    /// to [`Self::time_signature_change`].
+    pub fn time_signature(self, numerator: u8, denominator: u8) -> Self {
+        self.declare_meter(
+            TimeSignatureKind::Numeric {
+                numerator,
+                denominator,
+            },
+            true,
+        )
+    }
+
+    /// Set the time signature to common time (C symbol = 4/4) at the start of
+    /// the score. Once content has begun this is a meter change, identical to
+    /// [`Self::common_time_change`].
+    pub fn common_time(self) -> Self {
+        self.declare_meter(TimeSignatureKind::Common, true)
+    }
+
+    /// Set the time signature to cut time / alla breve (₵ symbol = 2/2) at the
+    /// start of the score. Once content has begun this is a meter change,
+    /// identical to [`Self::cut_time_change`].
+    pub fn cut_time(self) -> Self {
+        self.declare_meter(TimeSignatureKind::CutCommon, true)
+    }
+
+    /// Set an unprinted meter at the start of the score: measures keep its
+    /// nominal length (bar structure, numbering) but no time signature is
+    /// drawn (LilyPond `\omit Staff.TimeSignature`). Once content has begun
+    /// this is a hidden meter change, identical to
+    /// [`Self::hidden_time_signature_change`].
+    pub fn hidden_time_signature(self, numerator: u8, denominator: u8) -> Self {
+        self.declare_meter(
+            TimeSignatureKind::Numeric {
+                numerator,
+                denominator,
+            },
+            false,
+        )
+    }
+
+    /// Change the meter to `numerator/denominator`, printed after the barline
+    /// that starts the new measure (or in the next system's prefix, with a
+    /// courtesy signature ending the previous system).
+    ///
+    /// Must be entered at the start of a measure, before its first event;
+    /// otherwise rendering fails with
+    /// [`ScoreStructureError::MidMeasureTimeSignatureChange`]. Clears any
+    /// [`Self::measure_length`] override.
+    pub fn time_signature_change(self, numerator: u8, denominator: u8) -> Self {
+        self.push_meter_change(
+            TimeSignatureKind::Numeric {
+                numerator,
+                denominator,
+            },
+            true,
+        )
+    }
+
+    /// Change the meter to common time (C), like [`Self::time_signature_change`].
+    pub fn common_time_change(self) -> Self {
+        self.push_meter_change(TimeSignatureKind::Common, true)
+    }
+
+    /// Change the meter to cut time (₵), like [`Self::time_signature_change`].
+    pub fn cut_time_change(self) -> Self {
+        self.push_meter_change(TimeSignatureKind::CutCommon, true)
+    }
+
+    /// Change the meter without printing it (LilyPond `\once \omit
+    /// TimeSignature \time n/d`): nothing is drawn, but the new measure's
+    /// nominal length follows the meter. Same placement rule as
+    /// [`Self::time_signature_change`].
+    pub fn hidden_time_signature_change(self, numerator: u8, denominator: u8) -> Self {
+        self.push_meter_change(
+            TimeSignatureKind::Numeric {
+                numerator,
+                denominator,
+            },
+            false,
+        )
+    }
+
+    fn declare_meter(mut self, kind: TimeSignatureKind, visible: bool) -> Self {
+        if self.has_content() {
+            return self.push_meter_change(kind, visible);
+        }
+        self.time_signature = Some(TimeSignature { kind, visible });
+        self.length_override = None;
         self
     }
 
-    /// Set the time signature to common time (C symbol = 4/4).
-    pub fn common_time(mut self) -> Self {
-        self.time_sig = Some((4, 4));
-        self.time_sig_kind = Some(TimeSignatureKind::Common);
+    fn push_meter_change(mut self, kind: TimeSignatureKind, visible: bool) -> Self {
+        self.length_override = None;
+        self.current_events.push((
+            self.current_voice,
+            ScoreEvent::TimeSignatureChange(TimeSignature { kind, visible }),
+        ));
         self
     }
 
-    /// Set the time signature to cut time / alla breve (₵ symbol = 2/2).
-    pub fn cut_time(mut self) -> Self {
-        self.time_sig = Some((2, 2));
-        self.time_sig_kind = Some(TimeSignatureKind::CutCommon);
+    /// Declare the measure in progress a pickup (anacrusis) of `length`, like
+    /// LilyPond's `\partial`. Accepts a [`Duration`] or any
+    /// [`MeasureLength`] (e.g. `MeasureLength::new(11, 16)` for
+    /// `\partial 16*11`).
+    ///
+    /// The pickup's nominal length is `length`; it does not advance the bar
+    /// count, so a score-initial pickup is bar 0 (one before
+    /// [`Self::first_measure_number`]) and a mid-score pickup shares the number
+    /// of the bar before it. Pickups never print a bar number.
+    pub fn partial(mut self, length: impl Into<MeasureLength>) -> Self {
+        self.pending_partial = Some(length.into());
+        self
+    }
+
+    /// Set the nominal length of the measure in progress and of later
+    /// measures to `numerator/denominator` of a whole note without printing a
+    /// meter change (LilyPond `\set Timing.measureLength`), e.g. a 9/8 bar
+    /// under 4/4. In force until the next meter change or
+    /// [`Self::reset_measure_length`].
+    pub fn measure_length(mut self, numerator: u64, denominator: u64) -> Self {
+        self.length_override = Some(MeasureLength::new(numerator, denominator));
+        self
+    }
+
+    /// Return to the meter's own measure length (LilyPond `\unset
+    /// Timing.measureLength`), from the measure in progress on.
+    pub fn reset_measure_length(mut self) -> Self {
+        self.length_override = None;
+        self
+    }
+
+    /// Enter cadenza mode (LilyPond `\cadenzaOn`): measures that are in
+    /// cadenza mode at any point carry no nominal length. Barlines stay
+    /// explicit, as everywhere in this builder.
+    pub fn cadenza_on(mut self) -> Self {
+        self.cadenza = true;
+        self.cadenza_in_measure = true;
+        self
+    }
+
+    /// Leave cadenza mode (LilyPond `\cadenzaOff`).
+    pub fn cadenza_off(mut self) -> Self {
+        self.cadenza = false;
+        self
+    }
+
+    /// Set the number of the first measure that is not a pickup (default 1;
+    /// LilyPond `currentBarNumber`).
+    pub fn first_measure_number(mut self, number: i32) -> Self {
+        self.first_measure_number = number;
         self
     }
 
@@ -332,13 +570,11 @@ impl ScoreBuilder {
         self
     }
 
-    /// Show measure numbers above the start of each system.
-    ///
-    /// When enabled, each system displays the 1-based measure number of its
-    /// first bar above the staff, left-aligned with the start of the note
-    /// content (after the prefix: clef, key/time signature).
-    pub fn show_measure_numbers(mut self) -> Self {
-        self.show_measure_numbers = true;
+    /// Choose which measures print their number above the staff (default
+    /// [`MeasureNumbering::Hidden`]). Numbers sit where a measure begins: at
+    /// its opening barline, or after the prefix when it opens a system.
+    pub fn measure_numbering(mut self, numbering: MeasureNumbering) -> Self {
+        self.measure_numbering = numbering;
         self
     }
 
@@ -1422,7 +1658,7 @@ impl ScoreBuilder {
     /// No-op if the last event is a rest (grace notes attach to pitched events).
     pub fn grace_note(mut self, pitch: Pitch, kind: GraceNoteKind) -> Self {
         use crate::layout::note_placement::pitch_to_staff_position;
-        let clef = self.clef.to_clef();
+        let clef = self.active_clef().to_clef();
         let staff_pos = pitch_to_staff_position(&pitch, &clef);
         if let Some((
             _,
@@ -1444,7 +1680,7 @@ impl ScoreBuilder {
     /// No-op if the last event is a rest (grace notes attach to pitched events).
     pub fn grace_note_slur(mut self, pitch: Pitch, kind: GraceNoteKind) -> Self {
         use crate::layout::note_placement::pitch_to_staff_position;
-        let clef = self.clef.to_clef();
+        let clef = self.active_clef().to_clef();
         let staff_pos = pitch_to_staff_position(&pitch, &clef);
         if let Some((
             _,
@@ -1700,6 +1936,16 @@ impl ScoreBuilder {
         self
     }
 
+    /// Add an invisible spacer (LilyPond `s`): it takes `duration` and
+    /// horizontal room like a rest but draws nothing. A measure holding only
+    /// spacers renders as an empty bar, at least
+    /// [`MeasureLayoutConfig::empty_measure_min_width`] wide.
+    pub fn spacer(mut self, duration: Duration) -> Self {
+        self.current_events
+            .push((self.current_voice, ScoreEvent::Spacer { duration }));
+        self
+    }
+
     /// Add a multi-measure rest filling the current measure.
     ///
     /// Renders as a single measure-shaped frame containing an H-bar (thick
@@ -1819,20 +2065,14 @@ impl ScoreBuilder {
     /// End the current measure with a single barline and start a new one.
     /// Resets the active voice to 0.
     pub fn barline(mut self) -> Self {
-        let events = std::mem::take(&mut self.current_events);
-        let volta = self.resolve_volta();
-        self.measures.push((events, BarlineStyle::Single, volta));
-        self.current_voice = 0;
+        self.close_measure(BarlineStyle::Single);
         self
     }
 
     /// End the current measure with a final (double) barline.
     /// Typically called at the end of the piece. Resets the active voice to 0.
     pub fn end_barline(mut self) -> Self {
-        let events = std::mem::take(&mut self.current_events);
-        let volta = self.resolve_volta();
-        self.measures.push((events, BarlineStyle::Final, volta));
-        self.current_voice = 0;
+        self.close_measure(BarlineStyle::Final);
         self
     }
 
@@ -1843,19 +2083,33 @@ impl ScoreBuilder {
     /// barline; as the last call it ends the piece with no final barline,
     /// e.g. on an incomplete bar.
     pub fn barline_style(mut self, style: BarlineStyle) -> Self {
+        self.close_measure(style);
+        self
+    }
+
+    /// Close the measure in progress with `barline`, recording its events,
+    /// volta, and timing directives, and start the next one in voice 0.
+    fn close_measure(&mut self, barline: BarlineStyle) {
         let events = std::mem::take(&mut self.current_events);
         let volta = self.resolve_volta();
-        self.measures.push((events, style, volta));
+        let timing = MeasureTiming {
+            partial: self.pending_partial.take(),
+            length_override: self.length_override,
+            cadenza: std::mem::replace(&mut self.cadenza_in_measure, self.cadenza),
+        };
+        self.measures.push(CompletedMeasure {
+            events,
+            barline,
+            volta,
+            timing,
+        });
         self.current_voice = 0;
-        self
     }
 
     /// Flush any pending events as a final measure if not already flushed.
     pub(crate) fn flush_pending(&mut self) {
         if !self.current_events.is_empty() {
-            let events = std::mem::take(&mut self.current_events);
-            let volta = self.resolve_volta();
-            self.measures.push((events, BarlineStyle::Final, volta));
+            self.close_measure(BarlineStyle::Final);
         }
         self.current_voice = 0;
     }
@@ -1868,40 +2122,131 @@ impl ScoreBuilder {
     /// every barline. When multiple voices are present, voice 0 goes in
     /// `events` and voices 1+ go in `additional_voices`. Multi-voice measures
     /// force stem directions: voice 0 = stems up, voice 1 = stems down.
-    pub(crate) fn build_measure_contents(&self) -> Vec<MeasureContent> {
-        let clef = self.clef.to_clef();
-        self.measures
-            .iter()
-            .map(|(voiced_events, barline, volta)| {
-                // Determine the maximum voice index in this measure.
-                let max_voice = voiced_events.iter().map(|(v, _)| *v).max().unwrap_or(0);
-                let is_multi_voice = max_voice > 0;
+    ///
+    /// Clef and meter state is carried in score order. Every pitch is placed
+    /// in the clef in force at its onset: the latest clef change, in any
+    /// voice, at or before it. Structural changes travel in the primary
+    /// voice's events at their onset; hidden meter changes leave no event but
+    /// set the measure's [`MeasureMeta`].
+    pub(crate) fn build_measure_contents(
+        &self,
+    ) -> Result<Vec<MeasureContent>, ScoreStructureError> {
+        let mut clef = self.clef;
+        let mut meter = self.time_signature.clone();
+        let mut next_number = self.first_measure_number;
+        let mut contents = Vec::with_capacity(self.measures.len());
+        for (index, measure) in self.measures.iter().enumerate() {
+            let voiced_events = &measure.events;
+            let timeline = measure_timeline(voiced_events);
 
-                let resolved = resolve_measure_accidentals(voiced_events, &self.key_sig);
-                let mut accidentals = resolved.iter();
-
-                // Separate events by voice.
-                let mut voice_buckets: Vec<Vec<MeasureEvent>> =
-                    (0..=max_voice).map(|_| Vec::new()).collect();
-
-                for (voice, event) in voiced_events {
-                    let mut me = convert_resolved_event(event, &clef, &mut accidentals);
-                    if is_multi_voice {
-                        force_stem_direction(&mut me, *voice);
+            // Clef changes in onset order (builder order among equal onsets).
+            let measure_start_clef = clef;
+            let mut clef_changes: Vec<(event::Onset, ClefKind)> = Vec::new();
+            for ((_, event), &onset) in voiced_events.iter().zip(&timeline.onsets) {
+                match event {
+                    ScoreEvent::ClefChange(change) => clef_changes.push((onset, change.clef)),
+                    ScoreEvent::TimeSignatureChange(time_signature) => {
+                        if onset != 0 {
+                            return Err(ScoreStructureError::MidMeasureTimeSignatureChange {
+                                measure: index,
+                            });
+                        }
+                        meter = Some(time_signature.clone());
                     }
-                    voice_buckets[*voice as usize].push(me);
+                    _ => {}
                 }
+            }
+            clef_changes.sort_by_key(|&(onset, _)| onset);
+            let clef_at = |onset: event::Onset| {
+                clef_changes
+                    .iter()
+                    .take_while(|&&(change_onset, _)| change_onset <= onset)
+                    .last()
+                    .map_or(measure_start_clef, |&(_, kind)| kind)
+            };
+            if let Some(&(_, last)) = clef_changes.last() {
+                clef = last;
+            }
 
-                let primary = voice_buckets.remove(0);
-                MeasureContent {
-                    events: primary,
-                    barline: *barline,
-                    volta: volta.clone(),
-                    additional_voices: voice_buckets,
-                    meta: MeasureMeta::default(),
+            // Determine the maximum voice index in this measure.
+            let max_voice = voiced_events.iter().map(|(v, _)| *v).max().unwrap_or(0);
+            let is_multi_voice = max_voice > 0;
+
+            let resolved = resolve_measure_accidentals(voiced_events, &self.key_sig);
+            let mut accidentals = resolved.iter();
+
+            // Separate events by voice. Structural changes entered in another
+            // voice join the primary voice before its first event at or after
+            // their onset.
+            let mut voice_buckets: Vec<Vec<MeasureEvent>> =
+                (0..=max_voice).map(|_| Vec::new()).collect();
+            let mut primary_onsets: Vec<event::Onset> = Vec::new();
+            let mut foreign_changes: Vec<(event::Onset, MeasureEvent)> = Vec::new();
+            for ((voice, event), &onset) in voiced_events.iter().zip(&timeline.onsets) {
+                if let ScoreEvent::TimeSignatureChange(time_signature) = event {
+                    if !time_signature.visible {
+                        continue;
+                    }
                 }
-            })
-            .collect()
+                let staff_clef = clef_at(onset).to_clef();
+                let mut me = convert_resolved_event(event, &staff_clef, &mut accidentals);
+                if event.is_structural() && *voice != 0 {
+                    foreign_changes.push((onset, me));
+                    continue;
+                }
+                if is_multi_voice {
+                    force_stem_direction(&mut me, *voice);
+                }
+                if *voice == 0 {
+                    primary_onsets.push(onset);
+                }
+                voice_buckets[*voice as usize].push(me);
+            }
+            for (onset, change) in foreign_changes.into_iter().rev() {
+                let at = primary_onsets
+                    .iter()
+                    .position(|&primary| primary >= onset)
+                    .unwrap_or(primary_onsets.len());
+                voice_buckets[0].insert(at, change);
+                primary_onsets.insert(at, onset);
+            }
+
+            let anacrusis = measure.timing.partial.is_some();
+            let number = if anacrusis {
+                next_number - 1
+            } else {
+                next_number += 1;
+                next_number - 1
+            };
+            let nominal_length = if measure.timing.cadenza {
+                None
+            } else {
+                measure
+                    .timing
+                    .partial
+                    .or(measure.timing.length_override)
+                    .or_else(|| meter.as_ref().map(|meter| meter.kind.measure_length()))
+            };
+            let meta = MeasureMeta {
+                number,
+                meter: meter.as_ref().map(|meter| meter.kind.clone()),
+                meter_visible: meter.as_ref().is_some_and(|meter| meter.visible),
+                nominal_length,
+                actual_length: timeline.to_length(timeline.length),
+                anacrusis,
+                ..MeasureMeta::default()
+            };
+
+            let primary = voice_buckets.remove(0);
+            contents.push(MeasureContent {
+                events: primary,
+                barline: measure.barline,
+                volta: measure.volta.clone(),
+                additional_voices: voice_buckets,
+                meta,
+            });
+        }
+        Ok(contents)
     }
 
     /// Switch the active voice for subsequent events.
@@ -1939,18 +2284,17 @@ impl ScoreBuilder {
         self
     }
 
-    /// Build the system prefix (clef, key sig, time sig) for this score's stave.
+    /// Build the prefix of the score's first system before any change: the
+    /// initial clef, key, and (printed) initial meter. Each system's actual
+    /// prefix is derived from it with
+    /// [`system_start_prefix`](crate::layout::system::system_start_prefix).
     pub(crate) fn build_prefix(&self) -> SystemPrefix {
-        let clef = self.clef.to_clef();
-        let time_sig_kind = match (&self.time_sig_kind, self.time_sig) {
-            (Some(kind), _) => Some(kind.clone()),
-            (None, Some((n, d))) => Some(TimeSignatureKind::Numeric {
-                numerator: n,
-                denominator: d,
-            }),
-            (None, None) => None,
-        };
-        SystemPrefix::new(&clef, self.key_sig.clone(), time_sig_kind)
+        let time_signature = self
+            .time_signature
+            .as_ref()
+            .filter(|meter| meter.visible)
+            .map(|meter| meter.kind.clone());
+        SystemPrefix::new(&self.clef.to_clef(), self.key_sig.clone(), time_signature)
     }
 
     /// Effective system width in font design units (auto = 40 staff spaces).
@@ -1994,27 +2338,30 @@ impl ScoreBuilder {
     /// Flush any pending measure and lay the score out as a page: logical
     /// measures with this builder's explicit line breaks applied, broken
     /// into systems by its breaking policy. `None` when there are no measures.
-    pub(crate) fn page_layout(&mut self, staff_space: f64) -> Option<PageLayout> {
+    pub(crate) fn page_layout(
+        &mut self,
+        staff_space: f64,
+    ) -> Result<Option<PageLayout>, ScoreStructureError> {
         self.flush_pending();
         if self.measures.is_empty() {
-            return None;
+            return Ok(None);
         }
 
-        let logical = self.build_measure_contents();
+        let logical = self.build_measure_contents()?;
         let measure_contents = self.line_break_plan(&logical).apply(logical);
         let prefix = self.build_prefix();
         let measure_config = MeasureLayoutConfig::from_staff_space(staff_space);
         let sys_width = self.effective_system_width(staff_space);
         let mut page_config = PageLayoutConfig::new(staff_space, sys_width);
-        page_config.show_measure_numbers = self.show_measure_numbers;
+        page_config.measure_numbering = self.measure_numbering;
 
-        Some(layout_page(
+        Ok(Some(layout_page(
             &prefix,
             &measure_contents,
             &measure_config,
             &page_config,
             &self.system_breaking(),
-        ))
+        )))
     }
 
     /// Render the score to an SVG string, returning an error if font operations fail.
@@ -2026,7 +2373,7 @@ impl ScoreBuilder {
     pub fn try_render_svg(mut self) -> Result<String, crate::error::EngraverError> {
         let font = bravura_font();
         let config = font.engraving_config();
-        let Some(page_layout) = self.page_layout(config.staff_space) else {
+        let Some(page_layout) = self.page_layout(config.staff_space)? else {
             return Ok(String::from(
                 "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
             ));
@@ -2120,3 +2467,5 @@ mod tests_breve;
 mod tests_c_clefs;
 #[cfg(test)]
 mod tests_written_octave;
+#[cfg(test)]
+mod tests_structure;

@@ -4525,7 +4525,7 @@ fn show_measure_numbers_adds_text_to_svg() {
     let svg = ScoreBuilder::new()
         .clef(Clef::Treble)
         .time_signature(4, 4)
-        .show_measure_numbers()
+        .measure_numbering(MeasureNumbering::SystemStart)
         .note(Pitch::new(Note::C, 4), Duration::WHOLE)
         .barline()
         .note(Pitch::new(Note::D, 4), Duration::WHOLE)
@@ -4541,7 +4541,7 @@ fn show_measure_numbers_multi_system_shows_correct_numbers() {
         .clef(Clef::Treble)
         .time_signature(4, 4)
         .measures_per_system(2)
-        .show_measure_numbers()
+        .measure_numbering(MeasureNumbering::SystemStart)
         .note(Pitch::new(Note::C, 4), Duration::WHOLE)
         .barline()
         .note(Pitch::new(Note::D, 4), Duration::WHOLE)
@@ -4585,7 +4585,9 @@ fn show_measure_numbers_on_vs_off_differs() {
             .end_barline()
     };
 
-    let svg_on = builder().show_measure_numbers().render_svg();
+    let svg_on = builder()
+        .measure_numbering(MeasureNumbering::SystemStart)
+        .render_svg();
     let svg_off = builder().render_svg();
 
     assert_ne!(
@@ -6042,7 +6044,7 @@ fn single_voice_no_additional_voices() {
         .note(p("C", 4), Duration::QTR)
         .note(p("D", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     assert_eq!(contents.len(), 1);
     assert_eq!(contents[0].events.len(), 2);
     assert!(contents[0].additional_voices.is_empty());
@@ -6057,7 +6059,7 @@ fn two_voices_splits_into_primary_and_additional() {
         .voice(1)
         .note(p("C", 4), Duration::WHOLE)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     assert_eq!(contents.len(), 1);
     // Voice 0: 2 half notes
     assert_eq!(contents[0].events.len(), 2);
@@ -6077,7 +6079,7 @@ fn multi_voice_forces_stem_up_on_voice_0() {
         .voice(1)
         .note(p("C", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 0 note should have stem up forced
     match &contents[0].events[0] {
         MeasureEvent::Note(n) => {
@@ -6101,7 +6103,7 @@ fn multi_voice_forces_stem_down_on_voice_1() {
         // Low note normally gets stem up, but voice 1 forces stem down
         .note(p("C", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 1 note should have stem down forced
     match &contents[0].additional_voices[0][0] {
         MeasureEvent::Note(n) => {
@@ -6121,7 +6123,7 @@ fn single_voice_does_not_force_stems() {
         .clef(Clef::Treble)
         .note(p("A", 5), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Single voice should use auto stem direction (None = auto)
     match &contents[0].events[0] {
         MeasureEvent::Note(n) => {
@@ -6166,7 +6168,7 @@ fn voice_reset_across_measures() {
         // After barline, voice should be 0 again
         .note(p("D", 5), Duration::WHOLE)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Measure 0: multi-voice (voice 0 + voice 1)
     assert_eq!(contents[0].additional_voices.len(), 1);
     // Measure 1: single voice (only voice 0)
@@ -6188,7 +6190,7 @@ fn multi_voice_beam_group_forces_stems() {
         .voice(1)
         .note(p("C", 4), Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 0 beam group should have stem up forced
     match &contents[0].events[0] {
         MeasureEvent::BeamGroup(bg) => {
@@ -6211,7 +6213,7 @@ fn multi_voice_chord_forces_stems() {
         .voice(1)
         .chord(vec![p("C", 4), p("E", 4)], Duration::HALF)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 0 chord: stems up
     match &contents[0].events[0] {
         MeasureEvent::Chord(c) => {
@@ -6236,7 +6238,7 @@ fn multi_voice_rest_has_no_stem_direction() {
         .voice(1)
         .rest(Duration::QTR)
         .end_barline();
-    let contents = builder.build_measure_contents();
+    let contents = builder.build_measure_contents().unwrap();
     // Voice 1 rest should still be a rest (no stem to force)
     match &contents[0].additional_voices[0][0] {
         MeasureEvent::Rest(r) => {
@@ -6345,7 +6347,7 @@ fn multi_voice_secondary_note_has_forced_stem_down() {
         .note(p("C", 4), Duration::QTR)
         .end_barline();
 
-    let contents = multi.build_measure_contents();
+    let contents = multi.build_measure_contents().unwrap();
     // Voice 0 should have stem up (forced for multi-voice)
     match &contents[0].events[0] {
         MeasureEvent::Note(n) => {
