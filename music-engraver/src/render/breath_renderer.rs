@@ -1,10 +1,12 @@
 use crate::font::FontError;
 use crate::font::MusicFont;
 use crate::layout::breath::BreathMarkLayout;
+use crate::render::articulation_renderer::draw_mark_parentheses;
 use crate::render::SvgWriter;
 
 /// Draw a breath mark glyph (comma, tick, or caesura) at the position
-/// computed by `layout_breath_mark`.
+/// computed by `layout_breath_mark`, enclosed in parentheses when the layout
+/// asks for it.
 pub fn draw_breath_mark(
     writer: &mut SvgWriter,
     font: &MusicFont,
@@ -13,6 +15,9 @@ pub fn draw_breath_mark(
     let outline = font.glyph_outline(layout.glyph)?;
     let transform = format!("translate({},{})", layout.x, layout.y);
     writer.add_path(&outline.path_data, "black", Some(&transform));
+    if layout.parenthesized {
+        draw_mark_parentheses(writer, font, layout.glyph, layout.x, layout.y)?;
+    }
     Ok(())
 }
 
@@ -41,7 +46,7 @@ mod tests {
     fn draw_comma_produces_path() {
         let font = test_font();
         let staff = test_staff();
-        let layout = layout_breath_mark(BreathMark::Comma, 500.0, &staff);
+        let layout = layout_breath_mark(BreathMark::Comma, 500.0, &staff, false);
         let mut writer = test_writer();
         draw_breath_mark(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
@@ -56,7 +61,7 @@ mod tests {
     fn draw_tick_produces_path() {
         let font = test_font();
         let staff = test_staff();
-        let layout = layout_breath_mark(BreathMark::Tick, 500.0, &staff);
+        let layout = layout_breath_mark(BreathMark::Tick, 500.0, &staff, false);
         let mut writer = test_writer();
         draw_breath_mark(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
@@ -67,7 +72,7 @@ mod tests {
     fn draw_caesura_produces_path() {
         let font = test_font();
         let staff = test_staff();
-        let layout = layout_breath_mark(BreathMark::Caesura, 500.0, &staff);
+        let layout = layout_breath_mark(BreathMark::Caesura, 500.0, &staff, false);
         let mut writer = test_writer();
         draw_breath_mark(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();
@@ -79,8 +84,8 @@ mod tests {
         let font = test_font();
         let staff = test_staff();
 
-        let comma = layout_breath_mark(BreathMark::Comma, 100.0, &staff);
-        let tick = layout_breath_mark(BreathMark::Tick, 100.0, &staff);
+        let comma = layout_breath_mark(BreathMark::Comma, 100.0, &staff, false);
+        let tick = layout_breath_mark(BreathMark::Tick, 100.0, &staff, false);
 
         let mut w1 = test_writer();
         draw_breath_mark(&mut w1, &font, &comma).unwrap();
@@ -98,8 +103,8 @@ mod tests {
         let font = test_font();
         let staff = test_staff();
 
-        let tick = layout_breath_mark(BreathMark::Tick, 100.0, &staff);
-        let caesura = layout_breath_mark(BreathMark::Caesura, 100.0, &staff);
+        let tick = layout_breath_mark(BreathMark::Tick, 100.0, &staff, false);
+        let caesura = layout_breath_mark(BreathMark::Caesura, 100.0, &staff, false);
 
         let mut w1 = test_writer();
         draw_breath_mark(&mut w1, &font, &tick).unwrap();
@@ -120,7 +125,7 @@ mod tests {
         let font = test_font();
         let staff = test_staff();
         for mark in BreathMark::all() {
-            let layout = layout_breath_mark(*mark, 100.0, &staff);
+            let layout = layout_breath_mark(*mark, 100.0, &staff, false);
             let mut writer = test_writer();
             let result = draw_breath_mark(&mut writer, &font, &layout);
             assert!(result.is_ok(), "{mark:?} should render without error");
@@ -134,7 +139,7 @@ mod tests {
         let font = test_font();
         let staff = test_staff();
         let note_right_x = 789.0;
-        let layout = layout_breath_mark(BreathMark::Comma, note_right_x, &staff);
+        let layout = layout_breath_mark(BreathMark::Comma, note_right_x, &staff, false);
         let mut writer = test_writer();
         draw_breath_mark(&mut writer, &font, &layout).unwrap();
         let svg = writer.to_svg();

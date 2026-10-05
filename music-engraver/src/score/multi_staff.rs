@@ -588,11 +588,11 @@ impl MultiStaffScore {
                         &contents[stave_start..stave_end],
                         contents.get(stave_end),
                         &measure_config,
-                        Some(sys_width),
+                        (stave_data.len() == 1).then_some(sys_width),
                     )
                 })
                 .collect();
-            align_system_measure_boundaries(&mut stave_systems);
+            align_system_measure_boundaries(&mut stave_systems, sys_width);
 
             for (stave_idx, system) in stave_systems.iter().enumerate() {
                 let stave_y = ms_layout.staff_y_origins[stave_idx];

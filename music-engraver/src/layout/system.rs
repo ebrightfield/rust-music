@@ -645,50 +645,58 @@ fn scale_measure_springs(layout: &mut MeasureLayout, s: f64) {
     layout.total_width = layout.total_rod + layout.total_spring;
 }
 
-/// Give all staves of one multi-staff system the same measure boundaries.
+/// Give staves sharing a system the same measure boundaries.
 ///
-/// Staves are initially laid out independently because their clefs, meter
-/// changes, and rhythms have different rods and springs. Each column takes
-/// the widest stave's width; the other staves stretch springs to that width
-/// without compressing any rod. Closing barlines therefore meet vertically
-/// even when the prefix or the content differs between staves.
-pub(crate) fn align_system_measure_boundaries(systems: &mut [SystemLayout]) {
+/// Each stave is first laid out at natural width. The widest rod and spring
+/// of each measure column define a shared system, whose springs are fitted
+/// once to `target_width`. Then each stave's own springs fit that column,
+/// preserving incompressible glyph widths and aligning closing barlines.
+pub(crate) fn align_system_measure_boundaries(systems: &mut [SystemLayout], target_width: f64) {
+    if systems.len() < 2 {
+        return;
+    }
     let count = systems.iter().map(|system| system.measures.len()).max().unwrap_or(0);
-    for index in 0..count {
-        let width = systems
-            .iter()
-            .filter_map(|system| system.measures.get(index))
-            .map(|measure| measure.layout.total_width)
-            .fold(0.0, f64::max);
-        for system in systems.iter_mut() {
-            let Some(measure) = system.measures.get_mut(index) else {
-                continue;
-            };
+    let columns: Vec<(f64, f64)> = (0..count)
+        .map(|index| {
+            systems
+                .iter()
+                .filter_map(|system| system.measures.get(index))
+                .fold((0.0_f64, 0.0_f64), |(rod, spring), measure| {
+                    (
+                        rod.max(measure.layout.total_rod),
+                        spring.max(measure.layout.total_spring),
+                    )
+                })
+        })
+        .collect();
+    let rods: f64 = columns.iter().map(|(rod, _)| rod).sum();
+    let springs: f64 = columns.iter().map(|(_, spring)| spring).sum();
+    let shared_scale = spring_scale(rods, springs, target_width);
+    let widths: Vec<f64> = columns
+        .iter()
+        .map(|(rod, spring)| rod + spring * shared_scale)
+        .collect();
+
+    for system in systems {
+        let mut x = 0.0;
+        for (measure, &width) in system.measures.iter_mut().zip(&widths) {
             let layout = &mut measure.layout;
-            if layout.total_width < width && layout.total_spring > 0.0 {
-                scale_measure_springs(
-                    layout,
-                    spring_scale(layout.total_rod, layout.total_spring, width),
-                );
+            if layout.total_spring > 0.0 {
+                let scale = spring_scale(layout.total_rod, layout.total_spring, width);
+                scale_measure_springs(layout, scale);
                 for voice in &mut measure.additional_voice_layouts {
                     if voice.total_spring > 0.0 {
-                        scale_measure_springs(
-                            voice,
-                            spring_scale(voice.total_rod, voice.total_spring, layout.total_width),
-                        );
+                        let voice_scale =
+                            spring_scale(voice.total_rod, voice.total_spring, layout.total_width);
+                        scale_measure_springs(voice, voice_scale);
                     }
                 }
             }
-        }
-    }
-    for system in systems {
-        let mut x = 0.0;
-        for measure in &mut system.measures {
             measure.x_offset = x;
-            x += measure.layout.total_width;
+            x += layout.total_width;
         }
         system.total_width = x;
-        system.staff_width = system.staff_width.max(x);
+        system.staff_width = target_width.max(x);
     }
 }
 
