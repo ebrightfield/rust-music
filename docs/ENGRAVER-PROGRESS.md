@@ -7879,5 +7879,6 @@
   midpoint; cross-staff glissandi are separate work.
 - Focused public-builder score/layout/SVG tests cover source-derived
   mn-c06-m003, mn-c01-h007, mn-c04-r010, mn-c12-i001 and mn-c05-m006 shapes.
-  A flattened PNG of the mn-c06-m003 barline-crossing bracket was inspected
-  alongside the LilyPond PDF (representative bars, not a complete transcription).
+  Flattened PNGs of the mn-c06-m003 dashed barline-crossing bracket and
+  mn-c01-h007 solid chord-pair brackets were inspected alongside LilyPond
+  PDFs (representative bars, not complete transcriptions).

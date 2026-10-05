@@ -88,19 +88,19 @@ fn mn_c06_m003_bracket_survives_barline_below() {
         && (attr(hook, "x2") - attr(line, "x1")).abs() < 0.001));
 }
 
-/// mn-c01-h007: solid brackets span chord pairs and chord-to-single-note pairs.
+/// mn-c01-h007: solid brackets below chord pairs and a chord-to-note pair.
 #[test]
 fn mn_c01_h007_solid_chord_pair_and_note_endpoint() {
     let score = ScoreBuilder::new()
         .clef(Clef::Treble)
         .stemless()
         .chord(vec![p(Note::Cis, 4), p(Note::Ees, 4)], Duration::EIGHTH)
-        .analysis_bracket_start(bracket(AnalysisBracketStyle::Solid, Placement::Above))
+        .analysis_bracket_start(bracket(AnalysisBracketStyle::Solid, Placement::Below))
         .chord(vec![p(Note::D, 4), p(Note::E, 4)], Duration::EIGHTH)
         .analysis_bracket_end()
         .barline()
         .chord(vec![p(Note::D, 4), p(Note::Ees, 4)], Duration::EIGHTH)
-        .analysis_bracket_start(bracket(AnalysisBracketStyle::Solid, Placement::Above))
+        .analysis_bracket_start(bracket(AnalysisBracketStyle::Solid, Placement::Below))
         .note(p(Note::E, 4), Duration::EIGHTH)
         .analysis_bracket_end()
         .end_barline();
@@ -117,7 +117,8 @@ fn mn_c01_h007_solid_chord_pair_and_note_endpoint() {
         })
         .collect();
     assert_eq!(brackets.len(), 2);
-    assert!(brackets.iter().all(|l| attr(l, "y1") < 0.0));
+    let staff_bottom = 4.0 * bravura_font().engraving_config().staff_space;
+    assert!(brackets.iter().all(|l| attr(l, "y1") > staff_bottom));
     assert!((attr(brackets[0], "x1") - xs[0][0]).abs() < 0.001);
     assert!(attr(brackets[1], "x2") > xs[0][3]);
 }
