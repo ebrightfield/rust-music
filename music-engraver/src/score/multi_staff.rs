@@ -44,6 +44,9 @@ use super::ScoreBuilder;
 /// One stave's measure contents (explicit line breaks applied) and prefix.
 pub(crate) type StaveData = (Vec<MeasureContent>, SystemPrefix);
 
+/// Prepared stave contents and the system ranges shared by all staves.
+type SharedSystems = (Vec<StaveData>, Vec<(usize, usize)>);
+
 /// A multi-staff score combining multiple [`ScoreBuilder`] staves with a
 /// visual connector (brace, bracket, or none) and optionally joined barlines.
 ///
@@ -301,7 +304,7 @@ impl MultiStaffScore {
         measure_config: &MeasureLayoutConfig,
         sys_width: f64,
         measures_per_system: usize,
-    ) -> Result<(Vec<StaveData>, Vec<(usize, usize)>), super::ScoreStructureError> {
+    ) -> Result<SharedSystems, super::ScoreStructureError> {
         let logical: Vec<_> = self
             .staves
             .iter()

@@ -679,7 +679,11 @@ pub(crate) fn align_system_measure_boundaries(systems: &mut [SystemLayout], targ
     if systems.len() < 2 {
         return;
     }
-    let count = systems.iter().map(|system| system.measures.len()).max().unwrap_or(0);
+    let count = systems
+        .iter()
+        .map(|system| system.measures.len())
+        .max()
+        .unwrap_or(0);
     let columns: Vec<(f64, f64)> = (0..count)
         .map(|index| {
             systems

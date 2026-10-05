@@ -422,11 +422,9 @@ fn grand_staff_systems(
     lower: ScoreBuilder,
 ) -> (Vec<StaveDataOf>, Vec<(usize, usize)>) {
     let ss = staff_space();
-    MultiStaffScore::grand_staff(upper, lower).staves_into_systems(
-        &MeasureLayoutConfig::from_staff_space(ss),
-        40.0 * ss,
-        4,
-    ).unwrap()
+    MultiStaffScore::grand_staff(upper, lower)
+        .staves_into_systems(&MeasureLayoutConfig::from_staff_space(ss), 40.0 * ss, 4)
+        .unwrap()
 }
 
 type StaveDataOf = crate::score::multi_staff::StaveData;
