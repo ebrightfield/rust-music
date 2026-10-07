@@ -31,7 +31,7 @@ pub const HARMONIC_GLYPH_SCALE: f64 = 0.6;
 
 /// Compute layout for a natural harmonic indicator on a tab staff.
 ///
-/// `string` is 1-based (1 = highest pitch = bottom line).
+/// `string` is 1-based (1 = highest pitch = top line).
 /// `x` is the horizontal position of the fret event.
 pub fn layout_tab_harmonic(tab_staff: &TabStaffLayout, string: u8, x: f64) -> TabHarmonicLayout {
     let string_y = tab_staff.string_y(string);
@@ -118,31 +118,5 @@ mod tests {
         let (staff, _) = guitar_staff();
         let layout = layout_tab_harmonic(&staff, 1, 500.0);
         assert!((layout.scale - HARMONIC_GLYPH_SCALE).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn nonzero_origin_shifts_y() {
-        let font = bravura_font();
-        let config = font.engraving_config();
-        let staff = TabStaffLayout::guitar(0.0, 500.0, 5000.0, &config);
-        let layout = layout_tab_harmonic(&staff, 1, 100.0);
-        // String 1 is at bottom: y_origin + height, so harmonic y should be offset from there
-        assert!(
-            layout.y > 400.0,
-            "y should be shifted by nonzero origin, got {}",
-            layout.y
-        );
-    }
-
-    #[test]
-    fn harmonic_on_string_1_is_near_bottom() {
-        let (staff, _) = guitar_staff();
-        let l1 = layout_tab_harmonic(&staff, 1, 500.0);
-        let l6 = layout_tab_harmonic(&staff, 6, 500.0);
-        // String 1 is bottom (highest y), string 6 is top (lowest y)
-        assert!(
-            l1.y > l6.y,
-            "string 1 harmonic should be below string 6 harmonic"
-        );
     }
 }

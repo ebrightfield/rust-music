@@ -31,7 +31,7 @@ use crate::layout::tab_let_ring::{
 use crate::layout::tab_palm_mute::{
     layout_tab_palm_mute, layout_tab_palm_mute_dash, PALM_MUTE_DASH_OFFSET_SS,
 };
-use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::layout::tab_rhythm::{layout_tab_rhythm, TabRhythmStyle};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::bend_gesture_renderer::draw_bend_segment;
@@ -1264,6 +1264,7 @@ pub struct GuitarScore {
     pub(crate) spans: Vec<GuitarSpan>,
     pub(crate) bends: Vec<BendGesture>,
     show_technique_legend: bool,
+    pub(crate) tab_rhythm_style: TabRhythmStyle,
     next_event_id: u64,
 }
 
@@ -1288,6 +1289,7 @@ impl GuitarScore {
             spans: Vec::new(),
             bends: Vec::new(),
             show_technique_legend: false,
+            tab_rhythm_style: TabRhythmStyle::default(),
             next_event_id: 1,
         }
     }
@@ -1334,6 +1336,13 @@ impl GuitarScore {
             clef: ClefKind::from_clef(&clef),
             after_barline,
         });
+        self
+    }
+
+    /// Set the vertical position and length of stems and beams above the TAB
+    /// stave without changing the standard-notation voice.
+    pub fn set_tab_rhythm_style(&mut self, style: TabRhythmStyle) -> &mut Self {
+        self.tab_rhythm_style = style;
         self
     }
 
@@ -4753,6 +4762,17 @@ mod tests {
     fn spec(pitch: Pitch, duration: Duration, string: u8, fret: u8) -> GuitarEventSpec {
         GuitarEventSpec::pitched(pitch, duration, string, fret)
     }
+    fn svg_attribute(element: &str, name: &str) -> f64 {
+        element
+            .split_once(&format!("{name}=\""))
+            .unwrap()
+            .1
+            .split_once('"')
+            .unwrap()
+            .0
+            .parse()
+            .unwrap()
+    }
 
     #[test]
     fn guitar_clef_in_secondary_voice_changes_other_voices_at_the_same_onset() {
@@ -4904,6 +4924,87 @@ mod tests {
                 pitch_to_staff_position(&Pitch::new(Note::E, 4), &Clef::Bass),
                 pitch_to_staff_position(&Pitch::new(Note::Fis, 4), &Clef::Bass),
             ]
+        );
+    }
+
+    #[test]
+    fn guitar_tab_rhythm_style_moves_unbeamed_and_beamed_stems_without_moving_notation() {
+        fn tab_stems(svg: &str) -> Vec<(f64, f64)> {
+            svg.lines()
+                .filter(|line| {
+                    line.starts_with("  <line ")
+                        && svg_attribute(line, "x1") == svg_attribute(line, "x2")
+                        && svg_attribute(line, "y1") > 3000.0
+                        && svg_attribute(line, "y1") > svg_attribute(line, "y2")
+                })
+                .map(|line| (svg_attribute(line, "y1"), svg_attribute(line, "y2")))
+                .collect()
+        }
+        let mut score = GuitarScore::standard();
+        score.set_time_signature(2, 4);
+        score
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
+        score
+            .beam_group(vec![
+                spec(Pitch::new(Note::Fis, 4), Duration::EIGHTH, 1, 2),
+                spec(Pitch::new(Note::G, 4), Duration::EIGHTH, 1, 3),
+            ])
+            .unwrap();
+        score.end_barline().unwrap();
+        let default = score.clone().render_svg();
+        score.set_tab_rhythm_style(TabRhythmStyle::new(2.0, 4.0).unwrap());
+        let styled = score.render_svg();
+        let original = tab_stems(&default);
+        let changed = tab_stems(&styled);
+        assert_eq!(original.len(), 3);
+        assert_eq!(changed.len(), 3);
+        for ((base, tip), (new_base, new_tip)) in original.iter().zip(changed.iter()) {
+            assert_eq!(base - new_base, 125.0);
+            assert_eq!(tip - new_tip, 375.0);
+        }
+        assert!(styled.contains("<polygon "), "TAB beams remain connected");
+    }
+
+    #[test]
+    fn tall_guitar_tab_stem_gets_space_below_the_notation_staff() {
+        let mut score = GuitarScore::standard();
+        score.set_time_signature(1, 4);
+        score
+            .note(Pitch::new(Note::E, 4), Duration::QTR, 1, 0)
+            .unwrap();
+        score.end_barline().unwrap();
+        score.set_tab_rhythm_style(TabRhythmStyle::new(3.0, 12.0).unwrap());
+        let svg = score.render_svg();
+        let mut staff_lines: Vec<_> = svg
+            .lines()
+            .filter(|line| {
+                line.starts_with("  <line ")
+                    && svg_attribute(line, "y1") == svg_attribute(line, "y2")
+                    && svg_attribute(line, "x1") != svg_attribute(line, "x2")
+            })
+            .map(|line| svg_attribute(line, "y1"))
+            .collect();
+        staff_lines.sort_by(f64::total_cmp);
+        staff_lines.dedup();
+        assert_eq!(staff_lines.len(), 11);
+        let notation_bottom = staff_lines[4];
+        let tab_top = staff_lines[5];
+        let rhythm_tip = svg
+            .lines()
+            .filter(|line| {
+                line.starts_with("  <line ")
+                    && svg_attribute(line, "x1") == svg_attribute(line, "x2")
+                    && svg_attribute(line, "y1") > notation_bottom
+                    && svg_attribute(line, "y2") < svg_attribute(line, "y1")
+            })
+            .map(|line| svg_attribute(line, "y2"))
+            .next()
+            .unwrap();
+        assert_eq!(tab_top - rhythm_tip, 15.0 * 250.0);
+        assert!(
+            rhythm_tip > notation_bottom + 250.0,
+            "custom stem must clear the standard staff"
         );
     }
 

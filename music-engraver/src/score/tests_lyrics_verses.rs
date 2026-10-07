@@ -280,8 +280,7 @@ fn grouped_chord_and_beamed_tuplet_lyrics_span_exact_member_positions() {
         MeasureElement::Chord(_)
     ));
     let svg = score.render_svg();
-    let staff = StaffLayout::new(0.0, 0.0, system.staff_width, 250.0);
-    let (from, to) = lyric_line(&svg, verse_baseline(&staff, 250.0, 1));
+    let (from, to) = lyric_line(&svg, attribute(text_element(&svg, "Så"), "y"));
     let source_edge = notes[0].x
         + crate::render::lyric_renderer::lyric_text_half_width("Så", LyricStyle::Upright, 250.0)
         + 0.15 * 250.0;
@@ -298,7 +297,7 @@ fn grouped_chord_and_beamed_tuplet_lyrics_span_exact_member_positions() {
     );
     let hyphen = text_element(&svg, "-");
     assert!(attribute(hyphen, "x") > notes[1].x && attribute(hyphen, "x") < notes[2].x);
-    assert!((attribute(hyphen, "y") - verse_baseline(&staff, 250.0, 2)).abs() < 0.01);
+    assert!((attribute(hyphen, "y") - attribute(text_element(&svg, "So"), "y")).abs() < 0.01);
 }
 
 #[test]
@@ -403,8 +402,7 @@ fn cross_system_melisma_waits_through_rest_and_skip_for_tuplet_member() {
     assert!(target[0].lyrics[0].syllable.skip);
     let svg = score.render_svg();
     let dst = &page.systems[1];
-    let staff = StaffLayout::new(dst.x, dst.y, dst.system.staff_width, 250.0);
-    let (_start, end) = lyric_line(&svg, verse_baseline(&staff, 250.0, 1));
+    let (_start, end) = lyric_line(&svg, attribute(text_element(&svg, "genug"), "y"));
     let expected_end = dst.x + target[1].x
         - crate::render::lyric_renderer::lyric_text_half_width("genug", LyricStyle::Upright, 250.0)
         - 0.15 * 250.0;

@@ -46,14 +46,18 @@ fn main() {
         ])
         .note(Pitch::new(Note::D, 5), Duration::new(DurationKind::Half, 1))
         .barline()
-        // Measure 4: mixed beam group (eighth + two sixteenths) + quarter + quarter
+        // Measure 4: off-center high note in a mixed beam. The second E4
+        // (16th) starts on the next quarter beat, so its beamlet faces right.
         .beam_group(vec![
-            (Pitch::new(Note::D, 5), Duration::EIGHTH),
+            (Pitch::new(Note::E, 4), Duration::SIXTEENTH),
             (Pitch::new(Note::C, 5), Duration::SIXTEENTH),
-            (Pitch::new(Note::B, 4), Duration::SIXTEENTH),
+            (Pitch::new(Note::G, 4), Duration::EIGHTH),
+            (Pitch::new(Note::E, 4), Duration::SIXTEENTH),
+            (Pitch::new(Note::G, 4), Duration::EIGHTH),
         ])
         .note(Pitch::new(Note::A, 4), Duration::QTR)
         .note(Pitch::new(Note::G, 4), Duration::QTR)
+        .rest(Duration::SIXTEENTH)
         .end_barline()
         .render_svg();
 

@@ -1,10 +1,24 @@
-use crate::layout::accidental::{layout_accidental_columns, AccidentalDisplay, ResolvedAccidental};
+use std::sync::{Arc, LazyLock};
+
+use smufl::Glyph;
+
+use crate::font::{MusicFont, BUNDLED_BRAVURA};
+use crate::layout::accidental::{
+    layout_accidental_columns, AccidentalDisplay, ResolvedAccidental,
+    ACCIDENTAL_NOTEHEAD_PADDING_SS,
+};
 use crate::layout::analysis_bracket::AnalysisBracketSpec;
 use crate::layout::arpeggio::ArpeggioDirection;
 use crate::layout::articulation::ArticulationMark;
 use crate::layout::barline::BarlineStyle;
 use crate::layout::breath::BreathMark;
+use crate::layout::chord::{
+    chord_left_notehead_offset, layout_chord_noteheads, notehead_x_offset, ChordNote,
+};
 use crate::layout::clef::{ClefLayout, ClefSize};
+use crate::layout::dot::{
+    DOT_INTER_DOT_SPACING_SS, DOT_NOTEHEAD_PADDING_SS, DOT_PARENTHESES_GAP_SS,
+};
 use crate::layout::dynamics::DynamicMark;
 use crate::layout::glissando::GlissandoStyle;
 use crate::layout::grace::{grace_group_extent, grace_stem_direction, GraceGroup, GraceNotes};
@@ -18,8 +32,8 @@ use crate::layout::ottava::OttavaKind;
 use crate::layout::pedal::PedalMark;
 use crate::layout::placement::Placement;
 use crate::layout::rehearsal::RehearsalStyle;
-use crate::layout::staff::StaffPosition;
-use crate::layout::stem::StemDirection;
+use crate::layout::rest::rest_glyph;
+use crate::layout::stem::{auto_stem_direction_chord, StemDirection};
 use crate::layout::tempo::TempoMark;
 use crate::layout::text_script::TextScript;
 use crate::layout::text_spanner::TextSpanner;
@@ -558,6 +572,118 @@ impl MeasureLayout {
     }
 }
 
+/// Horizontal font metrics in staff spaces. An advance positions the next
+/// glyph; the bounding box, not the advance, limits spring compression.
+#[derive(Clone, Copy, Debug)]
+struct GlyphWidth {
+    advance: f64,
+    left: f64,
+    right: f64,
+}
+
+impl GlyphWidth {
+    fn from_font(font: &MusicFont<'_>, glyph: Glyph, fallback: f64) -> Self {
+        let unit = f64::from(font.units_per_em()) / 4.0;
+        let advance = font
+            .glyph_advance(glyph)
+            .map_or(fallback, |width| f64::from(width) / unit);
+        let (left, right) = font
+            .glyph_bbox_design_units(glyph)
+            .map_or((0.0, advance), |bbox| {
+                (bbox.x_left / unit, bbox.x_right / unit)
+            });
+        Self {
+            advance,
+            left,
+            right,
+        }
+    }
+}
+
+/// Captured once at config construction, shared by clones and all events.
+/// The accidental roster is precisely the glyphs emitted by the resolver.
+#[derive(Debug)]
+struct RodGlyphMetrics {
+    heads: [[GlyphWidth; 4]; 6],
+    accidentals: [GlyphWidth; 5],
+    accidental_open: GlyphWidth,
+    accidental_close: GlyphWidth,
+    head_open: GlyphWidth,
+    head_close: GlyphWidth,
+    dot: GlyphWidth,
+    rests: [GlyphWidth; 9],
+}
+
+impl RodGlyphMetrics {
+    fn from_font(font: &MusicFont<'_>) -> Self {
+        let styles = [
+            NoteheadStyle::Normal,
+            NoteheadStyle::Diamond,
+            NoteheadStyle::X,
+            NoteheadStyle::CircleX,
+            NoteheadStyle::Slash,
+            NoteheadStyle::Square,
+        ];
+        let heads = styles.map(|style| {
+            [-1, 0, 1, 2].map(|duration| GlyphWidth::from_font(font, style.glyph(duration), 1.18))
+        });
+        let accidentals = [
+            Glyph::AccidentalNatural,
+            Glyph::AccidentalSharp,
+            Glyph::AccidentalFlat,
+            Glyph::AccidentalDoubleSharp,
+            Glyph::AccidentalDoubleFlat,
+        ]
+        .map(|glyph| GlyphWidth::from_font(font, glyph, 1.0));
+        let rests = [-1, 0, 1, 2, 3, 4, 5, 6, 7].map(|duration| {
+            GlyphWidth::from_font(font, rest_glyph(duration).expect("supported rest"), 1.18)
+        });
+        Self {
+            heads,
+            accidentals,
+            accidental_open: GlyphWidth::from_font(font, Glyph::AccidentalParensLeft, 0.564),
+            accidental_close: GlyphWidth::from_font(font, Glyph::AccidentalParensRight, 0.564),
+            head_open: GlyphWidth::from_font(font, Glyph::NoteheadParenthesisLeft, 0.436),
+            head_close: GlyphWidth::from_font(font, Glyph::NoteheadParenthesisRight, 0.436),
+            dot: GlyphWidth::from_font(font, Glyph::AugmentationDot, 0.35),
+            rests,
+        }
+    }
+
+    fn head(&self, style: NoteheadStyle, duration: i8) -> GlyphWidth {
+        let style_index = match style {
+            NoteheadStyle::Normal => 0,
+            NoteheadStyle::Diamond => 1,
+            NoteheadStyle::X => 2,
+            NoteheadStyle::CircleX => 3,
+            NoteheadStyle::Slash => 4,
+            NoteheadStyle::Square => 5,
+        };
+        let duration_index = match duration {
+            ..=-1 => 0,
+            0 => 1,
+            1 => 2,
+            _ => 3,
+        };
+        self.heads[style_index][duration_index]
+    }
+
+    fn accidental(&self, glyph: Glyph) -> Option<GlyphWidth> {
+        let index = match glyph {
+            Glyph::AccidentalNatural => 0,
+            Glyph::AccidentalSharp => 1,
+            Glyph::AccidentalFlat => 2,
+            Glyph::AccidentalDoubleSharp => 3,
+            Glyph::AccidentalDoubleFlat => 4,
+            _ => return None,
+        };
+        Some(self.accidentals[index])
+    }
+}
+
+static BUNDLED_ROD_METRICS: LazyLock<Arc<RodGlyphMetrics>> =
+    LazyLock::new(|| Arc::new(RodGlyphMetrics::from_font(&BUNDLED_BRAVURA)));
+
 /// Configuration for measure layout.
 #[derive(Clone, Debug)]
 pub struct MeasureLayoutConfig {
@@ -593,32 +719,36 @@ pub struct MeasureLayoutConfig {
     /// the spring following a note of the shortest duration in the measure
     /// (where `duration == 1`).
     pub spring_constant: f64,
-    /// Incompressible rod estimate for one notehead (in font design units).
+    /// Black notehead's font advance (in design units). Retained as the
+    /// baseline for invisible timed spacers and lyric anchors; the rods of
+    /// engraved notes use duration- and style-specific captured glyph metrics.
     pub notehead_rod: f64,
-    /// Additional rod width when an event carries one plain accidental
-    /// (in font design units).
+    /// Width hint for a nonstandard accidental missing from a custom font's
+    /// captured metric roster (in design units).
     pub accidental_rod: f64,
-    /// Further rod width when an accidental is parenthesized, covering both
-    /// SMuFL accidental parentheses (in font design units).
+    /// Combined advance of cautionary accidental parentheses, retained for
+    /// consumers; rods use the individual font metrics.
     pub accidental_parens_rod: f64,
     /// Horizontal gap between stacked accidental columns of one chord
     /// (in font design units).
     pub accidental_column_gap: f64,
-    /// Additional rod width per augmentation dot (in font design units).
+    /// Augmentation dot advance (in design units); dots in rods use the
+    /// glyph's ink and the renderer's actual notehead-to-dot placement.
     pub dot_rod: f64,
-    /// Further rod width when a note's dots are parenthesized (in font
-    /// design units).
+    /// Legacy combined width of dot parentheses (retained for consumers).
     pub dot_parens_rod: f64,
-    /// Rod width of one notehead parenthesis (in font design units); a
-    /// parenthesized note reserves one before and one after its noteheads.
+    /// Opening notehead parenthesis advance (in design units).
     pub notehead_parens_rod: f64,
     /// Minimum padding included in every rhythmic rod (in font design units).
     pub min_rod_padding: f64,
+    metrics: Arc<RodGlyphMetrics>,
 }
 
 impl MeasureLayoutConfig {
-    /// Default config using a staff space value (typically from EngravingConfig).
+    /// Default config using bundled Bravura metrics at this staff space.
+    /// Common glyph metrics are cached once; no per-event font parsing.
     pub fn from_staff_space(ss: f64) -> Self {
+        let metrics = Arc::clone(&*BUNDLED_ROD_METRICS);
         Self {
             staff_space: ss,
             clef_left_margin: 1.0 * ss,
@@ -631,29 +761,39 @@ impl MeasureLayoutConfig {
             barline_width: 0.5 * ss,
             empty_measure_min_width: 4.0 * ss,
             spacing_exponent: 0.6,
-            // Phase 4 calibration (see `examples/spacing_calibration.rs` and the
-            // 2026-08-06 progress entry): k = 1.0·ss. Matching the legacy
-            // power-of-ratio model's natural widths — the plan's original
-            // churn-minimizing target — was found to be both unachievable and
-            // undesirable: it needs k ≈ 0.02·ss for uniform rhythms (springs
-            // ~0, collapsing the model to fixed-width spacing) and a *negative*
-            // k for accidental-heavy measures, because the legacy model gave
-            // accidentals no room at all. k = 1.0·ss instead keeps the realized
-            // long:short advance ratio inside the engraving-practice band.
+            // Historical Gourlay calibration uses k = one staff space; the
+            // glyph-dependent hard rods now carry their own ink dimensions.
             spring_constant: 1.0 * ss,
-            // Notehead advance estimate matches the value used elsewhere
-            // (e.g. `layout/glissando.rs`): ~1.18 staff spaces.
-            notehead_rod: 1.18 * ss,
-            accidental_rod: 1.0 * ss,
-            // Bravura's accidentalParensLeft/Right each advance 0.564 ss.
-            accidental_parens_rod: 1.128 * ss,
+            notehead_rod: metrics.head(NoteheadStyle::Normal, 2).advance * ss,
+            accidental_rod: metrics.accidentals[1].advance * ss
+                + ACCIDENTAL_NOTEHEAD_PADDING_SS * ss,
+            accidental_parens_rod: (metrics.accidental_open.advance
+                + metrics.accidental_close.advance)
+                * ss,
             accidental_column_gap: crate::layout::accidental::ACCIDENTAL_COLUMN_GAP_SS * ss,
-            dot_rod: 0.35 * ss,
+            dot_rod: metrics.dot.advance * ss,
             dot_parens_rod: crate::layout::dot::DOT_PARENTHESES_EXTRA_SS * ss,
-            // Bravura's noteheadParenthesisLeft/Right each advance 0.436 ss.
-            notehead_parens_rod: 0.436 * ss,
+            notehead_parens_rod: metrics.head_open.advance * ss,
             min_rod_padding: 0.3 * ss,
+            metrics,
         }
+    }
+
+    /// Capture metrics for a different SMuFL font without changing any caller
+    /// of `layout_measure`. Pass a matching font to the renderer as well.
+    /// Prefix glyphs currently use the bundled metrics in their own modules.
+    pub fn from_font(font: &MusicFont<'_>, ss: f64) -> Self {
+        let mut config = Self::from_staff_space(ss);
+        let metrics = Arc::new(RodGlyphMetrics::from_font(font));
+        config.notehead_rod = metrics.head(NoteheadStyle::Normal, 2).advance * ss;
+        config.accidental_rod =
+            metrics.accidentals[1].advance * ss + ACCIDENTAL_NOTEHEAD_PADDING_SS * ss;
+        config.accidental_parens_rod =
+            (metrics.accidental_open.advance + metrics.accidental_close.advance) * ss;
+        config.dot_rod = metrics.dot.advance * ss;
+        config.notehead_parens_rod = metrics.head_open.advance * ss;
+        config.metrics = metrics;
+        config
     }
 }
 
@@ -674,125 +814,340 @@ fn spring_rest_length(
     spring_constant * duration.powf(spacing_exponent)
 }
 
-/// Compute the incompressible rod width for a rhythmic event whose engraved
-/// accidentals extend `accidental_extent` to the left of its noteheads.
-fn event_rod(accidental_extent: f64, dots: u8, config: &MeasureLayoutConfig) -> f64 {
-    config.min_rod_padding + config.notehead_rod + accidental_extent + dots as f64 * config.dot_rod
+/// An event's horizontal ink relative to its rhythmic notehead origin.
+/// Keep the left reach outside the event width: this is what lets the shared
+/// rhythm grid align different voices without shifting their onset columns.
+#[derive(Clone, Copy, Debug, Default)]
+struct InkExtent {
+    left: f64,
+    right: f64,
 }
 
-/// Rod of a note or chord at its annotated size: padding, notehead, dots
-/// (with their parentheses), the closing notehead parenthesis, and an inner
-/// accidental extent (`0.0` unless it is a later beam/tuplet member).
-fn note_rod(
-    accidental_extent: f64,
-    dots: u8,
-    annotations: &NoteAnnotations,
+impl InkExtent {
+    fn include(&mut self, x: f64, glyph: GlyphWidth, unit: f64) {
+        self.left = self.left.min(x).min(x + glyph.left * unit);
+        self.right = self
+            .right
+            .max(x + glyph.advance * unit)
+            .max(x + glyph.right * unit);
+    }
+
+    fn rod(self, config: &MeasureLayoutConfig) -> f64 {
+        self.right.max(0.0) + config.min_rod_padding
+    }
+}
+
+/// Invisible timed events still need an onset width; no glyph is drawn.
+fn event_rod(config: &MeasureLayoutConfig) -> f64 {
+    config.min_rod_padding + config.notehead_rod
+}
+
+fn accidental_glyph_width(
+    accidental: ResolvedAccidental,
     config: &MeasureLayoutConfig,
-) -> f64 {
-    let scale = annotations.size.scale();
-    let mut rod = config.min_rod_padding
-        + config.notehead_rod * scale
-        + accidental_extent
-        + dots as f64 * config.dot_rod * scale;
-    if dots > 0 && annotations.parenthesized_dots {
-        rod += config.dot_parens_rod * scale;
+) -> GlyphWidth {
+    if let Some(width) = config.metrics.accidental(accidental.glyph) {
+        return width;
     }
-    if annotations.parenthesized_noteheads.contains(&true) {
-        rod += config.notehead_parens_rod * scale;
+    let fallback =
+        (config.accidental_rod / config.staff_space - ACCIDENTAL_NOTEHEAD_PADDING_SS).max(0.0);
+    if Arc::ptr_eq(&config.metrics, &*BUNDLED_ROD_METRICS) {
+        // ResolvedAccidental is public: callers can supply nonstandard SMuFL
+        // accidentals. Read those directly from the already-parsed bundled
+        // font rather than treating the five pitch-spelling glyphs as exhaustive.
+        return GlyphWidth::from_font(&BUNDLED_BRAVURA, accidental.glyph, fallback);
     }
-    rod
+    // A custom config captures all five accidentals emitted by the score
+    // resolver. Its optional nonstandard glyphs have no borrowed font handle.
+    GlyphWidth {
+        advance: fallback,
+        left: 0.0,
+        right: fallback,
+    }
 }
 
-/// Estimated rod width of one engraved accidental, including its parentheses.
-fn accidental_rod_width(accidental: ResolvedAccidental, config: &MeasureLayoutConfig) -> f64 {
+fn accidental_advance(accidental: ResolvedAccidental, config: &MeasureLayoutConfig) -> f64 {
+    let metrics = &config.metrics;
+    let mut advance = accidental_glyph_width(accidental, config).advance;
     if accidental.parenthesized {
-        config.accidental_rod + config.accidental_parens_rod
+        advance += metrics.accidental_open.advance + metrics.accidental_close.advance;
+    }
+    advance * config.staff_space
+}
+
+/// Place exactly the glyphs the renderer emits, using their font advances to
+/// position origins and their bounding boxes to measure the actual ink.
+/// Returns the origin of the leftmost accidental for notehead parentheses.
+fn include_accidental(
+    extent: &mut InkExtent,
+    accidental: ResolvedAccidental,
+    column_x: f64,
+    unit: f64,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    let metrics = &config.metrics;
+    let glyph = accidental_glyph_width(accidental, config);
+    let pad = ACCIDENTAL_NOTEHEAD_PADDING_SS * unit;
+    if !accidental.parenthesized {
+        let x = column_x - glyph.advance * unit - pad;
+        extent.include(x, glyph, unit);
+        return x;
+    }
+    let close_x = column_x - metrics.accidental_close.advance * unit - pad;
+    let glyph_x = close_x - glyph.advance * unit;
+    let open_x = glyph_x - metrics.accidental_open.advance * unit;
+    extent.include(open_x, metrics.accidental_open, unit);
+    extent.include(glyph_x, glyph, unit);
+    extent.include(close_x, metrics.accidental_close, unit);
+    open_x
+}
+
+fn include_head_parentheses(
+    extent: &mut InkExtent,
+    left_x: f64,
+    right_x: f64,
+    unit: f64,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    let metrics = &config.metrics;
+    let open_x = left_x - metrics.head_open.advance * unit;
+    extent.include(open_x, metrics.head_open, unit);
+    extent.include(right_x, metrics.head_close, unit);
+    open_x
+}
+
+fn include_dots(
+    extent: &mut InkExtent,
+    head_x: f64,
+    head_advance: f64,
+    dots: u8,
+    parenthesized: bool,
+    unit: f64,
+    config: &MeasureLayoutConfig,
+) {
+    if dots == 0 {
+        return;
+    }
+    let metrics = &config.metrics;
+    let first_x = if parenthesized {
+        let open_x = head_x + head_advance + DOT_PARENTHESES_GAP_SS * unit;
+        extent.include(open_x, metrics.head_open, unit);
+        open_x + (metrics.head_open.advance + DOT_PARENTHESES_GAP_SS) * unit
     } else {
-        config.accidental_rod
+        head_x + head_advance + DOT_NOTEHEAD_PADDING_SS * unit
+    };
+    let mut last_x = first_x;
+    for index in 0..dots {
+        last_x = first_x + f64::from(index) * DOT_INTER_DOT_SPACING_SS * unit;
+        extent.include(last_x, metrics.dot, unit);
+    }
+    if parenthesized {
+        let close_x = last_x + (metrics.dot.advance + DOT_PARENTHESES_GAP_SS) * unit;
+        extent.include(close_x, metrics.head_close, unit);
     }
 }
 
-/// Estimated leftward extent of the accidentals engraved on one notehead
-/// column: a lone accidental's rod width (parentheses included), or the
-/// stacked chord accidental columns' extent when several are engraved.
-///
-/// `accidentals` is parallel to `staff_positions`.
-fn accidental_left_extent(
-    staff_positions: &[StaffPosition],
-    accidentals: &[Option<ResolvedAccidental>],
-    config: &MeasureLayoutConfig,
-) -> f64 {
-    let mut engraved =
-        staff_positions
-            .iter()
-            .zip(accidentals)
-            .filter_map(|(&position, accidental)| {
-                accidental.map(|accidental| (position, accidental_rod_width(accidental, config)))
-            });
-    let Some(first) = engraved.next() else {
-        return 0.0;
-    };
-    let Some(second) = engraved.next() else {
-        return first.1;
-    };
-    let mut stacked = vec![first, second];
-    stacked.extend(engraved);
-    layout_accidental_columns(&stacked, config.accidental_column_gap).extent
-}
-
-/// Estimated extent of everything a note or chord engraves left of its
-/// notehead column, at its annotated size: accidentals, the opening notehead
-/// parenthesis, and a preceding grace group (whose stems follow
-/// `stem_direction`, the principal's forced direction if any).
-fn annotated_left_extent(
-    staff_positions: &[StaffPosition],
-    accidentals: &[Option<ResolvedAccidental>],
-    annotations: &NoteAnnotations,
-    stem_direction: Option<StemDirection>,
-    config: &MeasureLayoutConfig,
-) -> f64 {
-    let scale = annotations.size.scale();
-    let mut extent = accidental_left_extent(staff_positions, accidentals, config) * scale;
-    if annotations.parenthesized_noteheads.contains(&true) {
-        extent += config.notehead_parens_rod * scale;
+fn note_ink(note: &NoteEvent, config: &MeasureLayoutConfig) -> InkExtent {
+    let mut ink = InkExtent::default();
+    let unit = config.staff_space * note.annotations.size.scale();
+    let head = config.metrics.head(
+        note.annotations
+            .notehead_styles
+            .first()
+            .copied()
+            .unwrap_or_default(),
+        note.duration_log2,
+    );
+    let left = note.accidental.map_or(0.0, |accidental| {
+        include_accidental(&mut ink, accidental, 0.0, unit, config)
+    });
+    ink.include(0.0, head, unit);
+    if note
+        .annotations
+        .parenthesized_noteheads
+        .first()
+        .copied()
+        .unwrap_or(false)
+    {
+        include_head_parentheses(&mut ink, left, head.advance * unit, unit, config);
     }
-    if let Some(group) = &annotations.grace_group {
-        extent += grace_group_extent(
+    include_dots(
+        &mut ink,
+        0.0,
+        head.advance * unit,
+        note.dots,
+        note.annotations.parenthesized_dots,
+        unit,
+        config,
+    );
+    if let Some(group) = &note.annotations.grace_group {
+        ink.left -= grace_group_extent(
             group,
-            grace_stem_direction(stem_direction),
+            grace_stem_direction(note.stem_direction),
             config.staff_space,
         );
     }
-    extent
+    ink
 }
 
-fn note_left_extent(note: &NoteEvent, config: &MeasureLayoutConfig) -> f64 {
-    annotated_left_extent(
-        std::slice::from_ref(&note.staff_position),
-        std::slice::from_ref(&note.accidental),
-        &note.annotations,
-        note.stem_direction,
+fn chord_ink(chord: &ChordEvent, config: &MeasureLayoutConfig) -> InkExtent {
+    let mut ink = InkExtent::default();
+    if chord.staff_positions.is_empty() {
+        return ink;
+    }
+    let direction = chord
+        .stem_direction
+        .unwrap_or_else(|| auto_stem_direction_chord(&chord.staff_positions));
+    let notes: Vec<_> = chord
+        .staff_positions
+        .iter()
+        .enumerate()
+        .map(|(index, &staff_position)| ChordNote {
+            staff_position,
+            accidental: chord.accidentals.get(index).copied().flatten(),
+            notehead_style: chord
+                .annotations
+                .notehead_styles
+                .get(index)
+                .copied()
+                .unwrap_or_default(),
+            parenthesized: chord
+                .annotations
+                .parenthesized_noteheads
+                .get(index)
+                .copied()
+                .unwrap_or(false),
+        })
+        .collect();
+    let layouts = layout_chord_noteheads(&notes, direction);
+    let unit = config.staff_space * chord.annotations.size.scale();
+    let widest = layouts.iter().fold(0.0_f64, |width, note| {
+        width.max(
+            config
+                .metrics
+                .head(note.notehead_style, chord.duration_log2)
+                .advance
+                * unit,
+        )
+    });
+    let anchor = chord_left_notehead_offset(&layouts, direction) * widest;
+    // The renderer only allocates accidental columns when two or more glyphs
+    // need stacking; keep the common zero/one-accidental chord allocation-free
+    // on this path too (apart from its required sorted notehead layouts).
+    let stacked: Vec<_> = if layouts
+        .iter()
+        .filter(|note| note.accidental.is_some())
+        .take(2)
+        .count()
+        > 1
+    {
+        layouts
+            .iter()
+            .filter_map(|note| {
+                note.accidental.map(|acc| {
+                    (
+                        note.staff_position,
+                        accidental_advance(acc, config) * chord.annotations.size.scale(),
+                    )
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let columns = (!stacked.is_empty()).then(|| {
+        layout_accidental_columns(
+            &stacked,
+            config.accidental_column_gap * chord.annotations.size.scale(),
+        )
+    });
+    let mut offsets = columns
+        .as_ref()
+        .map(|columns| columns.column_offsets.iter());
+    for note in &layouts {
+        let head_x = notehead_x_offset(note.offset, direction) * widest;
+        let head = config
+            .metrics
+            .head(note.notehead_style, chord.duration_log2);
+        let mut left = head_x;
+        if let Some(accidental) = note.accidental {
+            let offset = offsets.as_mut().map_or(0.0, |offsets| {
+                *offsets.next().expect("column for accidental")
+            });
+            left = include_accidental(&mut ink, accidental, anchor - offset, unit, config);
+        }
+        ink.include(head_x, head, unit);
+        if note.parenthesized {
+            include_head_parentheses(&mut ink, left, head_x + head.advance * unit, unit, config);
+        }
+    }
+    let dot_x = if layouts.iter().any(|note| note.offset) {
+        widest
+    } else {
+        0.0
+    };
+    include_dots(
+        &mut ink,
+        dot_x,
+        widest,
+        chord.dots,
+        chord.annotations.parenthesized_dots,
+        unit,
         config,
-    )
+    );
+    if let Some(group) = &chord.annotations.grace_group {
+        ink.left -= grace_group_extent(
+            group,
+            grace_stem_direction(chord.stem_direction),
+            config.staff_space,
+        );
+    }
+    ink
 }
 
-/// Space reserved before an element: its accidental, grace and parenthesis
-/// extent, or a clef's margin (zero for rests and bare notes).
-fn element_left_extent(element: &MeasureElement, config: &MeasureLayoutConfig) -> f64 {
-    match element {
-        MeasureElement::Note(note) => note_left_extent(note, config),
-        MeasureElement::Chord(chord) => annotated_left_extent(
-            &chord.staff_positions,
-            &chord.accidentals,
-            &chord.annotations,
-            chord.stem_direction,
+fn rest_ink(rest: &RestEvent, config: &MeasureLayoutConfig) -> InkExtent {
+    let mut ink = InkExtent::default();
+    let index = i16::from(rest.duration_log2) + 1;
+    let glyph = usize::try_from(index)
+        .ok()
+        .and_then(|index| config.metrics.rests.get(index))
+        .copied();
+    if let Some(glyph) = glyph {
+        ink.include(0.0, glyph, config.staff_space);
+        include_dots(
+            &mut ink,
+            0.0,
+            glyph.advance * config.staff_space,
+            rest.dots,
+            false,
+            config.staff_space,
             config,
-        ),
+        );
+    }
+    ink
+}
+
+fn element_ink(element: &MeasureElement, config: &MeasureLayoutConfig) -> Option<InkExtent> {
+    match element {
+        MeasureElement::Note(note) => Some(note_ink(note, config)),
+        MeasureElement::Chord(chord) => Some(chord_ink(chord, config)),
+        MeasureElement::Rest(rest) => Some(rest_ink(rest, config)),
+        _ => None,
+    }
+}
+
+/// Space reserved before an event for ink left of its rhythmic column.
+fn element_left_extent(
+    element: &MeasureElement,
+    ink: Option<InkExtent>,
+    config: &MeasureLayoutConfig,
+) -> f64 {
+    match element {
         MeasureElement::Clef(clef) => match clef.size {
             ClefSize::Full => config.clef_left_margin,
             ClefSize::Change => config.clef_change_margin,
         },
-        _ => 0.0,
+        _ => ink.map_or(0.0, |ink| -ink.left.min(0.0)),
     }
 }
 
@@ -853,6 +1208,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
     // Tuplet spans open at this point of the measure, outermost first.
     let mut open_tuplets: Vec<TupletSpec> = Vec::new();
     for elem in elements {
+        let ink = element_ink(elem, config);
         let time_scale = crate::layout::group::tuplet_time_scale(&open_tuplets);
         // Each arm yields (rod, spring, trailing_padding). Prefix elements use
         // trailing padding (e.g. clef_padding) that sits outside the element's
@@ -881,35 +1237,27 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                 config.time_sig_padding,
             ),
             MeasureElement::Note(n) => (
-                note_rod(0.0, n.dots, &n.annotations, config),
+                ink.expect("note ink").rod(config),
                 spring(n.duration_log2, time_scale),
                 0.0,
             ),
-            MeasureElement::Rest(r) => {
-                // A rest has no notehead/accidental, but reuse the notehead rod
-                // as the glyph-extent estimate; dots still apply.
-                (
-                    event_rod(0.0, r.dots, config),
-                    spring(r.duration_log2, time_scale),
-                    0.0,
-                )
-            }
+            MeasureElement::Rest(r) => (
+                ink.expect("rest ink").rod(config),
+                spring(r.duration_log2, time_scale),
+                0.0,
+            ),
             // Timed spacers occupy rest-like room; instantaneous anchors
             // introduce neither a phantom glyph nor a phantom spacing rod.
             MeasureElement::Spacer(spacer) => {
                 spacer.duration_log2.map_or((0.0, 0.0, 0.0), |log2| {
-                    (event_rod(0.0, spacer.dots, config), spring(log2, 1.0), 0.0)
+                    (event_rod(config), spring(log2, 1.0), 0.0)
                 })
             }
-            MeasureElement::Chord(c) => {
-                // A chord shares one stem column (one notehead rod); its stacked
-                // accidental columns are its leading accidental extent.
-                (
-                    note_rod(0.0, c.dots, &c.annotations, config),
-                    spring(c.duration_log2, time_scale),
-                    0.0,
-                )
-            }
+            MeasureElement::Chord(c) => (
+                ink.expect("chord ink").rod(config),
+                spring(c.duration_log2, time_scale),
+                0.0,
+            ),
             MeasureElement::GroupMark(mark) => {
                 match mark {
                     GroupMark::TupletStart { spec, .. } => open_tuplets.push(*spec),
@@ -926,7 +1274,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
                 // church-rest cluster) spanning to the barline. Use whole-note
                 // (longest) spring length as the block allocation, but treat it
                 // as rod so it neither compresses nor stretches.
-                (event_rod(0.0, 0, config) + spring(0, 1.0), 0.0, 0.0)
+                (event_rod(config) + spring(0, 1.0), 0.0, 0.0)
             }
             // An invisible barline marks a position (a break point or an
             // unmarked end) without taking any space.
@@ -934,7 +1282,7 @@ pub fn layout_measure(elements: &[MeasureElement], config: &MeasureLayoutConfig)
             MeasureElement::Barline(_) => (config.barline_width, 0.0, 0.0),
         };
 
-        let mut leading = element_left_extent(elem, config)
+        let mut leading = element_left_extent(elem, ink, config)
             + match (elem, previous) {
                 (MeasureElement::TimeSignature(_), None | Some(MeasureElement::Barline(_))) => {
                     config.time_sig_change_margin
@@ -1108,12 +1456,15 @@ mod tests {
         let layout = layout_measure(&elements, &cfg);
         assert_eq!(layout.elements.len(), 1);
         assert!((layout.elements[0].x - 0.0).abs() < f64::EPSILON);
-        // Single note: it is the shortest, so duration = 1.0 and spring = k.
-        // Width = rod + spring; rod is the bare notehead rod (no accidental/dots).
+        // The glyph advance and ink right edge, plus minimum padding, are
+        // incompressible; the duration contributes the spring alone.
         let el = &layout.elements[0];
-        let expected_rod = event_rod(0.0, 0, &cfg);
+        let font = &*BUNDLED_BRAVURA;
+        let bbox = font.glyph_bbox_design_units(Glyph::NoteheadBlack).unwrap();
+        let advance = f64::from(font.glyph_advance(Glyph::NoteheadBlack).unwrap());
+        let expected_rod = bbox.x_right.max(advance) + cfg.min_rod_padding;
         let expected_spring = cfg.spring_constant;
-        assert!((el.rod - expected_rod).abs() < f64::EPSILON, "rod");
+        assert!((el.rod - expected_rod).abs() < 1e-9, "rod");
         assert!((el.spring - expected_spring).abs() < f64::EPSILON, "spring");
         assert!(
             (el.width - (el.rod + el.spring)).abs() < f64::EPSILON,
@@ -1239,18 +1590,17 @@ mod tests {
             }),
         ];
         let layout = layout_measure(&elements, &cfg);
-        // The spring is the duration-driven part. A whole note is 8x an eighth
-        // in duration, so its spring is 8^c times larger (c = 0.6 → ~3.48x).
-        // Rods are equal (same bare notehead), so the spring ratio is the clean
-        // measure of duration proportionality.
+        // The spring tracks rhythmic duration independently of the glyph.
         let spring_ratio = layout.elements[0].spring / layout.elements[1].spring;
         assert!(
             spring_ratio > 3.0,
             "whole-note spring should be >3x an eighth's, got ratio {}",
             spring_ratio,
         );
-        // Rods identical (no accidental, no dots, single notehead each).
-        assert!((layout.elements[0].rod - layout.elements[1].rod).abs() < f64::EPSILON);
+        assert_ne!(
+            layout.elements[0].rod, layout.elements[1].rod,
+            "whole and filled noteheads have different font extents"
+        );
     }
 
     #[test]
@@ -1470,44 +1820,64 @@ mod tests {
     }
 
     #[test]
-    fn accidental_reserves_space_before_the_note_and_dots_widen_its_rod() {
-        let cfg = test_config();
-        let plain = layout_measure(
-            &[MeasureElement::Note(NoteEvent {
-                staff_position: 0,
-                duration_log2: 2,
-                dots: 0,
-                accidental: None,
-                stem_direction: None,
-                annotations: NoteAnnotations::default(),
-            })],
-            &cfg,
-        );
-        let adorned = layout_measure(
-            &[MeasureElement::Note(NoteEvent {
-                staff_position: 0,
-                duration_log2: 2,
-                dots: 2,
-                accidental: Some(ResolvedAccidental::plain(smufl::Glyph::AccidentalFlat)),
-                stem_direction: None,
-                annotations: NoteAnnotations::default(),
-            })],
-            &cfg,
-        );
-        // Same duration (and it is the only/shortest note in each) → same spring.
-        assert!((plain.elements[0].spring - adorned.elements[0].spring).abs() < f64::EPSILON);
-        // The accidental sits left of the notehead: the note starts after it…
-        assert_eq!(plain.elements[0].x, 0.0);
-        assert_eq!(adorned.elements[0].x, cfg.accidental_rod);
-        // …while only the dots widen the note's own rod.
+    fn compressed_accidentals_and_dots_clear_adjacent_ink() {
+        let mut cfg = test_config();
+        cfg.spring_constant = 0.0;
+        let font = &*BUNDLED_BRAVURA;
+        let first = MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 3,
+            accidental: None,
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                parenthesized_dots: true,
+                ..NoteAnnotations::default()
+            },
+        });
+        let second = MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: Some(ResolvedAccidental::cautionary(Glyph::AccidentalDoubleFlat)),
+            stem_direction: None,
+            annotations: NoteAnnotations {
+                parenthesized_noteheads: vec![true],
+                ..NoteAnnotations::default()
+            },
+        });
+        let layout = layout_measure(&[first, second], &cfg);
+        let head_advance = f64::from(font.glyph_advance(Glyph::NoteheadBlack).unwrap());
+        let dot_advance = f64::from(font.glyph_advance(Glyph::AugmentationDot).unwrap());
+        let paren_advance = f64::from(font.glyph_advance(Glyph::NoteheadParenthesisLeft).unwrap());
+        let dot_right = layout.elements[0].x
+            + head_advance
+            + DOT_PARENTHESES_GAP_SS * cfg.staff_space
+            + paren_advance
+            + DOT_PARENTHESES_GAP_SS * cfg.staff_space
+            + 2.0 * DOT_INTER_DOT_SPACING_SS * cfg.staff_space
+            + dot_advance
+            + DOT_PARENTHESES_GAP_SS * cfg.staff_space
+            + font
+                .glyph_bbox_design_units(Glyph::NoteheadParenthesisRight)
+                .unwrap()
+                .x_right;
+        let accidental_left = layout.elements[1].x
+            - ACCIDENTAL_NOTEHEAD_PADDING_SS * cfg.staff_space
+            - f64::from(font.glyph_advance(Glyph::AccidentalParensRight).unwrap())
+            - f64::from(font.glyph_advance(Glyph::AccidentalDoubleFlat).unwrap())
+            - paren_advance
+            - paren_advance
+            + font
+                .glyph_bbox_design_units(Glyph::NoteheadParenthesisLeft)
+                .unwrap()
+                .x_left;
         assert!(
-            ((adorned.elements[0].rod - plain.elements[0].rod) - 2.0 * cfg.dot_rod).abs()
-                < f64::EPSILON,
+            accidental_left - dot_right >= cfg.min_rod_padding - 1e-9,
+            "fully compressed dots and cautionary accidental must clear"
         );
-        // Both are incompressible measure rod.
-        let expected_delta = cfg.accidental_rod + 2.0 * cfg.dot_rod;
-        assert!(((adorned.total_rod - plain.total_rod) - expected_delta).abs() < 1e-9);
-        assert!(((adorned.total_width - plain.total_width) - expected_delta).abs() < 1e-9);
+        assert_eq!(layout.elements[0].spring, 0.0);
+        assert_eq!(layout.elements[1].spring, 0.0);
     }
 
     #[test]
@@ -1544,75 +1914,57 @@ mod tests {
         assert!((cfg2.spacing_exponent - cfg1.spacing_exponent).abs() < f64::EPSILON);
     }
 
-    // ---- Phase 4 calibration locks ----
-    //
-    // These pin the two properties the calibration sweep
-    // (`examples/spacing_calibration.rs`) established. See the
-    // 2026-08-06 entry in docs/ENGRAVER-PROGRESS.md for the rationale.
-
     #[test]
-    fn calibrated_defaults_are_the_locked_values() {
-        // c = 0.6 is the port plan's §6 midpoint of the 0.5-0.7 empirical
-        // range; k = 1.0·ss. Changing either shifts every spacing-sensitive
-        // golden, so the values are asserted rather than left implicit.
-        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
-        assert!((cfg.spacing_exponent - 0.6).abs() < f64::EPSILON);
-        assert!((cfg.spring_constant - 250.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn rod_alone_prevents_notehead_collision_at_the_spring_floor() {
-        // The calibration sweep's key structural finding: because every
-        // rhythmic rod includes `min_rod_padding + notehead_rod`, adjacent
-        // notehead centers stay at least `min_rod_padding` further apart than
-        // one notehead is wide — even at the `s = 0` spring floor, the worst
-        // case the system layer can produce. Collision avoidance therefore
-        // does not depend on the tuning of c or k.
-        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
-        let per_event_rod = event_rod(0.0, 0, &cfg);
-        assert!(
-            per_event_rod > cfg.notehead_rod,
-            "rod ({per_event_rod}) must exceed notehead width ({}) so fully \
-             collapsed springs still cannot collide",
-            cfg.notehead_rod
-        );
-        assert!(
-            (per_event_rod - cfg.notehead_rod - cfg.min_rod_padding).abs() < f64::EPSILON,
-            "the collision margin is exactly min_rod_padding"
-        );
-    }
-
-    #[test]
-    fn longer_notes_get_sublinear_extra_advance() {
-        // Proportionality sanity: a half note in a measure whose shortest note
-        // is an eighth (4x the duration) must take more room than the eighth,
-        // but far less than 4x — strict proportionality reads badly and wastes
-        // width. At the locked defaults the realized ratio is ~1.5x.
-        let cfg = MeasureLayoutConfig::from_staff_space(250.0);
-        let note = |duration_log2| {
-            MeasureElement::Note(NoteEvent {
-                staff_position: 0,
-                duration_log2,
-                dots: 0,
-                accidental: None,
-                stem_direction: None,
-                annotations: NoteAnnotations::default(),
-            })
-        };
-        let layout = layout_measure(&[note(1), note(3)], &cfg);
-        let ratio = layout.elements[0].width / layout.elements[1].width;
-        assert!(
-            ratio > 1.0 && ratio < 2.5,
-            "half:eighth advance ratio {ratio} outside the engraving-practice band"
-        );
+    fn notehead_styles_and_cue_size_use_actual_font_ink_at_spring_floor() {
+        let mut cfg = test_config();
+        cfg.spring_constant = 0.0;
+        let font = &*BUNDLED_BRAVURA;
+        for style in [
+            NoteheadStyle::Normal,
+            NoteheadStyle::Diamond,
+            NoteheadStyle::X,
+            NoteheadStyle::CircleX,
+            NoteheadStyle::Slash,
+            NoteheadStyle::Square,
+        ] {
+            for duration in [-1, 0, 1, 2] {
+                for size in [NoteSize::Normal, NoteSize::Cue] {
+                    let note = MeasureElement::Note(NoteEvent {
+                        staff_position: 4,
+                        duration_log2: duration,
+                        dots: 0,
+                        accidental: None,
+                        stem_direction: None,
+                        annotations: NoteAnnotations {
+                            notehead_styles: vec![style],
+                            size,
+                            ..NoteAnnotations::default()
+                        },
+                    });
+                    let layout = layout_measure(&[note.clone(), note], &cfg);
+                    let glyph = style.glyph(duration);
+                    let bbox = font.glyph_bbox_design_units(glyph).unwrap();
+                    let advance = f64::from(font.glyph_advance(glyph).unwrap());
+                    let right = bbox.x_right.max(advance) * size.scale();
+                    let left = bbox.x_left.min(0.0) * size.scale();
+                    let gap = layout.elements[1].x + left - (layout.elements[0].x + right);
+                    assert!(
+                        gap >= cfg.min_rod_padding - 1e-9,
+                        "{style:?} {duration} {size:?}: ink gap {gap}"
+                    );
+                    assert!(
+                        (layout.elements[0].rod - right - cfg.min_rod_padding).abs() < 1e-9,
+                        "{style:?} {duration} {size:?} rod must follow its glyph"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
     fn breve_advance_is_one_duration_doubling_beyond_whole() {
-        // A breve lasts twice a whole note. With identical rods, its spring
-        // must be the spacing model's duration function evaluated one doubling
-        // further, pushing the following event right by exactly the extra
-        // spring — for notes, rests, chords, and tuplet members alike.
+        // Breves have an extra duration doubling; their own ink rods may
+        // differ from whole notes, so the following onset includes both.
         let cfg = test_config();
         fn note(duration_log2: i8) -> MeasureElement {
             MeasureElement::Note(NoteEvent {
@@ -1671,7 +2023,7 @@ mod tests {
             let (breve, event, next) = layout_with(-1);
             let (whole, ..) = layout_with(0);
             let (breve_event, whole_event) = (&breve.elements[event], &whole.elements[event]);
-            assert!((breve_event.rod - whole_event.rod).abs() < 1e-9);
+            assert!(breve_event.rod > 0.0 && whole_event.rod > 0.0);
             assert!(
                 (breve_event.spring / whole_event.spring - doubling).abs() < 1e-9,
                 "breve spring {} must be whole spring {} times 2^exponent",
@@ -1680,15 +2032,136 @@ mod tests {
             );
             let breve_next_x = breve.elements[next].x;
             let whole_next_x = whole.elements[next].x;
-            assert!(breve_next_x > whole_next_x);
+            assert!(breve_event.spring > whole_event.spring);
             assert!(
-                ((breve_next_x - whole_next_x) - (breve_event.spring - whole_event.spring)).abs()
+                ((breve_next_x - whole_next_x)
+                    - ((breve_event.rod + breve_event.spring)
+                        - (whole_event.rod + whole_event.spring)))
+                    .abs()
                     < 1e-9
             );
         }
         let breve_note = layout_measure(&[note(-1), note(2)], &cfg);
         let expected = spring_rest_length(-1, 2, cfg.spring_constant, cfg.spacing_exponent);
         assert!((breve_note.elements[0].spring - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn displaced_chord_columns_and_dots_clear_both_neighboring_events() {
+        let mut cfg = test_config();
+        cfg.spring_constant = 0.0;
+        let font = &*BUNDLED_BRAVURA;
+        let plain = || {
+            MeasureElement::Note(NoteEvent {
+                staff_position: 4,
+                duration_log2: 2,
+                dots: 0,
+                accidental: None,
+                stem_direction: None,
+                annotations: NoteAnnotations::default(),
+            })
+        };
+        let chord = MeasureElement::Chord(ChordEvent {
+            staff_positions: vec![4, 5],
+            duration_log2: 2,
+            dots: 2,
+            accidentals: vec![
+                Some(ResolvedAccidental::cautionary(Glyph::AccidentalDoubleFlat)),
+                Some(ResolvedAccidental::plain(Glyph::AccidentalSharp)),
+            ],
+            stem_direction: Some(StemDirection::Up),
+            annotations: NoteAnnotations {
+                notehead_styles: vec![NoteheadStyle::Normal, NoteheadStyle::CircleX],
+                parenthesized_noteheads: vec![false, true],
+                ..NoteAnnotations::default()
+            },
+        });
+        let layout = layout_measure(&[plain(), chord, plain()], &cfg);
+        let advance = |glyph| f64::from(font.glyph_advance(glyph).unwrap());
+        let head_width = advance(Glyph::NoteheadBlack).max(advance(Glyph::NoteheadCircleX));
+        // Both accidentals overlap vertically, so the lower cautionary one
+        // occupies an outer column beyond the upper sharp.
+        let outer_offset = advance(Glyph::AccidentalSharp) + cfg.accidental_column_gap;
+        let outer_left = layout.elements[1].x
+            - outer_offset
+            - ACCIDENTAL_NOTEHEAD_PADDING_SS * cfg.staff_space
+            - advance(Glyph::AccidentalParensRight)
+            - advance(Glyph::AccidentalDoubleFlat)
+            - advance(Glyph::AccidentalParensLeft)
+            + font
+                .glyph_bbox_design_units(Glyph::AccidentalParensLeft)
+                .unwrap()
+                .x_left;
+        let previous_right = layout.elements[0].x
+            + font
+                .glyph_bbox_design_units(Glyph::NoteheadBlack)
+                .unwrap()
+                .x_right;
+        assert!(outer_left - previous_right >= cfg.min_rod_padding - 1e-9);
+
+        // An offset second uses the widest selected head for both its x
+        // displacement and the common dot column (renderer behavior).
+        let dot_right = layout.elements[1].x
+            + 2.0 * head_width
+            + DOT_NOTEHEAD_PADDING_SS * cfg.staff_space
+            + DOT_INTER_DOT_SPACING_SS * cfg.staff_space
+            + font
+                .glyph_bbox_design_units(Glyph::AugmentationDot)
+                .unwrap()
+                .x_right;
+        let following_left = layout.elements[2].x
+            + font
+                .glyph_bbox_design_units(Glyph::NoteheadBlack)
+                .unwrap()
+                .x_left;
+        assert!(following_left - dot_right >= cfg.min_rod_padding - 1e-9);
+    }
+
+    #[test]
+    fn alternate_font_bbox_changes_rod_and_accidental_clearance() {
+        use crate::font::{MusicFont, BRAVURA_METADATA, BRAVURA_OTF};
+        let mut metadata: serde_json::Value = serde_json::from_slice(BRAVURA_METADATA).unwrap();
+        metadata["glyphBBoxes"]["noteheadBlack"]["bBoxNE"][0] = serde_json::json!(2.5);
+        metadata["glyphBBoxes"]["accidentalSharp"]["bBoxSW"][0] = serde_json::json!(-0.8);
+        let metadata = serde_json::to_vec(&metadata).unwrap();
+        let font = MusicFont::new(BRAVURA_OTF, &metadata).unwrap();
+        let mut cfg = MeasureLayoutConfig::from_font(&font, 250.0);
+        cfg.spring_constant = 0.0;
+        let note = MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: Some(ResolvedAccidental::plain(Glyph::AccidentalSharp)),
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        });
+        let default = layout_measure(&[note.clone()], &test_config());
+        let adapted = layout_measure(&[note], &cfg);
+        let bbox = font.glyph_bbox_design_units(Glyph::NoteheadBlack).unwrap();
+        assert!((adapted.elements[0].rod - bbox.x_right - cfg.min_rod_padding).abs() < 1e-9);
+        assert!(adapted.elements[0].rod > default.elements[0].rod + 250.0);
+        assert!(adapted.elements[0].x > default.elements[0].x + 150.0);
+    }
+
+    #[test]
+    fn nonstandard_bundled_accidental_uses_its_own_ink_metrics() {
+        let mut cfg = test_config();
+        cfg.spring_constant = 0.0;
+        let glyph = Glyph::AccidentalTripleSharp;
+        let font = &*BUNDLED_BRAVURA;
+        let accidental = MeasureElement::Note(NoteEvent {
+            staff_position: 4,
+            duration_log2: 2,
+            dots: 0,
+            accidental: Some(ResolvedAccidental::plain(glyph)),
+            stem_direction: None,
+            annotations: NoteAnnotations::default(),
+        });
+        let layout = layout_measure(&[accidental], &cfg);
+        let advance = f64::from(font.glyph_advance(glyph).unwrap());
+        let left = font.glyph_bbox_design_units(glyph).unwrap().x_left.min(0.0);
+        let expected = advance + ACCIDENTAL_NOTEHEAD_PADDING_SS * cfg.staff_space - left;
+        assert!((layout.elements[0].x - expected).abs() < 1e-9);
     }
 
     #[test]

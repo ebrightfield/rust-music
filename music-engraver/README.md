@@ -38,7 +38,9 @@ std::fs::write("score.svg", &svg).unwrap();
 - **SMuFL-compliant** layout using Bravura metadata for all engraving constants
 - **Font-agnostic architecture** -- glyph lookup by SMuFL canonical name, not
   hard-coded to Bravura. Adding Petaluma or Leland requires no layout/render changes.
-- **Proportional spacing** using a Gourlay-style power-of-ratio model
+- **Proportional spacing** using Gourlay-style springs and measured notehead,
+  accidental, rest, and dot ink rods from the active font. For custom fonts,
+  pass `MeasureLayoutConfig::from_font(font, staff_space)` to layout.
 - **Accidentals as measure state**: each pitch is compared with the alteration in force
   for its letter and octave (the in-measure override, else the key signature), so
   cancelling naturals, reinstated key-signature accidentals, and suppressed repeats all
@@ -47,7 +49,9 @@ std::fs::write("score.svg", &svg).unwrap();
   (`note_with_accidental`, `chord_with_accidentals`, `beam_group_with_accidentals`,
   `tuplet_ratio_with_accidentals`). Chord accidentals stack into non-colliding columns, and
   every accidental's width is reserved to the left of its note.
-- **Multi-system page layout** with configurable measures-per-system and justification
+- **Multi-system page layout** with configurable fixed, greedy, or optimal
+  line breaks, explicit force/forbid directives, and a short-final-line
+  penalty that avoids stretching a single measure when a balanced pair fits.
 - **Numbered lyric verses** on notes and chords (including beam/tuplet members):
   `.lyric(syllable)` is upright verse 1; `.lyric_verse(verse, syllable, style)`
   accepts `LyricStyle::Upright` or `LyricStyle::Italic` (serif SVG text).
@@ -60,6 +64,30 @@ std::fs::write("score.svg", &svg).unwrap();
   without changing the persistent association. Verse numbers begin at 1.
   Serif glyph widths and visible hyphens reserve incompressible space during
   justification; multi-staff systems expand inter-stave gaps for lower verses.
+
+## TAB rhythm-stem styling
+
+`TabRhythmStyle` sets the stem base's distance above the TAB top line and
+the stem length, both in staff spaces. Defaults are 1.5 and 3.0. The same
+style applies to individual stems and beamed groups; page bounds and
+inter-system spacing include their ink.
+
+```rust
+use music_engraver::layout::TabRhythmStyle;
+use music_engraver::score::tab::TabScoreBuilder;
+
+let style = TabRhythmStyle::new(2.0, 4.0).expect("valid TAB stem geometry");
+let svg = TabScoreBuilder::guitar()
+    .rhythm_style(style)
+    .quarter()
+    .fret(1, 0)
+    .end_barline()
+    .render_svg();
+```
+
+For coordinated standard notation and TAB, call
+`GuitarScore::set_tab_rhythm_style(style)` before rendering. The notation
+staff remains unchanged; the gap above TAB expands when taller stems need it.
 
 ## Publication boundary
 
@@ -83,6 +111,16 @@ cargo run --example score_builder -p music-engraver
 cargo run --example beamed_notes -p music-engraver
 
 # All examples write SVG to music-engraver/examples/output/
+```
+
+The PNG regression in `tests/perceptual_png.rs` uses only bundled Bravura and
+compares tolerant ink silhouettes against a reviewed two-system fixture.
+After an intentional geometry change, inspect the regenerated image before
+accepting a new baseline:
+
+```bash
+cargo test -p music-engraver --features png --test perceptual_png refresh_baseline -- --ignored
+cargo test -p music-engraver --features png --test perceptual_png
 ```
 
 ## Architecture

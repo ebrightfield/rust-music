@@ -94,9 +94,11 @@ pub const LYRIC_VERSE_GAP_SS: f64 = 2.0;
 
 /// Baseline for a numbered verse below the bottom staff line.
 pub fn verse_baseline(staff: &StaffLayout, staff_space: f64, verse: u16) -> f64 {
-    staff.y_of(0)
-        + (LYRIC_BELOW_STAFF_SS + f64::from(verse.saturating_sub(1)) * LYRIC_VERSE_GAP_SS)
-            * staff_space
+    let verse_offset = f64::from(verse.saturating_sub(1)) * LYRIC_VERSE_GAP_SS;
+    let default = staff.y_of(0) + (LYRIC_BELOW_STAFF_SS + verse_offset) * staff_space;
+    staff.below_ink_y.map_or(default, |ink| {
+        default.max(ink + (4.5 + verse_offset) * staff_space)
+    })
 }
 
 /// Result of laying out a lyric syllable.

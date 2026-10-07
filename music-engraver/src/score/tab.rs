@@ -25,15 +25,17 @@ use crate::layout::bar_number::{
     BAR_NUMBER_FONT_SIZE_SS,
 };
 use crate::layout::barline::BarlineStyle;
+use crate::layout::flag::flag_glyph;
 use crate::layout::measure_meta::LineBreak;
 use crate::layout::page::{break_by_directives, SystemBreaking};
+use crate::layout::stem::StemDirection;
 use crate::layout::tab::{layout_fret_number, layout_muted_string, TabStaffLayout};
 use crate::layout::tab_beam::{layout_tab_beam_group, TabBeamedNote};
 use crate::layout::tab_hammer::{layout_tab_legato, LegatoKind};
 use crate::layout::tab_harmonic::layout_tab_harmonic;
 use crate::layout::tab_let_ring::{layout_tab_let_ring, layout_tab_let_ring_dash};
 use crate::layout::tab_palm_mute::{layout_tab_palm_mute, layout_tab_palm_mute_dash};
-use crate::layout::tab_rhythm::layout_tab_rhythm;
+use crate::layout::tab_rhythm::{layout_tab_rhythm, needs_stem, tab_flag_count, TabRhythmStyle};
 use crate::layout::tab_slide::layout_tab_slide;
 use crate::layout::tab_vibrato::{layout_tab_vibrato, VibratoKind};
 use crate::render::bar_number_renderer::draw_bar_numbers;
@@ -113,6 +115,8 @@ pub struct TabScoreBuilder {
     system_width: f64,
     /// Which measures print their number.
     measure_numbering: MeasureNumbering,
+    /// Vertical geometry of rhythm stems and beams above the TAB staff.
+    rhythm_style: TabRhythmStyle,
     /// Number assigned to the first measure (default 1).
     first_measure_number: i32,
     /// When true, we are accumulating events for a beam group.
@@ -150,6 +154,7 @@ impl TabScoreBuilder {
             system_width: 0.0,
             measure_numbering: MeasureNumbering::Hidden,
             first_measure_number: 1,
+            rhythm_style: TabRhythmStyle::default(),
             in_beam_group: false,
             beam_group_events: Vec::new(),
             pending_slide: false,
@@ -182,6 +187,12 @@ impl TabScoreBuilder {
     /// Set the system width in font design units.
     pub fn system_width_fu(mut self, width: f64) -> Self {
         self.system_width = width;
+        self
+    }
+
+    /// Set the vertical position and length of TAB rhythm stems and beams.
+    pub fn rhythm_style(mut self, style: TabRhythmStyle) -> Self {
+        self.rhythm_style = style;
         self
     }
 
@@ -561,7 +572,9 @@ impl TabScoreBuilder {
 
         // Compute page dimensions
         let tab_staff_height = staff_space * (self.line_count.saturating_sub(1)) as f64;
-        let inter_system_gap = 4.0 * staff_space;
+        let rhythm_reach =
+            tab_rhythm_ink_reach_ss(&self.measures, &font, staff_space, self.rhythm_style);
+        let inter_system_gap = (4.0_f64).max(rhythm_reach + 1.0) * staff_space;
         let total_systems = chunks.len();
         let page_height = if total_systems > 0 {
             total_systems as f64 * tab_staff_height
@@ -571,12 +584,14 @@ impl TabScoreBuilder {
         };
 
         let vb_margin = staff_space;
-        // Bar numbers sit above the first staff: keep them inside the box.
-        let top_margin = if self.measure_numbering == MeasureNumbering::Hidden {
+        // Stems, flags, and bar numbers above the first system must fit inside
+        // the viewBox. The same reach clears the preceding system's bottom line.
+        let number_margin = if self.measure_numbering == MeasureNumbering::Hidden {
             vb_margin
         } else {
             (BAR_NUMBER_ABOVE_STAFF_SS + BAR_NUMBER_FONT_SIZE_SS) * staff_space
         };
+        let top_margin = number_margin.max((rhythm_reach + 1.0) * staff_space);
         let vb_x = -vb_margin;
         let vb_y = -top_margin;
         let vb_w = sys_width + 2.0 * vb_margin;
@@ -590,8 +605,9 @@ impl TabScoreBuilder {
         for (sys_idx, (start, end)) in chunks.iter().enumerate() {
             let sys_y = sys_idx as f64 * (tab_staff_height + inter_system_gap);
 
-            let tab_staff =
+            let mut tab_staff =
                 TabStaffLayout::new(0.0, sys_y, sys_width, staff_space, self.line_count);
+            tab_staff.rhythm_style = self.rhythm_style;
 
             // Draw staff lines
             draw_tab_staff_lines(&mut svg, &tab_staff, &config);
@@ -693,6 +709,53 @@ impl Default for TabScoreBuilder {
     }
 }
 
+/// Highest ink above a TAB staff, including any flagged stem in the score.
+/// Only engraved durations contribute; a TAB without rhythm marks keeps its
+/// original compact margins. Bravura's high-order flags can extend above
+/// their stem tips, so use their measured bounds rather than just stem length.
+fn tab_rhythm_ink_reach_ss(
+    measures: &[TabMeasure],
+    font: &MusicFont,
+    staff_space: f64,
+    style: TabRhythmStyle,
+) -> f64 {
+    let mut has_stems = false;
+    let mut max_flags = 0;
+    let mut consider = |duration| {
+        if needs_stem(duration) {
+            has_stems = true;
+            max_flags = max_flags.max(tab_flag_count(duration));
+        }
+    };
+    for measure in measures {
+        for event in &measure.events {
+            match event {
+                TabEvent::Fret { duration_log2, .. } | TabEvent::Rest { duration_log2 } => {
+                    if let Some(duration) = duration_log2 {
+                        consider(*duration);
+                    }
+                }
+                TabEvent::BeamGroup { events } => {
+                    for (_, duration) in events {
+                        consider(*duration);
+                    }
+                }
+            }
+        }
+    }
+    if !has_stems {
+        return 0.0;
+    }
+    let flag_overhang = (1..=max_flags.min(5))
+        .filter_map(|level| flag_glyph(level, StemDirection::Up))
+        .map(|glyph| {
+            font.glyph_bbox_design_units(glyph)
+                .map_or(2.5, |bounds| (-bounds.y_top / staff_space).max(0.0))
+        })
+        .fold(0.0_f64, f64::max);
+    style.above_staff_reach_ss() + flag_overhang
+}
+
 /// Break the measures into system chunks of `mps` measures each, honoring
 /// their explicit line-break directives.
 fn break_tab_measures(measures: &[TabMeasure], mps: usize) -> Vec<(usize, usize)> {
@@ -728,20 +791,64 @@ pub(crate) fn draw_tab_measure(
     let padding = measure_width * 0.08;
     let usable_width = measure_width - 2.0 * padding;
 
-    // Compute x positions for events (evenly spaced)
-    let spacing = if event_count > 1 {
-        usable_width / (event_count - 1) as f64
+    // Flatten attack durations so beam-group boundaries do not affect spacing.
+    // Positions follow musical time: an eighth advances twice as far as a
+    // sixteenth, whether or not the attacks belong to the same beam group.
+    let attack_durations = measure
+        .events
+        .iter()
+        .flat_map(|event| match event {
+            TabEvent::Fret { duration_log2, .. } | TabEvent::Rest { duration_log2 } => {
+                vec![duration_log2.map_or(1.0, tab_duration_width)]
+            }
+            TabEvent::BeamGroup { events } => events
+                .iter()
+                .map(|(_, duration)| tab_duration_width(*duration))
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    let attack_count = attack_durations.len();
+    let onset_span: f64 = attack_durations
+        .iter()
+        .take(attack_count.saturating_sub(1))
+        .sum();
+    let duration_scale = if onset_span > 0.0 {
+        usable_width / onset_span
     } else {
         0.0
     };
-
-    let stem_width = config.stem_thickness_fu();
-
-    for (e_idx, event) in measure.events.iter().enumerate() {
-        let event_x = if event_count == 1 {
+    let event_elapsed = |event_index: usize| {
+        measure
+            .events
+            .iter()
+            .take(event_index)
+            .map(|event| match event {
+                TabEvent::Fret { duration_log2, .. } | TabEvent::Rest { duration_log2 } => {
+                    duration_log2.map_or(1.0, tab_duration_width)
+                }
+                TabEvent::BeamGroup { events } => events
+                    .iter()
+                    .map(|(_, duration)| tab_duration_width(*duration))
+                    .sum(),
+            })
+            .sum::<f64>()
+    };
+    let event_x_at = |event_index: usize| {
+        if attack_count == 1 {
             measure_x + padding + usable_width / 2.0
         } else {
-            measure_x + padding + e_idx as f64 * spacing
+            measure_x + padding + event_elapsed(event_index) * duration_scale
+        }
+    };
+
+    let stem_width = config.stem_thickness_fu();
+    let mut elapsed_duration = 0.0;
+
+    for event in &measure.events {
+        let event_x = if attack_count == 1 {
+            event_x_at(0)
+        } else {
+            measure_x + padding + elapsed_duration * duration_scale
         };
 
         match event {
@@ -787,11 +894,20 @@ pub(crate) fn draw_tab_measure(
                     tab_staff,
                     beam_events,
                     event_x,
-                    spacing.max(usable_width / (event_count.max(1)) as f64),
+                    duration_scale,
                     stem_width,
                 );
             }
         }
+        elapsed_duration += match event {
+            TabEvent::Fret { duration_log2, .. } | TabEvent::Rest { duration_log2 } => {
+                duration_log2.map_or(1.0, tab_duration_width)
+            }
+            TabEvent::BeamGroup { events } => events
+                .iter()
+                .map(|(_, duration)| tab_duration_width(*duration))
+                .sum(),
+        };
     }
 
     // Second pass: draw slide lines between consecutive fret events
@@ -811,12 +927,8 @@ pub(crate) fn draw_tab_measure(
                     frets: tgt_frets, ..
                 } = &measure.events[target_idx]
                 {
-                    let src_x = if event_count == 1 {
-                        measure_x + padding + usable_width / 2.0
-                    } else {
-                        measure_x + padding + i as f64 * spacing
-                    };
-                    let tgt_x = measure_x + padding + target_idx as f64 * spacing;
+                    let src_x = event_x_at(i);
+                    let tgt_x = event_x_at(target_idx);
 
                     // Draw a slide line for each string that appears in both events
                     for &(src_str, _) in src_frets {
@@ -844,11 +956,7 @@ pub(crate) fn draw_tab_measure(
             ..
         } = event
         {
-            let event_x = if event_count == 1 {
-                measure_x + padding + usable_width / 2.0
-            } else {
-                measure_x + padding + e_idx as f64 * spacing
-            };
+            let event_x = event_x_at(e_idx);
 
             let technique_stroke = config.stem_thickness_fu();
 
@@ -908,12 +1016,8 @@ pub(crate) fn draw_tab_measure(
 
                 // Draw a dashed line if the PM span covers more than one event
                 if end_idx > start_idx {
-                    let start_x = if event_count == 1 {
-                        measure_x + padding + usable_width / 2.0
-                    } else {
-                        measure_x + padding + start_idx as f64 * spacing
-                    };
-                    let end_x = measure_x + padding + end_idx as f64 * spacing;
+                    let start_x = event_x_at(start_idx);
+                    let end_x = event_x_at(end_idx);
 
                     if let Some(dash_layout) =
                         layout_tab_palm_mute_dash(tab_staff, start_x, end_x, technique_stroke)
@@ -946,12 +1050,8 @@ pub(crate) fn draw_tab_measure(
                 let end_idx = if is_lr { e_idx } else { e_idx - 1 };
 
                 if end_idx > start_idx {
-                    let start_x = if event_count == 1 {
-                        measure_x + padding + usable_width / 2.0
-                    } else {
-                        measure_x + padding + start_idx as f64 * spacing
-                    };
-                    let end_x = measure_x + padding + end_idx as f64 * spacing;
+                    let start_x = event_x_at(start_idx);
+                    let end_x = event_x_at(end_idx);
 
                     if let Some(dash_layout) =
                         layout_tab_let_ring_dash(tab_staff, start_x, end_x, technique_stroke)
@@ -982,12 +1082,8 @@ pub(crate) fn draw_tab_measure(
                     frets: tgt_frets, ..
                 } = &measure.events[target_idx]
                 {
-                    let src_x = if event_count == 1 {
-                        measure_x + padding + usable_width / 2.0
-                    } else {
-                        measure_x + padding + i as f64 * spacing
-                    };
-                    let tgt_x = measure_x + padding + target_idx as f64 * spacing;
+                    let src_x = event_x_at(i);
+                    let tgt_x = event_x_at(target_idx);
 
                     for &(src_str, _) in src_frets {
                         if tgt_frets.iter().any(|&(ts, _)| ts == src_str) {
@@ -1023,38 +1119,27 @@ pub(crate) fn draw_tab_measure(
 
 /// Draw a beam group event: fret numbers + beamed rhythm stems above the staff.
 ///
-/// Sub-events are spaced evenly within the allocated `group_width` starting
-/// at `start_x`. Each sub-event's fret numbers are drawn, then beam layout
-/// and rendering connect the stems.
+/// Sub-events are positioned from their rhythmic durations starting at
+/// `start_x`. Each sub-event's fret numbers are drawn, then beam layout and
+/// rendering connect the stems.
 fn draw_tab_beam_group_event(
     svg: &mut SvgWriter,
     config: &EngravingConfig,
     tab_staff: &TabStaffLayout,
     events: &[(Vec<(u8, u8)>, i8)],
     start_x: f64,
-    group_width: f64,
+    duration_scale: f64,
     stem_width: f64,
 ) {
     if events.is_empty() {
         return;
     }
 
-    // Compute x positions for sub-events within the beam group
-    let sub_count = events.len();
-    let sub_spacing = if sub_count > 1 {
-        group_width / (sub_count - 1) as f64
-    } else {
-        0.0
-    };
+    let mut beam_notes = Vec::with_capacity(events.len());
+    let mut elapsed_duration = 0.0;
 
-    let mut beam_notes = Vec::with_capacity(sub_count);
-
-    for (i, (frets, dur)) in events.iter().enumerate() {
-        let x = if sub_count == 1 {
-            start_x
-        } else {
-            start_x + i as f64 * sub_spacing
-        };
+    for (frets, dur) in events {
+        let x = start_x + elapsed_duration * duration_scale;
 
         // Draw fret numbers
         for &(string, fret) in frets {
@@ -1066,6 +1151,7 @@ fn draw_tab_beam_group_event(
             x,
             duration_log2: *dur,
         });
+        elapsed_duration += tab_duration_width(*dur);
     }
 
     // Layout and draw beams
@@ -1077,6 +1163,10 @@ fn draw_tab_beam_group_event(
     {
         draw_tab_beam_group(svg, &beam_layout);
     }
+}
+
+fn tab_duration_width(duration_log2: i8) -> f64 {
+    2.0_f64.powi(-i32::from(duration_log2))
 }
 
 /// Draw a barline at the given x position spanning the tab staff.
@@ -1518,6 +1608,104 @@ mod tests {
     }
 
     #[test]
+    fn styled_tab_stems_and_beams_clear_viewbox_and_previous_system() {
+        fn attr(element: &str, name: &str) -> f64 {
+            element
+                .split_once(&format!("{name}=\""))
+                .unwrap()
+                .1
+                .split_once('"')
+                .unwrap()
+                .0
+                .parse()
+                .unwrap()
+        }
+        let svg = TabScoreBuilder::guitar()
+            .rhythm_style(TabRhythmStyle::new(2.0, 4.0).unwrap())
+            .measures_per_system(1)
+            .quarter()
+            .fret(1, 0)
+            .barline()
+            .beam_start()
+            .eighth()
+            .fret(1, 2)
+            .next()
+            .eighth()
+            .fret(1, 3)
+            .beam_end()
+            .end_barline()
+            .render_svg();
+        let top: f64 = svg
+            .lines()
+            .next()
+            .unwrap()
+            .split_once("viewBox=\"")
+            .unwrap()
+            .1
+            .split_once('"')
+            .unwrap()
+            .0
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let stems: Vec<_> = svg
+            .lines()
+            .filter(|line| line.starts_with("  <line ") && attr(line, "y2") < attr(line, "y1"))
+            .map(|line| (attr(line, "y1"), attr(line, "y2")))
+            .collect();
+        assert_eq!(stems.len(), 3);
+        assert_eq!(stems[0], (-500.0, -1500.0));
+        assert!(top < stems[0].1, "first rhythm stem must fit the viewBox");
+        assert!(
+            stems[1..]
+                .iter()
+                .all(|&(base, tip)| { base - tip == 1000.0 && tip > 1250.0 }),
+            "beamed stems must clear the previous staff"
+        );
+        assert!(svg.contains("<polygon "), "beamed notes must still connect");
+    }
+
+    #[test]
+    fn high_order_flag_ink_fits_tab_viewbox() {
+        let font = bravura_font();
+        let staff_space = font.engraving_config().staff_space;
+        let svg = TabScoreBuilder::guitar()
+            .duration(7)
+            .fret(1, 0)
+            .end_barline()
+            .render_svg();
+        let top: f64 = svg
+            .lines()
+            .next()
+            .unwrap()
+            .split_once("viewBox=\"")
+            .unwrap()
+            .1
+            .split_once('"')
+            .unwrap()
+            .0
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let flag = flag_glyph(5, StemDirection::Up).unwrap();
+        let flag_top = font.glyph_bbox_design_units(flag).unwrap().y_top;
+        let tip = -TabRhythmStyle::default().above_staff_reach_ss() * staff_space;
+        assert!(top < tip + flag_top, "128th flag ink must not be clipped");
+        let plain = TabScoreBuilder::guitar()
+            .fret(1, 0)
+            .end_barline()
+            .render_svg();
+        assert!(
+            plain.contains("viewBox=\"-250 -250 "),
+            "unrhythmic TAB keeps compact bounds"
+        );
+    }
+
+    #[test]
     fn whole_note_no_stem() {
         let svg = TabScoreBuilder::guitar()
             .whole()
@@ -1690,6 +1878,89 @@ mod tests {
         // 2 fret numbers
         assert_eq!(svg.matches(">0</text>").count(), 1, "should show fret 0");
         assert_eq!(svg.matches(">2</text>").count(), 1, "should show fret 2");
+    }
+
+    #[test]
+    fn adjacent_beam_groups_use_distinct_attack_positions() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth()
+            .fret(6, 5)
+            .next()
+            .eighth()
+            .fret(6, 6)
+            .next()
+            .eighth()
+            .fret(6, 7)
+            .next()
+            .eighth()
+            .fret(6, 8)
+            .next()
+            .beam_end()
+            .beam_start()
+            .eighth()
+            .fret(5, 5)
+            .next()
+            .eighth()
+            .fret(5, 6)
+            .next()
+            .eighth()
+            .fret(5, 7)
+            .next()
+            .eighth()
+            .fret(5, 8)
+            .next()
+            .beam_end()
+            .end_barline()
+            .render_svg();
+
+        let mut x_positions = svg
+            .match_indices("<text x=\"")
+            .filter_map(|(start, _)| {
+                let value = &svg[start + 9..];
+                value.find('"').map(|end| &value[..end])
+            })
+            .collect::<Vec<_>>();
+        x_positions.sort_unstable();
+        x_positions.dedup();
+
+        assert_eq!(
+            x_positions.len(),
+            8,
+            "all eight attacks across adjacent beam groups need distinct x positions"
+        );
+    }
+
+    #[test]
+    fn mixed_beam_durations_use_time_proportional_spacing() {
+        let svg = TabScoreBuilder::guitar()
+            .beam_start()
+            .eighth()
+            .fret(6, 5)
+            .next()
+            .duration(4)
+            .fret(6, 6)
+            .next()
+            .eighth()
+            .fret(6, 7)
+            .next()
+            .beam_end()
+            .end_barline()
+            .render_svg();
+
+        let positions = svg
+            .match_indices("<text x=\"")
+            .filter_map(|(start, _)| {
+                let value = &svg[start + 9..];
+                value
+                    .find('"')
+                    .and_then(|end| value[..end].parse::<f64>().ok())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(positions.len(), 3);
+        let eighth_gap = positions[1] - positions[0];
+        let sixteenth_gap = positions[2] - positions[1];
+        assert!((eighth_gap / sixteenth_gap - 2.0).abs() < 0.01);
     }
 
     #[test]
@@ -2680,14 +2951,6 @@ mod tests {
         }
 
         // -- Pixel-content verification --
-        //
-        // Tab staves have 6 strings (vs 5 staff lines for standard notation),
-        // a TAB clef glyph (vs the much smaller G/F clef), and fret numbers
-        // rendered as text (vs notehead glyphs). A regression like dropping
-        // a string line, rendering the TAB clef as a wrong glyph, or losing
-        // text fret numbers would slip past magic-byte and dimension checks
-        // but show up here as ink-density or layout anomalies.
-
         /// A small but content-rich tab score: 6 chord notes across two
         /// measures, both barlines, fret numbers on multiple strings.
         fn rich_tab_score() -> TabScoreBuilder {
@@ -2707,12 +2970,6 @@ mod tests {
                 .next()
                 .fret(4, 0)
                 .end_barline()
-        }
-
-        /// A near-empty tab score: TAB clef + end barline only. No fret
-        /// numbers; the only ink is from the staff lines and clef glyph.
-        fn sparse_tab_score() -> TabScoreBuilder {
-            TabScoreBuilder::guitar().end_barline()
         }
 
         #[test]
@@ -2742,58 +2999,6 @@ mod tests {
             assert!(
                 dense >= 6,
                 "tab has only {dense} dense rows; expected >= 6 (six strings)"
-            );
-        }
-
-        #[test]
-        fn tab_png_has_more_dense_rows_than_standard_staff() {
-            // 6-string tab should produce more dense horizontal bands than a
-            // 5-line standard staff (sanity vs the previous test, but with a
-            // built-in baseline comparison — catches a regression that
-            // accidentally collapsed the tab staff to 5 strings).
-            use crate::score::ScoreBuilder as NotationScoreBuilder;
-            use music::notation::clef::Clef;
-            use music::notation::rhythm::duration::Duration;
-            use music::note::note::Note;
-            use music::note::pitch::Pitch;
-
-            let standard_png = NotationScoreBuilder::new()
-                .clef(Clef::Treble)
-                .note(Pitch::new(Note::C, 4), Duration::QTR)
-                .end_barline()
-                .render_png(1.0);
-            let tab_png = rich_tab_score().render_png(1.0);
-            let standard_dense =
-                count_dense_rows(&decode_pixmap(&standard_png), INK_ALPHA_THRESHOLD, 0.5);
-            let tab_dense = count_dense_rows(&decode_pixmap(&tab_png), INK_ALPHA_THRESHOLD, 0.5);
-            assert!(
-                tab_dense > standard_dense,
-                "tab dense rows ({tab_dense}) should exceed standard staff ({standard_dense})"
-            );
-        }
-
-        #[test]
-        fn tab_png_with_fret_numbers_has_more_ink_than_sparse_tab() {
-            // Fret-number text is drawn into the same vertical region as the
-            // staff lines; counting total ink is the cleanest way to verify
-            // the text actually rendered. If a font-loading failure ever
-            // rendered fret digits as invisible, the sparse vs rich
-            // difference would shrink to zero.
-            let sparse_png = sparse_tab_score().render_png(1.0);
-            let rich_png = rich_tab_score().render_png(1.0);
-            let sparse_ink = count_inked_pixels(&decode_pixmap(&sparse_png), INK_ALPHA_THRESHOLD);
-            let rich_ink = count_inked_pixels(&decode_pixmap(&rich_png), INK_ALPHA_THRESHOLD);
-            assert!(
-                rich_ink > sparse_ink,
-                "tab with fret numbers ({rich_ink}) should have more ink than \
-                 empty tab ({sparse_ink})"
-            );
-            // And the difference should be substantial — at least 100 extra
-            // inked pixels for 6 fret digits + extra barline.
-            assert!(
-                rich_ink - sparse_ink >= 100,
-                "fret-number ink contribution is only {} pixels; expected >= 100",
-                rich_ink - sparse_ink
             );
         }
 

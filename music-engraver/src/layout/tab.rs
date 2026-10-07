@@ -1,5 +1,6 @@
 use smufl::Glyph;
 
+use super::tab_rhythm::TabRhythmStyle;
 use crate::font::EngravingConfig;
 
 /// Number of lines in a standard guitar tablature staff.
@@ -30,6 +31,8 @@ pub struct TabStaffLayout {
     pub staff_space: f64,
     /// Number of strings/lines (6 for guitar, 4 for bass/ukulele).
     pub line_count: u8,
+    /// Vertical styling shared by rhythm stems, flags, and TAB beams.
+    pub rhythm_style: TabRhythmStyle,
 }
 
 impl TabStaffLayout {
@@ -41,6 +44,7 @@ impl TabStaffLayout {
             width,
             staff_space,
             line_count,
+            rhythm_style: TabRhythmStyle::default(),
         }
     }
 

@@ -196,6 +196,53 @@ fn main() {
         notehead_advance,
     );
 
+    // --- Group 5: mixed durations with an off-center high note ---
+    // The high C near the left edge should influence the slope, not merely
+    // translate an endpoint-only beam upward.
+    // This low-level example has no measure onsets, so its lone E4 beamlet
+    // keeps the leftward fallback. The score example supplies real onsets.
+    let group5_pitches = [
+        Pitch::new(Note::E, 4),
+        Pitch::new(Note::C, 5),
+        Pitch::new(Note::G, 4),
+        Pitch::new(Note::E, 4),
+        Pitch::new(Note::G, 4),
+    ];
+    let group5_xs = [9700.0, 10020.0, 10400.0, 11100.0, 11600.0];
+    let group5_durs: [i8; 5] = [4, 4, 3, 4, 3];
+    let group5_notes: Vec<BeamedNote> = group5_pitches
+        .iter()
+        .zip(group5_xs)
+        .zip(group5_durs)
+        .map(|((pitch, x), duration_log2)| BeamedNote {
+            x,
+            staff_position: pitch_to_staff_position(pitch, &Clef::Treble),
+            duration_log2,
+        })
+        .collect();
+    for note in &group5_notes {
+        draw_note(
+            &mut svg,
+            &staff,
+            &font,
+            &config,
+            note.x,
+            note.staff_position,
+            NoteheadKind::Filled,
+        )
+        .unwrap();
+    }
+    let dir5 = beam_group_stem_direction(&group5_notes);
+    let layout5 = layout_beam_group(&group5_notes, dir5, staff.staff_space);
+    draw_beam_group(
+        &mut svg,
+        &staff,
+        &config,
+        &group5_notes,
+        &layout5,
+        notehead_advance,
+    );
+
     let output = svg.to_svg();
 
     std::fs::create_dir_all("music-engraver/examples/output").unwrap();

@@ -166,7 +166,10 @@ pub(super) fn draw_event_marks(
     let padding = TEXT_SCRIPT_PADDING_SS * ss;
     let mut stacks = Stacks {
         above: anchor.top_y.min(staff.y_of(8)) - padding,
-        below: anchor.bottom_y.max(staff.y_of(0)) + padding,
+        below: anchor
+            .bottom_y
+            .max(staff.below_ink_y.unwrap_or(staff.y_of(0)))
+            + padding,
         gap: TEXT_SCRIPT_STACK_GAP_SS * ss,
     };
 

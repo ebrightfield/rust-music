@@ -371,27 +371,27 @@ fn greedy_breaks(widths: &[f64], budgets: (f64, f64)) -> Vec<(usize, usize)> {
 
 /// Optimal line breaking via Knuth-Plass style dynamic programming.
 ///
-/// Minimizes total badness across all systems, where badness for a system is
-/// the squared deviation of its fill ratio from 1.0. This distributes
-/// whitespace more evenly than the greedy [`greedy_breaks`]. Budgets are as
-/// for [`greedy_breaks`].
-///
-/// The algorithm considers every possible break point and uses DP to find
-/// the globally optimal sequence. Complexity is O(n²) where n is the number
-/// of units — acceptable since scores rarely exceed a few hundred measures.
+/// Balances squared fill deviation against an orphan penalty when an
+/// underfilled system holds just one breakable unit. This avoids stretching
+/// a final short measure to the entire line when adjacent measures can make
+/// a balanced pair. Prefix widths and explicit Force/Forbid directives remain
+/// outside this scorer. Complexity is O(n²) for n breakable units.
 fn optimal_breaks(widths: &[f64], budgets: (f64, f64)) -> Vec<(usize, usize)> {
     let n = widths.len();
+    // Prefix sums make every candidate width O(1), not a repeated slice sum.
+    let mut cumulative = Vec::with_capacity(n + 1);
+    cumulative.push(0.0);
+    for &width in widths {
+        cumulative.push(cumulative.last().copied().unwrap() + width);
+    }
+    const SHORT_SINGLETON_PENALTY: f64 = 0.22;
 
-    // Badness for a system spanning units[start..end] on system number
-    // `sys_idx` (0-based).
-    let line_badness = |start: usize, end: usize, sys_idx: usize| -> f64 {
-        let budget = if sys_idx == 0 { budgets.0 } else { budgets.1 };
+    let line_badness = |start: usize, end: usize| -> f64 {
+        let budget = if start == 0 { budgets.0 } else { budgets.1 };
         if budget <= 0.0 {
             return 0.0;
         }
-
-        let content_w: f64 = widths[start..end].iter().sum();
-        let ratio = content_w / budget;
+        let ratio = (cumulative[end] - cumulative[start]) / budget;
 
         if ratio > 1.5 {
             // Severely overfull — penalize heavily but not infinitely, so the
@@ -399,17 +399,21 @@ fn optimal_breaks(widths: &[f64], budgets: (f64, f64)) -> Vec<(usize, usize)> {
             return 1e6;
         }
 
-        // Squared deviation from perfect fill. Underfull lines (ratio < 1)
-        // and slightly overfull lines (ratio > 1) are both penalized, but
-        // underfull is more common and more visually objectionable, so we
-        // use an asymmetric weight: underfull gets 1× weight, overfull gets
-        // 4× weight (discouraging cramming).
-        let deviation = ratio - 1.0;
-        if deviation < 0.0 {
-            deviation * deviation
+        // Underfilled systems are visually stretched by justification.
+        // Penalize a short singleton without penalizing a necessary wide
+        // measure (or the only measure in a forced-break section).
+        let orphan = if n > 1 && end - start == 1 && ratio < 0.65 {
+            SHORT_SINGLETON_PENALTY
         } else {
-            4.0 * deviation * deviation
-        }
+            0.0
+        };
+        let deviation = ratio - 1.0;
+        orphan
+            + if deviation < 0.0 {
+                deviation * deviation
+            } else {
+                4.0 * deviation * deviation
+            }
     };
 
     // DP: cost[j] = minimum total badness for units[0..j].
@@ -418,18 +422,13 @@ fn optimal_breaks(widths: &[f64], budgets: (f64, f64)) -> Vec<(usize, usize)> {
     let mut prev = vec![0usize; n + 1];
     cost[0] = 0.0;
 
-    // sys_count[j] = number of systems used to reach unit j.
-    let mut sys_count = vec![0usize; n + 1];
-
     for j in 1..=n {
         for i in (0..j).rev() {
-            let sys_idx = sys_count[i];
-            let b = line_badness(i, j, sys_idx);
+            let b = line_badness(i, j);
             let candidate = cost[i] + b;
             if candidate < cost[j] {
                 cost[j] = candidate;
                 prev[j] = i;
-                sys_count[j] = sys_idx + 1;
             }
             // Early termination: if we've already found a very good fit and
             // going further back would only make lines emptier, stop.
@@ -1200,5 +1199,93 @@ mod tests {
             "very narrow target should give one measure per system"
         );
         assert_eq!(chunks, vec![(0, 1), (1, 2), (2, 3)]);
+    }
+
+    #[test]
+    fn optimal_breaking_avoids_a_short_final_orphan_in_mixed_rhythm_corpus() {
+        // Multi-system practice material: quarter-note scales, mixed halves,
+        // dotted rhythms, dense eighths, and a two-half-note cadence.
+        let patterns: &[&[(i8, u8)]] = &[
+            &[(2, 0), (2, 0), (2, 0), (2, 0)],
+            &[(1, 0), (2, 0), (2, 0)],
+            &[
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+            ],
+            &[(2, 1), (3, 0), (1, 0)],
+            &[(0, 0)],
+            &[(2, 0), (2, 0), (2, 0), (2, 0)],
+            &[(3, 0), (3, 0), (3, 0), (3, 0), (1, 0)],
+            &[(1, 0), (1, 0)],
+            &[(2, 1), (3, 0), (2, 0), (2, 0)],
+            &[(2, 0), (2, 0), (2, 0), (2, 0)],
+            &[
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+                (3, 0),
+            ],
+            &[(1, 0), (1, 0)],
+        ];
+        let measures: Vec<_> = patterns
+            .iter()
+            .enumerate()
+            .map(|(measure, pattern)| {
+                let mut content = make_measure(measure as i8 % 8);
+                content.events = pattern
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &(duration_log2, dots))| {
+                        MeasureEvent::Note(NoteEvent {
+                            staff_position: (measure + index) as i8 % 8,
+                            duration_log2,
+                            dots,
+                            accidental: None,
+                            stem_direction: None,
+                            annotations: NoteAnnotations::default(),
+                        })
+                    })
+                    .collect();
+                content
+            })
+            .collect();
+        let config = test_measure_config(250.0);
+        let full = break_into_systems(
+            &test_prefix(),
+            &measures,
+            &config,
+            8500.0,
+            &SystemBreaking::Optimal,
+        );
+        assert!(full.len() >= 4);
+        assert_eq!(full.last().unwrap().1, measures.len());
+        assert!(full.iter().all(|&(start, end)| end > start));
+
+        // Same naturally measured units reordered into a shorter phrase.
+        // The terminal dotted bar should pair with its neighbor, rather
+        // than stretching alone over an underfilled final system.
+        let phrase: Vec<_> = [0, 4, 3, 1, 6, 5, 7, 8, 8]
+            .into_iter()
+            .map(|index| measures[index].clone())
+            .collect();
+        let breaks = break_into_systems(
+            &test_prefix(),
+            &phrase,
+            &config,
+            7500.0,
+            &SystemBreaking::Optimal,
+        );
+        assert_eq!(breaks.last(), Some(&(7, 9)));
+        assert!(breaks.windows(2).all(|pair| pair[0].1 == pair[1].0));
     }
 }

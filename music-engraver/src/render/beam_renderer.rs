@@ -186,7 +186,7 @@ fn draw_beam_level(
         // Does this note have beams at this level on its left side?
         let has_left = layout.beams_left[i] >= level1;
 
-        if has_right {
+        if has_right && i + 1 < n && layout.beams_left[i + 1] >= level1 {
             // Find how far this beam segment extends to the right
             let start = i;
             let mut end = i;
@@ -211,7 +211,7 @@ fn draw_beam_level(
                 end,
             );
             i = end + 1;
-        } else if has_left && !has_right && (i == 0 || layout.beams_right[i - 1] < level1) {
+        } else if has_left && (i == 0 || layout.beams_right[i - 1] < level1) {
             // Isolated left-only fractional beam (stub)
             draw_fractional_beam(
                 svg,
@@ -224,7 +224,24 @@ fn draw_beam_level(
                 dir_sign,
                 staff_space,
                 i,
-                true, // points left
+                true,
+            );
+            i += 1;
+        } else if has_right {
+            // A lone beamlet on the first note or at an aligned metric
+            // boundary points right. Do not draw a zero-width beam segment.
+            draw_fractional_beam(
+                svg,
+                notes,
+                layout,
+                notehead_advances,
+                stem_thick,
+                beam_thick,
+                beam_offset,
+                dir_sign,
+                staff_space,
+                i,
+                false,
             );
             i += 1;
         } else {
@@ -295,7 +312,7 @@ fn draw_fractional_beam(
     dir_sign: f64,
     staff_space: f64,
     note_idx: usize,
-    _points_left: bool,
+    points_left: bool,
 ) {
     let x_note = stem_x(
         notes[note_idx].x,
@@ -307,24 +324,23 @@ fn draw_fractional_beam(
 
     let stub_len = FRACTIONAL_BEAM_LENGTH_SS * staff_space;
 
-    // Fractional beams point toward the beat (left by convention)
-    let x_stub = x_note - stub_len;
-
-    // Interpolate y at stub end (beams are sloped, so we need the slope)
-    // For fractional beams, use flat (same y) since they're short stubs
+    let (x_left, x_right) = if points_left {
+        (x_note - stub_len, x_note + stem_thick / 2.0)
+    } else {
+        (x_note - stem_thick / 2.0, x_note + stub_len)
+    };
+    // Short beamlets are flat even when the primary beam has a small slope.
     let y_stub = y_note;
 
     let y_bottom = y_note + beam_thick * dir_sign;
     let y_stub_bottom = y_stub + beam_thick * dir_sign;
 
-    let half_stem = stem_thick / 2.0;
-
     svg.add_polygon(
         &[
-            (x_stub, y_stub),
-            (x_note + half_stem, y_note),
-            (x_note + half_stem, y_bottom),
-            (x_stub, y_stub_bottom),
+            (x_left, y_stub),
+            (x_right, y_note),
+            (x_right, y_bottom),
+            (x_left, y_stub_bottom),
         ],
         "black",
     );
@@ -334,7 +350,7 @@ fn draw_fractional_beam(
 mod tests {
     use super::*;
     use crate::font::bravura_font;
-    use crate::layout::beam::{layout_beam_group, BeamedNote};
+    use crate::layout::beam::{layout_beam_group, orient_fractional_beams, BeamedNote};
     use crate::layout::staff::StaffLayout;
     use crate::layout::stem::StemDirection;
 
@@ -360,6 +376,27 @@ mod tests {
 
     fn count_element(svg: &str, tag: &str) -> usize {
         svg.matches(&format!("<{tag} ")).count()
+    }
+
+    fn polygon_x_extents(svg: &str) -> Vec<(f64, f64)> {
+        svg.lines()
+            .filter(|line| line.contains("<polygon "))
+            .map(|line| {
+                let points = line
+                    .split_once("points=\"")
+                    .unwrap()
+                    .1
+                    .split_once('"')
+                    .unwrap()
+                    .0;
+                let xs = points
+                    .split_whitespace()
+                    .map(|point| point.split_once(',').unwrap().0.parse::<f64>().unwrap());
+                xs.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+                    (lo.min(x), hi.max(x))
+                })
+            })
+            .collect()
     }
 
     #[test]
@@ -446,6 +483,81 @@ mod tests {
         assert!(
             count_element(&output, "polygon") >= 2,
             "at least 2 beam polygons (primary + secondary)"
+        );
+    }
+
+    #[test]
+    fn isolated_secondary_polygon_points_to_strong_subdivision() {
+        let (config, staff) = setup();
+        let notes = make_notes(&[
+            (500.0, 0, 4),
+            (820.0, 5, 4),
+            (1200.0, 2, 3),
+            (1900.0, 0, 4),
+            (2400.0, 2, 3),
+        ]);
+        let stem = stem_x(
+            notes[3].x,
+            295.0,
+            StemDirection::Up,
+            config.stem_thickness_fu(),
+        );
+        let render = |onsets: [f64; 5]| {
+            let mut layout = layout_beam_group(&notes, StemDirection::Up, SS);
+            orient_fractional_beams(
+                &notes,
+                |i| onsets[i],
+                &mut layout.beams_left,
+                &mut layout.beams_right,
+            );
+            let mut svg = SvgWriter::new(800.0, 200.0, -200.0, -500.0, 6000.0, 2500.0);
+            draw_beam_group(&mut svg, &staff, &config, &notes, &layout, 295.0);
+            polygon_x_extents(&svg.to_svg())
+                .into_iter()
+                .find(|&(left, right)| left < stem + 1.0 && right > stem - 1.0 && right - left < SS)
+                .expect("isolated E4 must have a nonzero-width secondary polygon")
+        };
+
+        let (left, right) = render([0.0, 0.0625, 0.125, 0.25, 0.3125]);
+        assert!(left >= stem - config.stem_thickness_fu(), "{left} < {stem}");
+        assert!(
+            right > stem + SS / 2.0,
+            "right-facing beamlet: {left}..{right}"
+        );
+
+        let (left, right) = render([0.0625, 0.125, 0.1875, 0.3125, 0.375]);
+        assert!(
+            left < stem - SS / 2.0,
+            "off-grid beamlet faces left: {left}..{right}"
+        );
+        assert!(
+            right <= stem + config.stem_thickness_fu(),
+            "{right} > {stem}"
+        );
+    }
+
+    #[test]
+    fn leading_short_note_beamlet_points_inward_not_zero_width() {
+        let (config, staff) = setup();
+        let notes = make_notes(&[(500.0, 0, 4), (1000.0, 2, 3)]);
+        let layout = layout_beam_group(&notes, StemDirection::Up, SS);
+        let mut svg = SvgWriter::new(800.0, 200.0, -200.0, -500.0, 6000.0, 2500.0);
+        draw_beam_group(&mut svg, &staff, &config, &notes, &layout, 295.0);
+        let stem = stem_x(
+            notes[0].x,
+            295.0,
+            StemDirection::Up,
+            config.stem_thickness_fu(),
+        );
+        let polygons = polygon_x_extents(&svg.to_svg());
+        assert_eq!(polygons.len(), 2);
+        assert!(
+            polygons
+                .iter()
+                .any(|&(left, right)| left >= stem - config.stem_thickness_fu()
+                    && right > stem + SS / 2.0
+                    && right - left < SS),
+            "sixteenth before eighth must have an inward secondary beamlet: {polygons:?}"
         );
     }
 

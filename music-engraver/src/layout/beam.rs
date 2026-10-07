@@ -78,12 +78,12 @@ pub(crate) fn beam_level(duration_log2: i8) -> u8 {
 ///
 /// Rules:
 /// - The primary beam spans the entire group (all notes get at least 1 on each interior side).
-/// - Additional beams for shorter notes connect to the adjacent note with
-///   the same or shorter duration; if neither neighbor qualifies, a fractional
-///   beam (stub) extends toward the rhythmically stronger side.
+/// - Additional beams for shorter notes connect to adjacent notes with at
+///   least as many beams. If neither neighbor qualifies, a fractional beam
+///   points left until measure-relative onset identifies the stronger side.
 ///
-/// For simplicity in v1: beams always connect to the neighbor with more beams.
-/// Fractional beams point left (toward beat start) by default.
+/// Without onset information, isolated interior beamlets conservatively point
+/// left; the first/last note can only point into the group.
 pub fn compute_beam_counts(notes: &[BeamedNote]) -> (Vec<u8>, Vec<u8>) {
     let n = notes.len();
     if n == 0 {
@@ -129,8 +129,8 @@ pub fn compute_beam_counts(notes: &[BeamedNote]) -> (Vec<u8>, Vec<u8>) {
             // For beams beyond what connects to neighbors:
             // add fractional beams toward the side with more beams
             if my_level > beams_left[i] && my_level > beams_right[i] {
-                // Neither neighbor has enough beams; add fractional beams
-                // pointing toward the rhythmically stronger neighbor (left by convention)
+                // No onset context here: point left by convention. The score
+                // path may redirect it using measure-relative onsets.
                 beams_left[i] = my_level;
             } else if my_level > beams_right[i] {
                 beams_left[i] = beams_left[i].max(my_level);
@@ -143,11 +143,42 @@ pub fn compute_beam_counts(notes: &[BeamedNote]) -> (Vec<u8>, Vec<u8>) {
     (beams_left, beams_right)
 }
 
+/// Prefer a right-facing beamlet when an isolated short note starts on the
+/// next longer note-value grid (e.g. a sixteenth on an eighth boundary).
+/// `onset` supplies performed positions *within the measure*, never positions
+/// counted from the beginning of the beam group: the latter may begin mid-beat.
+/// A beam crossing a barline is safe because each note uses only its own onset.
+pub(crate) fn orient_fractional_beams(
+    notes: &[BeamedNote],
+    onset: impl Fn(usize) -> f64,
+    beams_left: &mut [u8],
+    beams_right: &mut [u8],
+) {
+    for i in 1..notes.len().saturating_sub(1) {
+        let level = beam_level(notes[i].duration_log2);
+        // Only a wholly isolated stack can turn: if a lower secondary level
+        // connects to a neighbor, numeric beam counts cannot represent a
+        // higher-level beamlet turning the other way without drawing a second
+        // beamlet at that lower level.
+        if level < 2 || beams_right[i - 1] >= 2 || beams_left[i + 1] >= 2 {
+            continue;
+        }
+        let stronger_grid = 2.0_f64.powi(-i32::from(notes[i].duration_log2 - 1));
+        let position = onset(i) / stronger_grid;
+        if (position - position.round()).abs() < 1e-9 {
+            beams_left[i] = beams_left[i].min(1);
+            beams_right[i] = level;
+        }
+        // Otherwise retain the traditional left-facing fallback; the group
+        // may have started off the grid or inside a tuplet.
+    }
+}
+
 /// Lay out a beam group: compute stem tip y-coordinates and beam connectivity.
 ///
-/// The beam line is determined by the first and last note positions, constrained
-/// to a maximum slope. All stems extend to meet the beam line, with a minimum
-/// length guarantee.
+/// Endpoint pitches suggest an initial slope. When an off-center interior note
+/// projects past that line toward the beam side, its natural tip and the farther
+/// endpoint determine a new slope; then all stems retain their minimum length.
 ///
 /// `staff_space`: distance between adjacent staff lines in font design units.
 pub fn layout_beam_group(
@@ -197,27 +228,54 @@ pub(crate) fn layout_beam_group_scaled(
         })
         .collect();
 
-    // Determine beam line from first and last notes' natural tips.
-    // Safety: natural_tips is non-empty because notes is non-empty (asserted above).
+    // Begin with the endpoint slope; keep it for straight passages and centered
+    // extrema, where changing the slope would arbitrarily favor one end.
     let first_tip = natural_tips[0];
     let last_tip = natural_tips[natural_tips.len() - 1];
-
-    // Constrain slope
     let first_note = &notes[0];
     let last_note = &notes[notes.len() - 1];
     let x_span = last_note.x - first_note.x;
     let (beam_y_first, beam_y_last) = if x_span.abs() < f64::EPSILON {
-        // All notes at same x (degenerate): flat beam
         let avg = natural_tips.iter().sum::<f64>() / natural_tips.len() as f64;
         (avg, avg)
     } else {
-        let raw_slope = (last_tip - first_tip) / x_span;
         let max_slope = MAX_SLOPE_HS_PER_SS * half_space / staff_space;
-        let clamped_slope = raw_slope.clamp(-max_slope, max_slope);
-        let mid_y = (first_tip + last_tip) / 2.0;
-        let bf = mid_y - clamped_slope * x_span / 2.0;
-        let bl = mid_y + clamped_slope * x_span / 2.0;
-        (bf, bl)
+        let endpoint_slope = ((last_tip - first_tip) / x_span).clamp(-max_slope, max_slope);
+        let midpoint_x = (first_note.x + last_note.x) / 2.0;
+        let midpoint_y = (first_tip + last_tip) / 2.0;
+        let interior = (1..notes.len() - 1)
+            .filter_map(|i| {
+                let x = notes[i].x;
+                if x <= first_note.x.min(last_note.x)
+                    || x >= first_note.x.max(last_note.x)
+                    || ((x - first_note.x).abs() - (last_note.x - x).abs()).abs() < f64::EPSILON
+                {
+                    return None;
+                }
+                let tip_on_line = midpoint_y + endpoint_slope * (x - midpoint_x);
+                let overshoot = match direction {
+                    StemDirection::Up => tip_on_line - natural_tips[i],
+                    StemDirection::Down => natural_tips[i] - tip_on_line,
+                };
+                (overshoot > 0.0).then_some((i, overshoot))
+            })
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        let (slope, anchor_x, anchor_y) = if let Some((i, _)) = interior {
+            let far = if (notes[i].x - first_note.x).abs() > (last_note.x - notes[i].x).abs() {
+                0
+            } else {
+                notes.len() - 1
+            };
+            let slope = ((natural_tips[far] - natural_tips[i]) / (notes[far].x - notes[i].x))
+                .clamp(-max_slope, max_slope);
+            (slope, notes[i].x, natural_tips[i])
+        } else {
+            (endpoint_slope, midpoint_x, midpoint_y)
+        };
+        (
+            anchor_y + slope * (first_note.x - anchor_x),
+            anchor_y + slope * (last_note.x - anchor_x),
+        )
     };
 
     // Compute beam y at each note's x via linear interpolation
@@ -283,9 +341,9 @@ fn staff_position_to_y(position: StaffPosition, half_space: f64) -> f64 {
 /// measure. A boundary falls before note `i + 1` when its onset is a whole
 /// multiple of the written duration `interval_log2` (3 = eighth, …); across
 /// it, only the beams that duration itself carries stay connected (one for
-/// an eighth, two for a sixteenth — never fewer than the primary beam). A note
-/// left with more beams than either side now connects keeps them as a
-/// fractional beam pointing left.
+/// an eighth, two for a sixteenth — never fewer than the primary beam).
+/// A note left with more beams than either side connects initially points
+/// left; the scored renderer may redirect it using its measure-relative onset.
 ///
 /// `beams_left`, `beams_right`, and `onsets` are parallel to `notes`.
 pub fn subdivide_beam_counts(
@@ -587,6 +645,92 @@ mod tests {
         // All beam counts should be populated
         assert_eq!(layout.beams_left.len(), 4);
         assert_eq!(layout.beams_right.len(), 4);
+    }
+
+    #[test]
+    fn off_center_interior_extreme_changes_mixed_beam_slope_without_short_stems() {
+        // E4-C5-G4-E4-G4, 16th-16th-8th-16th-8th. The high C5
+        // near the start is closer to the beam than either end. Connecting
+        // only the two endpoint pitches would rise to the right instead.
+        let notes = make_notes(&[
+            (9700.0, 0, 4),
+            (10020.0, 5, 4),
+            (10400.0, 2, 3),
+            (11100.0, 0, 4),
+            (11600.0, 2, 3),
+        ]);
+        let layout = layout_beam_group(&notes, StemDirection::Up, SS);
+        assert!(
+            layout.stem_tip_ys[4] > layout.stem_tip_ys[0],
+            "beam should fall toward the right-hand low notes: {:?}",
+            layout.stem_tip_ys
+        );
+        for (note, tip) in notes.iter().zip(&layout.stem_tip_ys) {
+            let stem = staff_position_to_y(note.staff_position, HS) - tip;
+            assert!(stem >= MIN_BEAMED_STEM_SS * SS - 1e-6, "{stem}");
+        }
+
+        // The same asymmetric valley must work with stems down.
+        let down = make_notes(&[
+            (9700.0, 8, 4),
+            (10020.0, 3, 4),
+            (10400.0, 6, 3),
+            (11100.0, 8, 4),
+            (11600.0, 6, 3),
+        ]);
+        let layout_down = layout_beam_group(&down, StemDirection::Down, SS);
+        assert!(layout_down.stem_tip_ys[4] < layout_down.stem_tip_ys[0]);
+        for (note, tip) in down.iter().zip(&layout_down.stem_tip_ys) {
+            let stem = tip - staff_position_to_y(note.staff_position, HS);
+            assert!(stem >= MIN_BEAMED_STEM_SS * SS - 1e-6, "{stem}");
+        }
+
+        // Straight, evenly spaced passages still take the endpoint contour.
+        let straight = eighth_notes(&[(0.0, 0), (950.0, 1), (1900.0, 2)]);
+        let straight_layout = layout_beam_group(&straight, StemDirection::Up, SS);
+        assert!(
+            (straight_layout.stem_tip_ys[2] - straight_layout.stem_tip_ys[0] + 250.0).abs() < 1e-6
+        );
+    }
+
+    #[test]
+    fn isolated_beamlets_follow_measure_grid_not_group_start() {
+        let notes = make_notes(&[
+            (0.0, 0, 4),
+            (250.0, 5, 4),
+            (500.0, 2, 3),
+            (900.0, 0, 4),
+            (1200.0, 2, 3),
+        ]);
+        let (mut left, mut right) = compute_beam_counts(&notes);
+        assert_eq!((left[3], right[3]), (2, 1), "no onset: left fallback");
+        // At a quarter boundary the isolated sixteenth starts the next
+        // eighth subdivision: its secondary beamlet should point right.
+        let onsets = [0.0, 0.0625, 0.125, 0.25, 0.3125];
+        orient_fractional_beams(&notes, |i| onsets[i], &mut left, &mut right);
+        assert_eq!((left[3], right[3]), (1, 2));
+        assert_eq!(
+            (left[1], right[1]),
+            (2, 1),
+            "the first pair stays connected by its secondary beam"
+        );
+
+        // A group starting one sixteenth later cannot treat its own start as
+        // the beat: .3125 lies off the eighth grid, so left is preserved.
+        let (mut left, mut right) = compute_beam_counts(&notes);
+        orient_fractional_beams(&notes, |i| onsets[i] + 0.0625, &mut left, &mut right);
+        assert_eq!((left[3], right[3]), (2, 1));
+
+        // A barline resets measure-relative onsets; direction is local to
+        // the isolated note, not inferred by accumulating through the span.
+        let (mut left, mut right) = compute_beam_counts(&notes);
+        orient_fractional_beams(
+            &notes,
+            |i| if i == 3 { 0.0 } else { onsets[i] },
+            &mut left,
+            &mut right,
+        );
+        assert_eq!((left[3], right[3]), (1, 2));
     }
 
     #[test]

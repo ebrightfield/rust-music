@@ -121,8 +121,16 @@ fn accidentals_dots_chords_and_mid_measure_structure_reserve_rods_once() {
         .iter()
         .find(|el| matches!(el.element, MeasureElement::Barline(BarlineStyle::Dashed)))
         .unwrap();
+    let font = &*crate::font::BUNDLED_BRAVURA;
+    let sharp_left = chord.x
+        - f64::from(font.glyph_advance(smufl::Glyph::AccidentalSharp).unwrap())
+        - crate::layout::accidental::ACCIDENTAL_NOTEHEAD_PADDING_SS * cfg().staff_space
+        + font
+            .glyph_bbox_design_units(smufl::Glyph::AccidentalSharp)
+            .unwrap()
+            .x_left;
     assert!(
-        chord.x > before.x + before.width + cfg().accidental_rod,
+        sharp_left >= before.x + before.width,
         "the accidental and clef must not overprint the inline barline"
     );
     assert!(measure.layout.closing_barline_x() > upper[3]);

@@ -178,7 +178,9 @@ pub use tab_palm_mute::{
     layout_tab_palm_mute, layout_tab_palm_mute_dash, TabPalmMuteDashLayout, TabPalmMuteLayout,
     PALM_MUTE_ABOVE_STAFF_SS, PALM_MUTE_DASH_OFFSET_SS, PALM_MUTE_FONT_SIZE_RATIO,
 };
-pub use tab_rhythm::{layout_tab_rhythm, needs_stem, tab_flag_count, TabRhythmLayout};
+pub use tab_rhythm::{
+    layout_tab_rhythm, needs_stem, tab_flag_count, TabRhythmLayout, TabRhythmStyle,
+};
 pub use tab_slide::{layout_tab_slide, TabSlideLayout};
 pub use tab_vibrato::{layout_tab_vibrato, TabVibratoLayout, VibratoKind};
 pub use tempo::{

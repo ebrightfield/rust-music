@@ -1,13 +1,15 @@
 //! Tablature with rhythm stems above the staff.
 //!
-//! Renders a 2-measure guitar tab showing rhythm notation:
-//! quarter notes, eighth notes, half note, and whole note.
+//! Renders four measures of guitar TAB with rhythm notation: quarter notes,
+//! eighth notes, half notes, and a whole note, with custom stem geometry.
 
+use music_engraver::layout::TabRhythmStyle;
 use music_engraver::score::tab::TabScoreBuilder;
 
 fn main() {
     let svg = TabScoreBuilder::guitar()
         .system_width_fu(10000.0)
+        .rhythm_style(TabRhythmStyle::new(2.0, 4.0).expect("positive TAB stem length"))
         // Measure 1: E minor arpeggio with quarter note rhythm
         .quarter()
         .fret(6, 0)
@@ -77,7 +79,7 @@ fn main() {
 
     // Should have rhythm stems (extra lines beyond staff + barlines)
     let line_count = svg.matches("<line ").count();
-    // 2 systems × 6 staff lines = 12, plus barlines + rhythm stems
+    // 6 staff lines, barlines, and rhythm stems
     assert!(
         line_count > 12,
         "should have staff lines + barlines + rhythm stems, got {line_count}"
@@ -85,7 +87,7 @@ fn main() {
 
     // Should have flag paths for eighth and sixteenth notes
     let path_count = svg.matches("<path ").count();
-    // 2 TAB clef paths + flag paths
+    // TAB clef path plus flag paths
     assert!(
         path_count > 2,
         "should have TAB clef paths + flag paths, got {path_count}"

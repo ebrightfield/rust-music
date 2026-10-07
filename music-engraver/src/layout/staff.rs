@@ -33,6 +33,9 @@ pub struct StaffLayout {
     pub width: f64,
     /// Distance between adjacent staff lines, in font design units.
     pub staff_space: f64,
+    /// Lowest notehead/ledger ink on this system, if it extends below the
+    /// bottom staff line. Mark placement uses this floor, not note geometry.
+    pub below_ink_y: Option<f64>,
 }
 
 impl StaffLayout {
@@ -43,6 +46,7 @@ impl StaffLayout {
             y_origin,
             width,
             staff_space,
+            below_ink_y: None,
         }
     }
 

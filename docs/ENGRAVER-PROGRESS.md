@@ -1,6 +1,6 @@
 # Music Engraver Progress Log
 
-## Current engraving checklist (code-checked 2026-10-04)
+## Current engraving checklist (code-checked 2026-10-06)
 
 This section is the current status; dated **Next** and **Open issues** entries
 below record what was true *then*. Older June QA snapshots and pre-merge
@@ -32,37 +32,39 @@ implemented or confirmed not to be a gap; tests are named where available.
 - [x] **Cross-system church rests are not a separate missing feature.**
   Church rests occupy single measures and already survive system breaks;
   the 2026-06-19 Gourlay spacing entry closed this older suggestion.
+- [x] **Configurable TAB rhythm-stem styling.** `TabRhythmStyle` controls
+  the stem base and length in staff spaces for standalone TAB and coordinated
+  guitar/TAB scores. Both individual and beamed stems use it; standalone
+  SVG bounds now include flagged-stem ink and successive systems clear it.
+- [x] **Low-register mark clearance.** A system-wide lowest-note/ledger
+  envelope moves below-staff dynamics, hairpins, and lyric verses out of
+  neighboring note ink; broken hairpins and melismas use the same floor on
+  their respective systems. Page extents and inter-system gaps follow the
+  displaced marks. `tests/mark_clearance.rs` checks SVG coordinates and
+  native PNG pixels.
+- [x] **Font-measured spacing rods.** Bravura glyph ink metrics for notehead
+  styles, accidentals, dots, and rests are cached in `MeasureLayoutConfig`;
+  `from_font` captures another font's rods. The rhythm grid stays shared and
+  every adjacent rhythmic rod retains at least 0.3 staff spaces of clearance.
+- [x] **Balanced optimal line breaks.** `layout/page.rs` uses cumulative
+  natural widths and a short-singleton penalty without changing directives or
+  the breaking API. A real mixed-rhythm multi-system corpus exercises the
+  final-line choice.
+- [x] **Mixed-duration beam polish.** `layout/beam.rs` considers interior
+  notes when fitting slope and measure-relative onsets when choosing isolated
+  beamlet direction; `render/beam_renderer.rs` draws both directions. The
+  actual mixed passage was rasterized and visually checked.
+- [x] **Perceptual PNG baseline.** `tests/perceptual_png.rs` renders a two-system
+  low-register and beamed score with bundled Bravura, compares 1-pixel-tolerant
+  ink silhouettes globally and by local tile against
+  `tests/fixtures/engraving_perceptual.png`; an ignored explicit refresh test
+  regenerates the reviewed fixture.
+
 
 ### Still actionable
 
-- [ ] **Local vertical collision avoidance (correctness).** Dynamics,
-  hairpins, and lyrics still use fixed staff-relative baselines in
-  `layout/{dynamics,hairpin,lyric}.rs`. `layout/mark_extent.rs` sizes pages and
-  separates *systems*, but does not route marks around low noteheads or ledger
-  lines in the same system. Reproduce on a low-register score before changing
-  placement; then check the actual SVG/PNG geometry.
-- [ ] **Font-measured spacing rods.** `layout/measure.rs::MeasureLayoutConfig`
-  still estimates notehead/accidental/dot rods in staff spaces. Replace the
-  estimates with active-font metrics without losing the minimum ink clearance;
-  the shared rhythmic grid itself is already implemented.
-- [ ] **Line-breaking quality, not line breaking itself.** `layout/page.rs`
-  already offers greedy and optimal breaks, explicit directives, and bounds
-  wide enough for incompressible systems. Its optimal cost is based on squared
-  fill deviation, without engraving penalties for awkward breaks; tune with
-  a representative multi-system corpus rather than adding another break API.
-- [ ] **Beam-rule polish.** `layout/beam.rs` derives slope from the first and
-  last notes (interior notes can only shift the whole beam) and defaults
-  isolated secondary-beam stubs leftward rather than consulting metric
-  position. These are quality candidates, not confirmed current collisions;
-  capture a visually failing mixed-duration passage before altering them.
-- [ ] **Perceptual PNG regression baselines.** The `png` feature renders and
-  pixel-content tests already inspect actual staff/TAB ink in
-  `render/png.rs` and the score tests. There is no PHASH/tolerance-backed
-  visual baseline corpus yet; do not confuse this with missing PNG export.
-- [ ] **Configurable TAB rhythm-stem styling.**
-  `layout/tab_rhythm.rs` still hardcodes the stem base/length above the TAB
-  staff, with no public style option in `score/tab.rs`. This is optional
-  tablature polish, not a blocker for standard-notation practice material.
+No open item from this checked backlog. Continue with newly observed
+engraving faults, not historical dated entries below.
 
 ## 2026-04-18 — Phase 0, crate scaffold
 - Did: Created `music-engraver/` as workspace member. Set up `Cargo.toml` with dependencies (music, ttf-parser, smufl 0.2, serde, serde_json, thiserror; optional png feature with resvg/tiny-skia/fontdb). Created `src/lib.rs` with `font` module. Bundled Bravura.otf (v1.380, 508KB), OFL.txt license, and bravura_metadata.json under `fonts/`. Font module exposes `BRAVURA_OTF` and `BRAVURA_METADATA` via `include_bytes!`.
@@ -8060,3 +8062,65 @@ implemented or confirmed not to be a gap; tests are named where available.
   the correction, checking the rendered SVG notehead and dashed-line
   coordinates. The actual SVG was rasterized and inspected: the line begins
   outside the routed head and reaches the lower staff's G2.
+
+## 2026-10-05 — Configurable TAB rhythm stems and page clearance
+- `TabRhythmStyle::new(base, length)` sets the distance above the TAB top
+  line and the stem length in staff spaces. Standalone `TabScoreBuilder` and
+  coordinated `GuitarScore` expose it; the same staff style reaches individual
+  stems and beam groups. Invalid non-finite or nonpositive lengths are rejected.
+- Reproduced a default TAB viewBox starting at y=-250 while quarter-note
+  stems reached y=-1125. Standalone page bounds now include measured flag
+  overhang and leave clear space between successive TAB systems. A tall
+  guitar/TAB style expands the gap below the notation staff.
+- The `tab_rhythm` example now renders custom 2.0/4.0-ss stems: viewBox
+  begins at -1759, stem tips at -1500. Rasterized with a loaded serif font
+  and visually checked staff, stems, flags, and fret numbers.
+- `cargo test -p music-engraver` passed (3008 tests, 1 ignored). Normal
+  `cargo clippy -p music-engraver --all-targets` completed with pre-existing
+  warnings; `-D warnings` stopped on warnings in the `music` dependency.
+  Two obsolete harmonic-layout tests assumed string 1 was the bottom TAB
+  line, contradicting `TabStaffLayout::string_y`; removed those tests and
+  corrected the accompanying comment.
+
+## 2026-10-06 — Low-register expression and lyric clearance
+- Reproduced C3/D3 treble ledger notes crossing same-system hairpins and
+  fixed lyric baselines; the first SVG had a hairpin crossing D3 note ink at
+  y=1875–2000 and a lyric baseline at y=2375 near C3's y=2125 head.
+- A shared per-system below-ink floor now offsets dynamics, hairpins, and
+  numbered lyrics, including both halves of a system-break wedge and lyric
+  continuations. The floor is derived from all positioned note/chord voices;
+  `system_mark_extent_ss` and the SVG viewBox reserve the displaced ink.
+- SVG regression covers two low systems, dynamic glyph bounds, ledger and
+  wedge geometry, lyric clearance, broken wedges, and page bounds. Native
+  PNG pixel regression checks an ink-free corridor between low note and
+  dynamic. The final 1176×909 native raster was visually inspected with
+  Noto Serif: ledger heads, wedges, dynamics, and syllables have clearance.
+- `cargo test -p music-engraver` passed (3009 passed, 1 ignored); the
+  feature-gated PNG regression passed with `--features png`.
+
+## 2026-10-06 — Measured rods, balanced breaks, beamlets, and visual baseline
+- Bravura notehead styles, accidentals, rests, dots, cautionary and notehead
+  parentheses use captured glyph bounding boxes rather than fixed rod widths.
+  Custom-font metrics are available through `MeasureLayoutConfig::from_font`;
+  the shared onset grid is unchanged. The spacing calibration example
+  measured a 0.30ss minimum adjacent ink clearance at the spring floor
+  across quarter, dotted, dense sixteenth, and chromatic passages.
+- Optimal breaks use constant-time prefix-width queries in the DP and penalize
+  genuinely short singleton systems. A multi-system mixed-rhythm corpus
+  checks the final pair through the actual page-break policy. A public
+  `ScoreBuilder` score with optimal breaks was rendered and its four balanced
+  systems visually inspected. No new break API or directive behavior.
+- The off-center high C5 in E4–C5–G4–E4–G4 now influences beam slope;
+  measure-relative onset timing selects an isolated right-facing secondary
+  beamlet. Both the low-level and `ScoreBuilder` beamed examples were
+  rasterized and inspected; existing simple beam passages retain their shape.
+- The reviewed `tests/fixtures/engraving_perceptual.png` uses only embedded
+  Bravura. `tests/perceptual_png.rs` compares 1-pixel-tolerant ink silhouettes
+  by region and globally; a simulated erased beam failed the comparison.
+  An explicit ignored refresh command is documented in the engraver README.
+  Two old TAB PNG tests based only on whole-image pixel counts were removed
+  rather than re-pinned after the new TAB geometry changed their incidental
+  counts. Low-register below-text scripts also reserve their shifted page
+  extent. `cargo test -p music-engraver --features png` passed 3067 tests
+  (2 ignored); the default-feature suite passed 3019 tests (1 ignored).
+  `cargo fmt -p music-engraver --check` passed.

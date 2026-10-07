@@ -180,8 +180,12 @@ pub fn draw_system(
     }
 
     // Create staff spanning the full system width
-    let staff = StaffLayout::new(x, y, system.staff_width, config.staff_space);
-
+    let mut staff = StaffLayout::new(x, y, system.staff_width, config.staff_space);
+    // Neighboring ledger notes can lie underneath a mark's own anchor.
+    let ink = crate::layout::mark_extent::system_note_ink_below_ss(system);
+    if ink > 0.0 {
+        staff.below_ink_y = Some(staff.bottom_y() + ink * config.staff_space);
+    }
     // Draw continuous staff lines
     draw_staff_lines(svg, &staff, config);
 

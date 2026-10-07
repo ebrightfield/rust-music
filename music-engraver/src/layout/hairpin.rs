@@ -108,7 +108,12 @@ pub fn hairpin_reference_y(
     staff_space: f64,
 ) -> f64 {
     match placement {
-        crate::layout::placement::Placement::Below => staff.bottom_y(),
+        crate::layout::placement::Placement::Below => {
+            let default = staff.bottom_y();
+            staff.below_ink_y.map_or(default, |ink| {
+                default.max(ink + (1.5 - HAIRPIN_BELOW_STAFF_SS) * staff_space)
+            })
+        }
         crate::layout::placement::Placement::Above => {
             staff.y_of(8) - (HAIRPIN_ABOVE_STAFF_SS + HAIRPIN_BELOW_STAFF_SS) * staff_space
         }

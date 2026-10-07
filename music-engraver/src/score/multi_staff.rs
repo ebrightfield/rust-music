@@ -629,10 +629,12 @@ impl MultiStaffScore {
             .map(GuitarScore::line_count)
             .unwrap_or(6);
         let tab_staff_height = staff_space * (tab_line_count.saturating_sub(1)) as f64;
-        // Guitar-specific upper lanes include rhythm stems and tuplets. Lower
-        // annotation lanes are planned per system so unrelated systems do not
-        // inherit the tallest annotation stack in the score.
-        let tab_gap = GUITAR_TAB_GAP_SS * staff_space;
+        // Reserve the larger of the conventional guitar/TAB gap and the
+        // chosen TAB stem reach, including room for an upward flag.
+        // This keeps tall custom stems off the standard notation stave.
+        let tab_gap = self.tab_stave.as_ref().map_or(GUITAR_TAB_GAP_SS, |score| {
+            GUITAR_TAB_GAP_SS.max(score.tab_rhythm_style.above_staff_reach_ss() + 3.0)
+        }) * staff_space;
         let guitar_annotation_layout = self
             .tab_stave
             .as_ref()
@@ -846,13 +848,14 @@ impl MultiStaffScore {
                     notation_bottom + tab_gap
                 };
 
-                let tab_staff = TabStaffLayout::new(
+                let mut tab_staff = TabStaffLayout::new(
                     left_margin,
                     tab_y,
                     system_width,
                     staff_space,
                     tab.line_count(),
                 );
+                tab_staff.rhythm_style = tab.tab_rhythm_style;
 
                 draw_tab_staff_lines(&mut svg, &tab_staff, &config);
                 draw_tab_clef(&mut svg, &tab_staff, &font)?;

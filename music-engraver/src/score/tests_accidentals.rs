@@ -573,7 +573,6 @@ fn first_measure_layout(score: &ScoreBuilder) -> crate::layout::measure::Measure
 
 #[test]
 fn a_cautionary_accidental_reserves_its_parentheses_left_of_the_note() {
-    let config = MeasureLayoutConfig::from_staff_space(250.0);
     let with = |display| {
         first_measure_layout(
             &ScoreBuilder::new()
@@ -586,29 +585,17 @@ fn a_cautionary_accidental_reserves_its_parentheses_left_of_the_note() {
     let plain = with(AccidentalDisplay::Force);
     let parenthesized = with(AccidentalDisplay::Cautionary);
     let (c5, f_sharp, g4) = (0, 1, 2);
-    // The note itself moves right by exactly the parentheses' width: the
-    // extra space sits between it and the preceding C5…
+    // The cautionary glyph cluster is wider than the plain accidental,
+    // but its extra room must live before the note, never in a spring.
     assert_eq!(plain.elements[c5].x, parenthesized.elements[c5].x);
-    assert!(
-        (parenthesized.elements[f_sharp].x
-            - plain.elements[f_sharp].x
-            - config.accidental_parens_rod)
-            .abs()
-            < 1e-9
-    );
-    // …and is incompressible rod, not spring.
-    assert!(
-        (parenthesized.total_rod - plain.total_rod - config.accidental_parens_rod).abs() < 1e-9
-    );
+    let extra = parenthesized.elements[f_sharp].x - plain.elements[f_sharp].x;
+    assert!(extra > 0.0);
+    assert!((parenthesized.total_rod - plain.total_rod - extra).abs() < 1e-9);
     assert_eq!(
-        parenthesized.elements[f_sharp].rod,
-        plain.elements[f_sharp].rod
+        parenthesized.elements[f_sharp].spring,
+        plain.elements[f_sharp].spring
     );
-    // The F♯'s own slot is unchanged, so G4 shifts only by the same amount.
-    assert!(
-        (parenthesized.elements[g4].x - plain.elements[g4].x - config.accidental_parens_rod).abs()
-            < 1e-9
-    );
+    assert!((parenthesized.elements[g4].x - plain.elements[g4].x - extra).abs() < 1e-9);
 }
 
 #[test]

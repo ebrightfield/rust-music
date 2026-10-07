@@ -12,7 +12,9 @@ use crate::layout::hairpin::{
 #[cfg(test)]
 use crate::layout::lyric::LYRIC_BELOW_STAFF_SS;
 use crate::layout::lyric::{verse_baseline, LyricContinuation, LyricStyle, LYRIC_FONT_SIZE_SS};
-use crate::layout::mark_extent::{annotation_extent_ss, element_annotations};
+use crate::layout::mark_extent::{
+    annotation_extent_ss, element_annotations, system_mark_extent_ss, system_note_ink_below_ss,
+};
 use crate::layout::ornament::{layout_ornament, Ornament};
 use crate::layout::ottava::{layout_ottava_bracket, OttavaKind};
 use crate::layout::page::{PageLayout, PageSystem};
@@ -60,6 +62,20 @@ use crate::render::trill_extension_renderer::{
     draw_trill_extension, draw_trill_extension_multi_speed,
 };
 use crate::render::SvgWriter;
+
+fn staff_with_mark_floor(page_system: &PageSystem, staff_space: f64) -> StaffLayout {
+    let mut staff = StaffLayout::new(
+        page_system.x,
+        page_system.y,
+        page_system.system.staff_width,
+        staff_space,
+    );
+    let ink = system_note_ink_below_ss(&page_system.system);
+    if ink > 0.0 {
+        staff.below_ink_y = Some(staff.bottom_y() + ink * staff_space);
+    }
+    staff
+}
 
 /// A note at the end of a system that has an unresolved `tie_forward`.
 struct UnresolvedTie {
@@ -158,6 +174,15 @@ fn content_vertical_extent(page: &PageLayout, config: &EngravingConfig) -> (f64,
                     }
                 }
             }
+        }
+    }
+
+    // The system lane can move lyrics and dynamics beyond their event-local
+    // estimates; use the same reach that separates consecutive systems.
+    for ps in &page.systems {
+        let (_, below) = system_mark_extent_ss(&ps.system);
+        if below > 0.0 {
+            bottom = bottom.max(ps.y + (4.0 + below) * config.staff_space);
         }
     }
 
@@ -674,12 +699,7 @@ fn find_unresolved_hairpins(
 ) -> Result<Vec<UnresolvedHairpin>, FontError> {
     let system = &page_system.system;
     let note_info = collect_hairpin_note_info(system);
-    let staff = StaffLayout::new(
-        page_system.x,
-        page_system.y,
-        system.staff_width,
-        config.staff_space,
-    );
+    let staff = staff_with_mark_floor(page_system, config.staff_space);
 
     let mut unresolved = Vec::new();
 
@@ -722,12 +742,7 @@ fn find_incoming_hairpin_targets(
 ) -> Result<Vec<IncomingHairpinTarget>, FontError> {
     let system = &page_system.system;
     let note_info = collect_hairpin_note_info(system);
-    let staff = StaffLayout::new(
-        page_system.x,
-        page_system.y,
-        system.staff_width,
-        config.staff_space,
-    );
+    let staff = staff_with_mark_floor(page_system, config.staff_space);
 
     let first_measure_x = system
         .measures
@@ -1007,8 +1022,8 @@ fn draw_cross_system_lyric_spans(
             }
         }
         let target_notes = collect_lyric_note_info(&dst.system, config.staff_space);
-        let src_staff = StaffLayout::new(src.x, src.y, src.system.staff_width, config.staff_space);
-        let dst_staff = StaffLayout::new(dst.x, dst.y, dst.system.staff_width, config.staff_space);
+        let src_staff = staff_with_mark_floor(src, config.staff_space);
+        let dst_staff = staff_with_mark_floor(dst, config.staff_space);
         let dst_start = dst.x
             + dst
                 .system

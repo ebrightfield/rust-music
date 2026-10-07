@@ -109,8 +109,36 @@ pub fn annotation_extent_ss(annotations: &NoteAnnotations) -> (f64, f64) {
     (above, below)
 }
 
+/// Lowest note/ledger ink relative to the bottom staff line, in staff spaces.
+/// A whole-system lane prevents a wide dynamic or hairpin from hitting a
+/// neighboring note even when its own anchor is higher. The 0.75ss envelope
+/// covers notehead half-height and ledger-line stroke below the note center.
+pub fn system_note_ink_below_ss(system: &SystemLayout) -> f64 {
+    system
+        .measures
+        .iter()
+        .flat_map(|measure| {
+            std::iter::once(&measure.layout).chain(&measure.additional_voice_layouts)
+        })
+        .flat_map(|layout| &layout.elements)
+        .filter_map(|positioned| match &positioned.element {
+            MeasureElement::Note(note) => Some(note.staff_position),
+            MeasureElement::Chord(chord) => chord.staff_positions.iter().copied().min(),
+            _ => None,
+        })
+        .map(|position| {
+            if position < 0 {
+                0.75 - f64::from(position) * 0.5
+            } else {
+                0.0
+            }
+        })
+        .fold(0.0_f64, f64::max)
+}
+
 /// The largest [`annotation_extent_ss`] over every event of `system`.
 pub fn system_mark_extent_ss(system: &SystemLayout) -> (f64, f64) {
+    let ink = system_note_ink_below_ss(system);
     system
         .measures
         .iter()
@@ -120,7 +148,30 @@ pub fn system_mark_extent_ss(system: &SystemLayout) -> (f64, f64) {
                 .flat_map(|layout| layout.elements.iter())
         })
         .filter_map(|positioned| element_annotations(&positioned.element))
-        .map(annotation_extent_ss)
+        .map(|annotations| {
+            let (above, mut below) = annotation_extent_ss(annotations);
+            if ink > 0.0
+                && annotations
+                    .text_scripts
+                    .iter()
+                    .chain(&annotations.text_marks)
+                    .any(|script| script.placement == Placement::Below)
+            {
+                // Below scripts share the lowered event-mark stack, not
+                // their original bottom-staff offset.
+                below += ink;
+            }
+            if ink > 0.0 && annotations.dynamics_placement == Placement::Below {
+                if annotations.dynamic.is_some() || annotations.hairpin_start.is_some() {
+                    below = below.max(ink + 3.0);
+                }
+            }
+            if let Some(last) = annotations.lyrics.iter().map(|lyric| lyric.verse).max() {
+                below =
+                    below.max(ink + 4.8 + f64::from(last.saturating_sub(1)) * LYRIC_VERSE_GAP_SS);
+            }
+            (above, below)
+        })
         .fold((0.0, 0.0), |(above, below), (a, b)| {
             (above.max(a), below.max(b))
         })

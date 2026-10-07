@@ -7,18 +7,13 @@
 //!   legacy power-of-ratio model's width for the same measure. The legacy
 //!   model is reproduced here (`legacy_width`) purely as a calibration
 //!   reference; it is not used by the engraver any more.
-//! - **compression headroom** — how far a measure can be squeezed below its
-//!   natural width before adjacent noteheads touch.
-//! - **spring-floor gap** — the minimum notehead gap at `s = 0`, the worst
-//!   case the system layer can produce.
+//! - **ink clearance under compression** — the smallest gap between adjacent
+//!   rendered notehead/dot ink and the next notehead/accidental ink.
 //! - **rod share** and **realized advance ratio** — the incompressible
-//!   fraction of natural width, and the perceived long:short spacing contrast
-//!   that `c` ultimately controls.
+//!   fraction of natural width, and the perceived long:short spacing contrast.
 //!
-//! Conclusion (2026-08-06): collision avoidance is guaranteed by the rod alone
-//! and is independent of `c`/`k`; matching legacy widths is unachievable
-//! (needs k ≈ 0 or negative). Defaults stay c = 0.6, k = 1.0·ss. The three
-//! findings are pinned by unit tests in `layout/measure.rs`.
+//! Glyph-specific rods now follow the bundled font's actual advance and ink
+//! bounds. The historic legacy-width comparison is informative, not a target.
 //!
 //! Run with:
 //! ```text
@@ -27,7 +22,7 @@
 
 use music_engraver::layout::accidental::ResolvedAccidental;
 use music_engraver::layout::measure::{
-    layout_measure, MeasureElement, MeasureLayoutConfig, NoteAnnotations, NoteEvent,
+    layout_measure, MeasureElement, MeasureLayoutConfig, NoteAnnotations, NoteEvent, NoteheadStyle,
 };
 
 /// Staff space in font design units (Bravura: 1000 upem / 4 spaces = 250).
@@ -159,36 +154,65 @@ fn build_elements(case: &Case) -> Vec<MeasureElement> {
         .collect()
 }
 
-/// Smallest center-to-center notehead distance after compressing to `target`.
-///
-/// Returns `(min_gap, notehead_rod)` in staff spaces. A `min_gap` below the
-/// notehead rod means adjacent noteheads visually collide.
-fn min_gap_under_compression(case: &Case, cfg: &MeasureLayoutConfig, target: f64) -> (f64, f64) {
-    let elements = build_elements(case);
-    let layout = layout_measure(&elements, cfg);
+/// Smallest actual horizontal ink gap between adjacent events at `target`,
+/// including accidental leading gaps and dot ink. In staff spaces.
+fn min_gap_under_compression(case: &Case, cfg: &MeasureLayoutConfig, target: f64) -> f64 {
+    use music_engraver::font::BUNDLED_BRAVURA;
+    use music_engraver::layout::accidental::ACCIDENTAL_NOTEHEAD_PADDING_SS;
+    use music_engraver::layout::dot::{DOT_INTER_DOT_SPACING_SS, DOT_NOTEHEAD_PADDING_SS};
+    use smufl::Glyph;
 
-    // Mirrors `system.rs`'s spring-only solve: s = (target - Srod) / Sspring,
-    // floored at 0. Replicated here rather than widening the crate's API for a
-    // calibration script; the formula is the one under test.
-    let s = if layout.total_spring > 0.0 {
+    let font = &*BUNDLED_BRAVURA;
+    let layout = layout_measure(&build_elements(case), cfg);
+    let scale = if layout.total_spring > 0.0 {
         ((target - layout.total_rod) / layout.total_spring).max(0.0)
     } else {
         1.0
     };
-
-    // Re-flow x by accumulation, holding rods fixed and scaling springs only.
     let mut x = 0.0;
-    let mut xs = Vec::with_capacity(layout.elements.len());
-    for el in &layout.elements {
-        xs.push(x);
-        x += el.rod + s * el.spring;
+    let mut previous_end = 0.0;
+    let mut previous_right: Option<f64> = None;
+    let mut min_gap = f64::INFINITY;
+    for positioned in &layout.elements {
+        x += positioned.x - previous_end;
+        previous_end = positioned.x + positioned.width;
+        let MeasureElement::Note(note) = &positioned.element else {
+            continue;
+        };
+        let glyph = NoteheadStyle::Normal.glyph(note.duration_log2);
+        let bbox = font.glyph_bbox_design_units(glyph).unwrap();
+        let advance = f64::from(font.glyph_advance(glyph).unwrap());
+        let mut left = x + bbox.x_left.min(0.0);
+        if note.accidental.is_some() {
+            let sharp = Glyph::AccidentalSharp;
+            left = left.min(
+                x - f64::from(font.glyph_advance(sharp).unwrap())
+                    - ACCIDENTAL_NOTEHEAD_PADDING_SS * SS
+                    + font.glyph_bbox_design_units(sharp).unwrap().x_left,
+            );
+        }
+        let mut right = x + bbox.x_right.max(advance);
+        if note.dots > 0 {
+            right = right.max(
+                x + advance
+                    + DOT_NOTEHEAD_PADDING_SS * SS
+                    + (f64::from(note.dots) - 1.0) * DOT_INTER_DOT_SPACING_SS * SS
+                    + font
+                        .glyph_bbox_design_units(Glyph::AugmentationDot)
+                        .unwrap()
+                        .x_right
+                        .max(f64::from(
+                            font.glyph_advance(Glyph::AugmentationDot).unwrap(),
+                        )),
+            );
+        }
+        if let Some(previous) = previous_right {
+            min_gap = min_gap.min(left - previous);
+        }
+        previous_right = Some(right);
+        x += positioned.rod + scale * positioned.spring;
     }
-
-    let min_gap = xs
-        .windows(2)
-        .map(|w| w[1] - w[0])
-        .fold(f64::INFINITY, f64::min);
-    (min_gap / SS, cfg.notehead_rod / SS)
+    min_gap / SS
 }
 
 fn main() {
@@ -224,21 +248,11 @@ fn main() {
         println!();
     }
 
-    // Collision check under increasing compression pressure.
-    //
-    // Fitting to a fixed target pins the total width, so gaps are nearly
-    // c/k-independent there. What actually matters is how far a measure can be
-    // squeezed before noteheads touch: we sweep the target as a fraction of
-    // each config's own natural width and report the fraction at which the
-    // minimum gap first drops below the notehead rod.
-    println!("\n== Compression headroom ==");
-    println!(
-        "Squeeze fraction of natural width at which the min notehead gap first\n\
-         falls below the notehead rod ({:.2}ss). Lower = more squeeze tolerated\n\
-         before collision. 'rod' is the incompressible floor as a fraction of\n\
-         natural width — the model can never compress below it.",
-        1.18
-    );
+    // The hard rods reserve every printed glyph's ink, even when the springs
+    // reach zero. Report the actual ink gap at 50% of natural width; unlike an
+    // estimated black-notehead threshold this remains valid for whole notes,
+    // dotted notes and accidental-heavy passages.
+    println!("\n== Minimum adjacent ink clearance at 50% natural width (ss) ==");
     print!("{:<24}", "case");
     for c in exponents {
         for k in constants {
@@ -256,32 +270,25 @@ fn main() {
                 cfg.spring_constant = k * SS;
                 let natural = layout_measure(&build_elements(case), &cfg).total_width;
 
-                // Walk the squeeze fraction down until a collision appears.
-                let mut collide_at = f64::NAN;
-                let mut frac = 1.0;
-                while frac > 0.05 {
-                    let (gap, rod) = min_gap_under_compression(case, &cfg, natural * frac);
-                    if gap < rod {
-                        collide_at = frac;
-                        break;
-                    }
-                    frac -= 0.01;
-                }
-                print!("{:>12}", format!("{collide_at:.2}"));
+                let gap = min_gap_under_compression(case, &cfg, natural * 0.5);
+                print!("{gap:>12.2}");
             }
         }
         println!();
     }
 
-    // Hard-floor check: springs fully collapsed (s = 0). If no collision
-    // appears here, the rod alone guarantees separation at every scale.
-    println!("\n== Min notehead gap at the spring floor (s = 0) ==");
-    println!("Worst case the model can produce. Gap in staff spaces; * = collision.");
+    // Hard floor: all springs collapsed. Every entry should retain at least
+    // the configured minimum rod padding between adjacent ink.
+    println!("\n== Minimum adjacent ink clearance at spring floor (s = 0) ==");
     for case in &cases {
         let cfg = MeasureLayoutConfig::from_staff_space(SS);
-        let (gap, rod) = min_gap_under_compression(case, &cfg, 0.0);
-        let flag = if gap < rod { " *COLLIDE" } else { "" };
-        println!("  {:<24}{gap:.2}ss (rod {rod:.2}ss){flag}", case.name);
+        let gap = min_gap_under_compression(case, &cfg, 0.0);
+        let flag = if gap * SS + 1e-9 < cfg.min_rod_padding {
+            " *UNDER PAD"
+        } else {
+            ""
+        };
+        println!("  {:<24}{gap:.2}ss{flag}", case.name);
     }
 
     // Rod share: the hard floor on compression, independent of target.

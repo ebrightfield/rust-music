@@ -12,7 +12,8 @@
 
 use crate::font::{EngravingConfig, FontError, MusicFont};
 use crate::layout::beam::{
-    beam_level, layout_beam_group_scaled, subdivide_beam_counts, BeamedNote,
+    beam_level, layout_beam_group_scaled, orient_fractional_beams, subdivide_beam_counts,
+    BeamedNote,
 };
 use crate::layout::chord::{layout_chord_noteheads, notehead_x_offset, ChordNote};
 use crate::layout::group::{
@@ -294,6 +295,12 @@ fn draw_beam(
             &mut layout.beams_right,
         );
     }
+    orient_fractional_beams(
+        &notes,
+        |i| scan.onsets[stems[i].item],
+        &mut layout.beams_left,
+        &mut layout.beams_right,
+    );
     // A broken side keeps only the beams that connect inward; the
     // continuation is drawn as an extension below instead of a stub.
     let last = notes.len() - 1;

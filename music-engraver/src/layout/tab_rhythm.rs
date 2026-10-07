@@ -1,17 +1,60 @@
 //! Rhythm notation above tablature staves.
 //!
 //! Guitar tablature often shows rhythm stems and flags above the staff
-//! to indicate duration. Stems always point up from a fixed position
+//! to indicate duration. Stems always point up from a configurable position
 //! above the top staff line.
 
 use super::tab::TabStaffLayout;
 
-/// Distance from the top staff line to the stem base, in staff spaces.
-/// The stem base (bottom of the rhythm stem) sits just above the tab staff.
-const STEM_BASE_ABOVE_STAFF_SS: f64 = 1.5;
+/// Vertical geometry of TAB rhythm stems, measured in staff spaces.
+///
+/// Both values are relative to the TAB staff's top line. The same geometry
+/// applies to standalone stems and to the stems joined by TAB beams.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TabRhythmStyle {
+    stem_base_above_staff_ss: f64,
+    stem_length_ss: f64,
+}
 
-/// Default stem length in staff spaces (from base to tip).
-const STEM_LENGTH_SS: f64 = 3.0;
+impl TabRhythmStyle {
+    /// Create a style with a nonnegative base distance and a positive stem
+    /// length. Non-finite values are rejected so page bounds remain valid.
+    pub fn new(stem_base_above_staff_ss: f64, stem_length_ss: f64) -> Option<Self> {
+        (stem_base_above_staff_ss.is_finite()
+            && stem_base_above_staff_ss >= 0.0
+            && stem_length_ss.is_finite()
+            && stem_length_ss > 0.0
+            && (stem_base_above_staff_ss + stem_length_ss).is_finite())
+        .then_some(Self {
+            stem_base_above_staff_ss,
+            stem_length_ss,
+        })
+    }
+
+    /// Distance from the top staff line to the stem base.
+    pub fn stem_base_above_staff_ss(self) -> f64 {
+        self.stem_base_above_staff_ss
+    }
+
+    /// Length from stem base to tip.
+    pub fn stem_length_ss(self) -> f64 {
+        self.stem_length_ss
+    }
+
+    /// Distance from the top staff line to the stem tip.
+    pub fn above_staff_reach_ss(self) -> f64 {
+        self.stem_base_above_staff_ss + self.stem_length_ss
+    }
+}
+
+impl Default for TabRhythmStyle {
+    fn default() -> Self {
+        Self {
+            stem_base_above_staff_ss: 1.5,
+            stem_length_ss: 3.0,
+        }
+    }
+}
 
 /// Layout result for a rhythm stem above a tab staff.
 #[derive(Clone, Debug)]
@@ -47,10 +90,9 @@ pub fn needs_stem(duration_log2: i8) -> bool {
 
 /// Compute rhythm stem layout above a tab staff.
 ///
-/// The stem is positioned at `note_x` horizontally. Vertically, the base
-/// sits `STEM_BASE_ABOVE_STAFF_SS` staff spaces above the top staff line,
-/// and the tip extends `STEM_LENGTH_SS` staff spaces above that (in negative
-/// y direction since SVG y increases downward).
+/// The stem base is `tab_staff.rhythm_style.stem_base_above_staff_ss()`
+/// staff spaces above the top line. The tip is another
+/// `tab_staff.rhythm_style.stem_length_ss()` spaces higher (SVG y-down).
 ///
 /// Returns `None` for breves and whole notes (duration_log2 <= 0), which have no stem.
 pub fn layout_tab_rhythm(
@@ -64,8 +106,8 @@ pub fn layout_tab_rhythm(
     }
 
     let ss = tab_staff.staff_space;
-    let y_base = tab_staff.y_origin - STEM_BASE_ABOVE_STAFF_SS * ss;
-    let y_tip = y_base - STEM_LENGTH_SS * ss;
+    let y_base = tab_staff.y_origin - tab_staff.rhythm_style.stem_base_above_staff_ss * ss;
+    let y_tip = y_base - tab_staff.rhythm_style.stem_length_ss * ss;
 
     Some(TabRhythmLayout {
         x: note_x,
@@ -198,12 +240,36 @@ mod tests {
     fn stem_length_is_correct() {
         let staff = guitar_staff();
         let l = layout_tab_rhythm(&staff, 1000.0, 2, 5.0).unwrap();
-        let expected_length = STEM_LENGTH_SS * staff.staff_space;
+        let expected_length = TabRhythmStyle::default().stem_length_ss() * staff.staff_space;
         let actual_length = l.y_base - l.y_tip;
         assert!(
             (actual_length - expected_length).abs() < 0.01,
             "stem length {actual_length} should be {expected_length}"
         );
+    }
+
+    #[test]
+    fn custom_style_moves_base_and_tip_without_changing_beam_membership() {
+        let mut staff = guitar_staff();
+        staff.rhythm_style = TabRhythmStyle::new(2.0, 4.0).unwrap();
+        let layout = layout_tab_rhythm(&staff, 1000.0, 4, 5.0).unwrap();
+        assert_eq!(layout.y_base, staff.y_origin - 2.0 * staff.staff_space);
+        assert_eq!(layout.y_tip, staff.y_origin - 6.0 * staff.staff_space);
+        assert_eq!(layout.flag_count, 2);
+    }
+
+    #[test]
+    fn invalid_style_cannot_produce_nonfinite_bounds() {
+        for (base, length) in [
+            (f64::NAN, 3.0),
+            (f64::INFINITY, 3.0),
+            (-1.0, 3.0),
+            (1.0, 0.0),
+            (1.0, f64::NEG_INFINITY),
+            (f64::MAX, f64::MAX),
+        ] {
+            assert!(TabRhythmStyle::new(base, length).is_none());
+        }
     }
 
     #[test]
