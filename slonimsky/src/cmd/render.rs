@@ -99,6 +99,9 @@ fn validate(document: &Document) -> Result<()> {
         Document::IntervalMatrix(value) => {
             convert_interval_matrix(value)?;
         }
+        Document::Score(_) => {
+            anyhow::bail!("Score documents are not supported by slonimsky render");
+        }
     }
     Ok(())
 }

@@ -35,6 +35,23 @@ fn every_music_ron_document_kind_validates_and_emits_json() {
 }
 
 #[test]
+fn score_is_rejected_instead_of_claiming_semantic_validation() {
+    Command::cargo_bin("slonimsky")
+        .unwrap()
+        .args([
+            "render",
+            fixture("score.ron").to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Score documents are not supported by slonimsky render",
+        ));
+}
+
+#[test]
 fn pitch_circle_renders_svg_inferred_from_output_extension() {
     let dir = tempdir().unwrap();
     let output = dir.path().join("circle.svg");

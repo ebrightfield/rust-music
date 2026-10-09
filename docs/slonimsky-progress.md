@@ -5521,3 +5521,17 @@ failures, 0 ignored.
   71 four-string doubled C-major bass voicings within E1..G4.
   `cargo test -p slonimsky` passes 687 tests across 29 suites.
 - Artifacts: none retained.
+
+## 2026-10-06 — [FIX] Reject unsupported Score documents in `render`
+
+- `music-ron::Document` gained `Score` without a semantic score converter.
+  `slonimsky render` omitted that match arm, preventing the workspace from
+  compiling. `validate` now rejects Score explicitly rather than treating
+  deserialization as full semantic validation or emitting a generic SVG.
+- `slonimsky/tests/render.rs` checks the public CLI error for a valid Score
+  fixture; the existing supported-kind checks remain green. The Score
+  document-to-notation converter remains a separate feature, not part of
+  this compile repair.
+- `cargo test -p slonimsky --test render`: 5 passed; direct Score rejection and
+  supported Snippet JSON output were exercised. `cargo test --workspace`:
+  4449 passed, 11 ignored; `cargo fmt -p slonimsky --check` passed.
